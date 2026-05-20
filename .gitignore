@@ -1,0 +1,17 @@
+# Local test captures and generated diagnostics
+fitsocial_app/current_emulator_*.png
+fitsocial_app/*_dump.xml
+fitsocial_app/*_check.xml
+fitsocial_app/manual_*.xml
+fitsocial_app/android_build_log.txt
+fitsocial_app/flutter_run_*.txt
+fitsocial_app/flutter_run_*.log
+fitsocial_app/flutter_run_*.err.log
+fitsocial_app/window_dump.xml
+
+# Flutter/IDE generated files covered here for the root repository too
+fitsocial_app/.dart_tool/
+fitsocial_app/.idea/
+fitsocial_app/build/
+fitsocial_app/android/build/
+fitsocial_app/*.iml
