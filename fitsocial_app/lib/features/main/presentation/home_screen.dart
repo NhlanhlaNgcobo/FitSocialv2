@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
-import '../application/demo_content.dart';
+import '../application/content_providers.dart';
 import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
@@ -63,9 +63,17 @@ class HomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           summaryMetrics.when(
-            data: (data) => _TodaySummary(summaryMetrics: data),
+            data: (data) {
+              if (data.length < 2) {
+                return const _SectionPlaceholder(
+                  label: 'Summary unavailable',
+                );
+              }
+              return _TodaySummary(summaryMetrics: data);
+            },
             loading: () => const _SummaryPlaceholder(),
-            error: (_, __) => const _SectionPlaceholder(label: 'Summary unavailable'),
+            error: (_, __) =>
+                const _SectionPlaceholder(label: 'Summary unavailable'),
           ),
           const SizedBox(height: AppSpacing.lg),
           _MusicSpotlightCard(
@@ -81,7 +89,8 @@ class HomeScreen extends ConsumerWidget {
           posts.when(
             data: _buildPostColumn,
             loading: () => const _SectionPlaceholder(label: 'Loading feed...'),
-            error: (_, __) => const _SectionPlaceholder(label: 'Feed unavailable'),
+            error: (_, __) =>
+                const _SectionPlaceholder(label: 'Feed unavailable'),
           ),
         ],
       ),

@@ -15,7 +15,7 @@ class ExploreScreen extends StatelessWidget {
         children: const [
           DarkCard(
             child: Text(
-              'Phase 1 placeholder for discovery, trending posts, and creator search.',
+              'Discovery, trending posts, and creator search will appear here once connected.',
               style: TextStyle(fontSize: 16),
             ),
           ),

@@ -8,13 +8,6 @@ import 'firebase_options_adapter.dart';
 Future<BootstrapStatus> bootstrapApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (!appConfig.usesFirebase) {
-    return const BootstrapStatus(
-      backendMode: BackendMode.mock,
-      firebaseConfigured: false,
-    );
-  }
-
   final firebaseOptions = resolveFirebaseOptions();
   if (firebaseOptions == null) {
     return const BootstrapStatus(

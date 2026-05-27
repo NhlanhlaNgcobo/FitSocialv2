@@ -25,11 +25,13 @@ final progressMetricsProvider = FutureProvider<List<ProgressMetric>>((ref) {
 });
 
 final workoutPlaylistsProvider =
-    FutureProvider.family<List<WorkoutPlaylist>, WorkoutType>((ref, workoutType) {
+    FutureProvider.family<List<WorkoutPlaylist>, WorkoutType>(
+        (ref, workoutType) {
   return ref.watch(contentRepositoryProvider).getWorkoutPlaylists(workoutType);
 });
 
-final podcastRecommendationsProvider = FutureProvider<List<PodcastRecommendation>>((ref) {
+final podcastRecommendationsProvider =
+    FutureProvider<List<PodcastRecommendation>>((ref) {
   return ref.watch(contentRepositoryProvider).getPodcastRecommendations();
 });
 

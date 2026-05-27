@@ -1,5 +1,4 @@
 enum BackendMode {
-  mock,
   firebase,
 }
 
@@ -16,6 +15,6 @@ class AppConfig {
 }
 
 const appConfig = AppConfig(
-  backendMode: BackendMode.mock,
+  backendMode: BackendMode.firebase,
   enableAnalytics: false,
 );

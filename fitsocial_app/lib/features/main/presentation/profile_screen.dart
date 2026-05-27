@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../auth/application/app_session.dart';
-import '../application/demo_content.dart';
+import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/brand_image_tile.dart';
@@ -19,8 +19,9 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(appSessionProvider).profile;
     final stats = ref.watch(profileStatsProvider);
-    final displayName = profile?.displayName ?? 'Neo M.';
-    final handle = profile?.handle ?? '@neomotion';
+    final displayName = profile?.displayName ?? 'FitSocial User';
+    final handle = profile?.handle ?? '@fitsocial';
+    final initials = _initials(displayName);
 
     return DefaultTabController(
       length: 4,
@@ -55,8 +56,8 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        const Avatar(
-                          initials: 'NM',
+                        Avatar(
+                          initials: initials,
                           size: 68,
                           visualTile: AppVisualTile.heroPortrait,
                         ),
@@ -85,7 +86,7 @@ class ProfileScreen extends ConsumerWidget {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        '$handle\n${profile?.bio ?? 'Fitness enthusiast'}\n${profile?.location ?? 'Johannesburg, SA'}',
+                        '$handle\n${profile?.bio ?? ''}\n${profile?.location ?? ''}',
                         style: const TextStyle(
                             color: AppColors.muted, height: 1.5),
                       ),
@@ -142,6 +143,15 @@ class ProfileScreen extends ConsumerWidget {
         )
         .toList();
   }
+}
+
+String _initials(String value) {
+  final parts = value.trim().split(RegExp(r'\s+'));
+  if (parts.isEmpty || parts.first.isEmpty) return 'FS';
+  if (parts.length == 1) {
+    return parts.first.substring(0, 1).toUpperCase();
+  }
+  return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
 }
 
 class _ProfileStat extends StatelessWidget {

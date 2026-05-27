@@ -5,13 +5,12 @@ import '../domain/auth_models.dart';
 import 'firebase_user_profile_repository.dart';
 import 'user_profile_repository_contract.dart';
 
-class MockUserProfileRepository implements UserProfileRepository {
-  UserProfileDraft? _currentProfile;
+class UnconfiguredUserProfileRepository implements UserProfileRepository {
+  const UnconfiguredUserProfileRepository();
 
   @override
   Future<UserProfileDraft?> loadCurrentProfile() async {
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-    return _currentProfile;
+    throw StateError(_firebaseSetupMessage);
   }
 
   @override
@@ -21,23 +20,17 @@ class MockUserProfileRepository implements UserProfileRepository {
     required String bio,
     required String location,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    _currentProfile = UserProfileDraft(
-      displayName: displayName.trim(),
-      handle: handle.trim(),
-      bio: bio.trim(),
-      location: location.trim(),
-    );
-    return _currentProfile!;
+    throw StateError(_firebaseSetupMessage);
   }
 }
 
-final userProfileRepository = MockUserProfileRepository();
+const _firebaseSetupMessage =
+    'Firebase is not configured. Run flutterfire configure to generate lib/firebase_options.dart.';
 
 final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
   final status = ref.watch(bootstrapStatusProvider);
   if (status.canUseFirebase) {
     return FirebaseUserProfileRepository();
   }
-  return userProfileRepository;
+  return const UnconfiguredUserProfileRepository();
 });

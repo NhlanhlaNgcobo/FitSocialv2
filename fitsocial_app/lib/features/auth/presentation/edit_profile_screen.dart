@@ -24,10 +24,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   void initState() {
     super.initState();
     final profile = ref.read(appSessionProvider).profile;
-    _displayNameController = TextEditingController(text: profile?.displayName ?? 'Neo M.');
-    _handleController = TextEditingController(text: profile?.handle ?? '@neomotion');
-    _bioController = TextEditingController(text: profile?.bio ?? 'Running, lifting, and good food.');
-    _locationController = TextEditingController(text: profile?.location ?? 'Johannesburg, SA');
+    _displayNameController =
+        TextEditingController(text: profile?.displayName ?? '');
+    _handleController = TextEditingController(text: profile?.handle ?? '');
+    _bioController = TextEditingController(text: profile?.bio ?? '');
+    _locationController = TextEditingController(text: profile?.location ?? '');
   }
 
   @override

@@ -5,7 +5,7 @@ import '../../auth/domain/auth_models.dart';
 import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
-import 'demo_content.dart';
+import 'content_providers.dart';
 
 class ActivityActions {
   ActivityActions(this._ref);

@@ -24,10 +24,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   @override
   void initState() {
     super.initState();
-    _displayNameController = TextEditingController(text: 'Neo M.');
-    _handleController = TextEditingController(text: '@neomotion');
-    _bioController = TextEditingController(text: 'Running, lifting, and good food.');
-    _locationController = TextEditingController(text: 'Johannesburg, SA');
+    _displayNameController = TextEditingController();
+    _handleController = TextEditingController();
+    _bioController = TextEditingController();
+    _locationController = TextEditingController();
   }
 
   @override
@@ -61,7 +61,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 CircleAvatar(
                   radius: 34,
                   backgroundColor: AppColors.surfaceHigh,
-                  child: Icon(Icons.person_rounded, size: 36, color: AppColors.orangeBright),
+                  child: Icon(Icons.person_rounded,
+                      size: 36, color: AppColors.orangeBright),
                 ),
                 SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -70,7 +71,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                     children: [
                       Text(
                         'Profile photo',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 17),
                       ),
                       SizedBox(height: 4),
                       Text(

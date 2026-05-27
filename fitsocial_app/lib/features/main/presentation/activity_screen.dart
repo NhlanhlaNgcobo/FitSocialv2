@@ -7,7 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/brand_image_tile.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/stat_tile.dart';
-import '../application/demo_content.dart';
+import '../application/content_providers.dart';
 import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
 

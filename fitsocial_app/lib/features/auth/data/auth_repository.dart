@@ -5,35 +5,35 @@ import '../../../core/bootstrap/bootstrap_status.dart';
 import 'auth_repository_contract.dart';
 import 'firebase_auth_repository.dart';
 
-// Repository contract stays stable so Firebase can replace mock auth later.
+class UnconfiguredAuthRepository implements AuthRepository {
+  const UnconfiguredAuthRepository();
 
-class MockAuthRepository implements AuthRepository {
   @override
   Future<String> signInWithEmail({
     required String email,
     required String password,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    return email.trim();
+    throw StateError(_firebaseSetupMessage);
   }
 
   @override
   Future<String> continueWithProvider(String providerName) async {
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    return '$providerName@fitsocial.app';
+    throw StateError(_firebaseSetupMessage);
   }
+
   @override
   Future<void> signOut() async {
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+    throw StateError(_firebaseSetupMessage);
   }
 }
 
-final authRepository = MockAuthRepository();
+const _firebaseSetupMessage =
+    'Firebase is not configured. Run flutterfire configure to generate lib/firebase_options.dart.';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final status = ref.watch(bootstrapStatusProvider);
   if (status.canUseFirebase) {
     return FirebaseAuthRepository(FirebaseAuth.instance);
   }
-  return authRepository;
+  return const UnconfiguredAuthRepository();
 });
