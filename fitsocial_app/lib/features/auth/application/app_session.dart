@@ -58,6 +58,31 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  Future<void> signUpWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    if (email.trim().isEmpty || password.trim().isEmpty) return;
+    _setLoading(true);
+    _errorMessage = null;
+    try {
+      _email = await authRepository.signUpWithEmail(
+        email: email,
+        password: password,
+      );
+      _profile = await userProfileRepository.loadCurrentProfile();
+      _stage = AuthStage.profileSetup;
+      if (_profile != null) {
+        _stage = AuthStage.authenticated;
+      }
+    } catch (error) {
+      _errorMessage = error.toString();
+    } finally {
+      _setLoading(false, shouldNotify: false);
+      notifyListeners();
+    }
+  }
+
   Future<void> continueWithProvider(String providerName) async {
     _setLoading(true);
     _errorMessage = null;

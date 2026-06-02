@@ -8,15 +8,7 @@ import 'firebase_options_adapter.dart';
 Future<BootstrapStatus> bootstrapApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final firebaseOptions = resolveFirebaseOptions();
-  if (firebaseOptions == null) {
-    return const BootstrapStatus(
-      backendMode: BackendMode.firebase,
-      firebaseConfigured: false,
-    );
-  }
-
-  await Firebase.initializeApp(options: firebaseOptions);
+  await Firebase.initializeApp(options: resolveFirebaseOptions());
 
   return const BootstrapStatus(
     backendMode: BackendMode.firebase,

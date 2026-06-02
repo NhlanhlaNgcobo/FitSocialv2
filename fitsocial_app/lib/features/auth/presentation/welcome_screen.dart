@@ -150,11 +150,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       children: [
                         PrimaryButton(
                           label: 'Get Started',
-                          onPressed: () => context.go('/login'),
+                          onPressed: () => context.go('/login?mode=signup'),
                         ),
                         const SizedBox(height: AppSpacing.sm),
                         TextButton(
-                          onPressed: () => context.go('/login'),
+                          onPressed: () => context.go('/login?mode=login'),
                           child: const Text(
                             'Already have an account? Log in',
                             style: TextStyle(color: AppColors.muted),

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "801328750075",
+    "project_id": "fitsocialv2",
+    "storage_bucket": "fitsocialv2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:801328750075:android:50ea43d63351911a5dff5e",
+        "android_client_info": {
+          "package_name": "com.fitsocial.fitsocial_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "801328750075-cfe797f3fvd1uaf8vfjtp9osslig90lj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitsocial.fitsocial_app",
+            "certificate_hash": "9045a15e019228117746c360be33371e4350a9e6"
+          }
+        },
+        {
+          "client_id": "801328750075-4op9ti8k5ijei6p529vmbifqs44i2eiu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBHcgG6iKylGD7ko4wNylG3bGE832JV6MA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "801328750075-4op9ti8k5ijei6p529vmbifqs44i2eiu.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "801328750075-24iqm84ifhep8c4ciar4n8gjoqd19fpa.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.fitsocial.fitsocialApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

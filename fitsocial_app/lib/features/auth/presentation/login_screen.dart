@@ -10,7 +10,9 @@ import '../../../shared/widgets/primary_button.dart';
 import '../application/app_session.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.isLoginMode = true});
+
+  final bool isLoginMode;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -98,17 +100,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         right: 24,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            FitSocialLogo(size: 36),
-                            SizedBox(height: AppSpacing.lg),
+                          children: [
+                            const FitSocialLogo(size: 36),
+                            const SizedBox(height: AppSpacing.lg),
                             Text(
-                              'Create your account',
-                              style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+                              widget.isLoginMode ? 'Welcome back' : 'Create your account',
+                              style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             Text(
-                              'Join the fitness community.',
-                              style: TextStyle(color: AppColors.muted, fontSize: 16),
+                              widget.isLoginMode ? 'Log in to continue.' : 'Join the fitness community.',
+                              style: const TextStyle(color: AppColors.muted, fontSize: 16),
                             ),
                           ],
                         ),
@@ -128,15 +130,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
               PrimaryButton(
-                label: _showEmailForm ? 'Continue with Email' : 'Use Email',
+                label: _showEmailForm ? (widget.isLoginMode ? 'Log In' : 'Sign Up') : 'Use Email',
                 onPressed: session.isLoading
                     ? null
                     : () {
                         if (_showEmailForm) {
-                          ref.read(appSessionProvider).signInWithEmail(
-                                email: _emailController.text,
-                                password: _passwordController.text,
-                              );
+                          if (widget.isLoginMode) {
+                            ref.read(appSessionProvider).signInWithEmail(
+                                  email: _emailController.text,
+                                  password: _passwordController.text,
+                                );
+                          } else {
+                            ref.read(appSessionProvider).signUpWithEmail(
+                                  email: _emailController.text,
+                                  password: _passwordController.text,
+                                );
+                          }
                         } else {
                           setState(() {
                             _showEmailForm = true;
@@ -153,15 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ref.read(appSessionProvider).continueWithProvider('google');
                 },
               ),
-              const SizedBox(height: AppSpacing.md),
-              _SocialButton(
-                icon: Icons.apple_rounded,
-                label: 'Continue with Apple',
-                loading: session.isLoading,
-                onPressed: () {
-                  ref.read(appSessionProvider).continueWithProvider('apple');
-                },
-              ),
+
               if (_showEmailForm) ...[
                 const SizedBox(height: AppSpacing.md),
                 _EmailPanel(
