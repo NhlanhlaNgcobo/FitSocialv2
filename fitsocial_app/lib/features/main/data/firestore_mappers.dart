@@ -16,6 +16,7 @@ class FirestoreMapper {
 
   static FeedPost toFeedPost(FirestorePostRecord post) {
     return FeedPost(
+      id: post.id,
       userName: post.authorName,
       activity: post.activity,
       caption: post.caption,
@@ -24,6 +25,7 @@ class FirestoreMapper {
       likes: post.likesCount,
       comments: post.commentsCount,
       backgroundColors: _themeColors(post.themeKey),
+      likedBy: post.likedBy,
     );
   }
 
@@ -51,6 +53,16 @@ class FirestoreMapper {
     required String value,
   }) {
     return SummaryMetric(label: label, value: value);
+  }
+
+  static Comment toComment(FirestoreCommentRecord record) {
+    return Comment(
+      id: record.id,
+      authorId: record.authorId,
+      authorName: record.authorName,
+      text: record.text,
+      createdAt: record.createdAt ?? DateTime.now(),
+    );
   }
 
   static List<Color> _themeColors(String themeKey) {

@@ -54,6 +54,7 @@ class FirestorePostRecord {
     required this.commentsCount,
     required this.timestampLabel,
     required this.themeKey,
+    required this.likedBy,
   });
 
   final String id;
@@ -66,9 +67,14 @@ class FirestorePostRecord {
   final int commentsCount;
   final String timestampLabel;
   final String themeKey;
+  final List<String> likedBy;
 
   factory FirestorePostRecord.fromMap(String id, Map<String, dynamic> data) {
     final metrics = (data['metricLabels'] as List<dynamic>? ?? const [])
+        .map((item) => item.toString())
+        .toList();
+
+    final likedByList = (data['likedBy'] as List<dynamic>? ?? const [])
         .map((item) => item.toString())
         .toList();
 
@@ -83,6 +89,7 @@ class FirestorePostRecord {
       commentsCount: (data['commentsCount'] as num?)?.toInt() ?? 0,
       timestampLabel: (data['timestampLabel'] as String?) ?? 'now',
       themeKey: (data['themeKey'] as String?) ?? 'sunset',
+      likedBy: likedByList,
     );
   }
 }
@@ -110,6 +117,39 @@ class FirestoreProgressRecord {
       value: (data['value'] as String?) ?? '0',
       delta: (data['delta'] as String?) ?? '',
       chartBars: bars,
+    );
+  }
+}
+
+class FirestoreCommentRecord {
+  const FirestoreCommentRecord({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.text,
+    this.createdAt,
+  });
+
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String text;
+  final DateTime? createdAt;
+
+  factory FirestoreCommentRecord.fromMap(String id, Map<String, dynamic> data) {
+    DateTime? timestamp;
+    final raw = data['createdAt'];
+    if (raw != null) {
+      // cloud_firestore Timestamp
+      timestamp = (raw as dynamic).toDate() as DateTime;
+    }
+
+    return FirestoreCommentRecord(
+      id: id,
+      authorId: (data['authorId'] as String?) ?? '',
+      authorName: (data['authorName'] as String?) ?? 'FitSocial User',
+      text: (data['text'] as String?) ?? '',
+      createdAt: timestamp,
     );
   }
 }

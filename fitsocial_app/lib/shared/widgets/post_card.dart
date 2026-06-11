@@ -17,6 +17,9 @@ class PostCard extends StatelessWidget {
     this.comments = 0,
     this.backgroundColors = const [Color(0xFF332113), Color(0xFF0E0E0E)],
     this.visualTile,
+    this.isLikedByMe = false,
+    this.onLikeTapped,
+    this.onCommentTapped,
     super.key,
   });
 
@@ -29,6 +32,9 @@ class PostCard extends StatelessWidget {
   final int comments;
   final List<Color> backgroundColors;
   final AppVisualTile? visualTile;
+  final bool isLikedByMe;
+  final VoidCallback? onLikeTapped;
+  final VoidCallback? onCommentTapped;
 
   @override
   Widget build(BuildContext context) {
@@ -183,9 +189,22 @@ class PostCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              _MetaIcon(icon: Icons.favorite_rounded, value: '$likes'),
+              GestureDetector(
+                onTap: onLikeTapped,
+                child: _MetaIcon(
+                  icon: isLikedByMe
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  value: '$likes',
+                  highlighted: isLikedByMe,
+                ),
+              ),
               const SizedBox(width: AppSpacing.md),
-              _MetaIcon(icon: Icons.mode_comment_outlined, value: '$comments'),
+              GestureDetector(
+                onTap: onCommentTapped,
+                child: _MetaIcon(
+                    icon: Icons.mode_comment_outlined, value: '$comments'),
+              ),
               const Spacer(),
               const Icon(Icons.bookmark_border_rounded),
             ],
@@ -196,9 +215,12 @@ class PostCard extends StatelessWidget {
             style: const TextStyle(fontSize: 15),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'View all comments',
-            style: TextStyle(color: AppColors.muted, fontSize: 13),
+          GestureDetector(
+            onTap: onCommentTapped,
+            child: const Text(
+              'View all comments',
+              style: TextStyle(color: AppColors.muted, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -215,17 +237,26 @@ class PostCard extends StatelessWidget {
 }
 
 class _MetaIcon extends StatelessWidget {
-  const _MetaIcon({required this.icon, required this.value});
+  const _MetaIcon({
+    required this.icon,
+    required this.value,
+    this.highlighted = false,
+  });
 
   final IconData icon;
   final String value;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: AppColors.orangeBright, size: 20),
+        Icon(
+          icon,
+          color: highlighted ? AppColors.danger : AppColors.orangeBright,
+          size: 20,
+        ),
         const SizedBox(width: 6),
         Text(value, style: const TextStyle(color: AppColors.muted)),
       ],

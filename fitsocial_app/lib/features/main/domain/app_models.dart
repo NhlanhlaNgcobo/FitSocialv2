@@ -17,6 +17,7 @@ class StoryItem {
 
 class FeedPost {
   const FeedPost({
+    required this.id,
     required this.userName,
     required this.activity,
     required this.caption,
@@ -25,9 +26,11 @@ class FeedPost {
     required this.likes,
     required this.comments,
     required this.backgroundColors,
+    required this.likedBy,
     this.visualTile,
   });
 
+  final String id;
   final String userName;
   final String activity;
   final String caption;
@@ -36,7 +39,52 @@ class FeedPost {
   final int likes;
   final int comments;
   final List<Color> backgroundColors;
+  final List<String> likedBy;
   final AppVisualTile? visualTile;
+
+  FeedPost copyWith({
+    String? id,
+    String? userName,
+    String? activity,
+    String? caption,
+    List<String>? metricLabels,
+    String? timestamp,
+    int? likes,
+    int? comments,
+    List<Color>? backgroundColors,
+    List<String>? likedBy,
+    AppVisualTile? visualTile,
+  }) {
+    return FeedPost(
+      id: id ?? this.id,
+      userName: userName ?? this.userName,
+      activity: activity ?? this.activity,
+      caption: caption ?? this.caption,
+      metricLabels: metricLabels ?? this.metricLabels,
+      timestamp: timestamp ?? this.timestamp,
+      likes: likes ?? this.likes,
+      comments: comments ?? this.comments,
+      backgroundColors: backgroundColors ?? this.backgroundColors,
+      likedBy: likedBy ?? this.likedBy,
+      visualTile: visualTile ?? this.visualTile,
+    );
+  }
+}
+
+class Comment {
+  const Comment({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.text,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String text;
+  final DateTime createdAt;
 }
 
 class ActivitySaveResult {

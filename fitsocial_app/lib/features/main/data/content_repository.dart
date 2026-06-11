@@ -86,6 +86,21 @@ class UnconfiguredContentRepository implements ContentRepository {
   ) async {
     throw StateError(_firebaseSetupMessage);
   }
+
+  @override
+  Future<void> toggleLike(String postId, String userId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<Comment>> getComments(String postId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<Comment> addComment(String postId, String text) async {
+    throw StateError(_firebaseSetupMessage);
+  }
 }
 
 const _firebaseSetupMessage =

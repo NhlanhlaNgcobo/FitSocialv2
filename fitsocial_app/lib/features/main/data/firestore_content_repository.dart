@@ -231,6 +231,7 @@ class FirestoreContentRepository implements ContentRepository {
       commentsCount: 0,
       timestampLabel: 'now',
       themeKey: themeKey,
+      likedBy: const [],
     );
 
     await document.set({
@@ -243,6 +244,7 @@ class FirestoreContentRepository implements ContentRepository {
       'commentsCount': record.commentsCount,
       'timestampLabel': record.timestampLabel,
       'themeKey': record.themeKey,
+      'likedBy': record.likedBy,
       'createdAt': FieldValue.serverTimestamp(),
     });
     await _incrementUser(postsDelta: 1);
@@ -272,6 +274,76 @@ class FirestoreContentRepository implements ContentRepository {
       throw StateError('A Firebase user must be signed in for this action.');
     }
     return user;
+  }
+
+  @override
+  Future<void> toggleLike(String postId, String userId) async {
+    final postRef = postsCollection.doc(postId);
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(postRef);
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data() ?? {};
+      final likedBy = List<String>.from(
+        (data['likedBy'] as List<dynamic>?) ?? [],
+      );
+
+      if (likedBy.contains(userId)) {
+        likedBy.remove(userId);
+        transaction.update(postRef, {
+          'likedBy': likedBy,
+          'likesCount': FieldValue.increment(-1),
+        });
+      } else {
+        likedBy.add(userId);
+        transaction.update(postRef, {
+          'likedBy': likedBy,
+          'likesCount': FieldValue.increment(1),
+        });
+      }
+    });
+  }
+
+  @override
+  Future<List<Comment>> getComments(String postId) async {
+    final snapshot = await postsCollection
+        .doc(postId)
+        .collection('comments')
+        .orderBy('createdAt', descending: false)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => FirestoreCommentRecord.fromMap(doc.id, doc.data()))
+        .map(FirestoreMapper.toComment)
+        .toList();
+  }
+
+  @override
+  Future<Comment> addComment(String postId, String text) async {
+    final user = _requireCurrentUser();
+    final authorName = user.displayName ?? user.email ?? 'FitSocial User';
+    final commentRef = postsCollection.doc(postId).collection('comments').doc();
+
+    final now = DateTime.now();
+    await commentRef.set({
+      'authorId': user.uid,
+      'authorName': authorName,
+      'text': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // Increment comment count on the post
+    await postsCollection.doc(postId).update({
+      'commentsCount': FieldValue.increment(1),
+    });
+
+    return Comment(
+      id: commentRef.id,
+      authorId: user.uid,
+      authorName: authorName,
+      text: text,
+      createdAt: now,
+    );
   }
 }
 

@@ -25,4 +25,7 @@ abstract class ContentRepository {
     UserProfileDraft? profile,
     PostDraft draft,
   );
+  Future<void> toggleLike(String postId, String userId);
+  Future<List<Comment>> getComments(String postId);
+  Future<Comment> addComment(String postId, String text);
 }

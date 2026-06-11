@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,7 @@ import '../domain/app_models.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/story_avatar.dart';
+import 'comments_sheet.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -87,7 +89,7 @@ class HomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           posts.when(
-            data: _buildPostColumn,
+            data: (data) => _buildPostColumn(data, ref),
             loading: () => const _SectionPlaceholder(label: 'Loading feed...'),
             error: (_, __) =>
                 const _SectionPlaceholder(label: 'Feed unavailable'),
@@ -97,9 +99,9 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPostColumn(List<FeedPost> posts) {
+  Widget _buildPostColumn(List<FeedPost> posts, WidgetRef ref) {
     return Column(
-      children: _buildPosts(posts),
+      children: _buildPosts(posts, ref),
     );
   }
 
@@ -122,7 +124,8 @@ class HomeScreen extends ConsumerWidget {
     return items;
   }
 
-  List<Widget> _buildPosts(List<FeedPost> posts) {
+  List<Widget> _buildPosts(List<FeedPost> posts, WidgetRef ref) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     final items = <Widget>[];
     for (var i = 0; i < posts.length; i++) {
       final post = posts[i];
@@ -137,6 +140,20 @@ class HomeScreen extends ConsumerWidget {
           comments: post.comments,
           backgroundColors: post.backgroundColors,
           visualTile: post.visualTile,
+          isLikedByMe: post.likedBy.contains(currentUserId),
+          onLikeTapped: () {
+            ref
+                .read(feedPostsProvider.notifier)
+                .toggleLike(post.id, currentUserId);
+          },
+          onCommentTapped: () {
+            showModalBottomSheet(
+              context: ref.context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => CommentsSheet(postId: post.id),
+            );
+          },
         ),
       );
       if (i != posts.length - 1) {
