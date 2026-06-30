@@ -15,6 +15,12 @@ class StoryItem {
   final bool isOwnStory;
 }
 
+enum PostType {
+  text,
+  image,
+  workout,
+}
+
 class FeedPost {
   const FeedPost({
     required this.id,
@@ -28,6 +34,9 @@ class FeedPost {
     required this.backgroundColors,
     required this.likedBy,
     this.visualTile,
+    this.postType = PostType.text,
+    this.imageUrl,
+    this.workoutData,
   });
 
   final String id;
@@ -41,6 +50,9 @@ class FeedPost {
   final List<Color> backgroundColors;
   final List<String> likedBy;
   final AppVisualTile? visualTile;
+  final PostType postType;
+  final String? imageUrl;
+  final Map<String, dynamic>? workoutData;
 
   FeedPost copyWith({
     String? id,
@@ -54,6 +66,9 @@ class FeedPost {
     List<Color>? backgroundColors,
     List<String>? likedBy,
     AppVisualTile? visualTile,
+    PostType? postType,
+    String? imageUrl,
+    Map<String, dynamic>? workoutData,
   }) {
     return FeedPost(
       id: id ?? this.id,
@@ -67,6 +82,9 @@ class FeedPost {
       backgroundColors: backgroundColors ?? this.backgroundColors,
       likedBy: likedBy ?? this.likedBy,
       visualTile: visualTile ?? this.visualTile,
+      postType: postType ?? this.postType,
+      imageUrl: imageUrl ?? this.imageUrl,
+      workoutData: workoutData ?? this.workoutData,
     );
   }
 }
@@ -136,6 +154,7 @@ class MealLogDraft {
     required this.fat,
     required this.notes,
     required this.shareToFeed,
+    this.imageUrl,
   });
 
   final String name;
@@ -145,6 +164,7 @@ class MealLogDraft {
   final String fat;
   final String notes;
   final bool shareToFeed;
+  final String? imageUrl;
 }
 
 class PostDraft {

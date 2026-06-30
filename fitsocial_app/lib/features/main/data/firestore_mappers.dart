@@ -26,7 +26,22 @@ class FirestoreMapper {
       comments: post.commentsCount,
       backgroundColors: _themeColors(post.themeKey),
       likedBy: post.likedBy,
+      postType: _parsePostType(post.postType),
+      imageUrl: post.imageUrl,
+      workoutData: post.workoutData,
     );
+  }
+
+  static PostType _parsePostType(String value) {
+    switch (value) {
+      case 'image':
+        return PostType.image;
+      case 'workout':
+        return PostType.workout;
+      case 'text':
+      default:
+        return PostType.text;
+    }
   }
 
   static ProfileStat toProfileStat({

@@ -101,6 +101,16 @@ class UnconfiguredContentRepository implements ContentRepository {
   Future<Comment> addComment(String postId, String text) async {
     throw StateError(_firebaseSetupMessage);
   }
+
+  @override
+  Future<String> uploadMealImage(String localFilePath) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<Map<String, dynamic>> analyzeMealImage(String imageUrl) async {
+    throw StateError(_firebaseSetupMessage);
+  }
 }
 
 const _firebaseSetupMessage =

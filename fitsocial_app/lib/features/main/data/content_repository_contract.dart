@@ -28,4 +28,11 @@ abstract class ContentRepository {
   Future<void> toggleLike(String postId, String userId);
   Future<List<Comment>> getComments(String postId);
   Future<Comment> addComment(String postId, String text);
+
+  /// Uploads a meal photo to Firebase Storage and returns the download URL.
+  Future<String> uploadMealImage(String localFilePath);
+
+  /// Calls the analyzeMeal Cloud Function with the image URL and returns
+  /// structured nutritional data: { name, calories, protein, carbs, fat }.
+  Future<Map<String, dynamic>> analyzeMealImage(String imageUrl);
 }

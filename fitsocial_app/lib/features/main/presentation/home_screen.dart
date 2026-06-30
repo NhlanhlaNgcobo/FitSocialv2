@@ -141,6 +141,9 @@ class HomeScreen extends ConsumerWidget {
           backgroundColors: post.backgroundColors,
           visualTile: post.visualTile,
           isLikedByMe: post.likedBy.contains(currentUserId),
+          postType: post.postType,
+          imageUrl: post.imageUrl,
+          workoutData: post.workoutData,
           onLikeTapped: () {
             ref
                 .read(feedPostsProvider.notifier)

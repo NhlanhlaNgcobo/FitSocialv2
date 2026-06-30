@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
@@ -111,6 +116,13 @@ class FirestoreContentRepository implements ContentRepository {
         '${draft.exercises.length} moves'
       ],
       themeKey: 'burn',
+      postType: 'workout',
+      workoutData: {
+        'title': draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
+        'duration': draft.duration,
+        'calories': draft.calories,
+        'exercises': draft.exercises,
+      },
     );
     return ActivitySaveResult(
         message: 'Workout saved and shared.', createdPost: post);
@@ -161,6 +173,7 @@ class FirestoreContentRepository implements ContentRepository {
         '${draft.fat.trim()}g fat',
       ],
       themeKey: 'graphite',
+      imageUrl: draft.imageUrl,
     );
     return ActivitySaveResult(
         message: 'Meal saved and shared.', createdPost: post);
@@ -211,6 +224,9 @@ class FirestoreContentRepository implements ContentRepository {
     required String caption,
     required List<String> metricLabels,
     required String themeKey,
+    String postType = 'text',
+    String? imageUrl,
+    Map<String, dynamic>? workoutData,
   }) async {
     final user = _requireCurrentUser();
     final userId = user.uid;
@@ -232,6 +248,9 @@ class FirestoreContentRepository implements ContentRepository {
       timestampLabel: 'now',
       themeKey: themeKey,
       likedBy: const [],
+      postType: postType,
+      imageUrl: imageUrl,
+      workoutData: workoutData,
     );
 
     await document.set({
@@ -245,6 +264,9 @@ class FirestoreContentRepository implements ContentRepository {
       'timestampLabel': record.timestampLabel,
       'themeKey': record.themeKey,
       'likedBy': record.likedBy,
+      'postType': record.postType,
+      if (record.imageUrl != null) 'imageUrl': record.imageUrl,
+      if (record.workoutData != null) 'workoutData': record.workoutData,
       'createdAt': FieldValue.serverTimestamp(),
     });
     await _incrementUser(postsDelta: 1);
@@ -345,6 +367,63 @@ class FirestoreContentRepository implements ContentRepository {
       createdAt: now,
     );
   }
+
+  @override
+  Future<String> uploadMealImage(String localFilePath) async {
+    final user = _requireCurrentUser();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('meals/${user.uid}/$timestamp.jpg');
+
+    if (kIsWeb) {
+      // On web, localFilePath is a blob URL — use putString or putData.
+      // image_picker on web returns an XFile whose path is a network URL.
+      // We read bytes via the network image and upload.
+      throw UnsupportedError(
+        'Web upload requires using putData with XFile bytes. '
+        'Pass the file bytes directly for web support.',
+      );
+    }
+
+    final file = File(localFilePath);
+    final uploadTask = ref.putFile(
+      file,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+    final snapshot = await uploadTask.timeout(
+      const Duration(seconds: 60),
+      onTimeout: () => throw TimeoutException(
+        'Image upload timed out after 60 seconds.',
+      ),
+    );
+    return await snapshot.ref.getDownloadURL();
+  }
+
+  @override
+  Future<Map<String, dynamic>> analyzeMealImage(String imageUrl) async {
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'analyzeMeal',
+      options: HttpsCallableOptions(
+        timeout: const Duration(seconds: 60),
+      ),
+    );
+
+    final result = await callable.call<Map<String, dynamic>>({
+      'imageUrl': imageUrl,
+    });
+
+    final data = Map<String, dynamic>.from(result.data);
+    return data;
+  }
+}
+
+class TimeoutException implements Exception {
+  const TimeoutException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 String _formatDuration(Duration duration) {

@@ -55,6 +55,9 @@ class FirestorePostRecord {
     required this.timestampLabel,
     required this.themeKey,
     required this.likedBy,
+    this.postType = 'text',
+    this.imageUrl,
+    this.workoutData,
   });
 
   final String id;
@@ -68,6 +71,9 @@ class FirestorePostRecord {
   final String timestampLabel;
   final String themeKey;
   final List<String> likedBy;
+  final String postType;
+  final String? imageUrl;
+  final Map<String, dynamic>? workoutData;
 
   factory FirestorePostRecord.fromMap(String id, Map<String, dynamic> data) {
     final metrics = (data['metricLabels'] as List<dynamic>? ?? const [])
@@ -90,6 +96,9 @@ class FirestorePostRecord {
       timestampLabel: (data['timestampLabel'] as String?) ?? 'now',
       themeKey: (data['themeKey'] as String?) ?? 'sunset',
       likedBy: likedByList,
+      postType: (data['postType'] as String?) ?? 'text',
+      imageUrl: data['imageUrl'] as String?,
+      workoutData: (data['workoutData'] as Map<String, dynamic>?),
     );
   }
 }

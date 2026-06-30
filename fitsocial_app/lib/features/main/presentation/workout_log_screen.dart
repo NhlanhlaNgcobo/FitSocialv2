@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/activity_actions.dart';
 import '../domain/app_models.dart';
@@ -16,9 +17,12 @@ class WorkoutLogScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _durationController;
-  late final TextEditingController _caloriesController;
+  late final TextEditingController _setsController;
+  late final TextEditingController _repsController;
+  late final TextEditingController _notesController;
   bool _shareToFeed = true;
   bool _isSaving = false;
   String? _errorMessage;
@@ -26,36 +30,49 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: 'Push Day');
-    _durationController = TextEditingController(text: '52 min');
-    _caloriesController = TextEditingController(text: '520 kcal');
+    _titleController = TextEditingController();
+    _durationController = TextEditingController();
+    _setsController = TextEditingController();
+    _repsController = TextEditingController();
+    _notesController = TextEditingController();
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _durationController.dispose();
-    _caloriesController.dispose();
+    _setsController.dispose();
+    _repsController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
   Future<void> _saveWorkout() async {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       _isSaving = true;
       _errorMessage = null;
     });
 
     try {
+      final exercises = <String>[];
+      final sets = _setsController.text.trim();
+      final reps = _repsController.text.trim();
+      if (sets.isNotEmpty || reps.isNotEmpty) {
+        exercises.add('${sets.isNotEmpty ? sets : "0"} Sets x ${reps.isNotEmpty ? reps : "0"} Reps');
+      }
+      final notes = _notesController.text.trim();
+      if (notes.isNotEmpty) {
+        exercises.add('Notes: $notes');
+      }
+
       final result = await ref.read(activityActionsProvider).saveWorkout(
             WorkoutLogDraft(
-              title: _titleController.text,
-              duration: _durationController.text,
-              calories: _caloriesController.text,
-              exercises: const [
-                'Bench Press',
-                'Incline Dumbbell Press',
-                'Shoulder Press',
-              ],
+              title: _titleController.text.trim(),
+              duration: '${_durationController.text.trim()} min',
+              calories: '0 kcal',
+              exercises: exercises,
               shareToFeed: _shareToFeed,
             ),
           );
@@ -78,158 +95,151 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     }
   }
 
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: AppColors.muted),
+      filled: true,
+      fillColor: AppColors.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.stroke),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.stroke),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.orangeBright),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Log Workout')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          const _FieldLabel(label: 'Workout Title'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _titleController,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _MetricField(
-                  label: 'Duration',
-                  controller: _durationController,
-                ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          children: [
+            DarkCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Workout Title', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _titleController,
+                    style: const TextStyle(color: AppColors.white),
+                    decoration: _inputDecoration('e.g. Upper Body Power'),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) return 'Required';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  const Text('Duration (minutes)', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _durationController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: AppColors.white),
+                    decoration: _inputDecoration('e.g. 45'),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) return 'Required';
+                      if (int.tryParse(val.trim()) == null) return 'Invalid number';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Sets', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _setsController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: AppColors.white),
+                              decoration: _inputDecoration('e.g. 4'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Reps', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _repsController,
+                              keyboardType: TextInputType.number,
+                              style: const TextStyle(color: AppColors.white),
+                              decoration: _inputDecoration('e.g. 10'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  const Text('Notes', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _notesController,
+                    maxLines: 4,
+                    style: const TextStyle(color: AppColors.white),
+                    decoration: _inputDecoration('How did it feel?'),
+                  ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _MetricField(
-                  label: 'Calories',
-                  controller: _caloriesController,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          const _FieldLabel(label: 'Exercises'),
-          const SizedBox(height: 8),
-          ...const [
-            _ExerciseTile(name: 'Bench Press', detail: '4 x 10  |  80 kg'),
-            SizedBox(height: AppSpacing.sm),
-            _ExerciseTile(
-                name: 'Incline Dumbbell Press', detail: '3 x 12  |  26 kg'),
-            SizedBox(height: AppSpacing.sm),
-            _ExerciseTile(name: 'Shoulder Press', detail: '3 x 10  |  20 kg'),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          SwitchListTile(
-            value: _shareToFeed,
-            activeThumbColor: AppColors.orangeBright,
-            title: const Text('Share to Feed'),
-            subtitle: const Text(
-              'Post this workout to your profile activity',
-              style: TextStyle(color: AppColors.muted),
             ),
-            contentPadding: EdgeInsets.zero,
-            onChanged: (value) {
-              setState(() {
-                _shareToFeed = value;
-              });
-            },
-          ),
-          const SizedBox(height: AppSpacing.md),
-          if (_errorMessage != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.stroke),
+            const SizedBox(height: AppSpacing.lg),
+            SwitchListTile(
+              value: _shareToFeed,
+              activeColor: AppColors.orangeBright,
+              title: const Text('Share to feed'),
+              subtitle: const Text(
+                'Post this workout to your profile activity',
+                style: TextStyle(color: AppColors.muted),
               ),
-              child: Text(
-                _errorMessage!,
-                style: const TextStyle(color: AppColors.orangeBright),
-              ),
+              contentPadding: EdgeInsets.zero,
+              onChanged: (value) {
+                setState(() {
+                  _shareToFeed = value;
+                });
+              },
             ),
             const SizedBox(height: AppSpacing.md),
+            if (_errorMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.stroke),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: AppColors.orangeBright),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            PrimaryButton(
+              label: _isSaving ? 'Saving...' : 'Save',
+              onPressed: _isSaving ? null : _saveWorkout,
+            ),
           ],
-          PrimaryButton(
-            label: _isSaving
-                ? 'Saving...'
-                : (_shareToFeed ? 'Save Workout & Share' : 'Save Workout'),
-            onPressed: _isSaving ? null : _saveWorkout,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricField extends StatelessWidget {
-  const _MetricField({required this.label, required this.controller});
-
-  final String label;
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _FieldLabel(label: label),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
         ),
-      ],
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: AppColors.white,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
-
-class _ExerciseTile extends StatelessWidget {
-  const _ExerciseTile({required this.name, required this.detail});
-
-  final String name;
-  final String detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            name,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            detail,
-            style: const TextStyle(color: AppColors.muted),
-          ),
-        ],
       ),
     );
   }

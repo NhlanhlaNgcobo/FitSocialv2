@@ -1,1 +1,34 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"fitsocialv2","appId":"1:801328750075:android:50ea43d63351911a5dff5e","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"fitsocialv2","configurations":{"android":"1:801328750075:android:50ea43d63351911a5dff5e","web":"1:801328750075:web:04d119fd8a0879aa5dff5e"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "fitsocialv2",
+          "appId": "1:801328750075:android:50ea43d63351911a5dff5e",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "fitsocialv2",
+          "configurations": {
+            "android": "1:801328750075:android:50ea43d63351911a5dff5e",
+            "web": "1:801328750075:web:04d119fd8a0879aa5dff5e"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ]
+}

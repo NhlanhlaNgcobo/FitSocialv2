@@ -1,0 +1,206 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/dark_card.dart';
+import '../../../shared/widgets/primary_button.dart';
+import '../data/content_repository.dart';
+
+class MealUploadScreen extends ConsumerStatefulWidget {
+  const MealUploadScreen({super.key});
+
+  @override
+  ConsumerState<MealUploadScreen> createState() => _MealUploadScreenState();
+}
+
+class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
+  final ImagePicker _picker = ImagePicker();
+  String? _imagePath;
+  bool _isAnalyzing = false;
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(source: source);
+      if (image != null) {
+        setState(() {
+          _imagePath = image.path;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking image: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _analyzeAndNavigate() async {
+    if (_imagePath == null) return;
+
+    setState(() {
+      _isAnalyzing = true;
+    });
+
+    try {
+      final repository = ref.read(contentRepositoryProvider);
+
+      // Step 1: Upload to Firebase Storage
+      final imageUrl = await repository.uploadMealImage(_imagePath!);
+
+      // Step 2: Call the Cloud Function to analyze the meal
+      Map<String, dynamic> analysisData;
+      try {
+        analysisData = await repository.analyzeMealImage(imageUrl);
+      } catch (analysisError) {
+        // If analysis fails, still navigate with just the image URL
+        // so the user can fill in the fields manually.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'AI analysis failed. You can fill in the details manually.',
+              ),
+            ),
+          );
+          context.push('/meal-review', extra: <String, dynamic>{
+            'imageUrl': imageUrl,
+          });
+        }
+        return;
+      }
+
+      // Step 3: Navigate to review with analysis data
+      if (mounted) {
+        context.push('/meal-review', extra: <String, dynamic>{
+          'imageUrl': imageUrl,
+          ...analysisData,
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAnalyzing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Upload Meal'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_imagePath != null) ...[
+                DarkCard(
+                  padding: EdgeInsets.zero,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: kIsWeb
+                        ? Image.network(
+                            _imagePath!,
+                            fit: BoxFit.cover,
+                            height: 300,
+                            width: double.infinity,
+                          )
+                        : Image.file(
+                            File(_imagePath!),
+                            fit: BoxFit.cover,
+                            height: 300,
+                            width: double.infinity,
+                          ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                PrimaryButton(
+                  label: _isAnalyzing ? 'Analyzing...' : 'Analyze Meal',
+                  onPressed: _isAnalyzing ? null : _analyzeAndNavigate,
+                ),
+                if (_isAnalyzing)
+                  const Padding(
+                    padding: EdgeInsets.only(top: AppSpacing.md),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.orangeBright,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'Uploading & analyzing with AI...',
+                          style: TextStyle(color: AppColors.muted, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.md),
+                TextButton(
+                  onPressed: _isAnalyzing
+                      ? null
+                      : () {
+                          setState(() {
+                            _imagePath = null;
+                          });
+                        },
+                  child: const Text(
+                    'Retake or choose another',
+                    style: TextStyle(color: AppColors.muted),
+                  ),
+                ),
+              ] else ...[
+                const Icon(
+                  Icons.camera_alt_outlined,
+                  size: 80,
+                  color: AppColors.muted,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                const Text(
+                  'Capture or upload a photo of your meal.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.muted, fontSize: 16),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                PrimaryButton(
+                  label: 'Take Photo',
+                  icon: Icons.camera_alt,
+                  onPressed: () => _pickImage(ImageSource.camera),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                PrimaryButton(
+                  label: 'Upload from Gallery',
+                  icon: Icons.photo_library,
+                  onPressed: () => _pickImage(ImageSource.gallery),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
