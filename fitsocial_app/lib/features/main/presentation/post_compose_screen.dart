@@ -6,6 +6,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/activity_actions.dart';
+import '../application/create_flow_controller.dart';
 import '../domain/app_models.dart';
 
 class PostComposeScreen extends ConsumerStatefulWidget {
@@ -23,9 +24,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   @override
   void initState() {
     super.initState();
-    _captionController = TextEditingController(
-      text: 'Strong session this morning. Staying consistent.',
-    );
+    final draft = ref.read(createFlowControllerProvider).postDraft;
+    _captionController = TextEditingController(text: draft.caption);
   }
 
   @override
@@ -35,6 +35,15 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   }
 
   Future<void> _sharePost() async {
+    final draft = PostComposerDraftState(caption: _captionController.text);
+    if (draft.caption.trim().isEmpty) {
+      setState(() {
+        _errorMessage = 'Write a caption before sharing.';
+      });
+      return;
+    }
+
+    ref.read(createFlowControllerProvider.notifier).updatePost(draft);
     setState(() {
       _isSaving = true;
       _errorMessage = null;
@@ -42,9 +51,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
     try {
       final result = await ref.read(activityActionsProvider).sharePost(
-            PostDraft(caption: _captionController.text),
+            PostDraft(caption: draft.caption),
           );
       if (!mounted) return;
+      ref.read(createFlowControllerProvider.notifier).completePost(
+            result.message,
+          );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.message)),
       );
@@ -99,6 +111,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
           TextField(
             maxLines: 5,
             controller: _captionController,
+            decoration: const InputDecoration(hintText: 'Write a caption'),
+            onChanged: (value) {
+              ref
+                  .read(createFlowControllerProvider.notifier)
+                  .updatePost(PostComposerDraftState(caption: value));
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
           if (_errorMessage != null) ...[

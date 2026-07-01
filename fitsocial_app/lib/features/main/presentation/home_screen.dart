@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
+import '../application/create_flow_controller.dart';
 import '../application/content_providers.dart';
 import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
@@ -33,7 +34,12 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.notifications_none_rounded),
           ),
           IconButton(
-            onPressed: () => context.push('/meal-camera'),
+            onPressed: () {
+              ref
+                  .read(createFlowControllerProvider.notifier)
+                  .begin(CreateCanvasDestination.photo);
+              context.push(CreateCanvasDestination.photo.route);
+            },
             icon: const Icon(Icons.photo_camera_outlined),
           ),
         ],

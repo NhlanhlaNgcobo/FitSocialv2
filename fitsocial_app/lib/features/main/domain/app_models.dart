@@ -115,19 +115,33 @@ class ActivitySaveResult {
   final FeedPost? createdPost;
 }
 
+class ExerciseEntry {
+  const ExerciseEntry({
+    required this.name,
+    required this.sets,
+    required this.reps,
+  });
+
+  final String name;
+  final int sets;
+  final int reps;
+}
+
 class WorkoutLogDraft {
   const WorkoutLogDraft({
     required this.title,
     required this.duration,
     required this.calories,
     required this.exercises,
+    required this.notes,
     required this.shareToFeed,
   });
 
   final String title;
   final String duration;
   final String calories;
-  final List<String> exercises;
+  final List<ExerciseEntry> exercises;
+  final String notes;
   final bool shareToFeed;
 }
 

@@ -12,6 +12,7 @@ import '../../features/main/presentation/achievements_screen.dart';
 import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/home_screen.dart';
+import '../../features/main/presentation/manual_run_entry_screen.dart';
 import '../../features/main/presentation/meal_camera_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
 import '../../features/main/presentation/post_compose_screen.dart';
@@ -82,6 +83,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/log-run',
         builder: (context, state) => const RunLogScreen(),
+      ),
+      GoRoute(
+        path: '/log-run-manual',
+        builder: (context, state) => const ManualRunEntryScreen(),
       ),
       GoRoute(
         path: '/compose-post',

@@ -31,3 +31,14 @@
 
 # Generated config
 lib/firebase_options.dart
+
+# Node tooling (tool/seed)
+node_modules/
+firestore-debug.log
+ui-debug.log
+firebase-debug.log
+
+# Dev session screenshots (adb screencap artifacts)
+*.png
+!assets/**/*.png
+!assets/**/*.jpg

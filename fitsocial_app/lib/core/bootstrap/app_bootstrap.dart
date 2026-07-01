@@ -8,6 +8,8 @@ import 'firebase_options_adapter.dart';
 Future<BootstrapStatus> bootstrapApp() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // FirebaseInitProvider is disabled in AndroidManifest.xml so the native
+  // Google Services plugin does not auto-initialize before this call.
   await Firebase.initializeApp(options: resolveFirebaseOptions());
 
   return const BootstrapStatus(

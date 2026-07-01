@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/activity_actions.dart';
+import '../application/create_flow_controller.dart';
 import '../domain/app_models.dart';
 
 class MealReviewScreen extends ConsumerStatefulWidget {
@@ -17,7 +18,6 @@ class MealReviewScreen extends ConsumerStatefulWidget {
 }
 
 class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
-  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _caloriesController;
   late final TextEditingController _proteinController;
@@ -26,40 +26,19 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
   late final TextEditingController _notesController;
   bool _shareToFeed = true;
   bool _isSaving = false;
-
-  String? _imageUrl;
-  bool _didInitFromExtra = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    // Default empty — will be overridden in didChangeDependencies from route extra.
-    _nameController = TextEditingController();
-    _caloriesController = TextEditingController();
-    _proteinController = TextEditingController();
-    _carbsController = TextEditingController();
-    _fatController = TextEditingController();
-    _notesController = TextEditingController();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_didInitFromExtra) return;
-    _didInitFromExtra = true;
-
-    final extra = GoRouterState.of(context).extra;
-    if (extra is Map<String, dynamic>) {
-      _imageUrl = extra['imageUrl'] as String?;
-      _nameController.text = (extra['name'] as String?) ?? '';
-      _caloriesController.text = (extra['calories'] as String?) ?? '';
-      _proteinController.text = (extra['protein'] as String?) ?? '';
-      _carbsController.text = (extra['carbs'] as String?) ?? '';
-      _fatController.text = (extra['fat'] as String?) ?? '';
-    } else if (extra is String) {
-      // Backwards compatibility: plain image path string
-      _imageUrl = extra;
-    }
+    final draft = ref.read(createFlowControllerProvider).mealDraft;
+    _nameController = TextEditingController(text: draft.name);
+    _caloriesController = TextEditingController(text: draft.calories);
+    _proteinController = TextEditingController(text: draft.protein);
+    _carbsController = TextEditingController(text: draft.carbs);
+    _fatController = TextEditingController(text: draft.fat);
+    _notesController = TextEditingController(text: draft.notes);
+    _shareToFeed = draft.shareToFeed;
   }
 
   @override
@@ -74,35 +53,45 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
   }
 
   Future<void> _saveMeal() async {
-    if (!_formKey.currentState!.validate()) return;
+    final draft = _currentDraft;
+    if (draft.name.trim().isEmpty) {
+      setState(() {
+        _errorMessage = 'Add a meal name before saving.';
+      });
+      return;
+    }
 
+    ref.read(createFlowControllerProvider.notifier).updateMeal(draft);
     setState(() {
       _isSaving = true;
+      _errorMessage = null;
     });
 
     try {
       final result = await ref.read(activityActionsProvider).saveMeal(
             MealLogDraft(
-              name: _nameController.text,
-              calories: _caloriesController.text,
-              protein: _proteinController.text,
-              carbs: _carbsController.text,
-              fat: _fatController.text,
-              notes: _notesController.text,
-              shareToFeed: _shareToFeed,
-              imageUrl: _imageUrl,
+              name: draft.name,
+              calories: draft.calories,
+              protein: draft.protein,
+              carbs: draft.carbs,
+              fat: draft.fat,
+              notes: draft.notes,
+              shareToFeed: draft.shareToFeed,
             ),
           );
       if (!mounted) return;
+      ref.read(createFlowControllerProvider.notifier).completeMeal(
+            result.message,
+          );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result.message)),
       );
       context.go('/home');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving meal: $error')),
-      );
+      setState(() {
+        _errorMessage = error.toString();
+      });
     } finally {
       if (mounted) {
         setState(() {
@@ -112,18 +101,20 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
     }
   }
 
-  InputDecoration _buildInputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: AppColors.muted),
-      filled: true,
-      fillColor: AppColors.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  MealDraftState get _currentDraft {
+    return MealDraftState(
+      name: _nameController.text,
+      calories: _caloriesController.text,
+      protein: _proteinController.text,
+      carbs: _carbsController.text,
+      fat: _fatController.text,
+      notes: _notesController.text,
+      shareToFeed: _shareToFeed,
     );
+  }
+
+  void _syncDraft() {
+    ref.read(createFlowControllerProvider.notifier).updateMeal(_currentDraft);
   }
 
   @override
@@ -133,98 +124,117 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
-          if (_imageUrl != null) ...[
-            DarkCard(
-              padding: EdgeInsets.zero,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  _imageUrl!,
-                  fit: BoxFit.cover,
-                  height: 250,
-                  width: double.infinity,
-                  errorBuilder: (_, __, ___) => const SizedBox(
-                    height: 250,
-                    child: Center(
-                      child: Icon(Icons.broken_image, color: AppColors.muted, size: 48),
-                    ),
+          DarkCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 92,
+                  height: 92,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceHigh,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.stroke),
+                  ),
+                  child: const Icon(
+                    Icons.restaurant_menu_rounded,
+                    color: AppColors.orangeBright,
+                    size: 36,
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          DarkCard(
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _Label(label: 'Meal Name'),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _nameController,
-                    style: const TextStyle(color: AppColors.white),
-                    decoration: _buildInputDecoration('e.g., Grilled Chicken Bowl'),
-                    validator: (value) => value == null || value.isEmpty ? 'Required' : null,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  const _Label(label: 'Calories (kcal)'),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _caloriesController,
-                    style: const TextStyle(color: AppColors.white),
-                    keyboardType: TextInputType.number,
-                    decoration: _buildInputDecoration('e.g., 520'),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
+                const SizedBox(width: AppSpacing.md),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _MacroField(
-                          label: 'Protein (g)',
-                          controller: _proteinController,
-                          decoration: _buildInputDecoration('0'),
-                        ),
+                      Text(
+                        'Meal details',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w800),
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: _MacroField(
-                          label: 'Carbs (g)',
-                          controller: _carbsController,
-                          decoration: _buildInputDecoration('0'),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: _MacroField(
-                          label: 'Fat (g)',
-                          controller: _fatController,
-                          decoration: _buildInputDecoration('0'),
-                        ),
+                      SizedBox(height: 6),
+                      Text(
+                        'Add the meal information you want to log.',
+                        style: TextStyle(color: AppColors.muted),
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  const _Label(label: 'Notes (optional)'),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _notesController,
-                    maxLines: 3,
-                    style: const TextStyle(color: AppColors.white),
-                    decoration: _buildInputDecoration('Any additional details...'),
-                  ),
-                ],
-              ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    _syncDraft();
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(CreateCanvasDestination.photo.route);
+                    }
+                  },
+                  child: const Text('Change'),
+                ),
+              ],
             ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const _Label(label: 'Meal Name'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _nameController,
+            decoration: const InputDecoration(hintText: 'Meal name'),
+            textInputAction: TextInputAction.next,
+            onChanged: (_) => _syncDraft(),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const _Label(label: 'Calories (kcal)'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _caloriesController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(hintText: 'Calories'),
+            textInputAction: TextInputAction.next,
+            onChanged: (_) => _syncDraft(),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _MacroField(
+                  label: 'Protein (g)',
+                  controller: _proteinController,
+                  onChanged: _syncDraft,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _MacroField(
+                  label: 'Carbs (g)',
+                  controller: _carbsController,
+                  onChanged: _syncDraft,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _MacroField(
+                  label: 'Fat (g)',
+                  controller: _fatController,
+                  onChanged: _syncDraft,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const _Label(label: 'Notes (optional)'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _notesController,
+            maxLines: 3,
+            decoration: const InputDecoration(hintText: 'Notes'),
+            onChanged: (_) => _syncDraft(),
           ),
           const SizedBox(height: AppSpacing.md),
           SwitchListTile(
             value: _shareToFeed,
-            activeThumbColor: AppColors.white,
-            activeTrackColor: AppColors.orangeBright,
+            activeThumbColor: AppColors.orangeBright,
             contentPadding: EdgeInsets.zero,
-            title: const Text('Share to feed', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w600)),
+            title: const Text('Share to feed'),
             subtitle: const Text(
               'Post this meal to your profile activity',
               style: TextStyle(color: AppColors.muted),
@@ -233,16 +243,32 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
               setState(() {
                 _shareToFeed = value;
               });
+              _syncDraft();
             },
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
+          if (_errorMessage != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.stroke),
+              ),
+              child: Text(
+                _errorMessage!,
+                style: const TextStyle(color: AppColors.orangeBright),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           PrimaryButton(
             label: _isSaving
                 ? 'Saving...'
                 : (_shareToFeed ? 'Save Meal & Share' : 'Save Meal'),
             onPressed: _isSaving ? null : _saveMeal,
           ),
-          const SizedBox(height: AppSpacing.xl),
         ],
       ),
     );
@@ -267,11 +293,15 @@ class _Label extends StatelessWidget {
 }
 
 class _MacroField extends StatelessWidget {
-  const _MacroField({required this.label, required this.controller, required this.decoration});
+  const _MacroField({
+    required this.label,
+    required this.controller,
+    required this.onChanged,
+  });
 
   final String label;
   final TextEditingController controller;
-  final InputDecoration decoration;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -282,9 +312,9 @@ class _MacroField extends StatelessWidget {
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
-          style: const TextStyle(color: AppColors.white),
           keyboardType: TextInputType.number,
-          decoration: decoration,
+          textInputAction: TextInputAction.next,
+          onChanged: (_) => onChanged(),
         ),
       ],
     );

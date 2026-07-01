@@ -1,0 +1,12 @@
+{
+  "name": "fitsocial-seed",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Seeds the local Firestore emulator with mock FitSocial users/posts/progress for UI and demo testing.",
+  "scripts": {
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

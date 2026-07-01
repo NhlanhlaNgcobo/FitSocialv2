@@ -147,6 +147,7 @@ class AppSession extends ChangeNotifier {
     notifyListeners();
   }
 
+
   void _setLoading(bool value, {bool shouldNotify = true}) {
     _isLoading = value;
     if (shouldNotify) {

@@ -1,22 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
-import '../../../shared/widgets/brand_image_tile.dart';
+import '../../../shared/widgets/primary_button.dart';
+import '../application/create_flow_controller.dart';
 
-class MealCameraScreen extends StatefulWidget {
+class MealCameraScreen extends ConsumerStatefulWidget {
   const MealCameraScreen({super.key});
 
   @override
-  State<MealCameraScreen> createState() => _MealCameraScreenState();
+  ConsumerState<MealCameraScreen> createState() => _MealCameraScreenState();
 }
 
-class _MealCameraScreenState extends State<MealCameraScreen> {
+class _MealCameraScreenState extends ConsumerState<MealCameraScreen> {
   bool _flashEnabled = false;
+
+  void _showPendingPhotoMessage() {
+    ref.read(createFlowControllerProvider.notifier).markMealPhotoPending();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Meal photo analysis will be available after the AI backend is connected.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final flowState = ref.watch(createFlowControllerProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Log Meal')),
       body: Padding(
@@ -58,24 +73,36 @@ class _MealCameraScreenState extends State<MealCameraScreen> {
                     Positioned.fill(
                       child: Padding(
                         padding: const EdgeInsets.all(38),
-                        child: Stack(
-                          children: [
-                            BrandImageTile(
-                              tile: AppVisualTile.mealBowl,
-                              borderRadius: BorderRadius.circular(24),
-                              overlay: const Color(0x12050505),
-                            ),
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(24),
-                                gradient: const RadialGradient(
-                                  colors: [Color(0x28FFFFFF), Colors.transparent],
-                                  radius: 0.7,
-                                  center: Alignment.topCenter,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.no_photography_outlined,
+                                color: AppColors.orangeBright,
+                                size: 52,
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(
+                                flowState.mealPhotoAnalysisPending
+                                    ? 'Photo analysis queued'
+                                    : 'Photo analysis not connected',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                flowState.mealPhotoAnalysisPending
+                                    ? 'Keep the photo intent here and enter the meal details manually.'
+                                    : 'Enter meal details manually for now.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: AppColors.muted),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -89,13 +116,15 @@ class _MealCameraScreenState extends State<MealCameraScreen> {
               children: [
                 _RoundCameraButton(
                   icon: Icons.photo_library_outlined,
-                  onTap: () => context.push('/meal-review'),
+                  onTap: _showPendingPhotoMessage,
                 ),
                 _CaptureButton(
-                  onTap: () => context.push('/meal-review'),
+                  onTap: _showPendingPhotoMessage,
                 ),
                 _RoundCameraButton(
-                  icon: _flashEnabled ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                  icon: _flashEnabled
+                      ? Icons.flash_on_rounded
+                      : Icons.flash_off_rounded,
                   highlighted: _flashEnabled,
                   onTap: () {
                     setState(() {
@@ -106,9 +135,15 @@ class _MealCameraScreenState extends State<MealCameraScreen> {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            const Text(
-              'Take a photo of your meal',
-              style: TextStyle(color: AppColors.muted),
+            PrimaryButton(
+              label: 'Enter Meal Manually',
+              icon: Icons.edit_note_rounded,
+              onPressed: () {
+                ref
+                    .read(createFlowControllerProvider.notifier)
+                    .begin(CreateCanvasDestination.meal);
+                context.push(CreateCanvasDestination.meal.route);
+              },
             ),
           ],
         ),
@@ -122,8 +157,8 @@ class _CameraCorners extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: const [
+    return const Stack(
+      children: [
         _Corner(alignment: Alignment.topLeft),
         _Corner(alignment: Alignment.topRight),
         _Corner(alignment: Alignment.bottomLeft),
@@ -214,9 +249,12 @@ class _RoundCameraButton extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.stroke),
-          color: highlighted ? AppColors.orangeBright.withOpacity(0.18) : AppColors.surface,
+          color: highlighted
+              ? AppColors.orangeBright.withValues(alpha: 0.18)
+              : AppColors.surface,
         ),
-        child: Icon(icon, color: highlighted ? AppColors.orangeBright : AppColors.white),
+        child: Icon(icon,
+            color: highlighted ? AppColors.orangeBright : AppColors.white),
       ),
     );
   }

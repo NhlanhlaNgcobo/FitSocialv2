@@ -109,7 +109,9 @@ class FirestoreContentRepository implements ContentRepository {
     final post = await _createPost(
       profile: profile,
       activity: draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
-      caption: 'Logged ${draft.exercises.length} exercises.',
+      caption: draft.notes.trim().isEmpty
+          ? 'Logged ${draft.exercises.length} exercises.'
+          : draft.notes.trim(),
       metricLabels: [
         draft.duration,
         draft.calories,

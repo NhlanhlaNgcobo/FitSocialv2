@@ -1,6 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Location: precise GPS for run tracking -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Background location: keeps GPS alive when screen turns off during a run (Android 10+) -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    <!-- Foreground service: required to run location tracking in a foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <!-- Foreground service location type: required on Android 14+ (API 34) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <!-- Activity recognition: needed to use the hardware step counter sensor (Android 10+) -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+    <!-- Body sensors: reserved for future heart-rate / wearable sensor integration -->
+    <uses-permission android:name="android.permission.BODY_SENSORS"/>
     <application
         android:label="FitSocial"
         android:name="${applicationName}"
@@ -30,6 +41,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Disable the ContentProvider that google-services.json injects to
+             auto-initialize Firebase natively. Flutter's firebase_core Dart
+             plugin calls Firebase.initializeApp() instead, which is required
+             to properly register the default app on the Dart side. -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            android:exported="false"
+            android:initOrder="100"
+            android:enabled="false" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
