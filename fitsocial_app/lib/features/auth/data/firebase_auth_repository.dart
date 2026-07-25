@@ -14,6 +14,15 @@ class FirebaseAuthRepository implements AuthRepository {
   final GoogleSignIn _googleSignIn;
 
   @override
+  String? currentUserEmail() {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return null;
+    final email = user.email;
+    if (email != null && email.isNotEmpty) return email;
+    return user.uid;
+  }
+
+  @override
   Future<String> signInWithEmail({
     required String email,
     required String password,

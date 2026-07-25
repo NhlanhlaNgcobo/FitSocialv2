@@ -26,8 +26,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _emailController = TextEditingController(text: 'neo@fitsocial.app');
-    _passwordController = TextEditingController(text: 'password123');
+    _emailController = TextEditingController();
+    _passwordController = TextEditingController();
+  }
+
+  void _submit(AppSession session) {
+    if (!_showEmailForm) {
+      setState(() => _showEmailForm = true);
+      return;
+    }
+    if (widget.isLoginMode) {
+      session.signInWithEmail(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+    } else {
+      session.signUpWithEmail(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+    }
   }
 
   @override
@@ -54,6 +72,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               Expanded(
+                flex: _showEmailForm ? 2 : 5,
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
@@ -85,7 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
                             gradient: LinearGradient(
                               colors: [
-                                AppColors.orangeBright.withOpacity(0.2),
+                                AppColors.orangeBright.withValues(alpha: 0.2),
                                 Colors.transparent,
                               ],
                               begin: Alignment.bottomCenter,
@@ -129,49 +148,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              PrimaryButton(
-                label: _showEmailForm ? (widget.isLoginMode ? 'Log In' : 'Sign Up') : 'Use Email',
-                onPressed: session.isLoading
-                    ? null
-                    : () {
-                        if (_showEmailForm) {
-                          if (widget.isLoginMode) {
-                            ref.read(appSessionProvider).signInWithEmail(
-                                  email: _emailController.text,
-                                  password: _passwordController.text,
-                                );
-                          } else {
-                            ref.read(appSessionProvider).signUpWithEmail(
-                                  email: _emailController.text,
-                                  password: _passwordController.text,
-                                );
-                          }
-                        } else {
-                          setState(() {
-                            _showEmailForm = true;
-                          });
-                        }
-                      },
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _SocialButton(
-                icon: Icons.mail_outline_rounded,
-                label: 'Continue with Google',
-                loading: session.isLoading,
-                onPressed: () {
-                  ref.read(appSessionProvider).continueWithProvider('google');
-                },
-              ),
-
+              // Email fields appear ABOVE the primary CTA once revealed, so
+              // the flow reads top-to-bottom: enter details, then submit.
               if (_showEmailForm) ...[
-                const SizedBox(height: AppSpacing.md),
                 _EmailPanel(
                   emailController: _emailController,
                   passwordController: _passwordController,
+                  onSubmitted: () => _submit(session),
                 ),
+                const SizedBox(height: AppSpacing.md),
               ],
               if (session.errorMessage != null) ...[
-                const SizedBox(height: AppSpacing.md),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
@@ -188,7 +175,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: AppSpacing.md),
               ],
+              PrimaryButton(
+                label: session.isLoading
+                    ? 'Please wait…'
+                    : _showEmailForm
+                        ? (widget.isLoginMode ? 'Log In' : 'Sign Up')
+                        : 'Use Email',
+                onPressed: session.isLoading ? null : () => _submit(session),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _SocialButton(
+                icon: Icons.mail_outline_rounded,
+                label: 'Continue with Google',
+                loading: session.isLoading,
+                onPressed: () {
+                  ref.read(appSessionProvider).continueWithProvider('google');
+                },
+              ),
             ],
           ),
         ),
@@ -201,10 +206,12 @@ class _EmailPanel extends StatelessWidget {
   const _EmailPanel({
     required this.emailController,
     required this.passwordController,
+    required this.onSubmitted,
   });
 
   final TextEditingController emailController;
   final TextEditingController passwordController;
+  final VoidCallback onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -216,15 +223,31 @@ class _EmailPanel extends StatelessWidget {
         border: Border.all(color: AppColors.stroke),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text(
+            'Email',
+            style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            autocorrect: false,
             decoration: const InputDecoration(hintText: 'you@example.com'),
           ),
           const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Password',
+            style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: passwordController,
             obscureText: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => onSubmitted(),
             decoration: const InputDecoration(hintText: 'Enter your password'),
           ),
         ],

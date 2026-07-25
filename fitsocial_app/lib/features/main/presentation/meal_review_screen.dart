@@ -27,6 +27,7 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
   bool _shareToFeed = true;
   bool _isSaving = false;
   String? _errorMessage;
+  String? _imageUrl;
 
   @override
   void initState() {
@@ -39,6 +40,7 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
     _fatController = TextEditingController(text: draft.fat);
     _notesController = TextEditingController(text: draft.notes);
     _shareToFeed = draft.shareToFeed;
+    _imageUrl = draft.imageUrl;
   }
 
   @override
@@ -77,6 +79,7 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
               fat: draft.fat,
               notes: draft.notes,
               shareToFeed: draft.shareToFeed,
+              imageUrl: _imageUrl,
             ),
           );
       if (!mounted) return;
@@ -110,6 +113,7 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
       fat: _fatController.text,
       notes: _notesController.text,
       shareToFeed: _shareToFeed,
+      imageUrl: _imageUrl,
     );
   }
 

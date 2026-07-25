@@ -97,6 +97,37 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen> {
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
             DarkCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.gps_fixed_rounded,
+                  color: AppColors.orangeBright,
+                ),
+                title: const Text(
+                  'Track live with GPS',
+                  style: TextStyle(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Real-time distance, pace, and heart rate',
+                  style: TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+                trailing:
+                    const Icon(Icons.chevron_right, color: AppColors.muted),
+                onTap: () => context.push('/live-run'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const Center(
+              child: Text(
+                'or log manually',
+                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            DarkCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

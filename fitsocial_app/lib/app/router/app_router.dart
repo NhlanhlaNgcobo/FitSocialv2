@@ -6,6 +6,7 @@ import '../../features/auth/application/app_session.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_setup_screen.dart';
+import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/auth/presentation/welcome_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
 import '../../features/main/presentation/achievements_screen.dart';
@@ -15,10 +16,13 @@ import '../../features/main/presentation/home_screen.dart';
 import '../../features/main/presentation/manual_run_entry_screen.dart';
 import '../../features/main/presentation/meal_camera_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
+import '../../features/main/presentation/meal_upload_screen.dart';
 import '../../features/main/presentation/post_compose_screen.dart';
 import '../../features/main/presentation/profile_screen.dart';
 import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
+import '../../features/tracking/presentation/health_dashboard_screen.dart';
+import '../../features/tracking/presentation/live_run_screen.dart';
 import '../../shared/layout/app_shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -30,11 +34,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     refreshListenable: session,
-    initialLocation: '/welcome',
+    initialLocation: '/splash',
     redirect: (context, state) {
       final location = state.matchedLocation;
       final stage = session.stage;
       const authRoutes = {'/welcome', '/login'};
+
+      // While restoring a persisted session, stay on the splash screen.
+      if (stage == AuthStage.initializing) {
+        return location == '/splash' ? null : '/splash';
+      }
+
+      // Bootstrap finished: move off the splash to the right destination.
+      if (location == '/splash') {
+        if (stage == AuthStage.unauthenticated) return '/welcome';
+        if (stage == AuthStage.profileSetup) return '/profile-setup';
+        return '/home';
+      }
 
       if (stage == AuthStage.unauthenticated) {
         if (!authRoutes.contains(location)) {
@@ -57,6 +73,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/welcome',
         builder: (context, state) => const WelcomeScreen(),
@@ -97,12 +117,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MealCameraScreen(),
       ),
       GoRoute(
+        path: '/meal-upload',
+        builder: (context, state) => const MealUploadScreen(),
+      ),
+      GoRoute(
         path: '/meal-review',
         builder: (context, state) => const MealReviewScreen(),
       ),
       GoRoute(
         path: '/achievements',
         builder: (context, state) => const AchievementsScreen(),
+      ),
+      GoRoute(
+        path: '/live-run',
+        builder: (context, state) => const LiveRunScreen(),
+      ),
+      GoRoute(
+        path: '/health',
+        builder: (context, state) => const HealthDashboardScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

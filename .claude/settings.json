@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter analyze *)",
+      "PowerShell(Get-Command firebase -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command flutterfire -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command dart -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command flutter -ErrorAction SilentlyContinue)",
+      "Bash(npm -v)",
+      "Bash(npx --version)",
+      "Bash(npm install *)",
+      "Bash(java -version)",
+      "Bash(npx --yes firebase-tools@latest emulators:start --only firestore --project fitsocialv2)",
+      "Bash(tail -60 \"C:\\\\Users\\\\NhlanhlaNgcobo\\\\AppData\\\\Local\\\\npm-cache\\\\_logs\\\\2026-06-30T08_41_14_553Z-debug-0.log\" 2>&1)",
+      "Read(//c/Users/NhlanhlaNgcobo/AppData/Local/npm-cache/_logs/**)",
+      "mcp__claude_ai_Claude_Code_Remote__delete_trigger",
+      "PowerShell(winget --version 2>&1)",
+      "PowerShell(winget source list 2>&1)",
+      "PowerShell(winget install --id EclipseAdoptium.Temurin.21.JDK -e --accept-package-agreements --accept-source-agreements --silent 2>&1)",
+      "Bash(FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run seed)",
+      "Bash(curl -s \"http://127.0.0.1:8080/v1/projects/fitsocialv2/databases/\\(default\\)/documents/posts/mock-post-0\")",
+      "Bash(curl -s \"http://127.0.0.1:8080/v1/projects/fitsocialv2/databases/\\(default\\)/documents/users\")",
+      "Bash(git check-ignore *)",
+      "PowerShell(& \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\emulator\\\\emulator.exe\" -list-avds)",
+      "Bash(flutter run *)",
+      "Bash(tee flutter_run_session.log)",
+      "Bash(echo \"started flutter run in background with PID $!\")",
+      "Bash(wait)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8080/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:9099/)",
+      "Bash(npx --yes firebase-tools@latest emulators:start --only firestore,auth --project fitsocialv2)",
+      "Bash(tee flutter_run_session2.log)",
+      "Bash(curl -s -o /dev/null -w \"firestore:%{http_code}\\\\n\" http://127.0.0.1:8080/)",
+      "Bash(curl -s -o /dev/null -w \"auth:%{http_code}\\\\n\" http://127.0.0.1:9099/)",
+      "Bash(tee flutter_run_session3.log)"
+    ]
+  }
+}

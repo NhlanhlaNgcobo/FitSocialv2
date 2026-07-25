@@ -8,6 +8,8 @@ import '../data/user_profile_repository.dart';
 import '../domain/auth_models.dart';
 
 enum AuthStage {
+  /// Cold-start bootstrap: checking Firebase for a restored session.
+  initializing,
   unauthenticated,
   profileSetup,
   authenticated,
@@ -17,11 +19,13 @@ class AppSession extends ChangeNotifier {
   AppSession({
     required this.authRepository,
     required this.userProfileRepository,
-  });
+  }) {
+    _bootstrap();
+  }
 
   final AuthRepository authRepository;
   final UserProfileRepository userProfileRepository;
-  AuthStage _stage = AuthStage.unauthenticated;
+  AuthStage _stage = AuthStage.initializing;
   bool _isLoading = false;
   String? _email;
   UserProfileDraft? _profile;
@@ -32,6 +36,31 @@ class AppSession extends ChangeNotifier {
   String? get email => _email;
   UserProfileDraft? get profile => _profile;
   String? get errorMessage => _errorMessage;
+
+  /// Rehydrates the session on cold start. Firebase Auth persists the
+  /// signed-in user across launches; we ask for it, load the profile, and
+  /// route straight to the app (or profile setup) instead of the welcome
+  /// screen.
+  Future<void> _bootstrap() async {
+    final restoredEmail = authRepository.currentUserEmail();
+    if (restoredEmail == null) {
+      _stage = AuthStage.unauthenticated;
+      notifyListeners();
+      return;
+    }
+
+    _email = restoredEmail;
+    try {
+      _profile = await userProfileRepository.loadCurrentProfile();
+      _stage =
+          _profile != null ? AuthStage.authenticated : AuthStage.profileSetup;
+    } catch (_) {
+      // Profile load failed (offline/permission) but the auth session is
+      // valid — keep the user in, let the app retry loading data.
+      _stage = AuthStage.authenticated;
+    }
+    notifyListeners();
+  }
 
   Future<void> signInWithEmail({
     required String email,

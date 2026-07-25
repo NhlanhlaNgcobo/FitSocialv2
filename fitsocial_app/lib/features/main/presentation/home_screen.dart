@@ -30,6 +30,10 @@ class HomeScreen extends ConsumerWidget {
         title: const FitSocialLogo(size: 24, animated: false),
         actions: [
           IconButton(
+            onPressed: () => context.push('/health'),
+            icon: const Icon(Icons.monitor_heart_outlined),
+          ),
+          IconButton(
             onPressed: () => context.push('/achievements'),
             icon: const Icon(Icons.notifications_none_rounded),
           ),

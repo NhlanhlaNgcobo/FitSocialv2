@@ -56,16 +56,16 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     });
 
     try {
-      final exercises = <String>[];
-      final sets = _setsController.text.trim();
-      final reps = _repsController.text.trim();
-      if (sets.isNotEmpty || reps.isNotEmpty) {
-        exercises.add('${sets.isNotEmpty ? sets : "0"} Sets x ${reps.isNotEmpty ? reps : "0"} Reps');
-      }
-      final notes = _notesController.text.trim();
-      if (notes.isNotEmpty) {
-        exercises.add('Notes: $notes');
-      }
+      final sets = int.tryParse(_setsController.text.trim()) ?? 0;
+      final reps = int.tryParse(_repsController.text.trim()) ?? 0;
+      final exercises = <ExerciseEntry>[
+        if (sets > 0 || reps > 0)
+          ExerciseEntry(
+            name: _titleController.text.trim(),
+            sets: sets,
+            reps: reps,
+          ),
+      ];
 
       final result = await ref.read(activityActionsProvider).saveWorkout(
             WorkoutLogDraft(
@@ -73,6 +73,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
               duration: '${_durationController.text.trim()} min',
               calories: '0 kcal',
               exercises: exercises,
+              notes: _notesController.text.trim(),
               shareToFeed: _shareToFeed,
             ),
           );

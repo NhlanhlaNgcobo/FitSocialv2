@@ -124,7 +124,12 @@ class ProfileScreen extends ConsumerWidget {
             ),
             Expanded(
               child: TabBarView(
-                children: List.generate(4, (_) => const _MediaGrid()),
+                children: [
+                  _MediaGrid(userName: displayName),
+                  _MediaGrid(userName: displayName, activityKeyword: 'workout'),
+                  _MediaGrid(userName: displayName, activityKeyword: 'run'),
+                  _MediaGrid(userName: displayName, activityKeyword: 'meal'),
+                ],
               ),
             ),
           ],
@@ -178,32 +183,151 @@ class _ProfileStat extends StatelessWidget {
   }
 }
 
-class _MediaGrid extends StatelessWidget {
-  const _MediaGrid();
+/// Grid of the signed-in user's OWN posts. New accounts with no posts get an
+/// empty state — never mock/brand placeholder images.
+class _MediaGrid extends ConsumerWidget {
+  const _MediaGrid({required this.userName, this.activityKeyword});
+
+  final String userName;
+
+  /// When set, only posts whose activity contains this keyword are shown
+  /// (used by the Workouts / Runs / Meals tabs).
+  final String? activityKeyword;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final feed = ref.watch(feedPostsProvider);
+
+    return feed.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AppColors.orangeBright),
+      ),
+      error: (_, __) => const _EmptyGrid(
+        message: "Couldn't load your posts. Pull to refresh.",
+      ),
+      data: (posts) {
+        final mine = posts.where((p) {
+          if (p.userName != userName) return false;
+          if (activityKeyword == null) return true;
+          return p.activity.toLowerCase().contains(activityKeyword!);
+        }).toList();
+
+        if (mine.isEmpty) {
+          return _EmptyGrid(
+            message: activityKeyword == null
+                ? "You haven't posted yet. Log a workout, run, or meal to get started."
+                : 'No ${activityKeyword}s shared yet.',
+          );
+        }
+
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.xl,
+          ),
+          itemCount: mine.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemBuilder: (context, index) => _PostTile(post: mine[index]),
+        );
+      },
+    );
+  }
+}
+
+/// A single post tile — the uploaded photo when present, otherwise a
+/// gradient card labelled with the activity.
+class _PostTile extends StatelessWidget {
+  const _PostTile({required this.post});
+
+  final FeedPost post;
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.xl,
+    final radius = BorderRadius.circular(16);
+    if (post.imageUrl != null && post.imageUrl!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.network(
+          post.imageUrl!,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _GradientTile(post: post),
+          loadingBuilder: (context, child, progress) =>
+              progress == null ? child : _GradientTile(post: post),
+        ),
+      );
+    }
+    return _GradientTile(post: post);
+  }
+}
+
+class _GradientTile extends StatelessWidget {
+  const _GradientTile({required this.post});
+
+  final FeedPost post;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = post.backgroundColors.isNotEmpty
+        ? post.backgroundColors
+        : [AppColors.surfaceHigh, AppColors.surface];
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
-      itemCount: 8,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
+      padding: const EdgeInsets.all(8),
+      alignment: Alignment.bottomLeft,
+      child: Text(
+        post.activity,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
       ),
-      itemBuilder: (context, index) {
-        final tiles = AppVisualTile.values;
-        return BrandImageTile(
-          tile: tiles[index % tiles.length],
-          borderRadius: BorderRadius.circular(16),
-          overlay: const Color(0x16050505),
-        );
-      },
+    );
+  }
+}
+
+class _EmptyGrid extends StatelessWidget {
+  const _EmptyGrid({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.grid_view_rounded,
+              color: AppColors.muted,
+              size: 40,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

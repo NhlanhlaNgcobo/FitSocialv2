@@ -14,11 +14,19 @@
       },
       "oauth_client": [
         {
-          "client_id": "801328750075-cfe797f3fvd1uaf8vfjtp9osslig90lj.apps.googleusercontent.com",
+          "client_id": "801328750075-9kqptumsmg3a99nlhlu1mnv9qqdken7d.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.fitsocial.fitsocial_app",
-            "certificate_hash": "9045a15e019228117746c360be33371e4350a9e6"
+            "certificate_hash": "a6f45f930b427408d0131bc1517a96b615f551ed"
+          }
+        },
+        {
+          "client_id": "801328750075-ig5o6f1u6c3152klac8faijnies1iunh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitsocial.fitsocial_app",
+            "certificate_hash": "03b053663876c64f7be3609a0dac6cf9f94580d3"
           }
         },
         {

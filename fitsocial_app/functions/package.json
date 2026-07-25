@@ -2,7 +2,7 @@
   "name": "fitsocial-functions",
   "description": "Firebase Cloud Functions for FitSocial",
   "engines": {
-    "node": "18"
+    "node": "20"
   },
   "main": "index.js",
   "dependencies": {

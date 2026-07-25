@@ -125,6 +125,20 @@ class ExerciseEntry {
   final String name;
   final int sets;
   final int reps;
+
+  /// Firestore can only store primitives, lists, and maps — never custom
+  /// classes — so entries must be converted before being written.
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'sets': sets,
+        'reps': reps,
+      };
+
+  factory ExerciseEntry.fromMap(Map<String, dynamic> map) => ExerciseEntry(
+        name: (map['name'] as String?) ?? '',
+        sets: (map['sets'] as num?)?.toInt() ?? 0,
+        reps: (map['reps'] as num?)?.toInt() ?? 0,
+      );
 }
 
 class WorkoutLogDraft {

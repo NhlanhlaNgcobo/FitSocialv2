@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/brand_image_tile.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/stat_tile.dart';
+import '../../music/application/spotify_providers.dart';
 import '../application/content_providers.dart';
 import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
@@ -63,7 +64,17 @@ class _ProgressSection extends ConsumerWidget {
         const _RangeTabs(),
         const SizedBox(height: AppSpacing.md),
         metrics.when(
-          data: (data) => Column(children: _buildMetricTiles(data)),
+          data: (data) => data.isEmpty
+              ? const _EmptyState(
+                  icon: Icons.insights_rounded,
+                  title: 'No progress yet',
+                  message:
+                      'Log a workout, run, or meal and your stats will start '
+                      'showing up here.',
+                  ctaLabel: 'Log an activity',
+                  ctaRoute: '/create',
+                )
+              : Column(children: _buildMetricTiles(data)),
           loading: () => const _ProgressPlaceholder(label: 'Loading progress...'),
           error: (_, __) => const _ProgressPlaceholder(label: 'Progress unavailable'),
         ),
@@ -242,7 +253,7 @@ class _MusicHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 168,
+      height: 184,
       child: Stack(
         children: [
           const Positioned.fill(
@@ -281,8 +292,12 @@ class _MusicHeroCard extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: 8),
+                // maxLines guards the fixed-height card against overflow at
+                // larger system font scales.
                 Text(
                   'Preview provider-aware playlists, create your own gym mixes, and keep users inside the flow without mid-set app switching.',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: AppColors.muted, height: 1.45),
                 ),
               ],
@@ -419,39 +434,80 @@ class _MusicProviderConnections extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
+    final spotify = ref.watch(spotifyConnectionProvider);
+
+    return Column(
       children: [
-        Expanded(
-          child: _ProviderTile(
-            service: MusicProviderService.spotify,
-            connected: state.spotifyConnected,
-            primary: state.primaryService == MusicProviderService.spotify,
-            icon: Icons.multitrack_audio_rounded,
-            accent: const Color(0xFF1ED760),
-            onTap: () => ref
-                .read(musicIntegrationControllerProvider.notifier)
-                .toggleConnection(MusicProviderService.spotify),
-            onSetPrimary: () => ref
-                .read(musicIntegrationControllerProvider.notifier)
-                .setPrimaryService(MusicProviderService.spotify),
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _ProviderTile(
+                service: MusicProviderService.spotify,
+                connected: spotify.isConnected,
+                busy: spotify.isBusy,
+                primary: state.primaryService == MusicProviderService.spotify,
+                icon: Icons.multitrack_audio_rounded,
+                accent: const Color(0xFF1ED760),
+                description: spotify.isConnected
+                    ? 'Connected as ${spotify.profile?.displayName ?? 'your account'}'
+                        '${spotify.profile?.isPremium == false ? ' (free account — playback control needs Premium)' : ''}'
+                    : 'Sign in with Spotify to pull in your playlists.',
+                actionLabel:
+                    spotify.isConnected ? 'Disconnect' : 'Connect Spotify',
+                onTap: () {
+                  final controller =
+                      ref.read(spotifyConnectionProvider.notifier);
+                  if (spotify.isConnected) {
+                    controller.disconnect();
+                  } else {
+                    controller.connect();
+                  }
+                },
+                onSetPrimary: () => ref
+                    .read(musicIntegrationControllerProvider.notifier)
+                    .setPrimaryService(MusicProviderService.spotify),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _ProviderTile(
+                service: MusicProviderService.appleMusic,
+                connected: false,
+                busy: false,
+                primary: false,
+                enabled: false,
+                icon: Icons.library_music_rounded,
+                accent: const Color(0xFFFF3B30),
+                description:
+                    'Coming with the iOS release — Apple Music requires '
+                    'MusicKit and an Apple Developer account.',
+                actionLabel: 'Not available yet',
+                onTap: () {},
+                onSetPrimary: () {},
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _ProviderTile(
-            service: MusicProviderService.appleMusic,
-            connected: state.appleMusicConnected,
-            primary: state.primaryService == MusicProviderService.appleMusic,
-            icon: Icons.library_music_rounded,
-            accent: const Color(0xFFFF3B30),
-            onTap: () => ref
-                .read(musicIntegrationControllerProvider.notifier)
-                .toggleConnection(MusicProviderService.appleMusic),
-            onSetPrimary: () => ref
-                .read(musicIntegrationControllerProvider.notifier)
-                .setPrimaryService(MusicProviderService.appleMusic),
+        if (spotify.errorMessage != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.stroke),
+            ),
+            child: Text(
+              spotify.errorMessage!,
+              style: const TextStyle(
+                color: AppColors.orangeBright,
+                fontSize: 13,
+              ),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -464,8 +520,12 @@ class _ProviderTile extends StatelessWidget {
     required this.primary,
     required this.icon,
     required this.accent,
+    required this.description,
+    required this.actionLabel,
     required this.onTap,
     required this.onSetPrimary,
+    this.busy = false,
+    this.enabled = true,
   });
 
   final MusicProviderService service;
@@ -473,8 +533,12 @@ class _ProviderTile extends StatelessWidget {
   final bool primary;
   final IconData icon;
   final Color accent;
+  final String description;
+  final String actionLabel;
   final VoidCallback onTap;
   final VoidCallback onSetPrimary;
+  final bool busy;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -523,17 +587,24 @@ class _ProviderTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            connected
-                ? 'Preview connection active. Real provider auth is the next integration step.'
-                : 'Preview connect state only. Full provider auth is coming next.',
+            description,
             style: const TextStyle(color: AppColors.muted, height: 1.4),
           ),
           const SizedBox(height: AppSpacing.md),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: onTap,
-              child: Text(connected ? 'Preview Connected' : 'Preview Connect'),
+              onPressed: (!enabled || busy) ? null : onTap,
+              child: busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.orangeBright,
+                      ),
+                    )
+                  : Text(actionLabel),
             ),
           ),
           if (connected && !primary) ...[
@@ -1184,6 +1255,86 @@ class _ProgressPlaceholder extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(color: AppColors.muted),
+      ),
+    );
+  }
+}
+
+/// A friendly empty-state card: icon, title, message, and an optional CTA
+/// that routes somewhere useful. Used where a list can legitimately be empty.
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.ctaLabel,
+    this.ctaRoute,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? ctaLabel;
+  final String? ctaRoute;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xl,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.stroke),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.orangeBright.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.orangeBright, size: 30),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.muted, fontSize: 14),
+          ),
+          if (ctaLabel != null && ctaRoute != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.orangeBright,
+                side: const BorderSide(color: AppColors.orangeBright),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: () => context.go(ctaRoute!),
+              child: Text(ctaLabel!),
+            ),
+          ],
+        ],
       ),
     );
   }

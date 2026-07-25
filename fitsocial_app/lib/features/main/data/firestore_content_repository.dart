@@ -101,11 +101,13 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     WorkoutLogDraft draft,
   ) async {
-    await _incrementUser(workoutsDelta: 1);
     if (!draft.shareToFeed) {
+      await _incrementUser(workoutsDelta: 1);
       return const ActivitySaveResult(message: 'Workout saved.');
     }
 
+    // Create the post first, then increment. Incrementing up front means a
+    // failed post write still inflates the user's workout count.
     final post = await _createPost(
       profile: profile,
       activity: draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
@@ -123,9 +125,10 @@ class FirestoreContentRepository implements ContentRepository {
         'title': draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
         'duration': draft.duration,
         'calories': draft.calories,
-        'exercises': draft.exercises,
+        'exercises': draft.exercises.map((e) => e.toMap()).toList(),
       },
     );
+    await _incrementUser(workoutsDelta: 1);
     return ActivitySaveResult(
         message: 'Workout saved and shared.', createdPost: post);
   }
@@ -135,8 +138,8 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     RunLogDraft draft,
   ) async {
-    await _incrementUser(workoutsDelta: 1);
     if (!draft.shareToFeed) {
+      await _incrementUser(workoutsDelta: 1);
       return const ActivitySaveResult(message: 'Run saved.');
     }
 
@@ -151,6 +154,7 @@ class FirestoreContentRepository implements ContentRepository {
       ],
       themeKey: 'sunset',
     );
+    await _incrementUser(workoutsDelta: 1);
     return ActivitySaveResult(
         message: 'Run saved and shared.', createdPost: post);
   }
@@ -160,8 +164,8 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     MealLogDraft draft,
   ) async {
-    await _incrementUser(mealsDelta: 1);
     if (!draft.shareToFeed) {
+      await _incrementUser(mealsDelta: 1);
       return const ActivitySaveResult(message: 'Meal saved.');
     }
 
@@ -177,6 +181,7 @@ class FirestoreContentRepository implements ContentRepository {
       themeKey: 'graphite',
       imageUrl: draft.imageUrl,
     );
+    await _incrementUser(mealsDelta: 1);
     return ActivitySaveResult(
         message: 'Meal saved and shared.', createdPost: post);
   }
@@ -349,17 +354,21 @@ class FirestoreContentRepository implements ContentRepository {
     final commentRef = postsCollection.doc(postId).collection('comments').doc();
 
     final now = DateTime.now();
-    await commentRef.set({
+
+    // Write the comment and bump the post's counter atomically. Done as two
+    // separate awaits, a failure on the counter would leave an orphaned
+    // comment behind and the caller would retry, creating duplicates.
+    final batch = _firestore.batch();
+    batch.set(commentRef, {
       'authorId': user.uid,
       'authorName': authorName,
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
-
-    // Increment comment count on the post
-    await postsCollection.doc(postId).update({
+    batch.update(postsCollection.doc(postId), {
       'commentsCount': FieldValue.increment(1),
     });
+    await batch.commit();
 
     return Comment(
       id: commentRef.id,

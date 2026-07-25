@@ -3,18 +3,61 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // True when this write only adds or removes the caller's own uid in
+    // likedBy, leaving everyone else's likes untouched.
+    function isSelfLikeToggle() {
+      let before = resource.data.get('likedBy', []);
+      let after = request.resource.data.get('likedBy', []);
+      let uid = request.auth.uid;
+      return (after.toSet() == before.toSet().union([uid].toSet())
+              && !(uid in before))
+          || (after.toSet() == before.toSet().difference([uid].toSet())
+              && (uid in before));
+    }
+
+    // Adding a comment bumps commentsCount on the parent post. Allow that
+    // for any signed-in user, but only as an exact +1 so the counter can't
+    // be set to an arbitrary value.
+    function isCommentCountIncrement() {
+      return request.resource.data.get('commentsCount', 0)
+             == resource.data.get('commentsCount', 0) + 1;
+    }
+
     // Users can read/write their own profile document
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Feed posts — authenticated users can read all, write only their own
+    // Feed posts — authenticated users can read all, write only their own.
+    // Any signed-in user may update a post when the only fields touched are
+    // the like counters, and only to add/remove THEIR OWN uid — so nobody can
+    // like on someone else's behalf or tamper with the rest of the document.
     match /posts/{postId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
                     && request.resource.data.authorId == request.auth.uid;
-      allow update, delete: if request.auth != null
-                             && resource.data.authorId == request.auth.uid;
+      allow update: if request.auth != null
+                    && (resource.data.authorId == request.auth.uid
+                        || (request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['likedBy', 'likesCount'])
+                            && isSelfLikeToggle())
+                        || (request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['commentsCount'])
+                            && isCommentCountIncrement()));
+      allow delete: if request.auth != null
+                    && resource.data.authorId == request.auth.uid;
+
+      // Comments on a post — readable by any signed-in user; users may
+      // create comments as themselves and edit/delete only their own.
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if request.auth != null
+                               && resource.data.authorId == request.auth.uid;
+      }
     }
 
     // Progress metrics — any authenticated user can read

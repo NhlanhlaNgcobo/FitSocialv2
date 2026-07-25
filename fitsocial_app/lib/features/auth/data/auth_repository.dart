@@ -9,6 +9,9 @@ class UnconfiguredAuthRepository implements AuthRepository {
   const UnconfiguredAuthRepository();
 
   @override
+  String? currentUserEmail() => null;
+
+  @override
   Future<String> signInWithEmail({
     required String email,
     required String password,

@@ -32,6 +32,10 @@
 # Generated config
 lib/firebase_options.dart
 
+# Firebase Admin SDK service account keys (private key — never commit)
+*firebase-adminsdk*.json
+serviceAccountKey.json
+
 # Node tooling (tool/seed)
 node_modules/
 firestore-debug.log

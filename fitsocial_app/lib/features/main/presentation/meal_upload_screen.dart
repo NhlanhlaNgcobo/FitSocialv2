@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +10,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 
 class MealUploadScreen extends ConsumerStatefulWidget {
@@ -23,13 +25,60 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   String? _imagePath;
   bool _isAnalyzing = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Android can kill this activity while the system picker is open
+    // (low-RAM devices). When that happens the picked image is delivered
+    // on the NEXT launch via getLostData — recover it here so the photo
+    // the user chose isn't silently dropped.
+    _recoverLostImage();
+  }
+
+  Future<void> _recoverLostImage() async {
+    try {
+      final LostDataResponse response = await _picker.retrieveLostData();
+      if (response.isEmpty) return;
+      final file = response.file;
+      if (file != null && mounted) {
+        setState(() => _imagePath = file.path);
+      }
+    } catch (_) {
+      // Lost-data recovery is best-effort only.
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? image = await _picker.pickImage(source: source);
-      if (image != null) {
+      final XFile? image = await _pickDownscaled(source);
+      if (image != null && mounted) {
         setState(() {
           _imagePath = image.path;
         });
+      }
+    } on PlatformException catch (e) {
+      if (e.code == 'already_active') {
+        // A previous pick never completed (interrupted flow). Flush the
+        // stuck session and retry once instead of failing outright.
+        try {
+          await _picker.retrieveLostData();
+          final XFile? image = await _pickDownscaled(source);
+          if (image != null && mounted) {
+            setState(() => _imagePath = image.path);
+          }
+          return;
+        } catch (_) {}
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.code == 'already_active'
+                  ? 'The photo picker is busy — please try again.'
+                  : 'Could not open the ${source == ImageSource.camera ? 'camera' : 'gallery'}: ${e.message ?? e.code}',
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -38,6 +87,18 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
         );
       }
     }
+  }
+
+  /// Picks an image downscaled to ~1600px / 85% quality. Keeps uploads a
+  /// few hundred KB — full-resolution phone photos can exceed the 10 MB
+  /// Storage rules cap and make the AI analysis slow and costly.
+  Future<XFile?> _pickDownscaled(ImageSource source) {
+    return _picker.pickImage(
+      source: source,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      imageQuality: 85,
+    );
   }
 
   Future<void> _analyzeAndNavigate() async {
@@ -58,8 +119,8 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
       try {
         analysisData = await repository.analyzeMealImage(imageUrl);
       } catch (analysisError) {
-        // If analysis fails, still navigate with just the image URL
-        // so the user can fill in the fields manually.
+        // If analysis fails, still continue with just the image URL so the
+        // user can fill in the fields manually.
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -68,19 +129,29 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
               ),
             ),
           );
-          context.push('/meal-review', extra: <String, dynamic>{
-            'imageUrl': imageUrl,
-          });
+          ref.read(createFlowControllerProvider.notifier).updateMeal(
+                MealDraftState(imageUrl: imageUrl),
+              );
+          context.push('/meal-review');
         }
         return;
       }
 
-      // Step 3: Navigate to review with analysis data
+      // Step 3: Push the AI results into the meal draft the review screen
+      // reads from, then navigate. (Passing via `extra` alone was ignored by
+      // the review screen, so the analysis was being dropped.)
       if (mounted) {
-        context.push('/meal-review', extra: <String, dynamic>{
-          'imageUrl': imageUrl,
-          ...analysisData,
-        });
+        ref.read(createFlowControllerProvider.notifier).updateMeal(
+              MealDraftState(
+                name: (analysisData['name'] ?? '').toString(),
+                calories: (analysisData['calories'] ?? '').toString(),
+                protein: (analysisData['protein'] ?? '').toString(),
+                carbs: (analysisData['carbs'] ?? '').toString(),
+                fat: (analysisData['fat'] ?? '').toString(),
+                imageUrl: imageUrl,
+              ),
+            );
+        context.push('/meal-review');
       }
     } catch (e) {
       if (mounted) {

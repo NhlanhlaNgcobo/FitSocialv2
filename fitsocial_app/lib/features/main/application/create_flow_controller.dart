@@ -35,7 +35,10 @@ extension CreateCanvasDestinationX on CreateCanvasDestination {
       case CreateCanvasDestination.post:
         return '/compose-post';
       case CreateCanvasDestination.photo:
-        return '/meal-camera';
+        // Route to the upload screen that actually performs the AI meal
+        // analysis (Firebase Storage upload + analyzeMeal Cloud Function).
+        // The old /meal-camera screen was a stub that never called it.
+        return '/meal-upload';
     }
   }
 }
@@ -155,6 +158,7 @@ class MealDraftState {
     this.fat = '',
     this.notes = '',
     this.shareToFeed = true,
+    this.imageUrl,
   });
 
   final String name;
@@ -164,6 +168,9 @@ class MealDraftState {
   final String fat;
   final String notes;
   final bool shareToFeed;
+
+  /// Firebase Storage URL of the uploaded meal photo, when present.
+  final String? imageUrl;
 
   bool get hasContent =>
       name.trim().isNotEmpty ||
@@ -181,6 +188,7 @@ class MealDraftState {
     String? fat,
     String? notes,
     bool? shareToFeed,
+    String? imageUrl,
   }) {
     return MealDraftState(
       name: name ?? this.name,
@@ -190,6 +198,7 @@ class MealDraftState {
       fat: fat ?? this.fat,
       notes: notes ?? this.notes,
       shareToFeed: shareToFeed ?? this.shareToFeed,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 }
