@@ -206,7 +206,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
             const SizedBox(height: AppSpacing.lg),
             SwitchListTile(
               value: _shareToFeed,
-              activeColor: AppColors.orangeBright,
+              activeThumbColor: AppColors.orangeBright,
               title: const Text('Share to feed'),
               subtitle: const Text(
                 'Post this workout to your profile activity',

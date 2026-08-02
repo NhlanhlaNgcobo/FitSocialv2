@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../../../shared/widgets/brand_image_tile.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/app_session.dart';
+import '../data/auth_repository.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.isLoginMode = true});
@@ -53,6 +55,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = await showDialog<String>(
+      context: context,
+      builder: (_) => _ForgotPasswordDialog(
+        initialEmail: _emailController.text.trim(),
+      ),
+    );
+    if (email == null || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(authRepositoryProvider).sendPasswordResetEmail(email);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Password reset email sent! Check your inbox.'),
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      // 'user-not-found' is reported as success on purpose: confirming which
+      // addresses have accounts would let anyone enumerate our user base.
+      if (error.code == 'user-not-found') {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Password reset email sent! Check your inbox.'),
+          ),
+        );
+        return;
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.code == 'invalid-email'
+                ? "That email address doesn't look valid."
+                : 'Could not send the reset email: ${error.message ?? error.code}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not send the reset email: $error')),
+      );
+    }
   }
 
   @override
@@ -155,6 +204,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   emailController: _emailController,
                   passwordController: _passwordController,
                   onSubmitted: () => _submit(session),
+                  // Only offered when logging in — there is no password to
+                  // reset while creating an account.
+                  onForgotPassword:
+                      widget.isLoginMode ? _handleForgotPassword : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
               ],
@@ -207,11 +260,13 @@ class _EmailPanel extends StatelessWidget {
     required this.emailController,
     required this.passwordController,
     required this.onSubmitted,
+    this.onForgotPassword,
   });
 
   final TextEditingController emailController;
   final TextEditingController passwordController;
   final VoidCallback onSubmitted;
+  final VoidCallback? onForgotPassword;
 
   @override
   Widget build(BuildContext context) {
@@ -250,8 +305,119 @@ class _EmailPanel extends StatelessWidget {
             onSubmitted: (_) => onSubmitted(),
             decoration: const InputDecoration(hintText: 'Enter your password'),
           ),
+          if (onForgotPassword != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onForgotPassword,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.orangeBright,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Forgot Password?',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+/// Collects the address to send a reset link to. Pops with the trimmed email,
+/// or null when dismissed.
+class _ForgotPasswordDialog extends StatefulWidget {
+  const _ForgotPasswordDialog({required this.initialEmail});
+
+  final String initialEmail;
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  late final TextEditingController _controller;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final email = _controller.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() {
+        _errorText = 'Enter a valid email address.';
+      });
+      return;
+    }
+    Navigator.of(context).pop(email);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: AppColors.stroke),
+      ),
+      title: const Text(
+        'Reset your password',
+        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "We'll email you a link to set a new password.",
+            style: TextStyle(color: AppColors.muted, height: 1.4),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _controller,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            autocorrect: false,
+            autofocus: true,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              hintText: 'you@example.com',
+              errorText: _errorText,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(foregroundColor: AppColors.muted),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.orangeBright,
+          ),
+          child: const Text(
+            'Send Link',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }

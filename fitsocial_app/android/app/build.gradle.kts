@@ -11,7 +11,22 @@ plugins {
 import java.util.Properties
 import java.io.FileInputStream
 
-val mapsApiKey = project.findProperty("MAPS_API_KEY") as String? ?: ""
+// Google Maps SDK key.
+//
+// Read from android/local.properties, which is gitignored — so the key is never
+// committed. A gradle property (-PMAPS_API_KEY=... or ~/.gradle/gradle.properties)
+// still wins, which is how CI supplies it without a local.properties file.
+// Falls back to empty: the build succeeds and only the map view fails, rather
+// than blocking every developer who hasn't set a key yet.
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+val mapsApiKey: String = (project.findProperty("MAPS_API_KEY") as String?)
+    ?: localProperties.getProperty("MAPS_API_KEY")
+    ?: ""
 
 // Release signing config is read from android/key.properties (gitignored).
 // When absent (e.g. a fresh clone or CI without secrets), the release build

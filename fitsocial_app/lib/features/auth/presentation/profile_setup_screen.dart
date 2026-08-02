@@ -1,5 +1,9 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -20,6 +24,18 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   late final TextEditingController _handleController;
   late final TextEditingController _bioController;
   late final TextEditingController _locationController;
+  final ImagePicker _picker = ImagePicker();
+  String? _imagePath;
+
+  /// Preview of the freshly picked photo. On web image_picker returns a blob:
+  /// URL and dart:io's File is a stub that throws when read, so the blob is
+  /// fetched over the network instead.
+  ImageProvider? get _pickedAvatar {
+    final path = _imagePath;
+    if (path == null) return null;
+    if (kIsWeb) return NetworkImage(path);
+    return FileImage(File(path));
+  }
 
   @override
   void initState() {
@@ -55,29 +71,70 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
             style: TextStyle(color: AppColors.muted, fontSize: 15, height: 1.5),
           ),
           const SizedBox(height: AppSpacing.lg),
-          const DarkCard(
+          DarkCard(
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor: AppColors.surfaceHigh,
-                  child: Icon(Icons.person_rounded,
-                      size: 36, color: AppColors.orangeBright),
+                GestureDetector(
+                  onTap: () async {
+                    final XFile? image = await _picker.pickImage(
+                      source: ImageSource.gallery,
+                      maxWidth: 800,
+                      maxHeight: 800,
+                      imageQuality: 85,
+                    );
+                    if (image != null && mounted) {
+                      setState(() {
+                        _imagePath = image.path;
+                      });
+                    }
+                  },
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 34,
+                        backgroundColor: AppColors.surfaceHigh,
+                        backgroundImage: _pickedAvatar,
+                        child: _imagePath == null
+                            ? const Icon(Icons.person_rounded,
+                                size: 36, color: AppColors.orangeBright)
+                            : null,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.orangeBright,
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            color: AppColors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Profile photo',
                         style: TextStyle(
                             fontWeight: FontWeight.w700, fontSize: 17),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'We can wire uploads to Firebase Storage next.',
-                        style: TextStyle(color: AppColors.muted),
+                        _imagePath != null
+                            ? 'Photo selected — it will upload when you save.'
+                            : 'Tap to choose a photo from your gallery.',
+                        style: const TextStyle(color: AppColors.muted),
                       ),
                     ],
                   ),
@@ -102,18 +159,61 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           const SizedBox(height: 8),
           TextField(controller: _locationController),
           const SizedBox(height: AppSpacing.lg),
+          if (session.errorMessage != null) ...[
+            _SetupErrorBanner(message: session.errorMessage!),
+            const SizedBox(height: AppSpacing.md),
+          ],
           PrimaryButton(
             label: session.isLoading ? 'Saving...' : 'Complete Setup',
             onPressed: session.isLoading
                 ? null
                 : () {
+                    // Routing happens off the session's auth stage, which only
+                    // advances on success — a failure leaves the user here with
+                    // the error shown above.
                     ref.read(appSessionProvider).completeProfile(
                           displayName: _displayNameController.text,
                           handle: _handleController.text,
                           bio: _bioController.text,
                           location: _locationController.text,
+                          avatarLocalPath: _imagePath,
                         );
                   },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Surfaces a failed profile save (e.g. a denied avatar upload) instead of
+/// leaving the user on a screen that appears to do nothing.
+class _SetupErrorBanner extends StatelessWidget {
+  const _SetupErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.danger),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: AppColors.danger, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: AppColors.danger, fontSize: 13),
+            ),
           ),
         ],
       ),

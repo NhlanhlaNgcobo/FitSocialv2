@@ -80,7 +80,7 @@ class BrandImageTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (overlay.opacity > 0)
+                if (overlay.a > 0)
                   DecoratedBox(
                     decoration: BoxDecoration(
                       color: overlay,

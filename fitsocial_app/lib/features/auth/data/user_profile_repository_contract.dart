@@ -6,6 +6,7 @@ abstract class UserProfileRepository {
     required String handle,
     required String bio,
     required String location,
+    String? avatarLocalPath,
   });
 
   Future<UserProfileDraft?> loadCurrentProfile();

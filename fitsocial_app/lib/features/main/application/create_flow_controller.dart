@@ -35,9 +35,8 @@ extension CreateCanvasDestinationX on CreateCanvasDestination {
       case CreateCanvasDestination.post:
         return '/compose-post';
       case CreateCanvasDestination.photo:
-        // Route to the upload screen that actually performs the AI meal
-        // analysis (Firebase Storage upload + analyzeMeal Cloud Function).
-        // The old /meal-camera screen was a stub that never called it.
+        // The upload screen performs the real AI meal analysis (Firebase
+        // Storage upload + analyzeMeal Cloud Function).
         return '/meal-upload';
     }
   }

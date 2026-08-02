@@ -16,6 +16,17 @@ dependencies:
   cloud_firestore: ^5.4.4
   cloud_functions: ^5.6.2
   firebase_storage: ^12.3.3
+  # Platform-agnostic file handle. XFile.readAsBytes() works on mobile and web
+  # alike, which lets uploads use putData instead of dart:io's File.
+  cross_file: ^0.3.5
+  # Instagram-style upload pipeline (lib/features/main/data/image_pipeline.dart):
+  # `image` does the exact resize/centre-crop geometry, flutter_image_compress
+  # does the native JPEG encode, uuid names the Storage object. The first two
+  # were already in the dependency graph transitively — declared here because
+  # the pipeline imports them directly.
+  flutter_image_compress: ^2.3.0
+  image: ^4.8.0
+  uuid: ^4.5.1
   flutter_riverpod: ^2.5.1
   geolocator: ^14.0.2
   go_router: ^14.2.0
@@ -32,6 +43,7 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   crypto: ^3.0.7
   http: ^1.6.0
+  image_cropper: ^12.2.1
 
 dev_dependencies:
   flutter_test:
@@ -47,9 +59,9 @@ flutter:
 
 flutter_launcher_icons:
   android: true
-  ios: false
-  image_path: "assets/icon/icon.png"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
   min_sdk_android: 26
-  adaptive_icon_background: "#0A0A0C"
-  adaptive_icon_foreground: "assets/icon/icon_fg.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
   remove_alpha_ios: true

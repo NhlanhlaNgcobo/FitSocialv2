@@ -33,6 +33,11 @@ class UnconfiguredAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<void> signOut() async {
     throw StateError(_firebaseSetupMessage);
   }

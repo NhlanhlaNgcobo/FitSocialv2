@@ -89,7 +89,7 @@ class _FitSocialLogoState extends State<FitSocialLogo>
                           fontWeight: FontWeight.w800,
                           shadows: [
                             Shadow(
-                              color: AppColors.orangeBright.withOpacity(glow),
+                              color: AppColors.orangeBright.withValues(alpha: glow),
                               blurRadius: widget.size * 0.42,
                             ),
                           ],
@@ -164,7 +164,7 @@ class _LogoMarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final glowPaint = Paint()
-      ..color = AppColors.orangeBright.withOpacity(0.16)
+      ..color = AppColors.orangeBright.withValues(alpha: 0.16)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
 
     final barHeight = size.height * 0.16;
@@ -195,8 +195,8 @@ class _LogoMarkPainter extends CustomPainter {
       canvas.drawRRect(rect.inflate(3), glowPaint);
 
       final fillPaint = Paint()
-        ..shader = LinearGradient(
-          colors: const [
+        ..shader = const LinearGradient(
+          colors: [
             Color(0xFFF04C00),
             AppColors.orangeBright,
             Color(0xFFFFA76A),
@@ -211,7 +211,7 @@ class _LogoMarkPainter extends CustomPainter {
         ..shader = LinearGradient(
           colors: [
             Colors.transparent,
-            Colors.white.withOpacity(0.42),
+            Colors.white.withValues(alpha: 0.42),
             Colors.transparent,
           ],
           begin: Alignment.centerLeft,

@@ -1,6 +1,10 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -19,6 +23,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late final TextEditingController _handleController;
   late final TextEditingController _bioController;
   late final TextEditingController _locationController;
+  final ImagePicker _picker = ImagePicker();
+  String? _imagePath;
 
   @override
   void initState() {
@@ -40,6 +46,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     super.dispose();
   }
 
+  ImageProvider? get _avatarImage {
+    if (_imagePath != null) {
+      // On web image_picker hands back a blob: URL, and dart:io's File is a
+      // stub that throws the moment it's read — NetworkImage fetches the blob
+      // directly. On mobile the path is a real file.
+      if (kIsWeb) return NetworkImage(_imagePath!);
+      return FileImage(File(_imagePath!));
+    }
+    final url = ref.read(appSessionProvider).profile?.avatarUrl;
+    if (url != null && url.isNotEmpty) return NetworkImage(url);
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(appSessionProvider);
@@ -49,6 +68,54 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
+          Center(
+            child: GestureDetector(
+              onTap: () async {
+                final XFile? image = await _picker.pickImage(
+                  source: ImageSource.gallery,
+                  maxWidth: 800,
+                  maxHeight: 800,
+                  imageQuality: 85,
+                );
+                if (image != null && mounted) {
+                  setState(() {
+                    _imagePath = image.path;
+                  });
+                }
+              },
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: AppColors.surfaceHigh,
+                    backgroundImage: _avatarImage,
+                    child: _avatarImage == null
+                        ? const Icon(Icons.person_rounded,
+                            size: 40, color: AppColors.orangeBright)
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orangeBright,
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        color: AppColors.white,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
           const _Label(label: 'Display Name'),
           const SizedBox(height: 8),
           TextField(controller: _displayNameController),
@@ -65,21 +132,64 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           const SizedBox(height: 8),
           TextField(controller: _locationController),
           const SizedBox(height: AppSpacing.lg),
+          if (session.errorMessage != null) ...[
+            _ErrorBanner(message: session.errorMessage!),
+            const SizedBox(height: AppSpacing.md),
+          ],
           PrimaryButton(
             label: session.isLoading ? 'Saving...' : 'Save Changes',
             onPressed: session.isLoading
                 ? null
                 : () async {
-                    await ref.read(appSessionProvider).completeProfile(
-                          displayName: _displayNameController.text,
-                          handle: _handleController.text,
-                          bio: _bioController.text,
-                          location: _locationController.text,
-                        );
-                    if (context.mounted) {
+                    final saved =
+                        await ref.read(appSessionProvider).completeProfile(
+                              displayName: _displayNameController.text,
+                              handle: _handleController.text,
+                              bio: _bioController.text,
+                              location: _locationController.text,
+                              avatarLocalPath: _imagePath,
+                            );
+                    // Stay on the screen when the save failed, so the error is
+                    // visible and the user's edits aren't lost.
+                    if (saved && context.mounted) {
                       context.pop();
                     }
                   },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Surfaces a failed save. Without this the error captured on the session is
+/// discarded and a denied avatar upload looks like a successful save.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.danger),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: AppColors.danger, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: AppColors.danger, fontSize: 13),
+            ),
           ),
         ],
       ),

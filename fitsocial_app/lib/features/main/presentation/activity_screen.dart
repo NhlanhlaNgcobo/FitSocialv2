@@ -224,7 +224,7 @@ class _ActivitySectionPicker extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: selectedSection == section
-                          ? AppColors.orangeBright.withOpacity(0.18)
+                          ? AppColors.orangeBright.withValues(alpha: 0.18)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -375,9 +375,9 @@ class _MusicBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.orangeBright.withOpacity(0.18),
+        color: AppColors.orangeBright.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.orangeBright.withOpacity(0.4)),
+        border: Border.all(color: AppColors.orangeBright.withValues(alpha: 0.4)),
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
@@ -405,9 +405,9 @@ class _PodcastBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.orangeBright.withOpacity(0.18),
+        color: AppColors.orangeBright.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.orangeBright.withOpacity(0.4)),
+        border: Border.all(color: AppColors.orangeBright.withValues(alpha: 0.4)),
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
@@ -552,7 +552,7 @@ class _ProviderTile extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.18),
+                  color: accent.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: accent),
@@ -562,7 +562,7 @@ class _ProviderTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.orangeBright.withOpacity(0.16),
+                    color: AppColors.orangeBright.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: const Text(
@@ -683,7 +683,7 @@ class _CreatePlaylistCardState extends ConsumerState<_CreatePlaylistCard> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<MusicProviderService>(
-                  value: _provider,
+                  initialValue: _provider,
                   items: MusicProviderService.values
                       .map(
                         (service) => DropdownMenuItem(
@@ -858,7 +858,7 @@ class _WorkoutChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AppColors.orangeBright.withOpacity(0.18) : AppColors.surfaceHigh,
+          color: selected ? AppColors.orangeBright.withValues(alpha: 0.18) : AppColors.surfaceHigh,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: selected ? AppColors.orangeBright : AppColors.stroke,
@@ -1020,7 +1020,7 @@ class _PlaylistCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -1137,7 +1137,7 @@ class _PodcastCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -1202,7 +1202,7 @@ class _PlaylistInsightCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.orangeBright.withOpacity(0.16),
+              color: AppColors.orangeBright.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(
@@ -1377,7 +1377,7 @@ class _RangeChip extends StatelessWidget {
         height: 38,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? AppColors.orangeBright.withOpacity(0.18) : Colors.transparent,
+          color: selected ? AppColors.orangeBright.withValues(alpha: 0.18) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(

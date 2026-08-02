@@ -50,7 +50,12 @@ class ActivityActions {
       ..invalidate(summaryMetricsProvider)
       ..invalidate(progressMetricsProvider)
       ..invalidate(profileStatsProvider)
-      ..invalidate(storyItemsProvider);
+      ..invalidate(storyItemsProvider)
+      ..invalidate(achievementsProvider)
+      // Family providers: invalidating the family clears every keyed instance,
+      // so the author's profile grids pick the new post up.
+      ..invalidate(userPostsProvider)
+      ..invalidate(userMediaPostsProvider);
     return result;
   }
 }

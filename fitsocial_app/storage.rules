@@ -7,6 +7,15 @@ service firebase.storage {
     // Meal photos live under meals/{uid}/... — a user may read any meal
     // image (they appear in the shared feed) but write only to their own
     // folder, capped at 10 MB and image content types only.
+    //
+    // 10 MB is deliberate, not arbitrary. Feed images are downloaded by every
+    // viewer, so the cap bounds outbound bandwidth (the dominant Storage cost)
+    // and protects low-end devices from decoding huge bitmaps while scrolling.
+    // It mirrors InstagramImageSpec.maxBytes in image_pipeline.dart, so the
+    // client-side guardrail and the server-side rule agree.
+    //
+    // Neither should ever fire in practice: uploads are downscaled to 1080px
+    // and re-encoded on the device first, landing at a few hundred KB.
     match /meals/{userId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null

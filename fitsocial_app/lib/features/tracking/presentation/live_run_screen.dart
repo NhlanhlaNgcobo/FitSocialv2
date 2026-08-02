@@ -6,11 +6,11 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/run_route_map.dart';
 import '../../main/application/activity_actions.dart';
 import '../../main/domain/app_models.dart';
 import '../application/tracking_providers.dart';
 import '../data/live_run_service.dart';
-import 'run_route_map.dart';
 
 /// Live GPS run tracking: start/pause/stop with real-time distance,
 /// duration, and pace from the phone's location sensors, plus live BPM
@@ -60,6 +60,11 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen> {
               elapsed: result.elapsed,
               averagePace: result.formattedAveragePace,
               shareToFeed: true,
+              startedAt: result.startedAt,
+              routePoints: result.points
+                  .map((p) =>
+                      RoutePoint(latitude: p.latitude, longitude: p.longitude))
+                  .toList(growable: false),
             ),
           );
       if (!mounted) return;
@@ -108,7 +113,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen> {
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
           if (runState.isTracking) ...[
-            RunRouteMap(points: runState.points),
+            RunRouteMap(route: runState.routePoints),
             const SizedBox(height: AppSpacing.md),
           ],
           DarkCard(

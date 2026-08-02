@@ -15,5 +15,8 @@ abstract class AuthRepository {
 
   Future<String> continueWithProvider(String providerName);
 
+  /// Sends a Firebase password-reset email to [email].
+  Future<void> sendPasswordResetEmail(String email);
+
   Future<void> signOut();
 }

@@ -15,3 +15,8 @@ fitsocial_app/.idea/
 fitsocial_app/build/
 fitsocial_app/android/build/
 fitsocial_app/*.iml
+
+# Android Studio writes a project at the repository root as well as inside
+# fitsocial_app/ — workspace.xml in particular churns on every IDE action.
+/.idea/
+/*.iml

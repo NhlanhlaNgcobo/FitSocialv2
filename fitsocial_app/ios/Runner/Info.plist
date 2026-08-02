@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Fitsocial App</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>fitsocial_app</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<!-- Google Maps SDK key, read by AppDelegate. Resolved from the
+	     MAPS_API_KEY build setting so the key is never committed here — add
+	     `MAPS_API_KEY=...` to ios/Flutter/Debug.xcconfig and Release.xcconfig
+	     (both gitignored-friendly) or pass it via --dart-define-from-file /
+	     an Xcode build setting. Unset resolves to the literal placeholder,
+	     which AppDelegate treats as "no key". -->
+	<key>GMSApiKey</key>
+	<string>$(MAPS_API_KEY)</string>
+	<!-- Location: shown when the app first asks for GPS. iOS rejects builds
+	     that read location without these strings. "WhenInUse" covers tracking
+	     with the app open; "Always" additionally covers a run continuing while
+	     the phone is locked or the app is backgrounded. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>FitSocial uses your location to map your run route and measure distance and pace.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>FitSocial keeps tracking your route while the app is in the background so your run keeps recording with the screen off.</string>
+	<!-- Background GPS for an in-progress run. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<!-- Step counting and workout data for run stats. -->
+	<key>NSMotionUsageDescription</key>
+	<string>FitSocial uses motion data to count your steps during a run.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>FitSocial reads workout, step and heart-rate data to show your fitness stats.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>FitSocial saves your completed runs and workouts to Apple Health.</string>
+	<!-- Bluetooth heart-rate monitors and smartwatches. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>FitSocial connects to Bluetooth heart-rate monitors to show your live BPM.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>FitSocial connects to Bluetooth heart-rate monitors to show your live BPM.</string>
+	<!-- Post photos. -->
+	<key>NSCameraUsageDescription</key>
+	<string>FitSocial uses your camera to take photos for your posts and meal logs.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FitSocial needs access to your photos so you can attach them to posts.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

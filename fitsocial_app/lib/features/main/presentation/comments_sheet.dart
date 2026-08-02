@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../auth/application/app_session.dart';
 import '../application/content_providers.dart';
 import '../data/content_repository.dart';
 import '../domain/app_models.dart';
@@ -34,7 +35,9 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 
     try {
       final repository = ref.read(contentRepositoryProvider);
-      await repository.addComment(widget.postId, text);
+      // Attribution comes from the public profile, never from auth.
+      final profile = ref.read(appSessionProvider).profile;
+      await repository.addComment(profile, widget.postId, text);
 
       _controller.clear();
 

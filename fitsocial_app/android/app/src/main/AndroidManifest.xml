@@ -81,6 +81,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Interactive photo cropper (image_cropper -> uCrop on Android).
+             Without this activity registration the crop screen crashes with
+             ActivityNotFoundException the first time a user picks a photo. -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
         <!-- Health Connect permission-usage screen (Android 14+) -->
         <activity-alias
             android:name="ViewPermissionUsageActivity"

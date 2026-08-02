@@ -1,4 +1,22 @@
+import '../domain/app_models.dart';
+
 class FirestoreUserRecord {
+
+  factory FirestoreUserRecord.fromMap(String id, Map<String, dynamic> data) {
+    return FirestoreUserRecord(
+      id: id,
+      displayName: (data['displayName'] as String?) ?? 'FitSocial User',
+      handle: (data['handle'] as String?) ?? '@fitsocial',
+      bio: (data['bio'] as String?) ?? '',
+      location: (data['location'] as String?) ?? '',
+      avatarUrl: data['avatarUrl'] as String?,
+      followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
+      followingCount: (data['followingCount'] as num?)?.toInt() ?? 0,
+      postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
+      workoutsCount: (data['workoutsCount'] as num?)?.toInt() ?? 0,
+      mealsCount: (data['mealsCount'] as num?)?.toInt() ?? 0,
+    );
+  }
   const FirestoreUserRecord({
     required this.id,
     required this.displayName,
@@ -24,56 +42,9 @@ class FirestoreUserRecord {
   final int postsCount;
   final int workoutsCount;
   final int mealsCount;
-
-  factory FirestoreUserRecord.fromMap(String id, Map<String, dynamic> data) {
-    return FirestoreUserRecord(
-      id: id,
-      displayName: (data['displayName'] as String?) ?? 'FitSocial User',
-      handle: (data['handle'] as String?) ?? '@fitsocial',
-      bio: (data['bio'] as String?) ?? '',
-      location: (data['location'] as String?) ?? '',
-      avatarUrl: data['avatarUrl'] as String?,
-      followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
-      followingCount: (data['followingCount'] as num?)?.toInt() ?? 0,
-      postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
-      workoutsCount: (data['workoutsCount'] as num?)?.toInt() ?? 0,
-      mealsCount: (data['mealsCount'] as num?)?.toInt() ?? 0,
-    );
-  }
 }
 
 class FirestorePostRecord {
-  const FirestorePostRecord({
-    required this.id,
-    required this.authorId,
-    required this.authorName,
-    required this.activity,
-    required this.caption,
-    required this.metricLabels,
-    required this.likesCount,
-    required this.commentsCount,
-    required this.timestampLabel,
-    required this.themeKey,
-    required this.likedBy,
-    this.postType = 'text',
-    this.imageUrl,
-    this.workoutData,
-  });
-
-  final String id;
-  final String authorId;
-  final String authorName;
-  final String activity;
-  final String caption;
-  final List<String> metricLabels;
-  final int likesCount;
-  final int commentsCount;
-  final String timestampLabel;
-  final String themeKey;
-  final List<String> likedBy;
-  final String postType;
-  final String? imageUrl;
-  final Map<String, dynamic>? workoutData;
 
   factory FirestorePostRecord.fromMap(String id, Map<String, dynamic> data) {
     final metrics = (data['metricLabels'] as List<dynamic>? ?? const [])
@@ -99,22 +70,62 @@ class FirestorePostRecord {
       postType: (data['postType'] as String?) ?? 'text',
       imageUrl: data['imageUrl'] as String?,
       workoutData: (data['workoutData'] as Map<String, dynamic>?),
+      routePoints: RoutePoint.listFromFirestore(data['routePoints']),
+      authorAvatarUrl: data['authorAvatarUrl'] as String?,
+      imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
     );
   }
+  const FirestorePostRecord({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.activity,
+    required this.caption,
+    required this.metricLabels,
+    required this.likesCount,
+    required this.commentsCount,
+    required this.timestampLabel,
+    required this.themeKey,
+    required this.likedBy,
+    this.postType = 'text',
+    this.imageUrl,
+    this.workoutData,
+    this.routePoints = const [],
+    this.authorAvatarUrl,
+    this.imageAspectRatio,
+  });
+
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String activity;
+  final String caption;
+  final List<String> metricLabels;
+  final int likesCount;
+  final int commentsCount;
+  final String timestampLabel;
+  final String themeKey;
+  final List<String> likedBy;
+  final String postType;
+  final String? imageUrl;
+  final Map<String, dynamic>? workoutData;
+
+  /// GPS route for run posts; empty for everything else.
+  final List<RoutePoint> routePoints;
+
+  /// Author's profile photo at the time of posting.
+  ///
+  /// Denormalised alongside [authorName] so the feed renders from the post
+  /// documents it already streams — resolving it per card would mean an extra
+  /// user read for every post on screen.
+  final String? authorAvatarUrl;
+
+  /// width / height of [imageUrl], recorded at upload so the feed renders the
+  /// user's chosen crop rather than forcing a shape.
+  final double? imageAspectRatio;
 }
 
 class FirestoreProgressRecord {
-  const FirestoreProgressRecord({
-    required this.label,
-    required this.value,
-    required this.delta,
-    required this.chartBars,
-  });
-
-  final String label;
-  final String value;
-  final String delta;
-  final List<double> chartBars;
 
   factory FirestoreProgressRecord.fromMap(Map<String, dynamic> data) {
     final bars = (data['chartBars'] as List<dynamic>? ?? const [])
@@ -128,22 +139,20 @@ class FirestoreProgressRecord {
       chartBars: bars,
     );
   }
+  const FirestoreProgressRecord({
+    required this.label,
+    required this.value,
+    required this.delta,
+    required this.chartBars,
+  });
+
+  final String label;
+  final String value;
+  final String delta;
+  final List<double> chartBars;
 }
 
 class FirestoreCommentRecord {
-  const FirestoreCommentRecord({
-    required this.id,
-    required this.authorId,
-    required this.authorName,
-    required this.text,
-    this.createdAt,
-  });
-
-  final String id;
-  final String authorId;
-  final String authorName;
-  final String text;
-  final DateTime? createdAt;
 
   factory FirestoreCommentRecord.fromMap(String id, Map<String, dynamic> data) {
     DateTime? timestamp;
@@ -161,4 +170,17 @@ class FirestoreCommentRecord {
       createdAt: timestamp,
     );
   }
+  const FirestoreCommentRecord({
+    required this.id,
+    required this.authorId,
+    required this.authorName,
+    required this.text,
+    this.createdAt,
+  });
+
+  final String id;
+  final String authorId;
+  final String authorName;
+  final String text;
+  final DateTime? createdAt;
 }

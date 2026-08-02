@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/create_flow_controller.dart';
@@ -50,10 +51,10 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? image = await _pickDownscaled(source);
-      if (image != null && mounted) {
+      final path = await _pickDownscaled(source);
+      if (path != null && mounted) {
         setState(() {
-          _imagePath = image.path;
+          _imagePath = path;
         });
       }
     } on PlatformException catch (e) {
@@ -62,9 +63,9 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
         // stuck session and retry once instead of failing outright.
         try {
           await _picker.retrieveLostData();
-          final XFile? image = await _pickDownscaled(source);
-          if (image != null && mounted) {
-            setState(() => _imagePath = image.path);
+          final path = await _pickDownscaled(source);
+          if (path != null && mounted) {
+            setState(() => _imagePath = path);
           }
           return;
         } catch (_) {}
@@ -89,15 +90,16 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
     }
   }
 
-  /// Picks an image downscaled to ~1600px / 85% quality. Keeps uploads a
-  /// few hundred KB — full-resolution phone photos can exceed the 10 MB
-  /// Storage rules cap and make the AI analysis slow and costly.
-  Future<XFile?> _pickDownscaled(ImageSource source) {
-    return _picker.pickImage(
+  /// Picks a photo and hands the user the crop screen, which also downscales to
+  /// 1080px and encodes JPEG at quality 80 (Instagram's feed spec). Keeps
+  /// uploads a few hundred KB — full-resolution phone photos can exceed the
+  /// 10 MB Storage rules cap and make the AI analysis slow and costly.
+  ///
+  /// Returns the cropped file's path, or null if the user backed out.
+  Future<String?> _pickDownscaled(ImageSource source) {
+    return InstagramPhotoPicker.pickAndCrop(
+      context: context,
       source: source,
-      maxWidth: 1600,
-      maxHeight: 1600,
-      imageQuality: 85,
     );
   }
 

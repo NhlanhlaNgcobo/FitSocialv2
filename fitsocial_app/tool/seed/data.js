@@ -4,9 +4,9 @@
 
 const users = [
   {
-    id: 'mock-user-naledi',
-    displayName: 'Naledi Khumalo',
-    handle: '@naledi.trains',
+    id: 'mock-user-kristan',
+    displayName: 'Kristan Kraak',
+    handle: '@kristan.kraak',
     bio: 'Marathon in training. Coffee-powered.',
     location: 'Cape Town, ZA',
     avatarUrl: null,
@@ -17,11 +17,11 @@ const users = [
     mealsCount: 58,
   },
   {
-    id: 'mock-user-sipho',
-    displayName: 'Sipho Dlamini',
-    handle: '@sipho_lifts',
-    bio: 'Strength coach. PR chaser.',
-    location: 'Johannesburg, ZA',
+    id: 'mock-user-bear',
+    displayName: 'Bear Mdlalose',
+    handle: '@bear.mdlalose',
+    bio: 'Dev. Gains chaser. Food lover. All round Big Daddy.',
+    location: 'Knysna, ZA',
     avatarUrl: null,
     followersCount: 3021,
     followingCount: 198,
@@ -114,12 +114,12 @@ const users = [
 // hoursAgo drives both createdAt (for the orderBy query) and timestampLabel.
 const postsByHoursAgo = [
   {
-    authorId: 'mock-user-naledi', authorName: 'Naledi Khumalo', activity: 'Run',
+    authorId: 'mock-user-kristan', authorName: 'Kristan Kraak', activity: 'Run',
     caption: 'Easy 10K to shake out yesterday’s intervals.', themeKey: 'sunset',
     metricLabels: ['10.04 km', '52:18', '5:12 /km'], likesCount: 134, commentsCount: 12, hoursAgo: 1,
   },
   {
-    authorId: 'mock-user-sipho', authorName: 'Sipho Dlamini', activity: 'Strength',
+    authorId: 'mock-user-bear', authorName: 'Bear Mdlalose', activity: 'Strength',
     caption: 'New deadlift PR. Logged 3 exercises, felt strong all session.', themeKey: 'burn',
     metricLabels: ['62 min', '540 kcal', '3 moves'], likesCount: 289, commentsCount: 31, hoursAgo: 3,
   },
@@ -154,12 +154,12 @@ const postsByHoursAgo = [
     metricLabels: ['410 kcal', '12g protein', '16g fat'], likesCount: 44, commentsCount: 3, hoursAgo: 15,
   },
   {
-    authorId: 'mock-user-naledi', authorName: 'Naledi Khumalo', activity: 'Strength',
+    authorId: 'mock-user-kristan', authorName: 'Kristan Kraak', activity: 'Strength',
     caption: 'Leg day. Logged 4 exercises, notes: knees felt good.', themeKey: 'burn',
     metricLabels: ['58 min', '410 kcal', '4 moves'], likesCount: 98, commentsCount: 7, hoursAgo: 18,
   },
   {
-    authorId: 'mock-user-sipho', authorName: 'Sipho Dlamini', activity: 'Meal',
+    authorId: 'mock-user-bear', authorName: 'Bear Mdlalose', activity: 'Meal',
     caption: 'Bulking season. Rice, chicken thighs, broccoli.', themeKey: 'graphite',
     metricLabels: ['780 kcal', '58g protein', '22g fat'], likesCount: 53, commentsCount: 4, hoursAgo: 20,
   },
@@ -194,12 +194,12 @@ const postsByHoursAgo = [
     metricLabels: ['35 min', '220 kcal', '3 moves'], likesCount: 61, commentsCount: 5, hoursAgo: 44,
   },
   {
-    authorId: 'mock-user-naledi', authorName: 'Naledi Khumalo', activity: 'Run',
+    authorId: 'mock-user-kristan', authorName: 'Kristan Kraak', activity: 'Run',
     caption: 'Long run Sunday. 21K done, legs are toast.', themeKey: 'sunset',
     metricLabels: ['21.10 km', '1:48:32', '5:09 /km'], likesCount: 356, commentsCount: 42, hoursAgo: 49,
   },
   {
-    authorId: 'mock-user-sipho', authorName: 'Sipho Dlamini', activity: 'Strength',
+    authorId: 'mock-user-bear', authorName: 'Bear Mdlalose', activity: 'Strength',
     caption: 'Upper body push day. Logged 4 exercises, notes: shoulder felt stable.', themeKey: 'burn',
     metricLabels: ['54 min', '380 kcal', '4 moves'], likesCount: 174, commentsCount: 16, hoursAgo: 55,
   },

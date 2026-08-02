@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -135,12 +134,12 @@ class HomeScreen extends ConsumerWidget {
   }
 
   List<Widget> _buildPosts(List<FeedPost> posts, WidgetRef ref) {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
     final items = <Widget>[];
     for (var i = 0; i < posts.length; i++) {
       final post = posts[i];
       items.add(
         PostCard(
+          postId: post.id,
           userName: post.userName,
           activity: post.activity,
           caption: post.caption,
@@ -150,15 +149,12 @@ class HomeScreen extends ConsumerWidget {
           comments: post.comments,
           backgroundColors: post.backgroundColors,
           visualTile: post.visualTile,
-          isLikedByMe: post.likedBy.contains(currentUserId),
           postType: post.postType,
           imageUrl: post.imageUrl,
           workoutData: post.workoutData,
-          onLikeTapped: () {
-            ref
-                .read(feedPostsProvider.notifier)
-                .toggleLike(post.id, currentUserId);
-          },
+          routePoints: post.routePoints,
+          authorAvatarUrl: post.authorAvatarUrl,
+          imageAspectRatio: post.imageAspectRatio,
           onCommentTapped: () {
             showModalBottomSheet(
               context: ref.context,

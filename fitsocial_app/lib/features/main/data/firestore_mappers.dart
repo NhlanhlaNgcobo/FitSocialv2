@@ -7,9 +7,10 @@ class FirestoreMapper {
   const FirestoreMapper._();
 
   static StoryItem toStoryItem(FirestoreUserRecord user, {bool isOwnStory = false}) {
+    final name = PublicAuthorName.sanitize(user.displayName);
     return StoryItem(
-      name: isOwnStory ? 'Your Story' : user.displayName.split(' ').first,
-      initials: _initials(user.displayName),
+      name: isOwnStory ? 'Your Story' : name.split(' ').first,
+      initials: _initials(name),
       isOwnStory: isOwnStory,
     );
   }
@@ -17,7 +18,9 @@ class FirestoreMapper {
   static FeedPost toFeedPost(FirestorePostRecord post) {
     return FeedPost(
       id: post.id,
-      userName: post.authorName,
+      // Sanitised on read as well as write: posts stored before the email
+      // fallback was removed still carry addresses in this field.
+      userName: PublicAuthorName.sanitize(post.authorName),
       activity: post.activity,
       caption: post.caption,
       metricLabels: post.metricLabels,
@@ -29,6 +32,9 @@ class FirestoreMapper {
       postType: _parsePostType(post.postType),
       imageUrl: post.imageUrl,
       workoutData: post.workoutData,
+      routePoints: post.routePoints,
+      authorAvatarUrl: post.authorAvatarUrl,
+      imageAspectRatio: post.imageAspectRatio,
     );
   }
 
@@ -42,6 +48,19 @@ class FirestoreMapper {
       default:
         return PostType.text;
     }
+  }
+
+  static UserSearchResult toUserSearchResult(FirestoreUserRecord user) {
+    final displayName = PublicAuthorName.sanitize(user.displayName);
+    return UserSearchResult(
+      id: user.id,
+      displayName: displayName,
+      handle: user.handle,
+      initials: _initials(displayName),
+      postsCount: user.postsCount,
+      avatarUrl: user.avatarUrl,
+      bio: user.bio,
+    );
   }
 
   static ProfileStat toProfileStat({
@@ -74,7 +93,9 @@ class FirestoreMapper {
     return Comment(
       id: record.id,
       authorId: record.authorId,
-      authorName: record.authorName,
+      // Comments written before the email fallback was removed still hold
+      // addresses; never let one reach the UI.
+      authorName: PublicAuthorName.sanitize(record.authorName),
       text: record.text,
       createdAt: record.createdAt ?? DateTime.now(),
     );

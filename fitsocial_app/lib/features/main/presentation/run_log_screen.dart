@@ -198,7 +198,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen> {
             const SizedBox(height: AppSpacing.lg),
             SwitchListTile(
               value: _shareToFeed,
-              activeColor: AppColors.orangeBright,
+              activeThumbColor: AppColors.orangeBright,
               title: const Text('Share to feed'),
               subtitle: const Text(
                 'Post this run to your profile activity',

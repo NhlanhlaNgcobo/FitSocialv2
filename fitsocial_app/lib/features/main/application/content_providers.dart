@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/app_session.dart';
@@ -79,12 +80,40 @@ final feedPostsProvider =
 });
 
 // ---------------------------------------------------------------------------
-// Comments — family provider keyed by post ID
+// Comments — family provider keyed by post ID (one-shot fetch)
 // ---------------------------------------------------------------------------
 
 final commentsProvider =
     FutureProvider.family<List<Comment>, String>((ref, postId) {
   return ref.watch(contentRepositoryProvider).getComments(postId);
+});
+
+// ---------------------------------------------------------------------------
+// NEW: Real-time social action streams
+// ---------------------------------------------------------------------------
+
+/// Watches whether the active user has liked a specific post.
+/// Falls back to `false` when no user is signed in.
+final postLikeStatusProvider =
+    StreamProvider.family<bool, String>((ref, postId) {
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId == null) return Stream.value(false);
+  return ref.watch(contentRepositoryProvider).watchPostLikeStatus(postId, userId);
+});
+
+/// Watches whether the active user has bookmarked a specific post.
+/// Falls back to `false` when no user is signed in.
+final postBookmarkStatusProvider =
+    StreamProvider.family<bool, String>((ref, postId) {
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId == null) return Stream.value(false);
+  return ref.watch(contentRepositoryProvider).watchBookmarkStatus(postId, userId);
+});
+
+/// Real-time stream of comments for a given post, ordered by createdAt asc.
+final commentsStreamProvider =
+    StreamProvider.family<List<Comment>, String>((ref, postId) {
+  return ref.watch(contentRepositoryProvider).watchComments(postId);
 });
 
 // ---------------------------------------------------------------------------
@@ -112,4 +141,107 @@ final podcastRecommendationsProvider =
 
 final profileStatsProvider = FutureProvider<List<ProfileStat>>((ref) {
   return ref.watch(contentRepositoryProvider).getProfileStats();
+});
+
+// ---------------------------------------------------------------------------
+// Per-user post queries (profile grids)
+// ---------------------------------------------------------------------------
+
+/// Every post authored by the given user id, newest first.
+final userPostsProvider =
+    FutureProvider.family<List<FeedPost>, String>((ref, userId) {
+  return ref.watch(contentRepositoryProvider).fetchUserPosts(userId);
+});
+
+/// Only the given user's posts that carry an uploaded photo, newest first.
+final userMediaPostsProvider =
+    FutureProvider.family<List<FeedPost>, String>((ref, userId) {
+  return ref.watch(contentRepositoryProvider).fetchUserMediaPosts(userId);
+});
+
+/// Convenience: the signed-in user's uid, or null when unauthenticated.
+final currentUserIdProvider = Provider<String?>((ref) {
+  ref.watch(appSessionProvider);
+  return FirebaseAuth.instance.currentUser?.uid;
+});
+
+// ---------------------------------------------------------------------------
+// Explore — search and trending
+// ---------------------------------------------------------------------------
+
+/// The active Explore search term. Empty means "show trending".
+final userSearchQueryProvider = StateProvider<String>((ref) => '');
+
+/// Profiles matching the current search term.
+final userSearchResultsProvider =
+    FutureProvider.family<List<UserSearchResult>, String>((ref, query) {
+  if (query.trim().isEmpty) return Future.value(const []);
+  return ref.watch(contentRepositoryProvider).searchUsers(query);
+});
+
+/// Most-liked posts across the community.
+final trendingPostsProvider = FutureProvider<List<FeedPost>>((ref) {
+  return ref.watch(contentRepositoryProvider).fetchTrendingPosts();
+});
+
+// ---------------------------------------------------------------------------
+// Follow graph
+// ---------------------------------------------------------------------------
+
+/// Whether the signed-in user follows [targetUserId]. Keyed by target only —
+/// the follower is always the current user.
+final isFollowingProvider =
+    StreamProvider.family<bool, String>((ref, targetUserId) {
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return Stream.value(false);
+  return ref
+      .watch(contentRepositoryProvider)
+      .watchIsFollowing(currentUserId, targetUserId);
+});
+
+/// Follow/unfollow actions plus the cache invalidation they imply.
+class FollowActions {
+  const FollowActions(this._ref);
+
+  final Ref _ref;
+
+  Future<void> toggle(String targetUserId, {required bool isFollowing}) async {
+    final currentUserId = _ref.read(currentUserIdProvider);
+    if (currentUserId == null) {
+      throw StateError('You must be signed in to follow people.');
+    }
+
+    final repository = _ref.read(contentRepositoryProvider);
+    if (isFollowing) {
+      await repository.unfollowUser(currentUserId, targetUserId);
+    } else {
+      await repository.followUser(currentUserId, targetUserId);
+    }
+
+    // isFollowingProvider is a live stream and updates itself; the profile
+    // header counts are one-shot reads and need refreshing.
+    _ref.invalidate(profileStatsProvider);
+  }
+}
+
+final followActionsProvider = Provider<FollowActions>((ref) {
+  return FollowActions(ref);
+});
+
+// ---------------------------------------------------------------------------
+// Achievements — XP, level, streak and badge progress
+// ---------------------------------------------------------------------------
+
+/// Aggregated achievements for the signed-in user. Watches the session profile
+/// so it recomputes after sign-in/out, and is invalidated by [ActivityActions]
+/// whenever a workout, run or meal is logged.
+final achievementsProvider = FutureProvider<AchievementsData>((ref) {
+  // Depend on the session so a sign-out/sign-in swaps the underlying user.
+  ref.watch(appSessionProvider);
+
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+  if (userId == null) {
+    throw StateError('You must be signed in to view achievements.');
+  }
+  return ref.watch(contentRepositoryProvider).fetchUserAchievements(userId);
 });

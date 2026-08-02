@@ -56,6 +56,46 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<AchievementsData> fetchUserAchievements(String userId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<FeedPost>> fetchUserPosts(String userId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<FeedPost>> fetchUserMediaPosts(String userId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<UserSearchResult>> searchUsers(String query) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<FeedPost>> fetchTrendingPosts() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> followUser(String currentUserId, String targetUserId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> unfollowUser(String currentUserId, String targetUserId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Stream<bool> watchIsFollowing(String currentUserId, String targetUserId) {
+    return Stream.value(false);
+  }
+
+  @override
   Future<ActivitySaveResult> saveWorkout(
     UserProfileDraft? profile,
     WorkoutLogDraft draft,
@@ -98,7 +138,11 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Future<Comment> addComment(String postId, String text) async {
+  Future<Comment> addComment(
+    UserProfileDraft? profile,
+    String postId,
+    String text,
+  ) async {
     throw StateError(_firebaseSetupMessage);
   }
 
@@ -110,6 +154,31 @@ class UnconfiguredContentRepository implements ContentRepository {
   @override
   Future<Map<String, dynamic>> analyzeMealImage(String imageUrl) async {
     throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<String> uploadPostImage(String localFilePath) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> toggleBookmark(String postId, String userId) {
+    return Future.value();
+  }
+
+  @override
+  Stream<bool> watchPostLikeStatus(String postId, String userId) {
+    return Stream.value(false);
+  }
+
+  @override
+  Stream<bool> watchBookmarkStatus(String postId, String userId) {
+    return Stream.value(false);
+  }
+
+  @override
+  Stream<List<Comment>> watchComments(String postId) {
+    return const Stream.empty();
   }
 }
 

@@ -1,14 +1,20 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../features/main/application/content_providers.dart';
+import '../../features/main/data/content_repository.dart';
 import '../../features/main/domain/app_models.dart';
 import 'avatar.dart';
 import 'brand_image_tile.dart';
-import 'dark_card.dart';
+import 'run_route_map.dart';
 
 class PostCard extends StatelessWidget {
   const PostCard({
+    required this.postId,
     required this.userName,
     required this.activity,
     required this.caption,
@@ -18,15 +24,17 @@ class PostCard extends StatelessWidget {
     this.comments = 0,
     this.backgroundColors = const [Color(0xFF332113), Color(0xFF0E0E0E)],
     this.visualTile,
-    this.isLikedByMe = false,
-    this.onLikeTapped,
     this.onCommentTapped,
     this.postType = PostType.text,
     this.imageUrl,
     this.workoutData,
+    this.routePoints = const [],
+    this.authorAvatarUrl,
+    this.imageAspectRatio,
     super.key,
   });
 
+  final String postId;
   final String userName;
   final String activity;
   final String caption;
@@ -36,115 +44,162 @@ class PostCard extends StatelessWidget {
   final int comments;
   final List<Color> backgroundColors;
   final AppVisualTile? visualTile;
-  final bool isLikedByMe;
-  final VoidCallback? onLikeTapped;
   final VoidCallback? onCommentTapped;
   final PostType postType;
   final String? imageUrl;
   final Map<String, dynamic>? workoutData;
 
+  /// Completed run route. When non-empty the card renders a map preview of the
+  /// finished run instead of the plain gradient tile.
+  final List<RoutePoint> routePoints;
+
+  /// Author's profile photo, denormalised onto the post. Null falls back to
+  /// the initials avatar.
+  final String? authorAvatarUrl;
+
+  /// width / height of [imageUrl] as the user cropped it. Null falls back to
+  /// square rather than re-cropping the photo to a fixed shape.
+  final double? imageAspectRatio;
+
+  /// A polyline needs at least two fixes; a single point is not a route.
+  bool get _hasRoute => routePoints.length >= 2;
+
+  bool get _hasPayload =>
+      postType != PostType.text ||
+      imageUrl != null ||
+      workoutData != null ||
+      _hasRoute;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.transparent,
-      child: Column(
+    // One layout for every post type. The header — and therefore the avatar —
+    // sits in exactly the same place whether the post carries a photo, a run
+    // map, a workout card or nothing but text. Only the body swaps: media posts
+    // put their caption below the actions (Instagram), text posts put the words
+    // where the media would have been.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeader(),
+        if (_hasPayload) _buildPayload() else _buildBodyText(),
+        _InteractionRow(
+          postId: postId,
+          likes: likes,
+          comments: comments,
+          onCommentTapped: onCommentTapped,
+        ),
+        // A text post's words are already the body, so there's no caption line
+        // to repeat underneath.
+        if (_hasPayload) _buildCaption(),
+        const SizedBox(height: AppSpacing.lg),
+      ],
+    );
+  }
+
+  /// The words of a text-only post, set to Threads' body metrics: 15px on a
+  /// 21px line box. Sits at the gutter, aligned with the caption and the
+  /// username above it, so the left edge of every post's content lines up.
+  Widget _buildBodyText() {
+    if (caption.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 2),
+      child: Text(
+        caption,
+        style: const TextStyle(
+          fontSize: 15,
+          height: 21 / 15,
+          color: AppColors.white,
+        ),
+      ),
+    );
+  }
+
+  /// Horizontal inset for everything except the media, which runs edge to edge.
+  static const double _gutter = 16;
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_gutter, 10, 6, 10),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-                vertical: AppSpacing.md, horizontal: AppSpacing.md),
+          Avatar(
+            initials: _initials(userName),
+            size: 34,
+            visualTile: visualTile,
+            imageUrl: authorAvatarUrl,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Avatar(initials: _initials(userName), visualTile: visualTile),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Row 1: Username and timestamp
-                      Row(
-                        children: [
-                          Text(
-                            userName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            timestamp,
-                            style: const TextStyle(
-                              color: AppColors.muted,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.more_horiz_rounded,
-                              color: AppColors.muted, size: 20),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-
-                      // Row 2: Caption
-                      if (caption.isNotEmpty) ...[
-                        Text(
-                          caption,
-                          style: const TextStyle(fontSize: 15, height: 1.3),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                      ],
-
-                      // Row 3: Payload
-                      if (postType != PostType.text || imageUrl != null || workoutData != null) ...[
-                        _buildPayload(),
-                        const SizedBox(height: AppSpacing.sm),
-                      ],
-
-                      // Row 4: Interaction Buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          GestureDetector(
-                            onTap: onCommentTapped,
-                            child: _MetaIcon(
-                              icon: Icons.chat_bubble_outline_rounded,
-                              value: comments > 0 ? '$comments' : '',
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: onLikeTapped,
-                            child: _MetaIcon(
-                              icon: isLikedByMe
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
-                              value: likes > 0 ? '$likes' : '',
-                              highlighted: isLikedByMe,
-                            ),
-                          ),
-                          const Icon(Icons.bookmark_border_rounded,
-                              color: AppColors.muted, size: 20),
-                          const SizedBox(width: 24), // Spacer for visual balance
-                        ],
-                      ),
-                    ],
+                Flexible(
+                  child: Text(
+                    userName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppColors.white,
+                    ),
+                  ),
+                ),
+                const Text(
+                  ' • ',
+                  style: TextStyle(color: AppColors.muted, fontSize: 13),
+                ),
+                Text(
+                  timestamp,
+                  style: const TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 13,
                   ),
                 ),
               ],
             ),
           ),
-          Divider(
-            color: AppColors.muted.withOpacity(0.2),
-            height: 1,
-            thickness: 1,
+          IconButton(
+            onPressed: () {},
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.more_horiz_rounded,
+                color: AppColors.white, size: 22),
           ),
         ],
       ),
     );
   }
 
+  /// Username in semibold followed by the caption on the same line — the
+  /// Instagram convention, and it reads as one sentence rather than a header.
+  Widget _buildCaption() {
+    if (caption.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.35,
+            color: AppColors.white,
+          ),
+          children: [
+            TextSpan(
+              text: userName,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const TextSpan(text: '  '),
+            TextSpan(text: caption),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Selects the correct visual payload based on [postType].
   Widget _buildPayload() {
+    // Run posts are stored as PostType.text — the route, not the type, is what
+    // marks them out, so it is checked before the type switch.
+    if (_hasRoute) return _buildRoutePayload();
+
     switch (postType) {
       case PostType.image:
         return _buildImagePayload();
@@ -153,6 +208,18 @@ class PostCard extends StatelessWidget {
       case PostType.text:
         return _buildTextPayload();
     }
+  }
+
+  // ── ROUTE payload (completed run map preview) ─────────────────────────────
+
+  Widget _buildRoutePayload() {
+    return RunRouteMap(
+      route: routePoints
+          .map((point) => LatLng(point.latitude, point.longitude))
+          .toList(growable: false),
+      mode: RunRouteMapMode.completed,
+      height: 200,
+    );
   }
 
   // ── TEXT payload (original gradient tile) ──────────────────────────────────
@@ -164,10 +231,17 @@ class PostCard extends StatelessWidget {
   // ── IMAGE payload (AspectRatio 4:5 clamped) ───────────────────────────────
 
   Widget _buildImagePayload() {
+    // Render at the shape the user cropped to. Clamped to Instagram's legal
+    // range so a malformed value can't produce an absurdly tall or wide card;
+    // square is the fallback for posts saved before the ratio was recorded.
+    final ratio = (imageAspectRatio ?? 1.0).clamp(0.8, 1.91);
+
     return AspectRatio(
-      aspectRatio: 4 / 5,
+      aspectRatio: ratio,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        // Square corners: media runs edge to edge, so rounding would read as
+        // an inset card rather than a continuous feed.
+        borderRadius: BorderRadius.zero,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -188,7 +262,7 @@ class PostCard extends StatelessWidget {
                 errorBuilder: (_, __, ___) => Center(
                   child: Icon(
                     Icons.broken_image_rounded,
-                    color: AppColors.muted.withOpacity(0.5),
+                    color: AppColors.muted.withValues(alpha: 0.5),
                     size: 48,
                   ),
                 ),
@@ -241,7 +315,7 @@ class PostCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.28),
+                  color: Colors.black.withValues(alpha: 0.28),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -325,7 +399,7 @@ class PostCard extends StatelessWidget {
                       'Workout Complete',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.muted.withOpacity(0.8),
+                        color: AppColors.muted.withValues(alpha: 0.8),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -342,7 +416,7 @@ class PostCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.md, vertical: AppSpacing.sm + 4),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.04),
+                color: Colors.white.withValues(alpha: 0.04),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
@@ -396,7 +470,7 @@ class PostCard extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.2,
-                color: AppColors.orangeBright.withOpacity(0.9),
+                color: AppColors.orangeBright.withValues(alpha: 0.9),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -408,10 +482,10 @@ class PostCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
+                    color: Colors.white.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: AppColors.stroke.withOpacity(0.6),
+                      color: AppColors.stroke.withValues(alpha: 0.6),
                     ),
                   ),
                   child: Text(
@@ -485,32 +559,112 @@ class PostCard extends StatelessWidget {
   }
 }
 
-class _MetaIcon extends StatelessWidget {
-  const _MetaIcon({
+class _InteractionRow extends ConsumerWidget {
+  const _InteractionRow({
+    required this.postId,
+    required this.likes,
+    required this.comments,
+    this.onCommentTapped,
+  });
+
+  final String postId;
+  final int likes;
+  final int comments;
+  final VoidCallback? onCommentTapped;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLiked = ref.watch(postLikeStatusProvider(postId)).valueOrNull ?? false;
+    final isBookmarked = ref.watch(postBookmarkStatusProvider(postId)).valueOrNull ?? false;
+
+    // Spread evenly across the full width rather than clustered on the left,
+    // so the row reads as a balanced base to the post. Counts sit inline with
+    // their icon (Threads-style) instead of on separate lines, which keeps the
+    // card short and the layout identical for text and media posts.
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _ActionIcon(
+          icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          // Only the active like takes the brand colour; everything at rest is
+          // muted so the row stays quiet until the user acts.
+          color: isLiked ? AppColors.orange : AppColors.muted,
+          count: likes,
+          onTap: () async {
+            final userId = FirebaseAuth.instance.currentUser?.uid;
+            if (userId == null) return;
+            await ref.read(contentRepositoryProvider).toggleLike(postId, userId);
+          },
+        ),
+        _ActionIcon(
+          icon: Icons.mode_comment_outlined,
+          color: AppColors.muted,
+          count: comments,
+          onTap: onCommentTapped,
+        ),
+        _ActionIcon(
+          icon: Icons.send_outlined,
+          color: AppColors.muted,
+          onTap: () {},
+        ),
+        _ActionIcon(
+          icon: isBookmarked
+              ? Icons.bookmark_rounded
+              : Icons.bookmark_border_rounded,
+          color: isBookmarked ? AppColors.orange : AppColors.muted,
+          onTap: () async {
+            final userId = FirebaseAuth.instance.currentUser?.uid;
+            if (userId == null) return;
+            await ref
+                .read(contentRepositoryProvider)
+                .toggleBookmark(postId, userId);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// A feed action: a light outlined glyph with its count beside it.
+///
+/// Kept deliberately plain — no fill, no background, 20px stroke icons — so the
+/// row recedes and the content stays the loudest thing on screen.
+class _ActionIcon extends StatelessWidget {
+  const _ActionIcon({
     required this.icon,
-    required this.value,
-    this.highlighted = false,
+    required this.color,
+    this.count = 0,
+    this.onTap,
   });
 
   final IconData icon;
-  final String value;
-  final bool highlighted;
+  final Color color;
+  final int count;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          color: highlighted ? AppColors.danger : AppColors.muted,
-          size: 20,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        // Vertical padding gives a 44px touch target without the visual bulk
+        // of an IconButton's default 48px box.
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 20),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Text(
+                '$count',
+                style: TextStyle(color: color, fontSize: 13),
+              ),
+            ],
+          ],
         ),
-        if (value.isNotEmpty) ...[
-          const SizedBox(width: 6),
-          Text(value, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-        ],
-      ],
+      ),
     );
   }
 }
@@ -545,7 +699,7 @@ class _WorkoutMetric extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 11,
-            color: AppColors.muted.withOpacity(0.7),
+            color: AppColors.muted.withValues(alpha: 0.7),
           ),
         ),
       ],

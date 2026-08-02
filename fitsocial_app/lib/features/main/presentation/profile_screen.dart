@@ -59,6 +59,8 @@ class ProfileScreen extends ConsumerWidget {
                         Avatar(
                           initials: initials,
                           size: 68,
+                          imageUrl: profile?.avatarUrl,
+                          // Only reached when the user has no uploaded photo.
                           visualTile: AppVisualTile.heroPortrait,
                         ),
                         const SizedBox(width: AppSpacing.md),
@@ -122,13 +124,15 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            Expanded(
+            const Expanded(
               child: TabBarView(
                 children: [
-                  _MediaGrid(userName: displayName),
-                  _MediaGrid(userName: displayName, activityKeyword: 'workout'),
-                  _MediaGrid(userName: displayName, activityKeyword: 'run'),
-                  _MediaGrid(userName: displayName, activityKeyword: 'meal'),
+                  // First tab is the photo grid; the rest filter the user's
+                  // posts by activity.
+                  _MediaGrid(mediaOnly: true),
+                  _MediaGrid(activityKeyword: 'workout'),
+                  _MediaGrid(activityKeyword: 'run'),
+                  _MediaGrid(activityKeyword: 'meal'),
                 ],
               ),
             ),
@@ -183,12 +187,13 @@ class _ProfileStat extends StatelessWidget {
   }
 }
 
-/// Grid of the signed-in user's OWN posts. New accounts with no posts get an
-/// empty state — never mock/brand placeholder images.
+/// Grid of the signed-in user's OWN posts, queried by `authorId`. New accounts
+/// with no posts get an empty state — never mock/brand placeholder images.
 class _MediaGrid extends ConsumerWidget {
-  const _MediaGrid({required this.userName, this.activityKeyword});
+  const _MediaGrid({this.mediaOnly = false, this.activityKeyword});
 
-  final String userName;
+  /// Photo grid: query only posts that carry an uploaded image.
+  final bool mediaOnly;
 
   /// When set, only posts whose activity contains this keyword are shown
   /// (used by the Workouts / Runs / Meals tabs).
@@ -196,46 +201,110 @@ class _MediaGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final feed = ref.watch(feedPostsProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) {
+      return const _EmptyGrid(message: 'Sign in to see your posts.');
+    }
 
-    return feed.when(
+    final posts = ref.watch(
+      mediaOnly ? userMediaPostsProvider(userId) : userPostsProvider(userId),
+    );
+
+    return posts.when(
       loading: () => const Center(
         child: CircularProgressIndicator(color: AppColors.orangeBright),
       ),
-      error: (_, __) => const _EmptyGrid(
-        message: "Couldn't load your posts. Pull to refresh.",
+      error: (_, __) => _ErrorGrid(
+        onRetry: () => ref.invalidate(
+          mediaOnly ? userMediaPostsProvider(userId) : userPostsProvider(userId),
+        ),
       ),
-      data: (posts) {
-        final mine = posts.where((p) {
-          if (p.userName != userName) return false;
-          if (activityKeyword == null) return true;
-          return p.activity.toLowerCase().contains(activityKeyword!);
-        }).toList();
+      data: (all) {
+        final keyword = activityKeyword;
+        final visible = keyword == null
+            ? all
+            : all
+                .where((p) => p.activity.toLowerCase().contains(keyword))
+                .toList();
 
-        if (mine.isEmpty) {
+        if (visible.isEmpty) {
           return _EmptyGrid(
-            message: activityKeyword == null
-                ? "You haven't posted yet. Log a workout, run, or meal to get started."
-                : 'No ${activityKeyword}s shared yet.',
+            message: mediaOnly
+                ? 'Photos you post will show up here.'
+                : keyword == null
+                    ? 'No posts yet. Share your first workout!'
+                    : 'No ${keyword}s shared yet.',
           );
         }
 
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.xl,
+        return RefreshIndicator(
+          color: AppColors.orangeBright,
+          backgroundColor: AppColors.surface,
+          onRefresh: () async => ref.invalidate(
+            mediaOnly
+                ? userMediaPostsProvider(userId)
+                : userPostsProvider(userId),
           ),
-          itemCount: mine.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.xl,
+            ),
+            itemCount: visible.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemBuilder: (context, index) => _PostTile(post: visible[index]),
           ),
-          itemBuilder: (context, index) => _PostTile(post: mine[index]),
         );
       },
+    );
+  }
+}
+
+class _ErrorGrid extends StatelessWidget {
+  const _ErrorGrid({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              color: AppColors.muted,
+              size: 42,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              "Couldn't load your posts.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.muted, fontSize: 15),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.white,
+                side: const BorderSide(color: AppColors.stroke),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -314,16 +383,32 @@ class _EmptyGrid extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.grid_view_rounded,
-              color: AppColors.muted,
-              size: 40,
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.surfaceHigh,
+              ),
+              child: const Icon(
+                Icons.camera_alt_outlined,
+                color: AppColors.orangeBright,
+                size: 48,
+              ),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.xl),
+            const Text(
+              'No posts yet',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.white,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.muted),
+              style: const TextStyle(color: AppColors.muted, fontSize: 16),
             ),
           ],
         ),

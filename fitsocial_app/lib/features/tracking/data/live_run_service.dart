@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 /// A single GPS fix recorded during a live run.
 class RunPoint {
@@ -26,6 +27,8 @@ class LiveRunState {
     required this.elapsed,
     required this.currentPaceMinPerKm,
     required this.points,
+    required this.routePoints,
+    this.startedAt,
   });
 
   static const idle = LiveRunState(
@@ -36,6 +39,7 @@ class LiveRunState {
     elapsed: Duration.zero,
     currentPaceMinPerKm: 0,
     points: [],
+    routePoints: [],
   );
 
   final bool isTracking;
@@ -55,6 +59,15 @@ class LiveRunState {
   /// Rolling pace over the last ~200m; 0 when unknown.
   final double currentPaceMinPerKm;
   final List<RunPoint> points;
+
+  /// The same fixes as [points], pre-projected to map coordinates so the
+  /// route polyline can be handed straight to [GoogleMap] without rebuilding
+  /// the list on every widget build. Built once per emit (~1 Hz).
+  final List<LatLng> routePoints;
+
+  /// Wall-clock start of the run; null before tracking begins. Recorded on the
+  /// saved run log so the route can be placed on a timeline later.
+  final DateTime? startedAt;
 
   String get formattedPace {
     if (currentPaceMinPerKm <= 0 || currentPaceMinPerKm.isInfinite) {
@@ -216,6 +229,14 @@ class LiveRunService {
     }
 
     final prev = _points.last;
+
+    // Exact-duplicate rejection: a stationary phone re-delivers the same
+    // fix repeatedly. Dropping these before any maths keeps the polyline
+    // free of zero-length segments (which render as blobs at round caps).
+    if (point.latitude == prev.latitude && point.longitude == prev.longitude) {
+      return;
+    }
+
     final segment = Geolocator.distanceBetween(
       prev.latitude,
       prev.longitude,
@@ -278,6 +299,10 @@ class LiveRunService {
         elapsed: _elapsed,
         currentPaceMinPerKm: _rollingPace,
         points: List.unmodifiable(_points),
+        routePoints: List.unmodifiable(
+          _points.map((p) => LatLng(p.latitude, p.longitude)),
+        ),
+        startedAt: _startedAt,
       );
 
   void _emit() {

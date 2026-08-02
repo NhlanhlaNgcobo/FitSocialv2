@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Plain black so the native launch window hands off invisibly to the
+         Flutter splash, which is also black. Showing artwork here would flash
+         a different image for a fraction of a second before the logo
+         animation starts. -->
     <item android:drawable="@android:color/black" />
-    <item>
-        <bitmap
-            android:gravity="top|center_horizontal"
-            android:src="@drawable/welcome_reference_athlete" />
-    </item>
 </layer-list>

@@ -14,7 +14,6 @@ import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/home_screen.dart';
 import '../../features/main/presentation/manual_run_entry_screen.dart';
-import '../../features/main/presentation/meal_camera_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
 import '../../features/main/presentation/meal_upload_screen.dart';
 import '../../features/main/presentation/post_compose_screen.dart';
@@ -112,9 +111,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/compose-post',
         builder: (context, state) => const PostComposeScreen(),
       ),
+      // Legacy path kept so older links/back-stack entries don't 404. The
+      // real capture + AI analysis flow lives at /meal-upload.
       GoRoute(
         path: '/meal-camera',
-        builder: (context, state) => const MealCameraScreen(),
+        redirect: (context, state) => '/meal-upload',
       ),
       GoRoute(
         path: '/meal-upload',

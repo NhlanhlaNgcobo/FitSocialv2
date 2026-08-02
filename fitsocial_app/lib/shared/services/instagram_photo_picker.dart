@@ -1,0 +1,106 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../app/theme/app_colors.dart';
+
+/// Instagram's three supported feed-photo shapes.
+///
+/// Instagram accepts feed photos only between 1.91:1 (landscape) and 4:5
+/// (portrait); anything outside that range gets cropped on their side. Offering
+/// exactly these presets means what the user frames is what everyone sees.
+class InstagramCropRatio implements CropAspectRatioPresetData {
+  const InstagramCropRatio._(this.name, this.data);
+
+  @override
+  final String name;
+
+  @override
+  final (int, int)? data;
+
+  /// 1080x1350 — the default, and the shape that claims the most feed space.
+  static const portrait = InstagramCropRatio._('4:5', (4, 5));
+
+  /// 1080x1080.
+  static const square = InstagramCropRatio._('1:1', (1, 1));
+
+  /// 1080x566. Expressed as 191:100 because the preset takes integers.
+  static const landscape = InstagramCropRatio._('1.91:1', (191, 100));
+
+  /// Order matters — it's the order of the tabs in the crop UI.
+  static const all = <CropAspectRatioPresetData>[portrait, square, landscape];
+}
+
+/// Picks a photo and lets the user frame it to an Instagram feed ratio.
+///
+/// The crop step also does the downscaling and JPEG encoding, so the file that
+/// comes back is already upload-ready at Instagram's spec: 1080px wide, quality
+/// 80, never taller than 4:5.
+abstract final class InstagramPhotoPicker {
+  /// Instagram's standard feed width.
+  static const int _maxWidth = 1080;
+
+  /// Tallest legal feed image (4:5 at [_maxWidth]).
+  static const int _maxHeight = 1350;
+
+  /// Matches InstagramImageSpec.jpegQuality.
+  static const int _quality = 80;
+
+  /// Returns the cropped file's path, or null if the user backed out of either
+  /// the picker or the cropper.
+  ///
+  /// [context] is required by the web cropper implementation, which renders a
+  /// Flutter dialog rather than a native screen.
+  static Future<String?> pickAndCrop({
+    required BuildContext context,
+    required ImageSource source,
+  }) async {
+    final picked = await ImagePicker().pickImage(source: source);
+    if (picked == null) return null;
+    if (!context.mounted) return null;
+
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      // Bounds and encoding applied by the platform's native cropper, which
+      // keeps this working identically on Android, iOS and web.
+      maxWidth: _maxWidth,
+      maxHeight: _maxHeight,
+      compressFormat: ImageCompressFormat.jpg,
+      compressQuality: _quality,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop photo',
+          toolbarColor: AppColors.black,
+          toolbarWidgetColor: AppColors.white,
+          backgroundColor: AppColors.black,
+          activeControlsWidgetColor: AppColors.orangeBright,
+          cropFrameColor: AppColors.orangeBright,
+          cropGridColor: AppColors.stroke,
+          statusBarLight: false,
+          navBarLight: false,
+          initAspectRatio: InstagramCropRatio.portrait,
+          // Users pick a shape from the presets; free-form would let them
+          // produce a ratio Instagram-style feeds can't display consistently.
+          lockAspectRatio: true,
+          hideBottomControls: false,
+          aspectRatioPresets: InstagramCropRatio.all,
+        ),
+        IOSUiSettings(
+          title: 'Crop photo',
+          aspectRatioLockEnabled: true,
+          resetAspectRatioEnabled: false,
+          aspectRatioPickerButtonHidden: false,
+          aspectRatioPresets: InstagramCropRatio.all,
+        ),
+        if (kIsWeb)
+          WebUiSettings(
+            context: context,
+            presentStyle: WebPresentStyle.dialog,
+          ),
+      ],
+    );
+
+    return cropped?.path;
+  }
+}
