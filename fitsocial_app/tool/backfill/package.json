@@ -1,0 +1,12 @@
+{
+  "name": "fitsocial-backfill",
+  "private": true,
+  "version": "1.0.0",
+  "description": "One-off repair of author names and avatars on existing posts and comments in the live fitsocialv2 project.",
+  "scripts": {
+    "backfill": "node backfill.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

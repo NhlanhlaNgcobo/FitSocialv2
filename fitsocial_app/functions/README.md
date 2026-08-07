@@ -1,0 +1,146 @@
+# FitSocial Cloud Functions
+
+Two callables, both requiring a signed-in user:
+
+| Function | What it does |
+| --- | --- |
+| `analyzeMeal` | Takes a meal photo URL, identifies the foods with a vision model, and returns macros looked up from the nutrition database. |
+| `searchFoods` | Text search over the nutrition database, for adding or correcting a food by hand. |
+
+## How the meal analyzer works
+
+The vision model and the macros are deliberately separated:
+
+1. **The model identifies and portions.** It returns each food it can see plus an estimated weight in grams. Models are good at recognising food and bad at recalling nutrition tables, so it is never trusted for the macros themselves.
+2. **The database supplies the macros.** Each item is matched against a food-composition table and its macros are computed as `per-100 g values × grams ÷ 100`.
+3. **Totals are the sum of the items.** Nothing is taken from the model's own totals, so the headline number always equals its own breakdown.
+
+Each item comes back tagged with where its numbers came from:
+
+- `database` — matched the curated table in `data/nutrition_foods.json`
+- `usda` — matched USDA FoodData Central (only when a key is configured)
+- `estimate` — no match; the model's own guess, shown as such in the app
+
+Lookup order per item: Firestore `nutritionFoods` → bundled JSON → USDA → model estimate.
+
+## Setup
+
+### 1. OpenRouter key (required)
+
+```bash
+firebase functions:secrets:set OPENROUTER_API_KEY
+```
+
+Paste the key when prompted. It is never committed — `firebase-functions/params` reads it from Secret Manager at runtime.
+
+### 2. Choose a vision model (optional)
+
+`functions/.env`:
+
+```
+VISION_MODEL="openai/gpt-5.6-luna"
+```
+
+Any vision-capable OpenRouter model id works — they are vendor-prefixed. Changing this needs no code change, which is what makes comparing models on real photos cheap.
+
+The database changed what the model is for: it no longer recalls nutrition values, it only identifies foods and estimates their weight in grams. So this is a pure vision task now, and **portion estimation is the largest remaining source of error** — that, not food naming, is what to judge a model on.
+
+Approximate cost per scan assumes ~3,000 input tokens (photo plus prompt) and ~600 output. Measure your own once a model is live.
+
+| Model | $/MTok in / out | ~Cost/scan | Trade-off |
+| --- | --- | --- | --- |
+| `openai/gpt-5.6-luna` | 0.10 / 0.60 | ~$0.0007 | The current default. Roughly 18x cheaper than Sonnet 5 — accuracy on portion estimates still to be validated. |
+| `google/gemini-3.5-flash-lite` | 0.30 / 2.50 | ~$0.0024 | Other budget option. |
+| `openai/gpt-5.6-terra` | 1.00 / 6.00 | ~$0.0066 | Middle tier if Luna proves too rough. |
+| `anthropic/claude-sonnet-5` | 2.00 / 10.00 | ~$0.012 | High-resolution vision (2576px long edge), reliable JSON. The accuracy benchmark to beat. |
+| `anthropic/claude-opus-5` | 5.00 / 25.00 | ~$0.030 | Best spatial reasoning; gains are largest when the model can crop and re-check its own work, which this single-shot pipeline doesn't do. |
+
+### Comparing models
+
+Photograph 8–10 meals and **weigh each component on a kitchen scale first**, so you have ground truth. Run the set through each candidate and compare estimated grams against actual. Food-identification errors are already visible in the app as `Estimated` badges; gram error is the number that isn't, and it drives every macro.
+
+### Two request constraints
+
+Both in `index.js`, and both deliberately provider-neutral so `VISION_MODEL` can be swapped freely:
+
+- `max_tokens` is 4000. Reasoning models on both OpenAI and Anthropic draw thinking from the same budget as the response, so a tight cap truncates the JSON mid-object — which the code reports as a parse failure, not as truncation.
+- `temperature` is not sent. Current Claude models reject non-default sampling parameters with a 400, and omitting it keeps the request valid on every provider.
+
+### 3. Deploy
+
+```bash
+firebase deploy --only functions
+```
+
+### 4. Firestore rules
+
+The new `meals` and `nutritionFoods` rules ship in `../firestore.rules`:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+## The nutrition database
+
+`data/nutrition_foods.json` holds ~150 foods with per-100 g composition, aliases, and typical portion sizes — South African staples (pap, samp and beans, chakalaka, boerewors, vetkoek, kota, amasi, mageu) alongside common global foods, since those are what the vision model actually names on a plate here.
+
+The file is bundled with the deployed function, so **analysis works without seeding anything**.
+
+### Editing foods without redeploying
+
+Seed the table into Firestore, then edit it there:
+
+```bash
+npm run seed:nutrition
+```
+
+Needs Application Default Credentials with write access:
+
+```bash
+gcloud auth application-default login
+```
+
+Once the `nutritionFoods` collection is non-empty the function reads from it instead of the bundled file, refreshing at most every 10 minutes per warm instance. Re-running the seed is safe — documents are merged by id.
+
+### Checking the matcher
+
+Matching is the part that breaks quietly: a wrong match produces confidently wrong macros. After editing the food table, run:
+
+```bash
+npm run check:nutrition
+```
+
+It asserts that the phrasings a vision model realistically returns ("grilled chicken breast", "slap chips", "umngqusho", "tinned pilchards in tomato sauce") land on the right entries, and that non-food text matches nothing. No network or credentials needed.
+
+Matching is alias-based with an IDF-weighted fallback, so the rarest word in a description decides the food — "pilchards in tomato sauce" resolves to pilchards, not ketchup. Anything scoring below the threshold falls through to the model's estimate rather than guessing.
+
+### Adding a food
+
+Append to `data/nutrition_foods.json`:
+
+```json
+{
+  "id": "unique-kebab-id",
+  "name": "Display name",
+  "aliases": ["what a vision model would call it", "regional name"],
+  "category": "protein",
+  "per100g": { "calories": 165, "protein": 31, "carbs": 0, "fat": 3.6 },
+  "unitGrams": 50,
+  "unitName": "slice",
+  "defaultPortionGrams": 150
+}
+```
+
+`per100g` values are for the food **as eaten** (cooked, if it is cooked). Aliases matter more than the name — they are what the model's wording is matched against. `unitGrams` is optional and only for countable items.
+
+Add a case to `scripts/check_nutrition_matching.js` for anything with tricky phrasing.
+
+### USDA fallback (optional)
+
+For foods outside the local table, add a free key from <https://fdc.nal.usda.gov/api-key-signup> to `functions/.env`:
+
+```
+FDC_API_KEY="your-key"
+```
+
+Without it nothing is called and unmatched items simply stay estimates. It is read from the environment rather than declared as a secret so a missing key can never fail a deploy.

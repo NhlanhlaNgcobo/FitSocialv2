@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark-mode twin of values-v31/styles.xml. Both qualifiers are
+         needed: night is resolved before platform version, so in dark mode on
+         Android 12+ the plain values-night LaunchTheme would otherwise win and
+         the system icon splash would come back. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@android:color/black</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_pulse_mark</item>
+        <item name="android:windowSplashScreenAnimationDuration">1000</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+</resources>

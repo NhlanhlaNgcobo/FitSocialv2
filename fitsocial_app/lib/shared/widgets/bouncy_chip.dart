@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 
 /// A pill button that scales down on press for tactile feedback.
 class BouncyChip extends StatefulWidget {
@@ -22,6 +22,8 @@ class _BouncyChipState extends State<BouncyChip> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
       onTapCancel: () => setState(() => _pressed = false),
@@ -34,14 +36,16 @@ class _BouncyChipState extends State<BouncyChip> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.surfaceHigh,
+            color: palette.surfaceHigh,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppColors.stroke),
+            border: Border.all(color: palette.stroke),
           ),
           child: Text(
             widget.label,
-            style: const TextStyle(
-              color: AppColors.orangeBright,
+            style: TextStyle(
+              // brandText, not orangeBright: this is a 13px label, and the lit
+              // orange goes muddy at that size on a pale chip.
+              color: palette.brandText,
               fontWeight: FontWeight.w700,
               fontSize: 13,
             ),

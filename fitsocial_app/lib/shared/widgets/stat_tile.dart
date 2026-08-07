@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 import 'dark_card.dart';
 
 class StatTile extends StatelessWidget {
@@ -23,10 +24,11 @@ class StatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // No explicit colour: the card's Material hands down the theme's
+          // body colour, which is the foreground for whichever mode is active.
           Text(
             label,
             style: const TextStyle(
-              color: AppColors.white,
               fontWeight: FontWeight.w600,
               fontSize: 16,
             ),
@@ -35,7 +37,6 @@ class StatTile extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              color: AppColors.white,
               fontWeight: FontWeight.w800,
               fontSize: 28,
             ),
@@ -43,8 +44,8 @@ class StatTile extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             delta,
-            style: const TextStyle(
-              color: AppColors.success,
+            style: TextStyle(
+              color: context.palette.success,
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),

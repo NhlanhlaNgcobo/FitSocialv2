@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/app_session.dart';
+import '../../features/main/domain/app_models.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_setup_screen.dart';
@@ -17,18 +18,32 @@ import '../../features/main/presentation/manual_run_entry_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
 import '../../features/main/presentation/meal_upload_screen.dart';
 import '../../features/main/presentation/post_compose_screen.dart';
+import '../../features/main/presentation/post_detail_screen.dart';
 import '../../features/main/presentation/profile_screen.dart';
 import '../../features/main/presentation/run_log_screen.dart';
+import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
+import '../../features/messages/presentation/messages_screen.dart';
+import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/pulse/presentation/pulse_composer_screen.dart';
+import '../../features/pulse/presentation/pulse_viewer_screen.dart';
 import '../../features/tracking/presentation/health_dashboard_screen.dart';
 import '../../features/tracking/presentation/live_run_screen.dart';
 import '../../shared/layout/app_shell.dart';
+import '../../shared/layout/branch_transition.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final session = ref.watch(appSessionProvider);
+  // `.notifier`, NOT the provider itself. Watching a ChangeNotifierProvider
+  // rebuilds on every notifyListeners(), which would build a whole new
+  // GoRouter — and a new router starts at initialLocation, throwing away the
+  // navigation stack. Saving the profile notifies twice, which is why it used
+  // to land on /home instead of popping back to /profile. Watching the
+  // notifier rebuilds only if the AppSession instance itself is replaced;
+  // refreshListenable below is what re-runs `redirect` when its state changes.
+  final session = ref.watch(appSessionProvider.notifier);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -129,6 +144,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/achievements',
         builder: (context, state) => const AchievementsScreen(),
       ),
+      // One post, opened from a profile grid. The tapped post rides along as
+      // `extra` so the screen draws immediately; arriving without it (a deep
+      // link, or a restart) falls back to fetching by id.
+      GoRoute(
+        path: '/post/:postId',
+        builder: (context, state) => PostDetailScreen(
+          postId: state.pathParameters['postId']!,
+          initialPost: state.extra as FeedPost?,
+        ),
+      ),
+      GoRoute(
+        path: '/messages',
+        builder: (context, state) => const MessagesScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      // Someone else's profile. Outside the shell on purpose: it is a
+      // destination you come back from, not one of the five tabs.
+      GoRoute(
+        path: '/user/:userId',
+        builder: (context, state) => UserProfileScreen(
+          userId: state.pathParameters['userId']!,
+        ),
+      ),
       GoRoute(
         path: '/live-run',
         builder: (context, state) => const LiveRunScreen(),
@@ -137,9 +178,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/health',
         builder: (context, state) => const HealthDashboardScreen(),
       ),
-      StatefulShellRoute.indexedStack(
+      GoRoute(
+        path: '/pulse-compose',
+        builder: (context, state) => const PulseComposerScreen(),
+      ),
+      // Playback opens on one author's ring and can then be swiped across the
+      // rest of the tray, which the viewer reads from the provider itself —
+      // so the route carries an id rather than a payload.
+      GoRoute(
+        path: '/pulse/:authorId',
+        builder: (context, state) => PulseViewerScreen(
+          initialAuthorId: state.pathParameters['authorId']!,
+        ),
+      ),
+      // Not `.indexedStack`: that swaps branches on a single frame, which is
+      // the one screen change in the app with no motion. The container builder
+      // hands the branch navigators to BranchTransition instead, which keeps
+      // every one of them alive and fades between them.
+      StatefulShellRoute(
         builder: (context, state, navigationShell) {
           return AppShell(navigationShell: navigationShell);
+        },
+        navigatorContainerBuilder: (context, navigationShell, children) {
+          return BranchTransition(
+            currentIndex: navigationShell.currentIndex,
+            children: children,
+          );
         },
         branches: [
           StatefulShellBranch(

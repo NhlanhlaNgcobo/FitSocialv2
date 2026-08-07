@@ -47,15 +47,17 @@ class ActivityActions {
     final result = await save(repository, profile);
     _ref
       ..invalidate(feedPostsProvider)
-      ..invalidate(summaryMetricsProvider)
       ..invalidate(progressMetricsProvider)
       ..invalidate(profileStatsProvider)
-      ..invalidate(storyItemsProvider)
       ..invalidate(achievementsProvider)
       // Family providers: invalidating the family clears every keyed instance,
       // so the author's profile grids pick the new post up.
       ..invalidate(userPostsProvider)
-      ..invalidate(userMediaPostsProvider);
+      ..invalidate(userMediaPostsProvider)
+      // Likewise every range of the activity grid — without this the square
+      // for today keeps the value it was first built with and a run logged
+      // mid-session never lights up.
+      ..invalidate(activityCalendarProvider);
     return result;
   }
 }

@@ -3,17 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../application/create_flow_controller.dart';
-import '../application/music_integration_controller.dart';
-import '../domain/app_models.dart';
 
 class CreateScreen extends ConsumerWidget {
   const CreateScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
     final flowState = ref.watch(createFlowControllerProvider);
     final flowController = ref.read(createFlowControllerProvider.notifier);
     final actions = [
@@ -21,6 +22,7 @@ class CreateScreen extends ConsumerWidget {
         title: 'Log a Workout',
         subtitle: 'Track your gym session',
         icon: Icons.fitness_center_rounded,
+        accent: _kWorkoutAccent,
         destination: CreateCanvasDestination.workout,
         onTap: () {
           flowController.begin(CreateCanvasDestination.workout);
@@ -31,6 +33,7 @@ class CreateScreen extends ConsumerWidget {
         title: 'Log a Run',
         subtitle: 'Track your run',
         icon: Icons.directions_run_rounded,
+        accent: _kRunAccent,
         destination: CreateCanvasDestination.run,
         onTap: () {
           flowController.begin(CreateCanvasDestination.run);
@@ -41,6 +44,7 @@ class CreateScreen extends ConsumerWidget {
         title: 'Log a Meal',
         subtitle: 'Snap a photo of your meal',
         icon: Icons.restaurant_menu_rounded,
+        accent: _kMealAccent,
         destination: CreateCanvasDestination.photo,
         onTap: () {
           flowController.begin(CreateCanvasDestination.photo);
@@ -51,126 +55,208 @@ class CreateScreen extends ConsumerWidget {
         title: 'Share a Post',
         subtitle: 'Share an update',
         icon: Icons.edit_square,
+        accent: _kPostAccent,
         destination: CreateCanvasDestination.post,
         onTap: () {
           flowController.begin(CreateCanvasDestination.post);
           context.push(CreateCanvasDestination.post.route);
         },
       ),
-      _CreateAction(
-        title: 'Workout Music',
-        subtitle: 'Open playlists and podcast motivation',
-        icon: Icons.music_note_rounded,
-        destination: null,
-        onTap: () {
-          ref
-              .read(musicIntegrationControllerProvider.notifier)
-              .selectSection(ActivitySection.music);
-          context.go('/activity');
-        },
-      ),
-      _CreateAction(
-        title: 'Add Photo',
-        subtitle: 'Share a moment',
-        icon: Icons.photo_library_outlined,
-        destination: CreateCanvasDestination.photo,
-        onTap: () {
-          flowController.begin(CreateCanvasDestination.photo);
-          context.push(CreateCanvasDestination.photo.route);
-        },
-      ),
     ];
 
     return Scaffold(
       appBar: AppBar(title: const Text('What are you up to?')),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        itemBuilder: (context, index) {
-          if (flowState.hasDraft && index == 0) {
-            return _DraftResumeCard(
-              destination: flowState.activeDestination,
-              onResume: () {
-                if (flowState.activeDestination == null &&
-                    flowState.runDraft.hasContent &&
-                    !flowState.workoutDraft.hasContent) {
-                  context.push('/log-run-manual');
-                  return;
-                }
-                final destination = flowState.activeDestination ??
-                    (flowState.workoutDraft.hasContent
-                        ? CreateCanvasDestination.workout
-                        : flowState.mealDraft.hasContent
-                            ? CreateCanvasDestination.meal
-                            : CreateCanvasDestination.post);
-                flowController.begin(destination);
-                context.push(destination.route);
-              },
-              onClear: flowController.clearDrafts,
-            );
-          }
+      body: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.md + FitSocialBottomNav.clearance(context),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Pick a canvas and start logging.',
+              style: TextStyle(color: palette.muted, fontSize: 14),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            if (flowState.hasDraft) ...[
+              _DraftResumeCard(
+                destination: flowState.activeDestination,
+                onResume: () {
+                  // Both read from the pre-`begin` snapshot on purpose: the
+                  // route depends on what the draft holds, not on the
+                  // destination that is about to become active.
+                  final destination = flowState.resumeDestination;
+                  final route = flowState.resumeRoute;
+                  flowController.begin(destination);
+                  context.push(route);
+                },
+                onClear: flowController.clearDrafts,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            // Two columns keeps every tile inside the thumb arc, and a square-ish
+            // ratio leaves the icon room to breathe above the label.
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: AppSpacing.md,
+              crossAxisSpacing: AppSpacing.md,
+              childAspectRatio: 0.95,
+              children: [
+                for (final action in actions)
+                  _ActionTile(
+                    action: action,
+                    isActive: action.destination != null &&
+                        action.destination == flowState.activeDestination,
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-          final actionIndex = flowState.hasDraft ? index - 1 : index;
-          final action = actions[actionIndex];
-          final isActive = action.destination != null &&
-              action.destination == flowState.activeDestination;
-          return InkWell(
-            borderRadius: BorderRadius.circular(24),
-            onTap: action.onTap,
-            child: DarkCard(
-              child: Row(
+// One accent per action, and a fixed set in both themes: these identify the
+// four things you can create, the way a brand colour does, rather than describing
+// a surface. Green means "meal" whichever way the app is lit.
+const Color _kWorkoutAccent = AppColors.orangeBright;
+const Color _kRunAccent = Color(0xFF2ECBFF);
+const Color _kMealAccent = Color(0xFF31C46C);
+const Color _kPostAccent = Color(0xFFB06BFF);
+
+class _ActionTile extends StatefulWidget {
+  const _ActionTile({required this.action, required this.isActive});
+
+  final _CreateAction action;
+  final bool isActive;
+
+  @override
+  State<_ActionTile> createState() => _ActionTileState();
+}
+
+class _ActionTileState extends State<_ActionTile> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final action = widget.action;
+    final accent = action.accent;
+
+    return GestureDetector(
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      onTap: action.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(26),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                accent.withValues(alpha: widget.isActive ? 0.28 : 0.16),
+                palette.surface,
+              ],
+            ),
+            border: Border.all(
+              color: widget.isActive
+                  ? accent.withValues(alpha: 0.75)
+                  : accent.withValues(alpha: 0.22),
+              width: widget.isActive ? 1.5 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: widget.isActive ? 0.22 : 0.10),
+                blurRadius: 22,
+                spreadRadius: -6,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: isActive
-                          ? AppColors.orangeBright.withValues(alpha: 0.18)
-                          : AppColors.surfaceHigh,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(action.icon, color: AppColors.orangeBright),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          action.title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          action.subtitle,
-                          style: const TextStyle(color: AppColors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isActive) ...[
-                    const SizedBox(width: AppSpacing.sm),
-                    const Text(
-                      'Active',
-                      style: TextStyle(
-                        color: AppColors.orangeBright,
-                        fontWeight: FontWeight.w700,
+                      color: accent.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.35),
                       ),
                     ),
-                  ],
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.muted,
+                    child: Icon(action.icon, color: accent, size: 24),
                   ),
+                  const Spacer(),
+                  if (widget.isActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.20),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'Active',
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.arrow_outward_rounded,
+                      size: 18,
+                      color: accent.withValues(alpha: 0.55),
+                    ),
                 ],
               ),
-            ),
-          );
-        },
-        separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
-        itemCount: actions.length + (flowState.hasDraft ? 1 : 0),
+              const Spacer(),
+              Text(
+                action.title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                action.subtitle,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 12.5,
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -189,6 +275,7 @@ class _DraftResumeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return DarkCard(
       child: Row(
         children: [
@@ -217,9 +304,9 @@ class _DraftResumeCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Resume where you left off or clear the canvas.',
-                  style: TextStyle(color: AppColors.muted),
+                  style: TextStyle(color: palette.muted),
                 ),
               ],
             ),
@@ -241,6 +328,7 @@ class _CreateAction {
     required this.title,
     required this.subtitle,
     required this.icon,
+    required this.accent,
     required this.destination,
     required this.onTap,
   });
@@ -248,6 +336,7 @@ class _CreateAction {
   final String title;
   final String subtitle;
   final IconData icon;
+  final Color accent;
   final CreateCanvasDestination? destination;
   final VoidCallback onTap;
 }

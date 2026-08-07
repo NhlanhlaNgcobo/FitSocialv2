@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
-import '../../../shared/widgets/dark_card.dart';
 import '../application/create_flow_controller.dart';
 import '../application/content_providers.dart';
-import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
+import '../../../shared/widgets/activity_grid.dart';
+import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/post_card.dart';
-import '../../../shared/widgets/story_avatar.dart';
+import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -19,10 +19,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final stories = ref.watch(storyItemsProvider);
-    final summaryMetrics = ref.watch(summaryMetricsProvider);
     final posts = ref.watch(feedPostsProvider);
-    final musicState = ref.watch(musicIntegrationControllerProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -48,55 +45,21 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
           AppSpacing.sm,
           AppSpacing.md,
-          AppSpacing.xl,
+          // Clears the floating nav, which overlays this list rather than
+          // sitting below it.
+          AppSpacing.md + FitSocialBottomNav.clearance(context),
         ),
         children: [
-          stories.when(
-            data: (data) => SizedBox(
-              height: 96,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: _buildStories(data)),
-              ),
-            ),
-            loading: () => const SizedBox(
-              height: 96,
-              child: _SectionPlaceholder(label: 'Loading stories...'),
-            ),
-            error: (_, __) => const SizedBox(
-              height: 96,
-              child: _SectionPlaceholder(label: 'Stories unavailable'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          summaryMetrics.when(
-            data: (data) {
-              if (data.length < 2) {
-                return const _SectionPlaceholder(
-                  label: 'Summary unavailable',
-                );
-              }
-              return _TodaySummary(summaryMetrics: data);
-            },
-            loading: () => const _SummaryPlaceholder(),
-            error: (_, __) =>
-                const _SectionPlaceholder(label: 'Summary unavailable'),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _MusicSpotlightCard(
-            hasConnection: musicState.hasAnyConnection,
-            onOpenMusic: () {
-              ref
-                  .read(musicIntegrationControllerProvider.notifier)
-                  .selectSection(ActivitySection.music);
-              context.go('/activity');
-            },
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          const PulseTray(),
+          const SizedBox(height: AppSpacing.sm),
+          // The current Mon-Sun week, pinned: the feed is somewhere to glance
+          // at the streak, not somewhere to change the window.
+          const ActivityGridCard(fixedRange: ActivityRange.week),
+          const SizedBox(height: AppSpacing.sm),
           posts.when(
             data: (data) => _buildPostColumn(data, ref),
             loading: () => const _SectionPlaceholder(label: 'Loading feed...'),
@@ -114,25 +77,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  List<Widget> _buildStories(List<StoryItem> stories) {
-    final items = <Widget>[];
-    for (var i = 0; i < stories.length; i++) {
-      final story = stories[i];
-      items.add(
-        StoryAvatar(
-          name: story.name,
-          initials: story.initials,
-          visualTile: story.visualTile,
-          isOwnStory: story.isOwnStory,
-        ),
-      );
-      if (i != stories.length - 1) {
-        items.add(const SizedBox(width: AppSpacing.md));
-      }
-    }
-    return items;
-  }
-
   List<Widget> _buildPosts(List<FeedPost> posts, WidgetRef ref) {
     final items = <Widget>[];
     for (var i = 0; i < posts.length; i++) {
@@ -140,6 +84,7 @@ class HomeScreen extends ConsumerWidget {
       items.add(
         PostCard(
           postId: post.id,
+          authorId: post.authorId,
           userName: post.userName,
           activity: post.activity,
           caption: post.caption,
@@ -160,13 +105,20 @@ class HomeScreen extends ConsumerWidget {
               context: ref.context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
+              // Push onto the root navigator, not the shell branch's nested
+              // one. A branch-level route only covers AppShell's body, so the
+              // floating bottom nav — a sibling in the Scaffold — would paint
+              // straight over the sheet and escape the modal barrier.
+              useRootNavigator: true,
               builder: (_) => CommentsSheet(postId: post.id),
             );
           },
         ),
       );
       if (i != posts.length - 1) {
-        items.add(const SizedBox(height: AppSpacing.md));
+        // Just enough to keep the two card borders from touching — the feed
+        // should read as a continuous stack, not a list of spaced-out tiles.
+        items.add(const SizedBox(height: AppSpacing.xs));
       }
     }
     return items;
@@ -180,154 +132,21 @@ class _SectionPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Container(
       width: double.infinity,
       alignment: Alignment.center,
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.stroke),
+        border: Border.all(color: palette.stroke),
       ),
       child: Text(
         label,
-        style: const TextStyle(color: AppColors.muted),
+        style: TextStyle(color: palette.muted),
       ),
     );
   }
 }
 
-class _SummaryPlaceholder extends StatelessWidget {
-  const _SummaryPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SectionPlaceholder(label: 'Loading summary...');
-  }
-}
-
-class _TodaySummary extends StatelessWidget {
-  const _TodaySummary({required this.summaryMetrics});
-
-  final List<SummaryMetric> summaryMetrics;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.stroke),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1B120C), AppColors.surface],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SummaryMetric(
-              label: summaryMetrics[0].label,
-              value: summaryMetrics[0].value,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: _SummaryMetric(
-              label: summaryMetrics[1].label,
-              value: summaryMetrics[1].value,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MusicSpotlightCard extends StatelessWidget {
-  const _MusicSpotlightCard({
-    required this.hasConnection,
-    required this.onOpenMusic,
-  });
-
-  final bool hasConnection;
-  final VoidCallback onOpenMusic;
-
-  @override
-  Widget build(BuildContext context) {
-    return DarkCard(
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFA053), Color(0xFFFF6B2C)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Icon(
-              Icons.music_note_rounded,
-              color: AppColors.white,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Music for your workout',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  hasConnection
-                      ? 'Open your workout playlists and podcast picks.'
-                      : 'Connect Spotify or Apple Music and build your training soundtrack.',
-                  style: const TextStyle(color: AppColors.muted, height: 1.4),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          IconButton(
-            onPressed: onOpenMusic,
-            icon: const Icon(Icons.chevron_right_rounded),
-            color: AppColors.orangeBright,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryMetric extends StatelessWidget {
-  const _SummaryMetric({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.muted, fontSize: 13),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-        ),
-      ],
-    );
-  }
-}

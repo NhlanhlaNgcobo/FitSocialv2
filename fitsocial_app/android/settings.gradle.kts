@@ -27,3 +27,7 @@ plugins {
 }
 
 include(":app")
+// Spotify's App Remote library, vendored as a file artifact — see
+// spotify-app-remote/README.md. The spotify_sdk plugin depends on this
+// project path by name, so it must be included even though it has no sources.
+include(":spotify-app-remote")

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12 replaced the plain launch window with the SplashScreen API,
+         which draws the launcher icon over the window background unless the
+         theme says otherwise. That is why cold start used to show the static F
+         icon for as long as bootstrap took, and only then the pulsing one.
+
+         Pointing windowSplashScreenAnimatedIcon at the animated mark puts the
+         same pulse the Flutter SplashScreen runs on the system window, so the
+         logo is already breathing on the first frame the OS draws and simply
+         keeps going when the engine takes over.
+
+         Duration is the hint the system uses for how long it may hold the
+         splash open; 1000ms is the documented maximum. The animation itself
+         loops, so a slower cold start keeps pulsing rather than freezing. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@android:color/black</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_pulse_mark</item>
+        <item name="android:windowSplashScreenAnimationDuration">1000</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+</resources>

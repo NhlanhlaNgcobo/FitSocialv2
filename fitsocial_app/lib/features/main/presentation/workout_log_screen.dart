@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
-import '../../../shared/widgets/dark_card.dart';
+import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/share_to_feed_toggle.dart';
+import '../../../shared/widgets/staggered_fade_in.dart';
+import '../../../shared/widgets/stepper_field.dart';
 import '../application/activity_actions.dart';
 import '../domain/app_models.dart';
 
@@ -16,13 +20,26 @@ class WorkoutLogScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkoutLogScreen> createState() => _WorkoutLogScreenState();
 }
 
-class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
-  final _formKey = GlobalKey<FormState>();
+class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
+    with SingleTickerProviderStateMixin {
+  static const int _sectionCount = 6;
+
+  /// Quick-fill labels for the title field. Deliberately generic splits rather
+  /// than named programmes — they read as a starting point, not a prescription.
+  static const List<String> _titleSuggestions = [
+    'Push Day',
+    'Pull Day',
+    'Leg Day',
+    'Full Body',
+  ];
+
+  late final AnimationController _entranceController;
   late final TextEditingController _titleController;
   late final TextEditingController _durationController;
-  late final TextEditingController _setsController;
-  late final TextEditingController _repsController;
   late final TextEditingController _notesController;
+
+  int _sets = 0;
+  int _reps = 0;
   bool _shareToFeed = true;
   bool _isSaving = false;
   String? _errorMessage;
@@ -30,25 +47,56 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   @override
   void initState() {
     super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
     _titleController = TextEditingController();
     _durationController = TextEditingController();
-    _setsController = TextEditingController();
-    _repsController = TextEditingController();
     _notesController = TextEditingController();
   }
 
   @override
   void dispose() {
+    _entranceController.dispose();
     _titleController.dispose();
     _durationController.dispose();
-    _setsController.dispose();
-    _repsController.dispose();
     _notesController.dispose();
     super.dispose();
   }
 
+  int get _durationMinutes =>
+      int.tryParse(_durationController.text.trim()) ?? 0;
+
+  int get _totalReps => _sets * _reps;
+
+  bool get _hasSummary => _durationMinutes > 0 || _totalReps > 0;
+
+  void _setTitle(String value) {
+    _titleController.text = value;
+    _titleController.selection =
+        TextSelection.collapsed(offset: value.length);
+    setState(() {});
+  }
+
+  void _bumpDuration(int minutes) {
+    final next = (_durationMinutes + minutes).clamp(0, 600);
+    _durationController.text = next.toString();
+    _durationController.selection =
+        TextSelection.collapsed(offset: _durationController.text.length);
+    setState(() {});
+  }
+
   Future<void> _saveWorkout() async {
-    if (!_formKey.currentState!.validate()) return;
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
+      setState(() => _errorMessage = 'Give your workout a name.');
+      return;
+    }
+    if (_durationMinutes <= 0) {
+      setState(() => _errorMessage = 'Add how long the session lasted.');
+      return;
+    }
 
     setState(() {
       _isSaving = true;
@@ -56,21 +104,15 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     });
 
     try {
-      final sets = int.tryParse(_setsController.text.trim()) ?? 0;
-      final reps = int.tryParse(_repsController.text.trim()) ?? 0;
       final exercises = <ExerciseEntry>[
-        if (sets > 0 || reps > 0)
-          ExerciseEntry(
-            name: _titleController.text.trim(),
-            sets: sets,
-            reps: reps,
-          ),
+        if (_sets > 0 || _reps > 0)
+          ExerciseEntry(name: title, sets: _sets, reps: _reps),
       ];
 
       final result = await ref.read(activityActionsProvider).saveWorkout(
             WorkoutLogDraft(
-              title: _titleController.text.trim(),
-              duration: '${_durationController.text.trim()} min',
+              title: title,
+              duration: '$_durationMinutes min',
               calories: '0 kcal',
               exercises: exercises,
               notes: _notesController.text.trim(),
@@ -96,152 +138,530 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     }
   }
 
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: const TextStyle(color: AppColors.muted),
-      filled: true,
-      fillColor: AppColors.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.stroke),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.stroke),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.orangeBright),
+  @override
+  Widget build(BuildContext context) {
+    var sectionIndex = 0;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Log Workout')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.xl,
+        ),
+        children: [
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: _TitleSection(
+              controller: _titleController,
+              suggestions: _titleSuggestions,
+              onSuggestionTap: _setTitle,
+              onChanged: () => setState(() {}),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: _DurationSection(
+              controller: _durationController,
+              onChanged: () => setState(() {}),
+              onBump: _bumpDuration,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SectionHeader(
+                  icon: Icons.repeat_rounded,
+                  label: 'Sets & reps',
+                  hint: 'Optional',
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StepperField(
+                        label: 'Sets',
+                        value: _sets.toDouble(),
+                        max: 30,
+                        onChanged: (value) =>
+                            setState(() => _sets = value.toInt()),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: StepperField(
+                        label: 'Reps',
+                        value: _reps.toDouble(),
+                        max: 200,
+                        onChanged: (value) =>
+                            setState(() => _reps = value.toInt()),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Mirrors the estimated-pace card on the run screen: the numbers the
+          // user just entered, added up, so saving isn't a leap of faith.
+          _SummaryCard(
+            visible: _hasSummary,
+            minutes: _durationMinutes,
+            sets: _sets,
+            reps: _reps,
+            totalReps: _totalReps,
+          ),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: _NotesSection(controller: _notesController),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: ShareToFeedToggle(
+              value: _shareToFeed,
+              subtitle: 'Post this workout to your profile activity',
+              onChanged: (value) => setState(() => _shareToFeed = value),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _ErrorBanner(message: _errorMessage),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: PrimaryButton(
+              icon: _isSaving ? null : Icons.check_rounded,
+              label: _isSaving
+                  ? 'Saving...'
+                  : (_shareToFeed ? 'Save Workout & Share' : 'Save Workout'),
+              onPressed: _isSaving ? null : _saveWorkout,
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+/// Icon disc + label that opens each block of the form.
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.icon,
+    required this.label,
+    this.hint,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Log Workout')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          children: [
-            DarkCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Workout Title', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _titleController,
-                    style: const TextStyle(color: AppColors.white),
-                    decoration: _inputDecoration('e.g. Upper Body Power'),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) return 'Required';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  const Text('Duration (minutes)', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _durationController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: AppColors.white),
-                    decoration: _inputDecoration('e.g. 45'),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) return 'Required';
-                      if (int.tryParse(val.trim()) == null) return 'Invalid number';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Sets', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: _setsController,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(color: AppColors.white),
-                              decoration: _inputDecoration('e.g. 4'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Reps', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: _repsController,
-                              keyboardType: TextInputType.number,
-                              style: const TextStyle(color: AppColors.white),
-                              decoration: _inputDecoration('e.g. 10'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  const Text('Notes', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _notesController,
-                    maxLines: 4,
-                    style: const TextStyle(color: AppColors.white),
-                    decoration: _inputDecoration('How did it feel?'),
-                  ),
-                ],
-              ),
+    final palette = context.palette;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: AppColors.orangeBright.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            SwitchListTile(
-              value: _shareToFeed,
-              activeThumbColor: AppColors.orangeBright,
-              title: const Text('Share to feed'),
-              subtitle: const Text(
-                'Post this workout to your profile activity',
-                style: TextStyle(color: AppColors.muted),
-              ),
-              contentPadding: EdgeInsets.zero,
-              onChanged: (value) {
-                setState(() {
-                  _shareToFeed = value;
-                });
-              },
+            child: Icon(icon, size: 16, color: AppColors.orangeBright),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: TextStyle(
+              color: palette.text,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: AppSpacing.md),
-            if (_errorMessage != null) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.stroke),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style: const TextStyle(color: AppColors.orangeBright),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            PrimaryButton(
-              label: _isSaving ? 'Saving...' : 'Save',
-              onPressed: _isSaving ? null : _saveWorkout,
+          ),
+          if (hint != null) ...[
+            const Spacer(),
+            Text(
+              hint!,
+              style: TextStyle(color: palette.muted, fontSize: 12),
             ),
           ],
-        ),
+        ],
       ),
+    );
+  }
+}
+
+/// The rounded well every input sits in — one border radius and one fill for
+/// the whole form, so the fields read as a single surface instead of five.
+BoxDecoration _wellDecoration(BuildContext context) {
+  final palette = context.palette;
+  return BoxDecoration(
+    color: palette.surface,
+    borderRadius: BorderRadius.circular(18),
+    border: Border.all(color: palette.stroke),
+  );
+}
+
+class _TitleSection extends StatelessWidget {
+  const _TitleSection({
+    required this.controller,
+    required this.suggestions,
+    required this.onSuggestionTap,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final List<String> suggestions;
+  final ValueChanged<String> onSuggestionTap;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(
+          icon: Icons.fitness_center_rounded,
+          label: 'Workout title',
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: _wellDecoration(context),
+          child: TextField(
+            controller: controller,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              hintText: 'e.g. Upper Body Power',
+              hintStyle: TextStyle(
+                color: palette.muted,
+                fontSize: 17,
+                fontWeight: FontWeight.w500,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 18),
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: suggestions
+              .map(
+                (suggestion) => BouncyChip(
+                  label: suggestion,
+                  onTap: () => onSuggestionTap(suggestion),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _DurationSection extends StatelessWidget {
+  const _DurationSection({
+    required this.controller,
+    required this.onChanged,
+    required this.onBump,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+  final ValueChanged<int> onBump;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(
+          icon: Icons.timer_outlined,
+          label: 'Duration',
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: _wellDecoration(context),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: palette.text,
+                  ),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText: '0',
+                    hintStyle: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: palette.muted,
+                    ),
+                  ),
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  'min',
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [5, 10, 15, 30]
+              .map(
+                (minutes) => BouncyChip(
+                  label: '+$minutes min',
+                  onTap: () => onBump(minutes),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _NotesSection extends StatelessWidget {
+  const _NotesSection({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(
+          icon: Icons.edit_note_rounded,
+          label: 'Notes',
+          hint: 'Optional',
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          decoration: _wellDecoration(context),
+          child: TextField(
+            controller: controller,
+            maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            style: TextStyle(color: palette.text, height: 1.4),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              hintText: 'How did it feel?',
+              hintStyle: TextStyle(color: palette.muted),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Live read-out of the session as entered. Slides in once there is anything
+/// to show and collapses to nothing when there isn't, so an empty form stays
+/// empty rather than showing a row of dashes.
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.visible,
+    required this.minutes,
+    required this.sets,
+    required this.reps,
+    required this.totalReps,
+  });
+
+  final bool visible;
+  final int minutes;
+  final int sets;
+  final int reps;
+  final int totalReps;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+      alignment: Alignment.topCenter,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 240),
+        opacity: visible ? 1 : 0,
+        child: visible
+            ? Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.orangeBright.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppColors.orangeBright.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    _SummaryStat(
+                      label: 'Duration',
+                      value: minutes > 0 ? '$minutes min' : '--',
+                    ),
+                    const _SummaryDivider(),
+                    _SummaryStat(
+                      label: 'Sets × reps',
+                      value: totalReps > 0 ? '$sets × $reps' : '--',
+                    ),
+                    const _SummaryDivider(),
+                    _SummaryStat(
+                      label: 'Total reps',
+                      value: totalReps > 0 ? '$totalReps' : '--',
+                    ),
+                  ],
+                ),
+              )
+            : const SizedBox(width: double.infinity),
+      ),
+    );
+  }
+}
+
+class _SummaryStat extends StatelessWidget {
+  const _SummaryStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(color: context.palette.muted, fontSize: 11),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.orangeBright,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryDivider extends StatelessWidget {
+  const _SummaryDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 28,
+      color: AppColors.orangeBright.withValues(alpha: 0.25),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      alignment: Alignment.topCenter,
+      child: message == null
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: palette.danger.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: palette.danger.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.error_outline_rounded,
+                      size: 18,
+                      color: palette.danger,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        message!,
+                        style: TextStyle(color: palette.danger),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

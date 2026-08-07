@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -148,6 +149,7 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     var sectionIndex = 0;
 
     return Scaffold(
@@ -162,10 +164,10 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Distance',
                   style: TextStyle(
-                    color: AppColors.white,
+                    color: palette.text,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -173,9 +175,9 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: palette.surface,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppColors.stroke),
+                    border: Border.all(color: palette.stroke),
                   ),
                   child: Row(
                     children: [
@@ -186,10 +188,10 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                             decimal: true,
                           ),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.white,
+                            color: palette.text,
                           ),
                           decoration: const InputDecoration(
                             border: InputBorder.none,
@@ -203,12 +205,12 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                           },
                         ),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
                         child: Text(
                           'km',
                           style: TextStyle(
-                            color: AppColors.muted,
+                            color: palette.muted,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -240,10 +242,10 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Time',
                   style: TextStyle(
-                    color: AppColors.white,
+                    color: palette.text,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -313,9 +315,9 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
+                          Text(
                             'Estimated pace',
-                            style: TextStyle(color: AppColors.muted),
+                            style: TextStyle(color: palette.muted),
                           ),
                           Text(
                             _paceLabel,
@@ -352,9 +354,9 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: palette.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.stroke),
+                border: Border.all(color: palette.stroke),
               ),
               child: Text(
                 _errorMessage!,

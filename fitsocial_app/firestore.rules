@@ -44,6 +44,27 @@ service cloud.firestore {
           && !followerEdgeExistsAfter(userId);
     }
 
+    // The Pulse's author, for rules that live on its subcollections.
+    function isPulseAuthor(pulseId) {
+      return get(/databases/$(database)/documents/pulses/$(pulseId))
+               .data.authorId == request.auth.uid;
+    }
+
+    // Whether the caller's view record under {pulseId} exists once this batch
+    // commits. Ties a viewCount change to an actual view, so the number can't
+    // be inflated by repeat writes.
+    function pulseViewExistsAfter(pulseId) {
+      return existsAfter(
+        /databases/$(database)/documents/pulses/$(pulseId)/views/$(request.auth.uid)
+      );
+    }
+
+    function isPulseViewIncrement(pulseId) {
+      return request.resource.data.get('viewCount', 0)
+             == resource.data.get('viewCount', 0) + 1
+          && pulseViewExistsAfter(pulseId);
+    }
+
     // Profile documents.
     //
     // Reads are open to any signed-in user because Explore search and post
@@ -94,6 +115,22 @@ service cloud.firestore {
         allow create, delete: if request.auth != null
                              && request.auth.uid == followerId;
       }
+
+      // This user's "last watched" cursor per Pulse author — what decides
+      // whether a ring shows as live or spent. Private to its owner: it is a
+      // record of what they have been looking at.
+      match /pulseSeen/{authorId} {
+        allow read, write: if request.auth != null
+                           && request.auth.uid == userId;
+      }
+
+      // People this user has asked to be notified about. Private to its owner
+      // for the same reason as pulseSeen: it is a record of who they are
+      // watching, which is nobody else's business.
+      match /notifyFor/{targetId} {
+        allow read, write: if request.auth != null
+                           && request.auth.uid == userId;
+      }
     }
 
     // Feed posts — authenticated users can read all, write only their own.
@@ -118,13 +155,24 @@ service cloud.firestore {
                     && resource.data.authorId == request.auth.uid;
 
       // Comments on a post — readable by any signed-in user; users may
-      // create comments as themselves and edit/delete only their own.
+      // create comments as themselves and edit only their own.
+      //
+      // Deleting allows one extra case: the author of the parent post may
+      // remove any comment on it. That covers moderating your own post, and it
+      // is required for post deletion to clean up after itself — Firestore
+      // leaves subcollections behind when a document is deleted, so the client
+      // clears the comments first. The parent post must still exist for this
+      // check, which is why deletion happens in that order.
       match /comments/{commentId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null
                       && request.resource.data.authorId == request.auth.uid;
-        allow update, delete: if request.auth != null
-                               && resource.data.authorId == request.auth.uid;
+        allow update: if request.auth != null
+                      && resource.data.authorId == request.auth.uid;
+        allow delete: if request.auth != null
+                      && (resource.data.authorId == request.auth.uid
+                          || get(/databases/$(database)/documents/posts/$(postId))
+                               .data.authorId == request.auth.uid);
       }
     }
 
@@ -135,6 +183,55 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create, delete: if request.auth != null
                             && request.auth.uid == userId;
+    }
+
+    // Pulses — the 24-hour ephemeral posts.
+    //
+    // Expiry is NOT enforced here. Rules can't evaluate "now" against a stored
+    // field cheaply enough to guard every read, so lapsing is handled by the
+    // expiresAt filter every client query carries, plus a Firestore TTL policy
+    // on that same field to actually remove the documents. Enable the policy
+    // once per project:
+    //
+    //   gcloud firestore fields ttls update expiresAt \
+    //     --collection-group=pulses --enable-ttl --project=fitsocialv2
+    //
+    // Any signed-in user may update a Pulse they don't own, but only to move
+    // viewCount up by one, and only when their own view record exists after
+    // the write. No other field can ride along.
+    match /pulses/{pulseId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.authorId == request.auth.uid;
+      allow update: if request.auth != null
+                    && (resource.data.authorId == request.auth.uid
+                        || (request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['viewCount'])
+                            && isPulseViewIncrement(pulseId)));
+      allow delete: if request.auth != null
+                    && resource.data.authorId == request.auth.uid;
+
+      // Who watched this Pulse.
+      //
+      // Listing is the author's alone — a viewer list is theirs to see, not
+      // the audience's. A single get is also allowed on your own record,
+      // which is how the client checks whether it has already counted your
+      // view before incrementing the counter.
+      match /views/{viewerId} {
+        allow get: if request.auth != null
+                   && (request.auth.uid == viewerId
+                       || isPulseAuthor(pulseId));
+        allow list: if request.auth != null && isPulseAuthor(pulseId);
+        allow create: if request.auth != null
+                      && request.auth.uid == viewerId;
+        // The author clears these when deleting a Pulse: Firestore leaves
+        // subcollections behind, so the client empties them first while the
+        // parent still exists for this check to read.
+        allow delete: if request.auth != null
+                      && (request.auth.uid == viewerId
+                          || isPulseAuthor(pulseId));
+      }
     }
 
     // Run logs — the canonical record of a tracked run, including its GPS
@@ -148,6 +245,43 @@ service cloud.firestore {
                     && request.resource.data.authorId == request.auth.uid;
       allow update, delete: if request.auth != null
                             && resource.data.authorId == request.auth.uid;
+    }
+
+    // Workout logs — the canonical record of a logged workout, written
+    // whether or not it was shared. Private to its author for the same reason
+    // as /runs: this is a training history, and the feed already carries its
+    // own copy of anything the user chose to share.
+    match /workouts/{workoutId} {
+      allow read: if request.auth != null
+                  && resource.data.authorId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            && resource.data.authorId == request.auth.uid;
+    }
+
+    // Meal logs — the canonical record of a logged meal: the totals plus the
+    // itemised breakdown the analyzer produced. Private to its author for the
+    // same reason as /runs and /workouts, and more so: a food diary is health
+    // data. The feed post carries only the headline macros.
+    match /meals/{mealId} {
+      allow read: if request.auth != null
+                  && resource.data.authorId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            && resource.data.authorId == request.auth.uid;
+    }
+
+    // The food composition table the meal analyzer resolves against.
+    //
+    // Readable by any signed-in user so the app can search foods directly.
+    // Writes are closed: this is reference data, seeded by
+    // `npm run seed:nutrition` with admin credentials, and a client that could
+    // edit it could make every user's macros wrong.
+    match /nutritionFoods/{foodId} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
 
     // Progress metrics — any authenticated user can read

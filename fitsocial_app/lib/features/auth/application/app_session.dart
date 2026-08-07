@@ -133,12 +133,17 @@ class AppSession extends ChangeNotifier {
   /// Saves the profile. Returns true only when the write (including any avatar
   /// upload) actually succeeded — callers must not treat completion as success,
   /// or a failed save looks identical to a saved one.
+  ///
+  /// Every field is written on every call. A caller editing one of them must
+  /// pass the current values of the rest, or they are cleared.
   Future<bool> completeProfile({
     required String displayName,
     required String handle,
     required String bio,
     required String location,
     String? avatarLocalPath,
+    String pronouns = '',
+    String links = '',
   }) async {
     if (displayName.trim().isEmpty || handle.trim().isEmpty) {
       _errorMessage = 'Display name and handle are both required.';
@@ -154,6 +159,8 @@ class AppSession extends ChangeNotifier {
         bio: bio.trim(),
         location: location.trim(),
         avatarLocalPath: avatarLocalPath,
+        pronouns: pronouns.trim(),
+        links: links.trim(),
       );
       _stage = AuthStage.authenticated;
       return true;

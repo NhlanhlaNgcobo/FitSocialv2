@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -83,6 +84,7 @@ class _HealthDashboardScreenState
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final health = ref.watch(healthSummaryProvider);
     final sessionSteps = ref.watch(sessionStepsProvider).valueOrNull;
     final liveBpm = ref.watch(liveHeartRateProvider).valueOrNull;
@@ -228,11 +230,11 @@ class _HealthDashboardScreenState
                 ),
                 title: Text(
                   d.name,
-                  style: const TextStyle(color: AppColors.white),
+                  style: TextStyle(color: palette.text),
                 ),
                 subtitle: Text(
                   '${d.id} · ${d.rssi} dBm',
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                  style: TextStyle(color: palette.muted, fontSize: 12),
                 ),
                 trailing: TextButton(
                   onPressed: _isConnecting ? null : () => _connect(d),
@@ -242,13 +244,13 @@ class _HealthDashboardScreenState
             ),
           ),
           if (_devices.isEmpty && !_isScanning)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
               child: Text(
                 'Works with smartwatches and chest straps that broadcast '
                 'the standard Bluetooth heart-rate profile.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.muted, fontSize: 13),
+                style: TextStyle(color: palette.muted, fontSize: 13),
               ),
             ),
         ],
@@ -264,10 +266,11 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Text(
       text,
-      style: const TextStyle(
-        color: AppColors.muted,
+      style: TextStyle(
+        color: palette.muted,
         fontSize: 12,
         letterSpacing: 1.5,
         fontWeight: FontWeight.w700,
@@ -291,10 +294,11 @@ class _HealthMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Column(
       children: [
         Icon(icon,
-            color: accent ? AppColors.orangeBright : AppColors.muted,
+            color: accent ? AppColors.orangeBright : palette.muted,
             size: 28),
         const SizedBox(height: 8),
         Text(
@@ -302,13 +306,13 @@ class _HealthMetric extends StatelessWidget {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: accent ? AppColors.orangeBright : AppColors.white,
+            color: accent ? AppColors.orangeBright : palette.text,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: AppColors.muted, fontSize: 12),
+          style: TextStyle(color: palette.muted, fontSize: 12),
         ),
       ],
     );
@@ -323,6 +327,7 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: DarkCard(
@@ -333,7 +338,7 @@ class _InfoCard extends StatelessWidget {
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                style: TextStyle(color: palette.muted, fontSize: 13),
               ),
             ),
           ],

@@ -1,14 +1,46 @@
 import 'package:flutter/material.dart';
 
+/// Colours that mean the same thing in light mode and dark mode.
+///
+/// Everything that *changes* with the theme lives on `AppPalette` and is read
+/// through `context.palette`. Only fixed values are left here, which is what
+/// lets their call sites stay `const`.
+///
+/// The rule for telling them apart: ask what the colour sits on. If it sits on
+/// the page or a card, it is theme-dependent and belongs in the palette. If it
+/// sits on the orange or on a user's photo, that backdrop is the same in both
+/// themes and so is the colour on top of it.
 abstract final class AppColors {
-  static const Color black = Color(0xFF050505);
-  static const Color surface = Color(0xFF111111);
-  static const Color surfaceHigh = Color(0xFF1A1A1A);
-  static const Color stroke = Color(0xFF2B2B2B);
+  /// Brand orange, deep. Used where the orange carries small text or needs to
+  /// hold its own against white.
   static const Color orange = Color(0xFFD35400);
+
+  /// Brand orange, lit. The default: fills, glyphs, the Create disc, progress.
   static const Color orangeBright = Color(0xFFFF6B1A);
-  static const Color white = Color(0xFFF7F7F7);
-  static const Color muted = Color(0xFFAAAAAA);
-  static const Color success = Color(0xFF31C46C);
-  static const Color danger = Color(0xFFE85D5D);
+
+  /// Foreground on a brand-orange fill — the `+` in the Create disc, the label
+  /// on a primary button. Orange is orange in both themes, so this is fixed.
+  static const Color onBrand = Color(0xFFF7F7F7);
+
+  /// The dark foreground for the places that fill *solid* orange and need
+  /// contrast the other way — a selected filter pill, a logged day in the
+  /// activity grid. Also fixed: the orange underneath it never changes.
+  static const Color onBrandInk = Color(0xFF050505);
+
+  /// Foreground over a user's photo or video: metric labels on a feed image,
+  /// Pulse controls. Media is media in both themes.
+  static const Color onMedia = Color(0xFFF7F7F7);
+
+  /// The quiet register of [onMedia] — a disabled Pulse button, a caption hint.
+  static const Color onMediaMuted = Color(0xFFAAAAAA);
+
+  /// The letterbox behind a photo or video — Pulse's viewer and composer, the
+  /// crop canvas. Immersive media surfaces stay dark in light mode, the same
+  /// way Stories do, because a cream surround misreports what the media looks
+  /// like.
+  static const Color mediaBackdrop = Color(0xFF050505);
+
+  /// Rule-of-thirds lines in the photo cropper. Part of that same always-dark
+  /// chrome, and drawn over the photo rather than over any app surface.
+  static const Color cropGrid = Color(0xFF2B2B2B);
 }

@@ -45,6 +45,27 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Pulse media: pulses/{uid}/... — the photos and clips behind a 24-hour
+    // Pulse. Readable by any signed-in user, since a Pulse plays to the whole
+    // community while it is live.
+    //
+    // Two caps rather than one: photos are cropped and re-encoded to 1080x1920
+    // on the device and land at a few hundred KB, so they get the same 10 MB
+    // ceiling as every other image here. Video is not re-encoded, and a minute
+    // of phone-shot 1080p is genuinely large, so it gets its own limit — high
+    // enough not to reject real footage, low enough to bound what a single
+    // Pulse can cost in outbound bandwidth.
+    match /pulses/{userId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == userId
+                   && ((request.resource.contentType.matches('image/.*')
+                        && request.resource.size < 10 * 1024 * 1024)
+                       || (request.resource.contentType.matches('video/.*')
+                           && request.resource.size < 100 * 1024 * 1024));
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Everything else is denied by default.
     match /{allPaths=**} {
       allow read, write: if false;

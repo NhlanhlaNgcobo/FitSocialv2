@@ -19,17 +19,7 @@ class UnconfiguredContentRepository implements ContentRepository {
   const UnconfiguredContentRepository();
 
   @override
-  Future<List<StoryItem>> getStories(UserProfileDraft? profile) async {
-    throw StateError(_firebaseSetupMessage);
-  }
-
-  @override
   Future<List<FeedPost>> getFeedPosts(UserProfileDraft? profile) async {
-    throw StateError(_firebaseSetupMessage);
-  }
-
-  @override
-  Future<List<SummaryMetric>> getSummaryMetrics() async {
     throw StateError(_firebaseSetupMessage);
   }
 
@@ -39,24 +29,27 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<WorkoutPlaylist>> getWorkoutPlaylists(
-    WorkoutType workoutType,
-  ) async {
+  Future<List<ActivityDay>> getActivityDays(DateTime from) async {
     throw StateError(_firebaseSetupMessage);
   }
 
   @override
-  Future<List<PodcastRecommendation>> getPodcastRecommendations() async {
+  Future<List<ProfileStat>> getProfileStats(String userId) async {
     throw StateError(_firebaseSetupMessage);
   }
 
   @override
-  Future<List<ProfileStat>> getProfileStats() async {
+  Future<UserSearchResult?> fetchUserProfile(String userId) async {
     throw StateError(_firebaseSetupMessage);
   }
 
   @override
   Future<AchievementsData> fetchUserAchievements(String userId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<FeedPost?> fetchPost(String postId) async {
     throw StateError(_firebaseSetupMessage);
   }
 
@@ -96,6 +89,23 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Stream<bool> watchUserNotifications(
+    String currentUserId,
+    String targetUserId,
+  ) {
+    return Stream.value(false);
+  }
+
+  @override
+  Future<void> setUserNotifications(
+    String currentUserId,
+    String targetUserId, {
+    required bool enabled,
+  }) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<ActivitySaveResult> saveWorkout(
     UserProfileDraft? profile,
     WorkoutLogDraft draft,
@@ -128,6 +138,11 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<void> deletePost(String postId) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<void> toggleLike(String postId, String userId) async {
     throw StateError(_firebaseSetupMessage);
   }
@@ -153,6 +168,11 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<Map<String, dynamic>> analyzeMealImage(String imageUrl) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<FoodSearchResult>> searchFoods(String query) async {
     throw StateError(_firebaseSetupMessage);
   }
 

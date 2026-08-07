@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 
 /// An animated card-style toggle used to control whether a logged
@@ -19,6 +20,8 @@ class ShareToFeedToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () => onChanged(!value),
@@ -29,10 +32,10 @@ class ShareToFeedToggle extends StatelessWidget {
         decoration: BoxDecoration(
           color: value
               ? AppColors.orangeBright.withValues(alpha: 0.12)
-              : AppColors.surface,
+              : palette.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: value ? AppColors.orangeBright : AppColors.stroke,
+            color: value ? AppColors.orangeBright : palette.stroke,
             width: value ? 1.4 : 1,
           ),
         ),
@@ -46,7 +49,7 @@ class ShareToFeedToggle extends StatelessWidget {
               decoration: BoxDecoration(
                 color: value
                     ? AppColors.orangeBright.withValues(alpha: 0.2)
-                    : AppColors.surfaceHigh,
+                    : palette.surfaceHigh,
                 shape: BoxShape.circle,
               ),
               child: AnimatedSwitcher(
@@ -56,7 +59,7 @@ class ShareToFeedToggle extends StatelessWidget {
                 child: Icon(
                   value ? Icons.public_rounded : Icons.lock_outline_rounded,
                   key: ValueKey(value),
-                  color: value ? AppColors.orangeBright : AppColors.muted,
+                  color: value ? AppColors.orangeBright : palette.muted,
                 ),
               ),
             ),
@@ -72,7 +75,7 @@ class ShareToFeedToggle extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                    style: TextStyle(color: palette.muted, fontSize: 12),
                   ),
                 ],
               ),

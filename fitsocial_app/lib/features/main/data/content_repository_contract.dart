@@ -2,17 +2,32 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 
 abstract class ContentRepository {
-  Future<List<StoryItem>> getStories(UserProfileDraft? profile);
   Future<List<FeedPost>> getFeedPosts(UserProfileDraft? profile);
-  Future<List<SummaryMetric>> getSummaryMetrics();
   Future<List<ProgressMetric>> getProgressMetrics();
-  Future<List<WorkoutPlaylist>> getWorkoutPlaylists(WorkoutType workoutType);
-  Future<List<PodcastRecommendation>> getPodcastRecommendations();
-  Future<List<ProfileStat>> getProfileStats();
+
+  /// The signed-in user's runs and workouts bucketed per calendar day, from
+  /// [from] (local midnight) to now.
+  ///
+  /// Sparse by design: only days with at least one logged session come back.
+  /// [ActivityCalendar.fromLoggedDays] fills in the empty cells.
+  Future<List<ActivityDay>> getActivityDays(DateTime from);
+  /// Uploads / Followers / Following for [userId].
+  ///
+  /// "Uploads" is how much of the app the user has actually used: every run
+  /// and workout they have logged, shared or not, plus every photo they have
+  /// posted. Meals are excluded on purpose.
+  Future<List<ProfileStat>> getProfileStats(String userId);
+
+  /// A single public profile, or null when no such user exists.
+  Future<UserSearchResult?> fetchUserProfile(String userId);
 
   /// Aggregates the user's logged activity into XP, level, streak and badge
   /// progress.
   Future<AchievementsData> fetchUserAchievements(String userId);
+
+  /// A single post by id, or null when it no longer exists. Used when a post
+  /// is opened by route rather than tapped in a list that already holds it.
+  Future<FeedPost?> fetchPost(String postId);
 
   /// All posts authored by [userId], newest first.
   Future<List<FeedPost>> fetchUserPosts(String userId);
@@ -23,7 +38,9 @@ abstract class ContentRepository {
   /// Profiles whose display name or handle starts with [query].
   Future<List<UserSearchResult>> searchUsers(String query);
 
-  /// Most-liked posts across the community.
+  /// The community's posts ranked by engagement against age, newest-weighted,
+  /// for the Explore grid. Ordering is a live judgement rather than a stored
+  /// one — see `TrendingScore` — so results change as posts age.
   Future<List<FeedPost>> fetchTrendingPosts();
 
   /// Creates the follow edges between the two users and adjusts both profile
@@ -36,6 +53,17 @@ abstract class ContentRepository {
 
   /// Watches whether [currentUserId] currently follows [targetUserId].
   Stream<bool> watchIsFollowing(String currentUserId, String targetUserId);
+
+  /// Watches whether [currentUserId] has asked to be notified about
+  /// [targetUserId]'s activity.
+  Stream<bool> watchUserNotifications(String currentUserId, String targetUserId);
+
+  /// Turns notifications about [targetUserId] on or off for [currentUserId].
+  Future<void> setUserNotifications(
+    String currentUserId,
+    String targetUserId, {
+    required bool enabled,
+  });
   Future<ActivitySaveResult> saveWorkout(
     UserProfileDraft? profile,
     WorkoutLogDraft draft,
@@ -52,6 +80,10 @@ abstract class ContentRepository {
     UserProfileDraft? profile,
     PostDraft draft,
   );
+  /// Permanently removes a post the caller authored, along with its comments
+  /// and its uploaded image. Throws if the caller is not the author.
+  Future<void> deletePost(String postId);
+
   Future<void> toggleLike(String postId, String userId);
   Future<void> toggleBookmark(String postId, String userId);
   Future<List<Comment>> getComments(String postId);
@@ -82,6 +114,15 @@ abstract class ContentRepository {
   Future<String> uploadPostImage(String localFilePath);
 
   /// Calls the analyzeMeal Cloud Function with the image URL and returns
-  /// structured nutritional data: { name, calories, protein, carbs, fat }.
+  /// structured nutritional data.
+  ///
+  /// Shape: { name, calories, protein, carbs, fat, confidence, notes,
+  /// databaseCoverage, foodItems: [...] }. The macros come from the nutrition
+  /// database wherever the identified food could be resolved; `foodItems`
+  /// carries the per-item breakdown and each item's `source`.
   Future<Map<String, dynamic>> analyzeMealImage(String imageUrl);
+
+  /// Searches the nutrition database by name, for correcting or adding a food
+  /// by hand. Returns entries with their per-100 g composition.
+  Future<List<FoodSearchResult>> searchFoods(String query);
 }

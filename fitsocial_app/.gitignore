@@ -36,6 +36,12 @@ lib/firebase_options.dart
 *firebase-adminsdk*.json
 serviceAccountKey.json
 
+# Secrets for the Functions emulator (OPENROUTER_API_KEY etc). Deployed
+# functions read these from Secret Manager instead — note that functions/.env
+# IS committed, so no key belongs in it.
+functions/.secret.local
+.secret.local
+
 # Node tooling (tool/seed)
 node_modules/
 firestore-debug.log

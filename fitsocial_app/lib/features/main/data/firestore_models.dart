@@ -15,6 +15,7 @@ class FirestoreUserRecord {
       postsCount: (data['postsCount'] as num?)?.toInt() ?? 0,
       workoutsCount: (data['workoutsCount'] as num?)?.toInt() ?? 0,
       mealsCount: (data['mealsCount'] as num?)?.toInt() ?? 0,
+      runsCount: (data['runsCount'] as num?)?.toInt() ?? 0,
     );
   }
   const FirestoreUserRecord({
@@ -29,6 +30,7 @@ class FirestoreUserRecord {
     required this.postsCount,
     required this.workoutsCount,
     required this.mealsCount,
+    this.runsCount = 0,
   });
 
   final String id;
@@ -42,6 +44,7 @@ class FirestoreUserRecord {
   final int postsCount;
   final int workoutsCount;
   final int mealsCount;
+  final int runsCount;
 }
 
 class FirestorePostRecord {
@@ -54,6 +57,10 @@ class FirestorePostRecord {
     final likedByList = (data['likedBy'] as List<dynamic>? ?? const [])
         .map((item) => item.toString())
         .toList();
+
+    // Kept dynamic rather than importing cloud_firestore's Timestamp, matching
+    // FirestoreCommentRecord below — this file stays free of plugin types.
+    final rawCreatedAt = data['createdAt'];
 
     return FirestorePostRecord(
       id: id,
@@ -73,6 +80,8 @@ class FirestorePostRecord {
       routePoints: RoutePoint.listFromFirestore(data['routePoints']),
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
       imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
+      createdAt:
+          rawCreatedAt == null ? null : (rawCreatedAt as dynamic).toDate() as DateTime,
     );
   }
   const FirestorePostRecord({
@@ -93,6 +102,7 @@ class FirestorePostRecord {
     this.routePoints = const [],
     this.authorAvatarUrl,
     this.imageAspectRatio,
+    this.createdAt,
   });
 
   final String id;
@@ -123,6 +133,15 @@ class FirestorePostRecord {
   /// width / height of [imageUrl], recorded at upload so the feed renders the
   /// user's chosen crop rather than forcing a shape.
   final double? imageAspectRatio;
+
+  /// When the post was written, per the server clock.
+  ///
+  /// This — not [timestampLabel] — is what the feed's "2 hours ago" line is
+  /// derived from. The stored label is frozen at write time ("now") and would
+  /// otherwise still read "now" a week later. Null for the brief window before
+  /// the server timestamp resolves, and on posts written before it was
+  /// recorded; [timestampLabel] is the fallback in both cases.
+  final DateTime? createdAt;
 }
 
 class FirestoreProgressRecord {
@@ -168,6 +187,7 @@ class FirestoreCommentRecord {
       authorName: (data['authorName'] as String?) ?? 'FitSocial User',
       text: (data['text'] as String?) ?? '',
       createdAt: timestamp,
+      authorAvatarUrl: data['authorAvatarUrl'] as String?,
     );
   }
   const FirestoreCommentRecord({
@@ -176,6 +196,7 @@ class FirestoreCommentRecord {
     required this.authorName,
     required this.text,
     this.createdAt,
+    this.authorAvatarUrl,
   });
 
   final String id;
@@ -183,4 +204,7 @@ class FirestoreCommentRecord {
   final String authorName;
   final String text;
   final DateTime? createdAt;
+
+  /// Author's profile photo, denormalised alongside [authorName].
+  final String? authorAvatarUrl;
 }

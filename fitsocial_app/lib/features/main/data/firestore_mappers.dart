@@ -6,25 +6,17 @@ import 'firestore_models.dart';
 class FirestoreMapper {
   const FirestoreMapper._();
 
-  static StoryItem toStoryItem(FirestoreUserRecord user, {bool isOwnStory = false}) {
-    final name = PublicAuthorName.sanitize(user.displayName);
-    return StoryItem(
-      name: isOwnStory ? 'Your Story' : name.split(' ').first,
-      initials: _initials(name),
-      isOwnStory: isOwnStory,
-    );
-  }
-
   static FeedPost toFeedPost(FirestorePostRecord post) {
     return FeedPost(
       id: post.id,
+      authorId: post.authorId,
       // Sanitised on read as well as write: posts stored before the email
       // fallback was removed still carry addresses in this field.
       userName: PublicAuthorName.sanitize(post.authorName),
       activity: post.activity,
       caption: post.caption,
-      metricLabels: post.metricLabels,
-      timestamp: post.timestampLabel,
+      metricLabels: _realMetrics(post.metricLabels),
+      timestamp: _relativeTime(post.createdAt) ?? post.timestampLabel,
       likes: post.likesCount,
       comments: post.commentsCount,
       backgroundColors: _themeColors(post.themeKey),
@@ -38,12 +30,52 @@ class FirestoreMapper {
     );
   }
 
+  /// Placeholder metrics written by the old share flow, before plain photo
+  /// posts stopped claiming to measure anything.
+  static const _filler = ['Post', 'Community', 'Now'];
+
+  /// Drops the filler triple so photos shared before the change stop carrying
+  /// "Post / Community / Now" burned over the bottom of the image. Real
+  /// metrics — a run's pace, a meal's macros — pass through untouched.
+  static List<String> _realMetrics(List<String> labels) {
+    if (labels.length != _filler.length) return labels;
+    for (var i = 0; i < labels.length; i++) {
+      if (labels[i] != _filler[i]) return labels;
+    }
+    return const [];
+  }
+
+  /// "2 hours ago" from the post's server timestamp.
+  ///
+  /// Returns null when there is nothing to compute from, so the caller can fall
+  /// back to the stored label. A clock skew that puts [createdAt] in the future
+  /// reads as "just now" rather than a negative duration.
+  static String? _relativeTime(DateTime? createdAt) {
+    if (createdAt == null) return null;
+
+    final elapsed = DateTime.now().difference(createdAt);
+    if (elapsed.isNegative || elapsed.inMinutes < 1) return 'just now';
+    if (elapsed.inHours < 1) return _plural(elapsed.inMinutes, 'minute');
+    if (elapsed.inDays < 1) return _plural(elapsed.inHours, 'hour');
+    if (elapsed.inDays < 7) return _plural(elapsed.inDays, 'day');
+    if (elapsed.inDays < 30) return _plural(elapsed.inDays ~/ 7, 'week');
+    if (elapsed.inDays < 365) return _plural(elapsed.inDays ~/ 30, 'month');
+    return _plural(elapsed.inDays ~/ 365, 'year');
+  }
+
+  static String _plural(int count, String unit) =>
+      '$count $unit${count == 1 ? '' : 's'} ago';
+
   static PostType _parsePostType(String value) {
     switch (value) {
       case 'image':
         return PostType.image;
       case 'workout':
         return PostType.workout;
+      case 'run':
+        return PostType.run;
+      case 'meal':
+        return PostType.meal;
       case 'text':
       default:
         return PostType.text;
@@ -82,13 +114,6 @@ class FirestoreMapper {
     );
   }
 
-  static SummaryMetric toSummaryMetric({
-    required String label,
-    required String value,
-  }) {
-    return SummaryMetric(label: label, value: value);
-  }
-
   static Comment toComment(FirestoreCommentRecord record) {
     return Comment(
       id: record.id,
@@ -98,6 +123,7 @@ class FirestoreMapper {
       authorName: PublicAuthorName.sanitize(record.authorName),
       text: record.text,
       createdAt: record.createdAt ?? DateTime.now(),
+      authorAvatarUrl: record.authorAvatarUrl,
     );
   }
 

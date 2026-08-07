@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 
 /// How a [RunRouteMap] behaves.
 enum RunRouteMapMode {
@@ -17,7 +18,12 @@ enum RunRouteMapMode {
   completed,
 }
 
-/// Dark-styled Google Map that draws a run route as a deep-orange polyline.
+/// Themed Google Map that draws a run route as a deep-orange polyline.
+///
+/// The map takes the app's own styling in both themes, because it is not a
+/// photo — it is chrome. A black map sitting inside a white card on the light
+/// theme reads as a broken tile, so the base geometry follows the palette while
+/// the orange route stays the one constant.
 ///
 /// Shared by the live run screen and the finished-run preview in the feed —
 /// the only difference between the two is [mode].
@@ -63,6 +69,25 @@ class _RunRouteMapState extends State<RunRouteMap> {
   {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#2b2b2b"}]},
   {"featureType":"transit","stylers":[{"visibility":"off"}]},
   {"featureType":"water","elementType":"geometry","stylers":[{"color":"#050505"}]}
+]
+''';
+
+  // The light counterpart, built on the same rules: the app's cream page as the
+  // landmass, roads a shade off it, POIs and transit hidden so nothing competes
+  // with the orange route.
+  static const _lightStyle = '''
+[
+  {"elementType":"geometry","stylers":[{"color":"#F5F1EA"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#8A857C"}]},
+  {"elementType":"labels.text.stroke","stylers":[{"color":"#F5F1EA"}]},
+  {"featureType":"administrative","elementType":"geometry","stylers":[{"visibility":"off"}]},
+  {"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#EFEAE1"}]},
+  {"featureType":"poi","stylers":[{"visibility":"off"}]},
+  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#FFFFFF"}]},
+  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#8A857C"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#E7E0D4"}]},
+  {"featureType":"transit","stylers":[{"visibility":"off"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#DCE4E6"}]}
 ]
 ''';
 
@@ -174,7 +199,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
                 target: initialTarget,
                 zoom: 16,
               ),
-              style: _darkStyle,
+              style: context.palette.isDark ? _darkStyle : _lightStyle,
               // The blue "my location" dot only makes sense while running.
               myLocationEnabled: _isLive,
               myLocationButtonEnabled: false,
@@ -220,16 +245,23 @@ class _RouteBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
+        // A plate that pulls *away* from the map underneath it, which means
+        // opposite directions in the two themes. Light needs more opacity: a
+        // pale wash over a pale map leaves nothing for the label to sit on.
+        color: palette.isDark
+            ? Colors.black.withValues(alpha: 0.55)
+            : Colors.white.withValues(alpha: 0.82),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.muted,
+        style: TextStyle(
+          color: palette.muted,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.5,

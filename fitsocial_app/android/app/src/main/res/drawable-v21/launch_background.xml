@@ -3,6 +3,9 @@
     <!-- Plain black so the native launch window hands off invisibly to the
          Flutter splash, which is also black. Showing artwork here would flash
          a different image for a fraction of a second before the logo
-         animation starts. -->
+         animation starts.
+
+         On Android 12+ the mark on top of this comes from
+         values-v31/styles.xml, which runs the pulse natively. -->
     <item android:drawable="@android:color/black" />
 </layer-list>

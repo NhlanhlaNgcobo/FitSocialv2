@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/primary_button.dart';
 
@@ -35,10 +36,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Only the strip below the hero takes the theme. Everything stacked on the
+    // photograph keeps its fixed on-media colours — the athlete shot is the
+    // same dark image in both modes, so text over it reads the same way.
+    final palette = context.palette;
+
     return Scaffold(
-      backgroundColor: AppColors.black,
+      backgroundColor: palette.background,
       body: Container(
-        color: AppColors.black,
+        color: palette.background,
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -71,7 +77,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             'Train. Fuel. Share. Grow.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: AppColors.white,
+                              color: AppColors.onMedia,
                               fontSize: 17,
                               fontWeight: FontWeight.w500,
                               shadows: [
@@ -109,7 +115,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             'Your fitness community.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: AppColors.white,
+                              color: AppColors.onMedia,
                               fontSize: 17,
                               fontWeight: FontWeight.w500,
                               shadows: [
@@ -155,9 +161,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         const SizedBox(height: AppSpacing.sm),
                         TextButton(
                           onPressed: () => context.go('/login?mode=login'),
-                          child: const Text(
+                          child: Text(
                             'Already have an account? Log in',
-                            style: TextStyle(color: AppColors.muted),
+                            style: TextStyle(color: palette.muted),
                           ),
                         ),
                       ],
@@ -200,7 +206,7 @@ class _CenteredWordmark extends StatelessWidget {
           TextSpan(
             text: 'Social',
             style: TextStyle(
-              color: AppColors.white,
+              color: AppColors.onMedia,
               fontSize: 64,
               fontWeight: FontWeight.w900,
               fontStyle: FontStyle.italic,

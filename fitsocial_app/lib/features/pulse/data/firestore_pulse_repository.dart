@@ -1,0 +1,373 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cross_file/cross_file.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
+import '../../auth/domain/auth_models.dart';
+import '../../main/domain/app_models.dart' show PublicAuthorName;
+import '../domain/pulse_models.dart';
+import 'pulse_repository_contract.dart';
+
+/// Firestore-backed Pulses.
+///
+/// Layout:
+///   pulses/{pulseId}                     — one segment, with an expiresAt
+///   pulses/{pulseId}/views/{viewerId}    — who watched it
+///   users/{uid}/pulseSeen/{authorId}     — that viewer's per-author cursor
+///
+/// Expiry is belt-and-braces. `expiresAt` is written so a Firestore TTL policy
+/// can sweep the documents server-side, but TTL deletion is only guaranteed
+/// within 24 hours of the expiry time — so reads filter on it as well and a
+/// Pulse disappears from the app the moment it lapses.
+class FirestorePulseRepository implements PulseRepository {
+  FirestorePulseRepository(
+    this._firestore, {
+    FirebaseAuth? firebaseAuth,
+    FirebaseStorage? storage,
+  })  : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+        _storage = storage ?? FirebaseStorage.instance;
+
+  final FirebaseFirestore _firestore;
+  final FirebaseAuth _firebaseAuth;
+  final FirebaseStorage _storage;
+
+  /// Ceiling on how many live Pulses a single tray load will consider. Well
+  /// clear of anything a community this size produces in a day, and it keeps
+  /// one runaway account from unbounding the query.
+  static const int _trayLimit = 300;
+
+  static const Duration _imageUploadTimeout = Duration(seconds: 60);
+  static const Duration _videoUploadTimeout = Duration(minutes: 3);
+
+  CollectionReference<Map<String, dynamic>> get _pulses =>
+      _firestore.collection('pulses');
+
+  CollectionReference<Map<String, dynamic>> get _users =>
+      _firestore.collection('users');
+
+  CollectionReference<Map<String, dynamic>> _views(String pulseId) =>
+      _pulses.doc(pulseId).collection('views');
+
+  CollectionReference<Map<String, dynamic>> _seenMarkers(String userId) =>
+      _users.doc(userId).collection('pulseSeen');
+
+  @override
+  Stream<List<PulseSegment>> watchActivePulses() {
+    // Ordering by expiresAt is equivalent to ordering by createdAt — every
+    // Pulse has the same lifetime — and keeps this on a single-field index
+    // that Firestore provides automatically.
+    return _pulses
+        .where('expiresAt', isGreaterThan: Timestamp.now())
+        .orderBy('expiresAt', descending: true)
+        .limit(_trayLimit)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => _segmentFromDoc(doc.id, doc.data()))
+            .toList(growable: false));
+  }
+
+  @override
+  Stream<Map<String, DateTime>> watchSeenMarkers(String userId) {
+    return _seenMarkers(userId).snapshots().map((snapshot) {
+      final markers = <String, DateTime>{};
+      for (final doc in snapshot.docs) {
+        final lastSeenAt = _readTimestamp(doc.data()['lastSeenAt']);
+        if (lastSeenAt != null) markers[doc.id] = lastSeenAt;
+      }
+      return markers;
+    });
+  }
+
+  @override
+  Future<PulseSegment> publish(
+    UserProfileDraft? profile,
+    PulseDraft draft,
+  ) async {
+    if (!draft.isPublishable) {
+      throw ArgumentError('This Pulse has nothing in it yet.');
+    }
+
+    final user = _requireCurrentUser();
+    final authorName = await _resolveAuthorName(profile);
+    final authorAvatarUrl = await _resolveAuthorAvatarUrl(profile);
+
+    String? mediaUrl;
+    if (draft.type != PulseMediaType.text) {
+      mediaUrl = await _uploadMedia(
+        draft.localFilePath!,
+        isVideo: draft.type == PulseMediaType.video,
+      );
+    }
+
+    // createdAt is the server's clock, but expiresAt has to be a concrete
+    // value: it is both what the TTL policy reads and what every client
+    // filters on, and neither can work against an unresolved sentinel.
+    final now = DateTime.now();
+    final expiresAt = now.add(PulseTiming.lifetime);
+    final document = _pulses.doc();
+
+    await document.set({
+      'authorId': user.uid,
+      'authorName': authorName,
+      if (authorAvatarUrl != null) 'authorAvatarUrl': authorAvatarUrl,
+      'type': draft.type.key,
+      if (mediaUrl != null) 'mediaUrl': mediaUrl,
+      if (draft.text.trim().isNotEmpty) 'text': draft.text.trim(),
+      'gradientKey': draft.gradientKey,
+      if (draft.aspectRatio != null) 'aspectRatio': draft.aspectRatio,
+      if (draft.videoDuration != null)
+        'videoDurationMs': draft.videoDuration!.inMilliseconds,
+      'viewCount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(expiresAt),
+    });
+
+    return PulseSegment(
+      id: document.id,
+      authorId: user.uid,
+      authorName: authorName,
+      authorAvatarUrl: authorAvatarUrl,
+      type: draft.type,
+      mediaUrl: mediaUrl,
+      text: draft.text.trim(),
+      gradientKey: draft.gradientKey,
+      createdAt: now,
+      expiresAt: expiresAt,
+      videoDuration: draft.videoDuration,
+      aspectRatio: draft.aspectRatio,
+    );
+  }
+
+  @override
+  Future<void> markSeen(String authorId, DateTime lastSeenAt) async {
+    final user = _requireCurrentUser();
+    final markerRef = _seenMarkers(user.uid).doc(authorId);
+
+    // Rewinding the cursor would light a ring back up for content the user has
+    // already watched, so an out-of-order write is dropped rather than applied.
+    final existing = await markerRef.get();
+    final stored = _readTimestamp(existing.data()?['lastSeenAt']);
+    if (stored != null && !lastSeenAt.isAfter(stored)) return;
+
+    await markerRef.set({
+      'authorId': authorId,
+      'lastSeenAt': Timestamp.fromDate(lastSeenAt),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> recordView(String pulseId, UserProfileDraft? profile) async {
+    final user = _requireCurrentUser();
+    final pulseRef = _pulses.doc(pulseId);
+    final viewRef = _views(pulseId).doc(user.uid);
+
+    final snapshot = await pulseRef.get();
+    if (!snapshot.exists) return;
+    // Your own views don't count, matching what people expect from a viewer
+    // list: it should show the audience, not the poster.
+    if (snapshot.data()?['authorId'] == user.uid) return;
+
+    final existing = await viewRef.get();
+    if (existing.exists) return;
+
+    final viewerName = await _resolveAuthorName(profile);
+    final viewerAvatarUrl = await _resolveAuthorAvatarUrl(profile);
+
+    // The count and the record move together — a bare increment would let the
+    // number drift away from the list that explains it.
+    final batch = _firestore.batch();
+    batch.set(viewRef, {
+      'viewerId': user.uid,
+      'viewerName': viewerName,
+      if (viewerAvatarUrl != null) 'viewerAvatarUrl': viewerAvatarUrl,
+      'viewedAt': FieldValue.serverTimestamp(),
+    });
+    batch.update(pulseRef, {'viewCount': FieldValue.increment(1)});
+    await batch.commit();
+  }
+
+  @override
+  Future<void> deletePulse(String pulseId) async {
+    final user = _requireCurrentUser();
+    final pulseRef = _pulses.doc(pulseId);
+
+    final snapshot = await pulseRef.get();
+    if (!snapshot.exists) return;
+
+    final data = snapshot.data() ?? const <String, dynamic>{};
+    // Checked here as well as in the rules, so the user gets a readable
+    // message instead of a raw permission-denied.
+    if (data['authorId'] != user.uid) {
+      throw StateError('You can only delete your own Pulse.');
+    }
+
+    // Firestore does not cascade into subcollections, so the view records go
+    // first — the rule that lets the author clear them reads the parent Pulse,
+    // which has to still exist for that check to pass.
+    final views = await _views(pulseId).get();
+    for (var i = 0; i < views.docs.length; i += 500) {
+      final batch = _firestore.batch();
+      for (final doc in views.docs.skip(i).take(500)) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+
+    await pulseRef.delete();
+
+    // Best effort: the upload is orphaned the moment the document is gone and
+    // keeps costing storage, but the Pulse is already deleted either way.
+    final mediaUrl = data['mediaUrl'] as String?;
+    if (mediaUrl != null && mediaUrl.isNotEmpty) {
+      try {
+        await _storage.refFromURL(mediaUrl).delete();
+      } catch (_) {
+        // Already gone, or a URL we can't resolve — nothing to recover.
+      }
+    }
+  }
+
+  @override
+  Stream<List<PulseViewerRecord>> watchViewers(String pulseId) {
+    return _views(pulseId)
+        .orderBy('viewedAt', descending: true)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              return PulseViewerRecord(
+                userId: doc.id,
+                name: PublicAuthorName.sanitize(data['viewerName'] as String?),
+                avatarUrl: data['viewerAvatarUrl'] as String?,
+                viewedAt: _readTimestamp(data['viewedAt']) ?? DateTime.now(),
+              );
+            }).toList(growable: false));
+  }
+
+  Future<String> _uploadMedia(
+    String localFilePath, {
+    required bool isVideo,
+  }) async {
+    final user = _requireCurrentUser();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final ref = _storage.ref().child(
+          'pulses/${user.uid}/$timestamp.${isVideo ? 'mp4' : 'jpg'}',
+        );
+
+    // Bytes rather than a dart:io File, so this works on every platform — the
+    // same reason the post and meal uploads do it this way.
+    final bytes = await XFile(localFilePath).readAsBytes();
+    final task = ref.putData(
+      bytes,
+      SettableMetadata(contentType: isVideo ? 'video/mp4' : 'image/jpeg'),
+    );
+    final snapshot = await task.timeout(
+      isVideo ? _videoUploadTimeout : _imageUploadTimeout,
+      onTimeout: () => throw PulseUploadTimeout(
+        isVideo
+            ? 'That video took too long to upload. Try a shorter clip.'
+            : 'That photo took too long to upload.',
+      ),
+    );
+    return snapshot.ref.getDownloadURL();
+  }
+
+  PulseSegment _segmentFromDoc(String id, Map<String, dynamic> data) {
+    final expiresAt =
+        _readTimestamp(data['expiresAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    // A just-written document reaches its author from the local cache before
+    // the server has stamped createdAt. Deriving it from expiresAt keeps the
+    // segment orderable during that window instead of sorting as epoch zero.
+    final createdAt = _readTimestamp(data['createdAt']) ??
+        expiresAt.subtract(PulseTiming.lifetime);
+    final videoDurationMs = (data['videoDurationMs'] as num?)?.toInt();
+
+    return PulseSegment(
+      id: id,
+      authorId: (data['authorId'] as String?) ?? '',
+      // Sanitised on read as well as write: this name is shown to everyone,
+      // and older records may predate the write-path guard.
+      authorName: PublicAuthorName.sanitize(data['authorName'] as String?),
+      authorAvatarUrl: data['authorAvatarUrl'] as String?,
+      type: PulseMediaType.fromKey(data['type'] as String?),
+      mediaUrl: data['mediaUrl'] as String?,
+      text: (data['text'] as String?) ?? '',
+      gradientKey: (data['gradientKey'] as String?) ?? 'ember',
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+      viewCount: (data['viewCount'] as num?)?.toInt() ?? 0,
+      videoDuration: videoDurationMs == null
+          ? null
+          : Duration(milliseconds: videoDurationMs),
+      aspectRatio: (data['aspectRatio'] as num?)?.toDouble(),
+    );
+  }
+
+  /// Public name to attribute a Pulse to.
+  ///
+  /// Deliberately never consults the auth email — Pulses are visible to the
+  /// whole community. Prefers the in-memory session profile and only falls
+  /// back to a stored read when the session has nothing usable.
+  Future<String> _resolveAuthorName(UserProfileDraft? profile) async {
+    final fromSession = PublicAuthorName.firstSafe([
+      profile?.displayName,
+      profile?.handle,
+    ]);
+    if (fromSession != PublicAuthorName.fallback) return fromSession;
+
+    try {
+      final user = _requireCurrentUser();
+      final stored = await _users.doc(user.uid).get();
+      final data = stored.data() ?? const <String, dynamic>{};
+      return PublicAuthorName.firstSafe([
+        data['displayName'] as String?,
+        data['handle'] as String?,
+      ]);
+    } catch (_) {
+      return PublicAuthorName.fallback;
+    }
+  }
+
+  /// Mirrors [_resolveAuthorName] for the profile photo. Returns null rather
+  /// than throwing — a missing avatar must never block a Pulse.
+  Future<String?> _resolveAuthorAvatarUrl(UserProfileDraft? profile) async {
+    final fromSession = profile?.avatarUrl;
+    if (fromSession != null && fromSession.isNotEmpty) return fromSession;
+
+    try {
+      final user = _requireCurrentUser();
+      final stored = await _users.doc(user.uid).get();
+      final avatarUrl = stored.data()?['avatarUrl'] as String?;
+      return (avatarUrl != null && avatarUrl.isNotEmpty) ? avatarUrl : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  User _requireCurrentUser() {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      throw StateError('A Firebase user must be signed in for this action.');
+    }
+    return user;
+  }
+
+  static DateTime? _readTimestamp(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+}
+
+/// Raised when an upload exceeds its budget, so the composer can say something
+/// useful instead of hanging on a stalled connection.
+class PulseUploadTimeout implements Exception {
+  const PulseUploadTimeout(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}

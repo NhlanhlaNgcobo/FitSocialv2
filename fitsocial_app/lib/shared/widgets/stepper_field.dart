@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 
 /// A tactile +/- numeric input with an animated value readout.
 class StepperField extends StatelessWidget {
@@ -32,14 +33,15 @@ class StepperField extends StatelessWidget {
   Widget build(BuildContext context) {
     final canDecrement = value - step >= min - 1e-9;
     final canIncrement = value + step <= max + 1e-9;
+    final palette = context.palette;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.muted,
+          style: TextStyle(
+            color: palette.muted,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
@@ -47,9 +49,9 @@ class StepperField extends StatelessWidget {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: palette.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.stroke),
+            border: Border.all(color: palette.stroke),
           ),
           child: Row(
             children: [
@@ -78,7 +80,6 @@ class StepperField extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.white,
                       ),
                     ),
                   ),
@@ -118,7 +119,7 @@ class _StepperButton extends StatelessWidget {
         child: Icon(
           icon,
           size: 18,
-          color: enabled ? AppColors.orangeBright : AppColors.muted,
+          color: enabled ? AppColors.orangeBright : context.palette.muted,
         ),
       ),
     );

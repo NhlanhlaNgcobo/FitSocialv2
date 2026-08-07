@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
-import '../../../shared/widgets/dark_card.dart';
+import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/share_to_feed_toggle.dart';
+import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/activity_actions.dart';
 import '../domain/app_models.dart';
 
@@ -16,55 +19,115 @@ class RunLogScreen extends ConsumerStatefulWidget {
   ConsumerState<RunLogScreen> createState() => _RunLogScreenState();
 }
 
-class _RunLogScreenState extends ConsumerState<RunLogScreen> {
-  final _formKey = GlobalKey<FormState>();
+class _RunLogScreenState extends ConsumerState<RunLogScreen>
+    with SingleTickerProviderStateMixin {
+  static const int _sectionCount = 5;
+
+  late final AnimationController _entranceController;
   late final TextEditingController _distanceController;
   late final TextEditingController _durationController;
+
+  double _distanceKm = 0;
+  int _durationMinutes = 0;
   bool _shareToFeed = true;
   bool _isSaving = false;
+  // Set the first time Save is pressed with a blank field, so the wells only
+  // turn red after the user has actually tried to submit.
+  bool _showFieldErrors = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
     _distanceController = TextEditingController();
     _durationController = TextEditingController();
   }
 
   @override
   void dispose() {
+    _entranceController.dispose();
     _distanceController.dispose();
     _durationController.dispose();
     super.dispose();
   }
 
-  Future<void> _saveRun() async {
-    if (!_formKey.currentState!.validate()) return;
+  bool get _hasDistance => _distanceKm > 0;
+  bool get _hasDuration => _durationMinutes > 0;
+  bool get _isComplete => _hasDistance && _hasDuration;
 
+  /// `m:ss /km`, the same shape this screen has always saved.
+  String get _paceLabel {
+    if (!_isComplete) return '--';
+    final pace = _durationMinutes / _distanceKm;
+    final mins = pace.floor();
+    final secs = ((pace - mins) * 60).round().toString().padLeft(2, '0');
+    return '$mins:$secs /km';
+  }
+
+  String get _durationLabel {
+    if (!_hasDuration) return '--';
+    final hours = _durationMinutes ~/ 60;
+    final mins = _durationMinutes % 60;
+    if (hours == 0) return '$mins min';
+    return mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
+  }
+
+  static String _formatDistance(double value) {
+    var text = value.toStringAsFixed(2);
+    if (text.contains('.')) {
+      text = text.replaceFirst(RegExp(r'0+$'), '');
+      text = text.replaceFirst(RegExp(r'\.$'), '');
+    }
+    return text;
+  }
+
+  void _bumpDistance(double amount) {
+    final next = double.parse((_distanceKm + amount).toStringAsFixed(2));
+    setState(() {
+      _distanceKm = next;
+      _distanceController.text = next > 0 ? _formatDistance(next) : '';
+      _distanceController.selection = TextSelection.collapsed(
+        offset: _distanceController.text.length,
+      );
+    });
+  }
+
+  void _bumpDuration(int amount) {
+    final next = _durationMinutes + amount;
+    setState(() {
+      _durationMinutes = next;
+      _durationController.text = next > 0 ? '$next' : '';
+      _durationController.selection = TextSelection.collapsed(
+        offset: _durationController.text.length,
+      );
+    });
+  }
+
+  Future<void> _saveRun() async {
+    if (!_isComplete) {
+      setState(() {
+        _showFieldErrors = true;
+        _errorMessage = 'Add a distance and a time before saving.';
+      });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
     setState(() {
       _isSaving = true;
       _errorMessage = null;
     });
 
     try {
-      final distance = double.parse(_distanceController.text.trim());
-      final durationMins = int.parse(_durationController.text.trim());
-
-      final elapsed = Duration(minutes: durationMins);
-
-      String averagePace = '--';
-      if (distance > 0) {
-        final pace = durationMins / distance;
-        final mins = pace.floor();
-        final secs = ((pace - mins) * 60).round().toString().padLeft(2, '0');
-        averagePace = '$mins:$secs /km';
-      }
-
       final result = await ref.read(activityActionsProvider).saveRun(
             RunLogDraft(
-              distanceKm: distance,
-              elapsed: elapsed,
-              averagePace: averagePace,
+              distanceKm: _distanceKm,
+              elapsed: Duration(minutes: _durationMinutes),
+              averagePace: _paceLabel,
               shareToFeed: _shareToFeed,
             ),
           );
@@ -89,150 +152,515 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+    var sectionIndex = 0;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Log Run')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          children: [
-            DarkCard(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(
-                  Icons.gps_fixed_rounded,
-                  color: AppColors.orangeBright,
-                ),
-                title: const Text(
-                  'Track live with GPS',
-                  style: TextStyle(
-                    color: AppColors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                subtitle: const Text(
-                  'Real-time distance, pace, and heart rate',
-                  style: TextStyle(color: AppColors.muted, fontSize: 12),
-                ),
-                trailing:
-                    const Icon(Icons.chevron_right, color: AppColors.muted),
-                onTap: () => context.push('/live-run'),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          // Clears the gesture pill / three-button nav so the Save button
+          // isn't sitting under it at the end of the scroll.
+          AppSpacing.xl + MediaQuery.of(context).viewPadding.bottom,
+        ),
+        children: [
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: _GpsHeroCard(onTap: () => context.push('/live-run')),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: const _LabelledDivider(label: 'or log it manually'),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: palette.surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: palette.stroke),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            const Center(
-              child: Text(
-                'or log manually',
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            DarkCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Distance (km)', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  TextFormField(
+                  _MetricField(
+                    icon: Icons.straighten_rounded,
+                    label: 'Distance',
                     controller: _distanceController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: AppColors.white),
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 5.0',
-                      hintStyle: const TextStyle(color: AppColors.muted),
-                      filled: true,
-                      fillColor: AppColors.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.stroke),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.stroke),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.orangeBright),
-                      ),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) return 'Required';
-                      if (double.tryParse(val.trim()) == null) return 'Invalid number';
-                      return null;
+                    suffix: 'km',
+                    hint: '0.00',
+                    decimal: true,
+                    invalid: _showFieldErrors && !_hasDistance,
+                    onChanged: (value) {
+                      setState(() {
+                        _distanceKm = double.tryParse(value.trim()) ?? 0;
+                      });
                     },
+                    quickAdds: [
+                      for (final amount in const [0.5, 1.0, 5.0])
+                        BouncyChip(
+                          label: '+${_formatDistance(amount)} km',
+                          onTap: () => _bumpDistance(amount),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: AppSpacing.md),
-                  const Text('Duration (minutes)', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  TextFormField(
+                  const SizedBox(height: AppSpacing.lg),
+                  _MetricField(
+                    icon: Icons.timer_outlined,
+                    label: 'Duration',
                     controller: _durationController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(color: AppColors.white),
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 30',
-                      hintStyle: const TextStyle(color: AppColors.muted),
-                      filled: true,
-                      fillColor: AppColors.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.stroke),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.stroke),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.orangeBright),
-                      ),
-                    ),
-                    validator: (val) {
-                      if (val == null || val.trim().isEmpty) return 'Required';
-                      if (int.tryParse(val.trim()) == null) return 'Invalid number';
-                      return null;
+                    suffix: 'min',
+                    hint: '0',
+                    decimal: false,
+                    invalid: _showFieldErrors && !_hasDuration,
+                    onChanged: (value) {
+                      setState(() {
+                        _durationMinutes = int.tryParse(value.trim()) ?? 0;
+                      });
                     },
+                    quickAdds: [
+                      for (final amount in const [5, 10, 30])
+                        BouncyChip(
+                          label: '+$amount min',
+                          onTap: () => _bumpDuration(amount),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            SwitchListTile(
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 240),
+              opacity: _isComplete ? 1 : 0,
+              child: _isComplete
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.md),
+                      child: _RunSummary(
+                        distance: '${_formatDistance(_distanceKm)} km',
+                        duration: _durationLabel,
+                        pace: _paceLabel,
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: ShareToFeedToggle(
               value: _shareToFeed,
-              activeThumbColor: AppColors.orangeBright,
-              title: const Text('Share to feed'),
-              subtitle: const Text(
-                'Post this run to your profile activity',
-                style: TextStyle(color: AppColors.muted),
-              ),
-              contentPadding: EdgeInsets.zero,
+              subtitle: 'Post this run to your profile activity',
               onChanged: (value) {
                 setState(() {
                   _shareToFeed = value;
                 });
               },
             ),
+          ),
+          if (_errorMessage != null) ...[
             const SizedBox(height: AppSpacing.md),
-            if (_errorMessage != null) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.stroke),
-                ),
-                child: Text(
-                  _errorMessage!,
-                  style: const TextStyle(color: AppColors.orangeBright),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            PrimaryButton(
-              label: _isSaving ? 'Saving...' : 'Save',
+            _ErrorBanner(message: _errorMessage!),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: PrimaryButton(
+              icon: _isSaving ? null : Icons.check_rounded,
+              label: _isSaving
+                  ? 'Saving...'
+                  : (_shareToFeed ? 'Save Run & Share' : 'Save Run'),
               onPressed: _isSaving ? null : _saveRun,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The primary way into a run: a solid brand-orange card that reads as the
+/// recommended path before the manual form does.
+class _GpsHeroCard extends StatelessWidget {
+  const _GpsHeroCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.orangeBright.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.orangeBright, AppColors.orange],
+            ),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg - 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      // On the orange fill, so the white is fixed in both
+                      // themes — same rule as AppColors.onBrand.
+                      color: AppColors.onBrand.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.gps_fixed_rounded,
+                      color: AppColors.onBrand,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Track live with GPS',
+                          style: TextStyle(
+                            color: AppColors.onBrand,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Real-time distance, pace and route map',
+                          style: TextStyle(
+                            color: AppColors.onBrand,
+                            fontSize: 12.5,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    color: AppColors.onBrand,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LabelledDivider extends StatelessWidget {
+  const _LabelledDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final rule = Expanded(child: Container(height: 1, color: palette.stroke));
+
+    return Row(
+      children: [
+        rule,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: palette.muted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        rule,
+      ],
+    );
+  }
+}
+
+/// A big centred numeric well with its unit pinned to the right and a row of
+/// quick-add chips underneath.
+class _MetricField extends StatelessWidget {
+  const _MetricField({
+    required this.icon,
+    required this.label,
+    required this.controller,
+    required this.suffix,
+    required this.hint,
+    required this.decimal,
+    required this.invalid,
+    required this.onChanged,
+    required this.quickAdds,
+  });
+
+  final IconData icon;
+  final String label;
+  final TextEditingController controller;
+  final String suffix;
+  final String hint;
+  final bool decimal;
+  final bool invalid;
+  final ValueChanged<String> onChanged;
+  final List<Widget> quickAdds;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: palette.muted),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.sm),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            color: palette.surfaceHigh,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: invalid ? palette.danger : palette.stroke,
+              width: invalid ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              // Balances the unit on the right so the number stays optically
+              // centred in the well.
+              SizedBox(width: _suffixWidth(suffix)),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  onChanged: onChanged,
+                  keyboardType: decimal
+                      ? const TextInputType.numberWithOptions(decimal: true)
+                      : TextInputType.number,
+                  textAlign: TextAlign.center,
+                  cursorColor: AppColors.orangeBright,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                    border: InputBorder.none,
+                    hintText: hint,
+                    hintStyle: TextStyle(
+                      color: palette.muted.withValues(alpha: 0.5),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: _suffixWidth(suffix),
+                child: Text(
+                  suffix,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(spacing: 8, runSpacing: 8, children: quickAdds),
+      ],
+    );
+  }
+
+  static double _suffixWidth(String suffix) => suffix.length * 9.0 + 6;
+}
+
+/// The read-out that slides in once both fields are filled: what the run will
+/// look like on the feed.
+class _RunSummary extends StatelessWidget {
+  const _RunSummary({
+    required this.distance,
+    required this.duration,
+    required this.pace,
+  });
+
+  final String distance;
+  final String duration;
+  final String pace;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.orangeBright.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.orangeBright.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _SummaryStat(label: 'Distance', value: distance)),
+          _SummaryRule(color: palette.stroke),
+          Expanded(child: _SummaryStat(label: 'Time', value: duration)),
+          _SummaryRule(color: palette.stroke),
+          Expanded(child: _SummaryStat(label: 'Avg pace', value: pace)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRule extends StatelessWidget {
+  const _SummaryRule({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 32, color: color);
+  }
+}
+
+class _SummaryStat extends StatelessWidget {
+  const _SummaryStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      children: [
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: palette.brandText,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: palette.muted,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.danger.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.danger.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline_rounded, size: 18, color: palette.danger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: palette.danger,
+                fontSize: 13,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -6,12 +6,7 @@ import '../../auth/domain/auth_models.dart';
 import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
-
-final storyItemsProvider = FutureProvider<List<StoryItem>>((ref) {
-  final profile = ref.watch(appSessionProvider).profile;
-  final repository = ref.watch(contentRepositoryProvider);
-  return repository.getStories(profile);
-});
+import '../domain/explore_models.dart';
 
 // ---------------------------------------------------------------------------
 // Feed posts — StateNotifier for optimistic like toggling
@@ -58,6 +53,18 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
       // Roll back on error
       state = AsyncValue.data(current);
     }
+  }
+
+  /// Drops a post from the in-memory feed after it has been deleted on the
+  /// server, so the card disappears immediately instead of waiting for a
+  /// refresh.
+  void removePost(String postId) {
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    state = AsyncValue.data(
+      current.where((post) => post.id != postId).toList(growable: false),
+    );
   }
 
   /// Bump the comment count locally after a comment is posted.
@@ -120,32 +127,60 @@ final commentsStreamProvider =
 // Existing providers (unchanged)
 // ---------------------------------------------------------------------------
 
-final summaryMetricsProvider = FutureProvider<List<SummaryMetric>>((ref) {
-  return ref.watch(contentRepositoryProvider).getSummaryMetrics();
-});
-
 final progressMetricsProvider = FutureProvider<List<ProgressMetric>>((ref) {
   return ref.watch(contentRepositoryProvider).getProgressMetrics();
 });
 
-final workoutPlaylistsProvider =
-    FutureProvider.family<List<WorkoutPlaylist>, WorkoutType>(
-        (ref, workoutType) {
-  return ref.watch(contentRepositoryProvider).getWorkoutPlaylists(workoutType);
+/// The gap-filled run/workout calendar behind the progress grid.
+///
+/// The window is derived from the range here rather than in the widget so the
+/// query and the rendered grid can never disagree about where it starts.
+///
+/// autoDispose because the window is anchored to "today": a cached calendar
+/// outlives the day it was built for, and would still be showing yesterday's
+/// week after midnight. Re-reading on each visit to the tab costs two small
+/// queries. Logging an activity also invalidates this — see [ActivityActions].
+final activityCalendarProvider = FutureProvider.autoDispose
+    .family<ActivityCalendar, ActivityRange>((ref, range) async {
+  final today = DateTime.now();
+  final start = ActivityCalendar.startOfWindow(range, today);
+  final logged = await ref.watch(contentRepositoryProvider).getActivityDays(start);
+  return ActivityCalendar.fromLoggedDays(
+    range: range,
+    logged: logged,
+    today: today,
+  );
 });
 
-final podcastRecommendationsProvider =
-    FutureProvider<List<PodcastRecommendation>>((ref) {
-  return ref.watch(contentRepositoryProvider).getPodcastRecommendations();
+/// Following / Followers / Likes for one profile. Keyed by user id so the
+/// signed-in user's header and someone else's share the same code path.
+final profileStatsProvider =
+    FutureProvider.family<List<ProfileStat>, String>((ref, userId) {
+  // The header builds before the uid resolves. An empty id is not a document
+  // path Firestore accepts, so it never reaches the repository.
+  if (userId.isEmpty) return Future.value(const []);
+  return ref.watch(contentRepositoryProvider).getProfileStats(userId);
 });
 
-final profileStatsProvider = FutureProvider<List<ProfileStat>>((ref) {
-  return ref.watch(contentRepositoryProvider).getProfileStats();
+/// One public profile by id, for the other-user profile screen.
+final userProfileProvider =
+    FutureProvider.family<UserSearchResult?, String>((ref, userId) {
+  if (userId.isEmpty) return Future.value(null);
+  return ref.watch(contentRepositoryProvider).fetchUserProfile(userId);
 });
 
 // ---------------------------------------------------------------------------
 // Per-user post queries (profile grids)
 // ---------------------------------------------------------------------------
+
+/// One post by id. Only reached when the detail screen was opened without the
+/// post already in hand — a tap from a grid passes the loaded post straight
+/// through instead.
+final postProvider =
+    FutureProvider.family<FeedPost?, String>((ref, postId) {
+  if (postId.isEmpty) return Future.value(null);
+  return ref.watch(contentRepositoryProvider).fetchPost(postId);
+});
 
 /// Every post authored by the given user id, newest first.
 final userPostsProvider =
@@ -179,10 +214,20 @@ final userSearchResultsProvider =
   return ref.watch(contentRepositoryProvider).searchUsers(query);
 });
 
-/// Most-liked posts across the community.
-final trendingPostsProvider = FutureProvider<List<FeedPost>>((ref) {
+/// The Explore grid, ranked by engagement against age.
+///
+/// autoDispose because the ranking is computed against "now": a cached list
+/// outlives the hour it was scored in, and a user returning to the tab
+/// tomorrow would still be looking at yesterday's ordering. Re-ranking costs
+/// one query per visit.
+final trendingPostsProvider =
+    FutureProvider.autoDispose<List<FeedPost>>((ref) {
   return ref.watch(contentRepositoryProvider).fetchTrendingPosts();
 });
+
+/// Which category chip is active above the Explore grid.
+final exploreFilterProvider =
+    StateProvider<ExploreFilter>((ref) => ExploreFilter.all);
 
 // ---------------------------------------------------------------------------
 // Follow graph
@@ -197,6 +242,32 @@ final isFollowingProvider =
   return ref
       .watch(contentRepositoryProvider)
       .watchIsFollowing(currentUserId, targetUserId);
+});
+
+/// Whether the signed-in user has push notifications turned on for
+/// [targetUserId]'s activity.
+final userNotificationsProvider =
+    StreamProvider.family<bool, String>((ref, targetUserId) {
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return Stream.value(false);
+  return ref
+      .watch(contentRepositoryProvider)
+      .watchUserNotifications(currentUserId, targetUserId);
+});
+
+/// Turns the per-user notification marker on or off. The provider above is a
+/// live stream, so nothing needs invalidating afterwards.
+final userNotificationActionsProvider =
+    Provider<Future<void> Function(String, {required bool enabled})>((ref) {
+  return (String targetUserId, {required bool enabled}) {
+    final currentUserId = ref.read(currentUserIdProvider);
+    if (currentUserId == null) {
+      throw StateError('You must be signed in to change notifications.');
+    }
+    return ref
+        .read(contentRepositoryProvider)
+        .setUserNotifications(currentUserId, targetUserId, enabled: enabled);
+  };
 });
 
 /// Follow/unfollow actions plus the cache invalidation they imply.

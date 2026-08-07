@@ -1,0 +1,1268 @@
+[
+  {
+    "id": "pap-stiff",
+    "name": "Pap (stiff maize porridge)",
+    "aliases": ["pap", "stywe pap", "putu pap", "mieliepap", "maize porridge", "maize meal", "ugali", "sadza", "nsima"],
+    "category": "starch",
+    "per100g": { "calories": 120, "protein": 2.5, "carbs": 26, "fat": 0.5 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "pap-crumbly",
+    "name": "Krummelpap (crumbly maize porridge)",
+    "aliases": ["krummelpap", "crumbly pap", "phutu", "putu"],
+    "category": "starch",
+    "per100g": { "calories": 180, "protein": 4, "carbs": 38, "fat": 0.8 },
+    "defaultPortionGrams": 220
+  },
+  {
+    "id": "pap-soft",
+    "name": "Soft maize porridge (slap pap)",
+    "aliases": ["slap pap", "soft pap", "soft porridge", "maize meal porridge"],
+    "category": "starch",
+    "per100g": { "calories": 70, "protein": 1.5, "carbs": 15, "fat": 0.3 },
+    "defaultPortionGrams": 300
+  },
+  {
+    "id": "samp-and-beans",
+    "name": "Samp and beans (umngqusho)",
+    "aliases": ["samp and beans", "umngqusho", "umngqushu", "samp beans"],
+    "category": "starch",
+    "per100g": { "calories": 130, "protein": 6, "carbs": 22, "fat": 1.5 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "samp",
+    "name": "Samp, cooked",
+    "aliases": ["samp", "stampmielies", "hominy"],
+    "category": "starch",
+    "per100g": { "calories": 110, "protein": 3, "carbs": 24, "fat": 0.4 },
+    "defaultPortionGrams": 220
+  },
+  {
+    "id": "rice-white",
+    "name": "White rice, cooked",
+    "aliases": ["rice", "white rice", "steamed rice", "basmati rice", "jasmine rice", "boiled rice"],
+    "category": "starch",
+    "per100g": { "calories": 130, "protein": 2.7, "carbs": 28, "fat": 0.3 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "rice-brown",
+    "name": "Brown rice, cooked",
+    "aliases": ["brown rice", "wholegrain rice"],
+    "category": "starch",
+    "per100g": { "calories": 123, "protein": 2.7, "carbs": 26, "fat": 1 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "rice-yellow",
+    "name": "Yellow rice with raisins",
+    "aliases": ["yellow rice", "geelrys", "savoury rice"],
+    "category": "starch",
+    "per100g": { "calories": 160, "protein": 2.8, "carbs": 33, "fat": 2 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "pasta",
+    "name": "Pasta, cooked",
+    "aliases": ["pasta", "spaghetti", "macaroni", "penne", "noodles", "tagliatelle", "fusilli"],
+    "category": "starch",
+    "per100g": { "calories": 158, "protein": 6, "carbs": 31, "fat": 0.9 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "instant-noodles",
+    "name": "Instant noodles, prepared",
+    "aliases": ["instant noodles", "two minute noodles", "ramen", "supanoodles"],
+    "category": "starch",
+    "per100g": { "calories": 190, "protein": 4, "carbs": 26, "fat": 8 },
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "potato-boiled",
+    "name": "Potato, boiled",
+    "aliases": ["potato", "boiled potato", "potatoes", "baby potatoes"],
+    "category": "starch",
+    "per100g": { "calories": 87, "protein": 2, "carbs": 20, "fat": 0.1 },
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "potato-mash",
+    "name": "Mashed potato with milk and butter",
+    "aliases": ["mashed potato", "mash", "potato mash", "creamy mash"],
+    "category": "starch",
+    "per100g": { "calories": 110, "protein": 2, "carbs": 17, "fat": 4 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "potato-roast",
+    "name": "Roast potato",
+    "aliases": ["roast potato", "roasted potatoes", "baked potato"],
+    "category": "starch",
+    "per100g": { "calories": 150, "protein": 2.5, "carbs": 25, "fat": 4.5 },
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "chips-fries",
+    "name": "Deep-fried chips (french fries)",
+    "aliases": ["chips", "slap chips", "french fries", "fries", "hot chips", "potato chips fried", "steak fries"],
+    "category": "starch",
+    "per100g": { "calories": 312, "protein": 3.4, "carbs": 41, "fat": 15 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "sweet-potato",
+    "name": "Sweet potato, baked",
+    "aliases": ["sweet potato", "sweet potatoes", "patat"],
+    "category": "starch",
+    "per100g": { "calories": 90, "protein": 2, "carbs": 21, "fat": 0.1 },
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "bread-white",
+    "name": "White bread",
+    "aliases": ["white bread", "bread", "bread slice", "toast", "white toast", "bread roll"],
+    "category": "starch",
+    "per100g": { "calories": 265, "protein": 9, "carbs": 49, "fat": 3.2 },
+    "unitGrams": 30,
+    "unitName": "slice",
+    "defaultPortionGrams": 60
+  },
+  {
+    "id": "bread-brown",
+    "name": "Brown / wholewheat bread",
+    "aliases": ["brown bread", "wholewheat bread", "whole wheat bread", "wholegrain bread", "seed loaf"],
+    "category": "starch",
+    "per100g": { "calories": 250, "protein": 10, "carbs": 45, "fat": 3 },
+    "unitGrams": 32,
+    "unitName": "slice",
+    "defaultPortionGrams": 64
+  },
+  {
+    "id": "roti",
+    "name": "Roti / chapati",
+    "aliases": ["roti", "chapati", "chapatti", "flatbread", "naan"],
+    "category": "starch",
+    "per100g": { "calories": 300, "protein": 8, "carbs": 46, "fat": 9 },
+    "unitGrams": 60,
+    "unitName": "roti",
+    "defaultPortionGrams": 60
+  },
+  {
+    "id": "vetkoek",
+    "name": "Vetkoek (magwinya), fried",
+    "aliases": ["vetkoek", "magwinya", "amagwinya", "fat cake", "fat cakes", "amafethkuku"],
+    "category": "starch",
+    "per100g": { "calories": 330, "protein": 7, "carbs": 40, "fat": 16 },
+    "unitGrams": 80,
+    "unitName": "vetkoek",
+    "defaultPortionGrams": 80
+  },
+  {
+    "id": "dumpling-steamed",
+    "name": "Steamed bread dumpling (ujeqe)",
+    "aliases": ["ujeqe", "steamed bread", "dombolo", "idombolo", "dumpling"],
+    "category": "starch",
+    "per100g": { "calories": 240, "protein": 7, "carbs": 46, "fat": 2.5 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "mielie-cob",
+    "name": "Corn on the cob (mielie)",
+    "aliases": ["mielie", "corn on the cob", "sweetcorn", "sweet corn", "corn", "green mielies"],
+    "category": "vegetable",
+    "per100g": { "calories": 96, "protein": 3.4, "carbs": 21, "fat": 1.5 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "couscous",
+    "name": "Couscous, cooked",
+    "aliases": ["couscous"],
+    "category": "starch",
+    "per100g": { "calories": 112, "protein": 3.8, "carbs": 23, "fat": 0.2 },
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "quinoa",
+    "name": "Quinoa, cooked",
+    "aliases": ["quinoa"],
+    "category": "starch",
+    "per100g": { "calories": 120, "protein": 4.4, "carbs": 21, "fat": 1.9 },
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "oats-cooked",
+    "name": "Oats porridge, cooked with water",
+    "aliases": ["oats", "oatmeal", "porridge", "oats porridge", "jungle oats"],
+    "category": "starch",
+    "per100g": { "calories": 71, "protein": 2.5, "carbs": 12, "fat": 1.5 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "cereal-corn-flakes",
+    "name": "Breakfast cereal, corn flakes",
+    "aliases": ["corn flakes", "cereal", "breakfast cereal", "weet-bix", "weetbix", "muesli", "granola"],
+    "category": "starch",
+    "per100g": { "calories": 380, "protein": 8, "carbs": 80, "fat": 2 },
+    "defaultPortionGrams": 45
+  },
+  {
+    "id": "chicken-breast",
+    "name": "Chicken breast, skinless, grilled",
+    "aliases": ["chicken breast", "grilled chicken", "chicken fillet", "skinless chicken breast", "chicken"],
+    "category": "protein",
+    "per100g": { "calories": 165, "protein": 31, "carbs": 0, "fat": 3.6 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "chicken-thigh",
+    "name": "Chicken thigh, skinless, cooked",
+    "aliases": ["chicken thigh", "chicken thighs", "chicken drumstick", "chicken leg", "braaied chicken"],
+    "category": "protein",
+    "per100g": { "calories": 209, "protein": 26, "carbs": 0, "fat": 10.9 },
+    "defaultPortionGrams": 130
+  },
+  {
+    "id": "chicken-fried",
+    "name": "Fried chicken, crumbed with skin",
+    "aliases": ["fried chicken", "kfc chicken", "crumbed chicken", "chicken wings fried", "hot wings"],
+    "category": "protein",
+    "per100g": { "calories": 280, "protein": 22, "carbs": 9, "fat": 17 },
+    "defaultPortionGrams": 140
+  },
+  {
+    "id": "chicken-liver",
+    "name": "Chicken livers, cooked",
+    "aliases": ["chicken livers", "chicken liver", "peri peri livers"],
+    "category": "protein",
+    "per100g": { "calories": 165, "protein": 24, "carbs": 3, "fat": 6.5 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "chicken-feet",
+    "name": "Chicken feet, cooked",
+    "aliases": ["chicken feet", "walkie talkies", "runaways", "maotwana"],
+    "category": "protein",
+    "per100g": { "calories": 215, "protein": 20, "carbs": 0.2, "fat": 15 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "beef-mince",
+    "name": "Beef mince, cooked",
+    "aliases": ["beef mince", "mince", "ground beef", "minced beef", "savoury mince"],
+    "category": "protein",
+    "per100g": { "calories": 250, "protein": 26, "carbs": 0, "fat": 15 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "beef-steak",
+    "name": "Beef steak, grilled",
+    "aliases": ["steak", "beef steak", "sirloin", "rump steak", "t-bone", "fillet steak", "braai steak"],
+    "category": "protein",
+    "per100g": { "calories": 220, "protein": 30, "carbs": 0, "fat": 11 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "beef-stew",
+    "name": "Beef stew with gravy",
+    "aliases": ["beef stew", "stew", "beef casserole", "potjiekos", "oxtail stew", "oxtail"],
+    "category": "dish",
+    "per100g": { "calories": 140, "protein": 13, "carbs": 7, "fat": 6 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "boerewors",
+    "name": "Boerewors, grilled",
+    "aliases": ["boerewors", "wors", "boere wors", "farmers sausage", "braai sausage"],
+    "category": "protein",
+    "per100g": { "calories": 300, "protein": 14, "carbs": 3, "fat": 26 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "russian-sausage",
+    "name": "Russian sausage, fried",
+    "aliases": ["russian", "russian sausage", "russians", "viennas", "vienna sausage", "smoked sausage"],
+    "category": "protein",
+    "per100g": { "calories": 300, "protein": 13, "carbs": 4, "fat": 26 },
+    "unitGrams": 90,
+    "unitName": "russian",
+    "defaultPortionGrams": 90
+  },
+  {
+    "id": "polony",
+    "name": "Polony",
+    "aliases": ["polony", "bologna", "baloney", "luncheon meat"],
+    "category": "protein",
+    "per100g": { "calories": 270, "protein": 11, "carbs": 8, "fat": 22 },
+    "defaultPortionGrams": 50
+  },
+  {
+    "id": "bacon",
+    "name": "Bacon, fried",
+    "aliases": ["bacon", "streaky bacon", "back bacon"],
+    "category": "protein",
+    "per100g": { "calories": 540, "protein": 37, "carbs": 1, "fat": 42 },
+    "unitGrams": 20,
+    "unitName": "rasher",
+    "defaultPortionGrams": 40
+  },
+  {
+    "id": "pork-chop",
+    "name": "Pork chop, grilled",
+    "aliases": ["pork chop", "pork", "pork ribs", "pork belly"],
+    "category": "protein",
+    "per100g": { "calories": 230, "protein": 27, "carbs": 0, "fat": 13 },
+    "defaultPortionGrams": 160
+  },
+  {
+    "id": "lamb-chop",
+    "name": "Lamb chop, grilled",
+    "aliases": ["lamb chop", "lamb", "mutton chop", "lamb rib", "sosatie"],
+    "category": "protein",
+    "per100g": { "calories": 290, "protein": 25, "carbs": 0, "fat": 21 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "mutton-curry",
+    "name": "Mutton / lamb curry",
+    "aliases": ["mutton curry", "lamb curry", "durban curry"],
+    "category": "dish",
+    "per100g": { "calories": 200, "protein": 15, "carbs": 6, "fat": 13 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "chicken-curry",
+    "name": "Chicken curry",
+    "aliases": ["chicken curry", "curry chicken", "butter chicken"],
+    "category": "dish",
+    "per100g": { "calories": 150, "protein": 13, "carbs": 6, "fat": 8 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "tripe",
+    "name": "Tripe (mogodu / ulusu), cooked",
+    "aliases": ["tripe", "mogodu", "ulusu", "offal"],
+    "category": "protein",
+    "per100g": { "calories": 130, "protein": 15, "carbs": 2, "fat": 7 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "biltong",
+    "name": "Biltong",
+    "aliases": ["biltong", "dried meat", "beef jerky", "jerky"],
+    "category": "protein",
+    "per100g": { "calories": 250, "protein": 45, "carbs": 2, "fat": 7 },
+    "defaultPortionGrams": 50
+  },
+  {
+    "id": "droewors",
+    "name": "Droëwors",
+    "aliases": ["droewors", "droëwors", "dry wors", "dried sausage"],
+    "category": "protein",
+    "per100g": { "calories": 400, "protein": 40, "carbs": 2, "fat": 26 },
+    "defaultPortionGrams": 50
+  },
+  {
+    "id": "egg-boiled",
+    "name": "Egg, boiled or poached",
+    "aliases": ["egg", "eggs", "boiled egg", "poached egg", "hard boiled egg"],
+    "category": "protein",
+    "per100g": { "calories": 155, "protein": 13, "carbs": 1.1, "fat": 11 },
+    "unitGrams": 50,
+    "unitName": "egg",
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "egg-fried",
+    "name": "Egg, fried or scrambled",
+    "aliases": ["fried egg", "scrambled eggs", "scrambled egg", "omelette", "sunny side up"],
+    "category": "protein",
+    "per100g": { "calories": 196, "protein": 14, "carbs": 0.8, "fat": 15 },
+    "unitGrams": 55,
+    "unitName": "egg",
+    "defaultPortionGrams": 110
+  },
+  {
+    "id": "hake-grilled",
+    "name": "Hake / white fish, grilled",
+    "aliases": ["hake", "white fish", "grilled fish", "fish", "kingklip", "cod"],
+    "category": "protein",
+    "per100g": { "calories": 100, "protein": 21, "carbs": 0, "fat": 1.5 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "hake-fried",
+    "name": "Battered fried fish",
+    "aliases": ["fried fish", "battered fish", "fish and chips fish", "crumbed hake"],
+    "category": "protein",
+    "per100g": { "calories": 230, "protein": 16, "carbs": 12, "fat": 13 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "salmon",
+    "name": "Salmon, grilled",
+    "aliases": ["salmon", "grilled salmon", "salmon fillet", "trout"],
+    "category": "protein",
+    "per100g": { "calories": 208, "protein": 22, "carbs": 0, "fat": 13 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "tuna-canned",
+    "name": "Tuna, canned in water",
+    "aliases": ["tuna", "canned tuna", "tinned tuna"],
+    "category": "protein",
+    "per100g": { "calories": 116, "protein": 26, "carbs": 0, "fat": 1 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "pilchards",
+    "name": "Pilchards / sardines in tomato sauce",
+    "aliases": ["pilchards", "sardines", "lucky star", "tinned fish"],
+    "category": "protein",
+    "per100g": { "calories": 155, "protein": 17, "carbs": 2, "fat": 8 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "prawns",
+    "name": "Prawns, cooked",
+    "aliases": ["prawns", "shrimp", "seafood"],
+    "category": "protein",
+    "per100g": { "calories": 99, "protein": 24, "carbs": 0, "fat": 0.3 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "tofu",
+    "name": "Tofu, firm",
+    "aliases": ["tofu", "bean curd", "soya chunks"],
+    "category": "protein",
+    "per100g": { "calories": 145, "protein": 16, "carbs": 3, "fat": 9 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "soya-mince",
+    "name": "Soya mince, cooked",
+    "aliases": ["soya mince", "soy mince", "toppers", "textured vegetable protein"],
+    "category": "protein",
+    "per100g": { "calories": 130, "protein": 14, "carbs": 10, "fat": 3 },
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "baked-beans",
+    "name": "Baked beans in tomato sauce",
+    "aliases": ["baked beans", "beans in tomato sauce", "koo beans"],
+    "category": "legume",
+    "per100g": { "calories": 94, "protein": 4.8, "carbs": 16, "fat": 0.5 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "sugar-beans",
+    "name": "Sugar beans, cooked",
+    "aliases": ["sugar beans", "beans", "kidney beans", "red beans", "dried beans"],
+    "category": "legume",
+    "per100g": { "calories": 127, "protein": 8, "carbs": 23, "fat": 0.5 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "lentils",
+    "name": "Lentils, cooked",
+    "aliases": ["lentils", "dhal", "dal", "lentil curry"],
+    "category": "legume",
+    "per100g": { "calories": 116, "protein": 9, "carbs": 20, "fat": 0.4 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "chickpeas",
+    "name": "Chickpeas, cooked",
+    "aliases": ["chickpeas", "garbanzo", "hummus base"],
+    "category": "legume",
+    "per100g": { "calories": 164, "protein": 9, "carbs": 27, "fat": 2.6 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "peanut-butter",
+    "name": "Peanut butter",
+    "aliases": ["peanut butter", "peanutbutter"],
+    "category": "fat",
+    "per100g": { "calories": 588, "protein": 25, "carbs": 20, "fat": 50 },
+    "defaultPortionGrams": 32
+  },
+  {
+    "id": "morogo",
+    "name": "Morogo / imifino (wild greens), cooked",
+    "aliases": ["morogo", "imifino", "wild spinach", "african greens", "pumpkin leaves"],
+    "category": "vegetable",
+    "per100g": { "calories": 45, "protein": 4, "carbs": 6, "fat": 0.5 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "spinach",
+    "name": "Spinach, cooked",
+    "aliases": ["spinach", "creamed spinach base", "swiss chard"],
+    "category": "vegetable",
+    "per100g": { "calories": 23, "protein": 2.9, "carbs": 3.6, "fat": 0.4 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "chakalaka",
+    "name": "Chakalaka",
+    "aliases": ["chakalaka", "chakalaka relish"],
+    "category": "vegetable",
+    "per100g": { "calories": 80, "protein": 2, "carbs": 10, "fat": 4 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "cabbage",
+    "name": "Cabbage, cooked",
+    "aliases": ["cabbage", "braised cabbage", "coleslaw base"],
+    "category": "vegetable",
+    "per100g": { "calories": 23, "protein": 1.3, "carbs": 5.5, "fat": 0.1 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "coleslaw",
+    "name": "Coleslaw with mayonnaise",
+    "aliases": ["coleslaw", "cole slaw", "creamy salad"],
+    "category": "vegetable",
+    "per100g": { "calories": 150, "protein": 1, "carbs": 12, "fat": 11 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "butternut",
+    "name": "Butternut, roasted",
+    "aliases": ["butternut", "butternut squash", "roasted butternut"],
+    "category": "vegetable",
+    "per100g": { "calories": 45, "protein": 1, "carbs": 12, "fat": 0.1 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "pumpkin",
+    "name": "Pumpkin, cooked",
+    "aliases": ["pumpkin", "boiled pumpkin", "isijingi"],
+    "category": "vegetable",
+    "per100g": { "calories": 34, "protein": 1, "carbs": 8, "fat": 0.1 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "carrots",
+    "name": "Carrots",
+    "aliases": ["carrots", "carrot", "glazed carrots"],
+    "category": "vegetable",
+    "per100g": { "calories": 41, "protein": 0.9, "carbs": 10, "fat": 0.2 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "broccoli",
+    "name": "Broccoli, steamed",
+    "aliases": ["broccoli", "steamed broccoli", "cauliflower"],
+    "category": "vegetable",
+    "per100g": { "calories": 35, "protein": 2.4, "carbs": 7, "fat": 0.4 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "green-beans",
+    "name": "Green beans, cooked",
+    "aliases": ["green beans", "string beans", "peas", "mixed vegetables"],
+    "category": "vegetable",
+    "per100g": { "calories": 35, "protein": 1.8, "carbs": 8, "fat": 0.1 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "salad-green",
+    "name": "Green salad, undressed",
+    "aliases": ["salad", "green salad", "garden salad", "lettuce", "side salad", "mixed salad"],
+    "category": "vegetable",
+    "per100g": { "calories": 20, "protein": 1.2, "carbs": 4, "fat": 0.2 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "tomato",
+    "name": "Tomato, raw",
+    "aliases": ["tomato", "tomatoes", "cherry tomatoes"],
+    "category": "vegetable",
+    "per100g": { "calories": 18, "protein": 0.9, "carbs": 3.9, "fat": 0.2 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "onion",
+    "name": "Onion, cooked",
+    "aliases": ["onion", "onions", "fried onions", "tomato and onion relish"],
+    "category": "vegetable",
+    "per100g": { "calories": 44, "protein": 1.4, "carbs": 10, "fat": 0.2 },
+    "defaultPortionGrams": 60
+  },
+  {
+    "id": "mushrooms-fried",
+    "name": "Mushrooms, fried",
+    "aliases": ["mushrooms", "fried mushrooms", "mushroom sauce base"],
+    "category": "vegetable",
+    "per100g": { "calories": 90, "protein": 3, "carbs": 4, "fat": 7 },
+    "defaultPortionGrams": 80
+  },
+  {
+    "id": "beetroot-salad",
+    "name": "Beetroot salad",
+    "aliases": ["beetroot", "beetroot salad", "pickled beetroot"],
+    "category": "vegetable",
+    "per100g": { "calories": 70, "protein": 1.5, "carbs": 12, "fat": 1.5 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "avocado",
+    "name": "Avocado",
+    "aliases": ["avocado", "avo", "guacamole"],
+    "category": "fat",
+    "per100g": { "calories": 160, "protein": 2, "carbs": 9, "fat": 15 },
+    "defaultPortionGrams": 70
+  },
+  {
+    "id": "banana",
+    "name": "Banana",
+    "aliases": ["banana", "bananas"],
+    "category": "fruit",
+    "per100g": { "calories": 89, "protein": 1.1, "carbs": 23, "fat": 0.3 },
+    "unitGrams": 118,
+    "unitName": "banana",
+    "defaultPortionGrams": 118
+  },
+  {
+    "id": "apple",
+    "name": "Apple",
+    "aliases": ["apple", "apples", "pear"],
+    "category": "fruit",
+    "per100g": { "calories": 52, "protein": 0.3, "carbs": 14, "fat": 0.2 },
+    "unitGrams": 180,
+    "unitName": "apple",
+    "defaultPortionGrams": 180
+  },
+  {
+    "id": "orange",
+    "name": "Orange / naartjie",
+    "aliases": ["orange", "naartjie", "clementine", "mandarin", "citrus"],
+    "category": "fruit",
+    "per100g": { "calories": 47, "protein": 0.9, "carbs": 12, "fat": 0.1 },
+    "unitGrams": 140,
+    "unitName": "orange",
+    "defaultPortionGrams": 140
+  },
+  {
+    "id": "grapes",
+    "name": "Grapes",
+    "aliases": ["grapes", "grape"],
+    "category": "fruit",
+    "per100g": { "calories": 69, "protein": 0.7, "carbs": 18, "fat": 0.2 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "mango",
+    "name": "Mango",
+    "aliases": ["mango", "mangoes", "pawpaw", "papaya"],
+    "category": "fruit",
+    "per100g": { "calories": 60, "protein": 0.8, "carbs": 15, "fat": 0.4 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "pineapple",
+    "name": "Pineapple",
+    "aliases": ["pineapple"],
+    "category": "fruit",
+    "per100g": { "calories": 50, "protein": 0.5, "carbs": 13, "fat": 0.1 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "watermelon",
+    "name": "Watermelon",
+    "aliases": ["watermelon", "melon", "spanspek"],
+    "category": "fruit",
+    "per100g": { "calories": 30, "protein": 0.6, "carbs": 8, "fat": 0.2 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "berries",
+    "name": "Strawberries / mixed berries",
+    "aliases": ["strawberries", "berries", "blueberries", "raspberries"],
+    "category": "fruit",
+    "per100g": { "calories": 40, "protein": 0.7, "carbs": 9, "fat": 0.3 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "milk-full-cream",
+    "name": "Full-cream milk",
+    "aliases": ["milk", "full cream milk", "whole milk"],
+    "category": "dairy",
+    "per100g": { "calories": 61, "protein": 3.2, "carbs": 4.8, "fat": 3.3 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "milk-low-fat",
+    "name": "Low-fat milk",
+    "aliases": ["low fat milk", "skim milk", "2% milk", "fat free milk"],
+    "category": "dairy",
+    "per100g": { "calories": 47, "protein": 3.4, "carbs": 5, "fat": 1.7 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "amasi",
+    "name": "Amasi (cultured milk)",
+    "aliases": ["amasi", "maas", "sour milk", "cultured milk"],
+    "category": "dairy",
+    "per100g": { "calories": 60, "protein": 3.3, "carbs": 4.7, "fat": 3.2 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "yoghurt-plain",
+    "name": "Plain yoghurt, full cream",
+    "aliases": ["yoghurt", "yogurt", "plain yoghurt", "double cream yoghurt"],
+    "category": "dairy",
+    "per100g": { "calories": 61, "protein": 3.5, "carbs": 4.7, "fat": 3.3 },
+    "defaultPortionGrams": 175
+  },
+  {
+    "id": "yoghurt-greek",
+    "name": "Greek yoghurt",
+    "aliases": ["greek yoghurt", "greek yogurt", "high protein yoghurt"],
+    "category": "dairy",
+    "per100g": { "calories": 97, "protein": 9, "carbs": 4, "fat": 5 },
+    "defaultPortionGrams": 175
+  },
+  {
+    "id": "yoghurt-fruit",
+    "name": "Fruit yoghurt",
+    "aliases": ["fruit yoghurt", "flavoured yoghurt", "strawberry yoghurt"],
+    "category": "dairy",
+    "per100g": { "calories": 95, "protein": 3.5, "carbs": 14, "fat": 2.5 },
+    "defaultPortionGrams": 175
+  },
+  {
+    "id": "cheddar",
+    "name": "Cheddar cheese",
+    "aliases": ["cheese", "cheddar", "gouda", "grated cheese"],
+    "category": "dairy",
+    "per100g": { "calories": 402, "protein": 25, "carbs": 1.3, "fat": 33 },
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "feta",
+    "name": "Feta cheese",
+    "aliases": ["feta", "feta cheese", "danish feta"],
+    "category": "dairy",
+    "per100g": { "calories": 264, "protein": 14, "carbs": 4, "fat": 21 },
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "mozzarella",
+    "name": "Mozzarella cheese",
+    "aliases": ["mozzarella", "pizza cheese"],
+    "category": "dairy",
+    "per100g": { "calories": 300, "protein": 22, "carbs": 2.2, "fat": 22 },
+    "defaultPortionGrams": 40
+  },
+  {
+    "id": "cottage-cheese",
+    "name": "Cottage cheese",
+    "aliases": ["cottage cheese", "smooth cottage cheese"],
+    "category": "dairy",
+    "per100g": { "calories": 98, "protein": 11, "carbs": 3.4, "fat": 4.3 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "butter",
+    "name": "Butter",
+    "aliases": ["butter", "margarine", "spread"],
+    "category": "fat",
+    "per100g": { "calories": 717, "protein": 0.9, "carbs": 0.1, "fat": 81 },
+    "defaultPortionGrams": 10
+  },
+  {
+    "id": "cream",
+    "name": "Fresh cream",
+    "aliases": ["cream", "fresh cream", "whipped cream"],
+    "category": "dairy",
+    "per100g": { "calories": 340, "protein": 2, "carbs": 3, "fat": 36 },
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "custard",
+    "name": "Custard",
+    "aliases": ["custard", "ultramel"],
+    "category": "dairy",
+    "per100g": { "calories": 110, "protein": 3, "carbs": 17, "fat": 3 },
+    "defaultPortionGrams": 125
+  },
+  {
+    "id": "ice-cream",
+    "name": "Ice cream, vanilla",
+    "aliases": ["ice cream", "icecream", "soft serve", "gelato"],
+    "category": "dessert",
+    "per100g": { "calories": 207, "protein": 3.5, "carbs": 24, "fat": 11 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "oil",
+    "name": "Cooking oil",
+    "aliases": ["oil", "sunflower oil", "olive oil", "vegetable oil", "canola oil"],
+    "category": "fat",
+    "per100g": { "calories": 884, "protein": 0, "carbs": 0, "fat": 100 },
+    "defaultPortionGrams": 10
+  },
+  {
+    "id": "mayonnaise",
+    "name": "Mayonnaise",
+    "aliases": ["mayonnaise", "mayo", "creamy dressing"],
+    "category": "condiment",
+    "per100g": { "calories": 680, "protein": 1, "carbs": 1.5, "fat": 75 },
+    "defaultPortionGrams": 20
+  },
+  {
+    "id": "tomato-sauce",
+    "name": "Tomato sauce (ketchup)",
+    "aliases": ["tomato sauce", "ketchup", "all gold"],
+    "category": "condiment",
+    "per100g": { "calories": 100, "protein": 1, "carbs": 24, "fat": 0.2 },
+    "defaultPortionGrams": 20
+  },
+  {
+    "id": "chutney",
+    "name": "Fruit chutney",
+    "aliases": ["chutney", "mrs balls", "mrs ball's chutney"],
+    "category": "condiment",
+    "per100g": { "calories": 260, "protein": 0.5, "carbs": 63, "fat": 0.3 },
+    "defaultPortionGrams": 20
+  },
+  {
+    "id": "atchar",
+    "name": "Mango atchar",
+    "aliases": ["atchar", "achar", "mango atchar", "pickle"],
+    "category": "condiment",
+    "per100g": { "calories": 220, "protein": 1, "carbs": 12, "fat": 19 },
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "peri-peri-sauce",
+    "name": "Peri-peri / chilli sauce",
+    "aliases": ["peri peri sauce", "chilli sauce", "hot sauce", "nandos sauce"],
+    "category": "condiment",
+    "per100g": { "calories": 60, "protein": 1, "carbs": 8, "fat": 2 },
+    "defaultPortionGrams": 20
+  },
+  {
+    "id": "sweet-chilli-sauce",
+    "name": "Sweet chilli sauce",
+    "aliases": ["sweet chilli sauce", "sweet chili sauce"],
+    "category": "condiment",
+    "per100g": { "calories": 220, "protein": 0.5, "carbs": 53, "fat": 0.2 },
+    "defaultPortionGrams": 20
+  },
+  {
+    "id": "gravy",
+    "name": "Gravy",
+    "aliases": ["gravy", "brown sauce", "meat sauce", "sous"],
+    "category": "condiment",
+    "per100g": { "calories": 40, "protein": 1, "carbs": 5, "fat": 1.5 },
+    "defaultPortionGrams": 60
+  },
+  {
+    "id": "cheese-sauce",
+    "name": "Cheese sauce",
+    "aliases": ["cheese sauce", "white sauce", "alfredo sauce"],
+    "category": "condiment",
+    "per100g": { "calories": 180, "protein": 6, "carbs": 7, "fat": 14 },
+    "defaultPortionGrams": 60
+  },
+  {
+    "id": "salad-dressing",
+    "name": "Salad dressing, vinaigrette",
+    "aliases": ["salad dressing", "vinaigrette", "italian dressing"],
+    "category": "condiment",
+    "per100g": { "calories": 300, "protein": 0.5, "carbs": 7, "fat": 30 },
+    "defaultPortionGrams": 20
+  },
+  {
+    "id": "bobotie",
+    "name": "Bobotie",
+    "aliases": ["bobotie", "bobothie"],
+    "category": "dish",
+    "per100g": { "calories": 180, "protein": 12, "carbs": 10, "fat": 11 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "kota",
+    "name": "Kota / sphatlo (loaded quarter loaf)",
+    "aliases": ["kota", "sphatlo", "spatlo", "quarter loaf", "bunny chow"],
+    "category": "dish",
+    "per100g": { "calories": 300, "protein": 9, "carbs": 33, "fat": 15 },
+    "defaultPortionGrams": 350
+  },
+  {
+    "id": "gatsby",
+    "name": "Gatsby",
+    "aliases": ["gatsby", "gatsby roll"],
+    "category": "dish",
+    "per100g": { "calories": 280, "protein": 11, "carbs": 30, "fat": 13 },
+    "defaultPortionGrams": 350
+  },
+  {
+    "id": "boerie-roll",
+    "name": "Boerewors roll",
+    "aliases": ["boerie roll", "boerewors roll", "wors roll"],
+    "category": "dish",
+    "per100g": { "calories": 290, "protein": 12, "carbs": 24, "fat": 17 },
+    "unitGrams": 200,
+    "unitName": "roll",
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "burger-beef",
+    "name": "Beef burger with cheese",
+    "aliases": ["burger", "cheeseburger", "beef burger", "hamburger", "chicken burger"],
+    "category": "dish",
+    "per100g": { "calories": 260, "protein": 13, "carbs": 24, "fat": 12 },
+    "unitGrams": 200,
+    "unitName": "burger",
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "pizza",
+    "name": "Pizza",
+    "aliases": ["pizza", "pizza slice", "margherita", "pepperoni pizza"],
+    "category": "dish",
+    "per100g": { "calories": 266, "protein": 11, "carbs": 30, "fat": 11 },
+    "unitGrams": 110,
+    "unitName": "slice",
+    "defaultPortionGrams": 220
+  },
+  {
+    "id": "hot-dog",
+    "name": "Hot dog",
+    "aliases": ["hot dog", "hotdog", "corn dog"],
+    "category": "dish",
+    "per100g": { "calories": 260, "protein": 10, "carbs": 22, "fat": 15 },
+    "unitGrams": 150,
+    "unitName": "hot dog",
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "toasted-sandwich",
+    "name": "Toasted cheese sandwich",
+    "aliases": ["toasted sandwich", "toastie", "grilled cheese", "braaibroodjie", "cheese toastie"],
+    "category": "dish",
+    "per100g": { "calories": 320, "protein": 12, "carbs": 30, "fat": 17 },
+    "unitGrams": 120,
+    "unitName": "sandwich",
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "sandwich-chicken",
+    "name": "Chicken sandwich / wrap",
+    "aliases": ["sandwich", "chicken wrap", "wrap", "chicken mayo sandwich", "sub"],
+    "category": "dish",
+    "per100g": { "calories": 210, "protein": 12, "carbs": 22, "fat": 7 },
+    "defaultPortionGrams": 220
+  },
+  {
+    "id": "shawarma",
+    "name": "Shawarma / kebab",
+    "aliases": ["shawarma", "kebab", "gyro", "doner"],
+    "category": "dish",
+    "per100g": { "calories": 210, "protein": 14, "carbs": 20, "fat": 8 },
+    "defaultPortionGrams": 300
+  },
+  {
+    "id": "samoosa",
+    "name": "Samoosa, fried",
+    "aliases": ["samoosa", "samosa", "samoosas"],
+    "category": "snack",
+    "per100g": { "calories": 300, "protein": 7, "carbs": 30, "fat": 17 },
+    "unitGrams": 40,
+    "unitName": "samoosa",
+    "defaultPortionGrams": 80
+  },
+  {
+    "id": "spring-roll",
+    "name": "Spring roll, fried",
+    "aliases": ["spring roll", "spring rolls"],
+    "category": "snack",
+    "per100g": { "calories": 250, "protein": 6, "carbs": 30, "fat": 12 },
+    "unitGrams": 40,
+    "unitName": "roll",
+    "defaultPortionGrams": 80
+  },
+  {
+    "id": "pie-steak",
+    "name": "Steak pie / pastry pie",
+    "aliases": ["pie", "steak pie", "chicken pie", "meat pie", "pepper steak pie"],
+    "category": "dish",
+    "per100g": { "calories": 290, "protein": 9, "carbs": 25, "fat": 17 },
+    "unitGrams": 150,
+    "unitName": "pie",
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "sushi",
+    "name": "Sushi roll",
+    "aliases": ["sushi", "sushi roll", "california roll", "salmon roll", "maki"],
+    "category": "dish",
+    "per100g": { "calories": 145, "protein": 6, "carbs": 25, "fat": 2 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "nachos",
+    "name": "Nachos with cheese",
+    "aliases": ["nachos", "loaded nachos", "tortilla chips"],
+    "category": "snack",
+    "per100g": { "calories": 350, "protein": 8, "carbs": 35, "fat": 19 },
+    "defaultPortionGrams": 200
+  },
+  {
+    "id": "crisps",
+    "name": "Potato crisps",
+    "aliases": ["crisps", "potato chips packet", "simba chips", "lays", "nik naks", "cheese curls"],
+    "category": "snack",
+    "per100g": { "calories": 536, "protein": 6, "carbs": 53, "fat": 34 },
+    "defaultPortionGrams": 36
+  },
+  {
+    "id": "popcorn",
+    "name": "Popcorn, plain",
+    "aliases": ["popcorn", "salted popcorn"],
+    "category": "snack",
+    "per100g": { "calories": 380, "protein": 12, "carbs": 74, "fat": 4 },
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "nuts-mixed",
+    "name": "Mixed nuts",
+    "aliases": ["nuts", "mixed nuts", "peanuts", "almonds", "cashews"],
+    "category": "snack",
+    "per100g": { "calories": 600, "protein": 20, "carbs": 20, "fat": 50 },
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "chocolate",
+    "name": "Chocolate slab",
+    "aliases": ["chocolate", "chocolate bar", "cadbury", "kitkat", "milk chocolate"],
+    "category": "dessert",
+    "per100g": { "calories": 535, "protein": 7, "carbs": 59, "fat": 30 },
+    "defaultPortionGrams": 50
+  },
+  {
+    "id": "koeksister",
+    "name": "Koeksister",
+    "aliases": ["koeksister", "koeksusters"],
+    "category": "dessert",
+    "per100g": { "calories": 400, "protein": 2, "carbs": 60, "fat": 17 },
+    "unitGrams": 90,
+    "unitName": "koeksister",
+    "defaultPortionGrams": 90
+  },
+  {
+    "id": "melktert",
+    "name": "Melktert (milk tart)",
+    "aliases": ["melktert", "milk tart", "milktart"],
+    "category": "dessert",
+    "per100g": { "calories": 220, "protein": 4, "carbs": 30, "fat": 9 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "malva-pudding",
+    "name": "Malva pudding",
+    "aliases": ["malva pudding", "malvapoeding", "sticky pudding"],
+    "category": "dessert",
+    "per100g": { "calories": 350, "protein": 4, "carbs": 50, "fat": 15 },
+    "defaultPortionGrams": 120
+  },
+  {
+    "id": "rusk",
+    "name": "Buttermilk rusk",
+    "aliases": ["rusk", "rusks", "beskuit", "ouma rusks"],
+    "category": "snack",
+    "per100g": { "calories": 420, "protein": 7, "carbs": 65, "fat": 15 },
+    "unitGrams": 40,
+    "unitName": "rusk",
+    "defaultPortionGrams": 40
+  },
+  {
+    "id": "biscuit",
+    "name": "Sweet biscuit / cookie",
+    "aliases": ["biscuit", "cookie", "cookies", "marie biscuit", "romany creams"],
+    "category": "dessert",
+    "per100g": { "calories": 460, "protein": 6, "carbs": 70, "fat": 18 },
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "doughnut",
+    "name": "Doughnut",
+    "aliases": ["doughnut", "donut", "jam doughnut"],
+    "category": "dessert",
+    "per100g": { "calories": 400, "protein": 6, "carbs": 45, "fat": 22 },
+    "unitGrams": 70,
+    "unitName": "doughnut",
+    "defaultPortionGrams": 70
+  },
+  {
+    "id": "muffin",
+    "name": "Muffin",
+    "aliases": ["muffin", "blueberry muffin", "chocolate muffin"],
+    "category": "dessert",
+    "per100g": { "calories": 380, "protein": 6, "carbs": 50, "fat": 17 },
+    "unitGrams": 110,
+    "unitName": "muffin",
+    "defaultPortionGrams": 110
+  },
+  {
+    "id": "cake",
+    "name": "Iced cake",
+    "aliases": ["cake", "chocolate cake", "birthday cake", "cupcake", "carrot cake"],
+    "category": "dessert",
+    "per100g": { "calories": 370, "protein": 4, "carbs": 50, "fat": 17 },
+    "defaultPortionGrams": 100
+  },
+  {
+    "id": "soft-drink",
+    "name": "Soft drink (regular)",
+    "aliases": ["coke", "coca cola", "soft drink", "fizzy drink", "soda", "sprite", "fanta", "cooldrink"],
+    "category": "drink",
+    "per100g": { "calories": 42, "protein": 0, "carbs": 10.6, "fat": 0 },
+    "defaultPortionGrams": 330
+  },
+  {
+    "id": "soft-drink-diet",
+    "name": "Diet soft drink",
+    "aliases": ["diet coke", "coke zero", "sugar free soda", "diet soft drink"],
+    "category": "drink",
+    "per100g": { "calories": 0.4, "protein": 0, "carbs": 0.1, "fat": 0 },
+    "defaultPortionGrams": 330
+  },
+  {
+    "id": "fruit-juice",
+    "name": "Fruit juice",
+    "aliases": ["juice", "orange juice", "fruit juice", "apple juice"],
+    "category": "drink",
+    "per100g": { "calories": 45, "protein": 0.7, "carbs": 10, "fat": 0.2 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "mageu",
+    "name": "Mageu",
+    "aliases": ["mageu", "maheu", "amahewu"],
+    "category": "drink",
+    "per100g": { "calories": 65, "protein": 1.5, "carbs": 14, "fat": 0.3 },
+    "defaultPortionGrams": 500
+  },
+  {
+    "id": "beer",
+    "name": "Beer",
+    "aliases": ["beer", "lager", "castle lite", "black label"],
+    "category": "drink",
+    "per100g": { "calories": 43, "protein": 0.5, "carbs": 3.6, "fat": 0 },
+    "defaultPortionGrams": 340
+  },
+  {
+    "id": "wine",
+    "name": "Wine",
+    "aliases": ["wine", "red wine", "white wine"],
+    "category": "drink",
+    "per100g": { "calories": 83, "protein": 0.1, "carbs": 2.6, "fat": 0 },
+    "defaultPortionGrams": 150
+  },
+  {
+    "id": "coffee-black",
+    "name": "Black coffee / tea, no sugar",
+    "aliases": ["coffee", "black coffee", "tea", "rooibos", "espresso", "americano"],
+    "category": "drink",
+    "per100g": { "calories": 2, "protein": 0.1, "carbs": 0, "fat": 0 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "coffee-milk-sugar",
+    "name": "Coffee / tea with milk and sugar",
+    "aliases": ["coffee with milk", "cappuccino", "latte", "tea with milk", "milky coffee"],
+    "category": "drink",
+    "per100g": { "calories": 45, "protein": 1.5, "carbs": 7, "fat": 1.3 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "milkshake",
+    "name": "Milkshake",
+    "aliases": ["milkshake", "shake", "thickshake"],
+    "category": "drink",
+    "per100g": { "calories": 110, "protein": 3.5, "carbs": 16, "fat": 3.5 },
+    "defaultPortionGrams": 350
+  },
+  {
+    "id": "smoothie",
+    "name": "Fruit smoothie",
+    "aliases": ["smoothie", "fruit smoothie", "berry smoothie"],
+    "category": "drink",
+    "per100g": { "calories": 60, "protein": 1, "carbs": 14, "fat": 0.3 },
+    "defaultPortionGrams": 350
+  },
+  {
+    "id": "energy-drink",
+    "name": "Energy drink",
+    "aliases": ["energy drink", "red bull", "monster", "score energy"],
+    "category": "drink",
+    "per100g": { "calories": 45, "protein": 0, "carbs": 11, "fat": 0 },
+    "defaultPortionGrams": 250
+  },
+  {
+    "id": "water",
+    "name": "Water",
+    "aliases": ["water", "sparkling water", "still water"],
+    "category": "drink",
+    "per100g": { "calories": 0, "protein": 0, "carbs": 0, "fat": 0 },
+    "defaultPortionGrams": 500
+  },
+  {
+    "id": "whey-protein",
+    "name": "Whey protein powder",
+    "aliases": ["whey protein", "protein powder", "whey"],
+    "category": "supplement",
+    "per100g": { "calories": 400, "protein": 80, "carbs": 8, "fat": 6 },
+    "unitGrams": 30,
+    "unitName": "scoop",
+    "defaultPortionGrams": 30
+  },
+  {
+    "id": "protein-shake",
+    "name": "Protein shake, mixed",
+    "aliases": ["protein shake", "whey shake", "protein drink"],
+    "category": "supplement",
+    "per100g": { "calories": 45, "protein": 8, "carbs": 1.5, "fat": 0.6 },
+    "defaultPortionGrams": 400
+  },
+  {
+    "id": "protein-bar",
+    "name": "Protein bar",
+    "aliases": ["protein bar", "energy bar", "future life bar"],
+    "category": "supplement",
+    "per100g": { "calories": 350, "protein": 30, "carbs": 35, "fat": 10 },
+    "unitGrams": 60,
+    "unitName": "bar",
+    "defaultPortionGrams": 60
+  },
+  {
+    "id": "honey",
+    "name": "Honey",
+    "aliases": ["honey", "syrup", "golden syrup", "maple syrup"],
+    "category": "condiment",
+    "per100g": { "calories": 304, "protein": 0.3, "carbs": 82, "fat": 0 },
+    "defaultPortionGrams": 20
+  },
+  {
+    "id": "sugar",
+    "name": "Sugar",
+    "aliases": ["sugar", "white sugar", "brown sugar"],
+    "category": "condiment",
+    "per100g": { "calories": 387, "protein": 0, "carbs": 100, "fat": 0 },
+    "defaultPortionGrams": 8
+  },
+  {
+    "id": "jam",
+    "name": "Jam",
+    "aliases": ["jam", "apricot jam", "strawberry jam", "marmalade"],
+    "category": "condiment",
+    "per100g": { "calories": 250, "protein": 0.4, "carbs": 62, "fat": 0.1 },
+    "defaultPortionGrams": 20
+  }
+]

@@ -16,6 +16,8 @@
          permission, but some OEM galleries and Android <= 12 devices
          require these to resolve the picked image URI. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <!-- Video: Pulse clips are picked from the gallery the same way. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
     <!-- Bluetooth LE: scan/connect to heart-rate monitors and smartwatches -->
@@ -66,20 +68,41 @@
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
             </intent-filter>
         </activity>
-        <!-- OAuth redirect receiver: catches fitsocial://spotify-callback
-             and hands the auth code back to flutter_web_auth_2. The scheme +
-             host must match SpotifyConfig.redirectUri and the Redirect URI
-             registered in the Spotify developer dashboard. -->
+        <!-- OAuth redirect receiver: catches the music-service sign-in
+             callbacks and hands the auth code back to flutter_web_auth_2.
+             Each scheme + host must match the redirect URI configured in the
+             matching Dart config *and* the one registered in that service's
+             developer dashboard.
+
+             YouTube Music is the exception: Google requires installed apps to
+             redirect to the reversed OAuth client ID, so its <data> entry has
+             to be filled in once that client exists — see
+             YouTubeMusicConfig.callbackScheme. -->
         <activity
             android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
-            android:exported="true">
+            android:exported="true"
+            android:taskAffinity="">
             <intent-filter android:label="flutter_web_auth_2">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="fitsocial" android:host="spotify-callback"/>
+                <data android:scheme="fitsocial" android:host="apple-music-callback"/>
             </intent-filter>
         </activity>
+        <!-- The plugin declares this activity itself, but without a task
+             affinity, so it would default to the package name. MainActivity
+             above runs with android:taskAffinity="", and the two must match:
+             the browser starts CallbackActivity with FLAG_ACTIVITY_NEW_TASK,
+             and Android places it in the task matching *its* affinity. With a
+             mismatch the callback lands in a second task, so the auth code
+             arrives but the app never returns to the foreground — the user is
+             left looking at the browser — and the FLAG_ACTIVITY_CLEAR_TOP the
+             plugin uses to dismiss the tab targets the wrong task. -->
+        <activity
+            android:name="com.linusu.flutter_web_auth_2.AuthenticationManagementActivity"
+            android:exported="false"
+            android:taskAffinity=""/>
 
         <!-- Interactive photo cropper (image_cropper -> uCrop on Android).
              Without this activity registration the crop screen crashes with

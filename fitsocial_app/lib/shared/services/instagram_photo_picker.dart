@@ -71,12 +71,12 @@ abstract final class InstagramPhotoPicker {
       uiSettings: [
         AndroidUiSettings(
           toolbarTitle: 'Crop photo',
-          toolbarColor: AppColors.black,
-          toolbarWidgetColor: AppColors.white,
-          backgroundColor: AppColors.black,
+          toolbarColor: AppColors.mediaBackdrop,
+          toolbarWidgetColor: AppColors.onMedia,
+          backgroundColor: AppColors.mediaBackdrop,
           activeControlsWidgetColor: AppColors.orangeBright,
           cropFrameColor: AppColors.orangeBright,
-          cropGridColor: AppColors.stroke,
+          cropGridColor: AppColors.cropGrid,
           statusBarLight: false,
           navBarLight: false,
           initAspectRatio: InstagramCropRatio.portrait,

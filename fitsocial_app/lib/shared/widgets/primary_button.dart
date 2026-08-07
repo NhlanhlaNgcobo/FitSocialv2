@@ -22,7 +22,8 @@ class PrimaryButton extends StatelessWidget {
       child: FilledButton(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.orangeBright,
-          foregroundColor: AppColors.white,
+          // Sits on the orange fill, which is the same orange in both themes.
+          foregroundColor: AppColors.onBrand,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
@@ -39,7 +40,16 @@ class PrimaryButton extends StatelessWidget {
               Icon(icon, size: 18),
               const SizedBox(width: 8),
             ],
-            Text(label),
+            // Flexible so a long label on a narrow phone shortens instead of
+            // overflowing the button.
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
           ],
         ),
       ),

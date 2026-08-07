@@ -5,9 +5,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
+import '../domain/explore_models.dart';
 import 'content_repository_contract.dart';
 import 'firestore_mappers.dart';
 import 'firestore_models.dart';
@@ -32,6 +34,15 @@ class FirestoreContentRepository implements ContentRepository {
         .map((doc) => FirestorePostRecord.fromMap(doc.id, doc.data()))
         .map(FirestoreMapper.toFeedPost)
         .toList();
+  }
+
+  @override
+  Future<FeedPost?> fetchPost(String postId) async {
+    final snapshot = await postsCollection.doc(postId).get();
+    if (!snapshot.exists) return null;
+    return FirestoreMapper.toFeedPost(
+      FirestorePostRecord.fromMap(snapshot.id, snapshot.data() ?? const {}),
+    );
   }
 
   @override
@@ -62,16 +73,47 @@ class FirestoreContentRepository implements ContentRepository {
 
   @override
   Future<List<FeedPost>> fetchTrendingPosts() async {
+    // Ordered by recency rather than by likes. The scoring below needs a
+    // candidate pool that actually contains recent posts, and `likesCount desc`
+    // would only ever hand back the all-time winners — the very thing that made
+    // this grid static. Posts written before `createdAt` was recorded are
+    // dropped by the orderBy, exactly as they already are from the main feed.
     final snapshot = await postsCollection
-        .orderBy('likesCount', descending: true)
-        .limit(30)
+        .orderBy('createdAt', descending: true)
+        .limit(_trendingCandidatePool)
         .get();
 
-    return snapshot.docs
+    final now = DateTime.now();
+    final scored = snapshot.docs
         .map((doc) => FirestorePostRecord.fromMap(doc.id, doc.data()))
-        .map(FirestoreMapper.toFeedPost)
-        .toList();
+        .map(
+          (record) => (
+            record: record,
+            score: TrendingScore.of(
+              likes: record.likesCount,
+              comments: record.commentsCount,
+              createdAt: record.createdAt,
+              now: now,
+            ),
+          ),
+        )
+        .toList()
+      ..sort((a, b) => b.score.compareTo(a.score));
+
+    return scored
+        .take(_trendingLimit)
+        .map((entry) => FirestoreMapper.toFeedPost(entry.record))
+        .toList(growable: false);
   }
+
+  /// How many recent posts are scored to fill the grid. Ranking happens on
+  /// device, so the pool has to be wide enough that a well-received post from
+  /// last week can still beat today's quiet ones — but it is one query either
+  /// way, and 120 covers a small community's fortnight.
+  static const int _trendingCandidatePool = 120;
+
+  /// How many of the scored posts reach the grid.
+  static const int _trendingLimit = 30;
 
   DocumentReference<Map<String, dynamic>> _followingRef(
     String currentUserId,
@@ -163,6 +205,42 @@ class FirestoreContentRepository implements ContentRepository {
         .map((snapshot) => snapshot.exists);
   }
 
+  /// The caller's "notify me about this person" marker. Presence is the whole
+  /// state, so the document body carries no flag to contradict it.
+  DocumentReference<Map<String, dynamic>> _notifyRef(
+    String currentUserId,
+    String targetUserId,
+  ) {
+    return usersCollection
+        .doc(currentUserId)
+        .collection('notifyFor')
+        .doc(targetUserId);
+  }
+
+  @override
+  Stream<bool> watchUserNotifications(
+    String currentUserId,
+    String targetUserId,
+  ) {
+    return _notifyRef(currentUserId, targetUserId)
+        .snapshots()
+        .map((snapshot) => snapshot.exists);
+  }
+
+  @override
+  Future<void> setUserNotifications(
+    String currentUserId,
+    String targetUserId, {
+    required bool enabled,
+  }) {
+    final ref = _notifyRef(currentUserId, targetUserId);
+    if (!enabled) return ref.delete();
+    return ref.set({
+      'userId': targetUserId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   @override
   Future<List<UserSearchResult>> searchUsers(String query) async {
     final term = query.trim();
@@ -222,15 +300,57 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<ProfileStat>> getProfileStats() async {
-    final user = await _loadUserRecord();
+  Future<List<ProfileStat>> getProfileStats(String userId) async {
+    // Both reads are started before either is awaited, so they overlap.
+    final profileRead = usersCollection.doc(userId).get();
+    final photosRead = _countPhotoPosts(userId);
+
+    final snapshot = await profileRead;
+    final record =
+        FirestoreUserRecord.fromMap(userId, snapshot.data() ?? const {});
+
     return [
-      FirestoreMapper.toProfileStat(label: 'Posts', value: user.postsCount),
       FirestoreMapper.toProfileStat(
-          label: 'Followers', value: user.followersCount),
+        label: 'Uploads',
+        value: await photosRead + record.runsCount + record.workoutsCount,
+      ),
       FirestoreMapper.toProfileStat(
-          label: 'Following', value: user.followingCount),
+          label: 'Followers', value: record.followersCount),
+      FirestoreMapper.toProfileStat(
+          label: 'Following', value: record.followingCount),
     ];
+  }
+
+  /// How many photo posts [userId] has shared.
+  ///
+  /// Counted by query rather than read off the profile, because no counter
+  /// tracks plain photo shares — [_incrementUser] only moves the per-activity
+  /// totals. Keys off `postType` so meal shares are left out: a meal carries
+  /// an image but is written as a text post, which is what separates the two.
+  /// Deliberately unordered, so two equality filters can be served from the
+  /// single-field indexes without a composite one.
+  Future<int> _countPhotoPosts(String userId) async {
+    final snapshot = await postsCollection
+        .where('authorId', isEqualTo: userId)
+        .where('postType', isEqualTo: 'image')
+        .limit(_uploadCountPostLimit)
+        .get();
+
+    return snapshot.docs.length;
+  }
+
+  /// Ceiling on how many photo posts the upload total counts. Past this the
+  /// number under-reports rather than turning one profile view into unbounded
+  /// reads.
+  static const int _uploadCountPostLimit = 300;
+
+  @override
+  Future<UserSearchResult?> fetchUserProfile(String userId) async {
+    final snapshot = await usersCollection.doc(userId).get();
+    if (!snapshot.exists) return null;
+    return FirestoreMapper.toUserSearchResult(
+      FirestoreUserRecord.fromMap(snapshot.id, snapshot.data() ?? const {}),
+    );
   }
 
   @override
@@ -244,34 +364,89 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<WorkoutPlaylist>> getWorkoutPlaylists(
-      WorkoutType workoutType) async {
-    return const [];
-  }
+  Future<List<ActivityDay>> getActivityDays(DateTime from) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const [];
 
-  @override
-  Future<List<PodcastRecommendation>> getPodcastRecommendations() async {
-    return const [];
-  }
+    final results = await Future.wait([
+      _activityLogs(runsCollection, user.uid),
+      _activityLogs(workoutsCollection, user.uid),
+    ]);
 
-  @override
-  Future<List<StoryItem>> getStories(UserProfileDraft? profile) async {
-    final currentUser = await _loadUserRecord();
+    // The window is applied here rather than in the query — see _activityLogs.
+    //
+    // `createdAt` is a server timestamp, so it is the field that is always
+    // present and comparable. For bucketing, the client-side stamp is
+    // preferred: it carries the moment the session actually happened in the
+    // user's own timezone, which is the day the grid should light up.
+    final start = ActivityCalendar.dateOnly(from);
+    final runsByDay = _countByDay(results[0], ['startedAt', 'createdAt'], start);
+    final workoutsByDay =
+        _countByDay(results[1], ['loggedAt', 'createdAt'], start);
+
+    final dates = {...runsByDay.keys, ...workoutsByDay.keys}.toList()..sort();
     return [
-      FirestoreMapper.toStoryItem(currentUser, isOwnStory: true),
+      for (final date in dates)
+        ActivityDay(
+          date: date,
+          runs: runsByDay[date] ?? 0,
+          workouts: workoutsByDay[date] ?? 0,
+        ),
     ];
   }
 
-  @override
-  Future<List<SummaryMetric>> getSummaryMetrics() async {
-    final user = await _loadUserRecord();
-    return [
-      FirestoreMapper.toSummaryMetric(
-        label: 'This week',
-        value: '${user.workoutsCount} workouts',
-      ),
-      SummaryMetric(label: 'Meals logged', value: '${user.mealsCount} meals'),
-    ];
+  /// Every log [userId] owns in [collection], or an empty list if that read
+  /// could not be served.
+  ///
+  /// Filtered by author alone, with the date window applied client-side.
+  /// Pairing the equality with a `createdAt` range would need a composite
+  /// index per collection, and Firestore rejects the query outright until that
+  /// index finishes building — so a grid that has to wait on a deploy before
+  /// it renders anything. One user's own training history is small enough to
+  /// narrow in Dart, and this form runs on the single-field index Firestore
+  /// maintains for free.
+  ///
+  /// Failures are swallowed per collection so that one unreadable collection
+  /// costs its own squares rather than the whole grid.
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _activityLogs(
+    CollectionReference<Map<String, dynamic>> collection,
+    String userId,
+  ) async {
+    try {
+      final snapshot =
+          await collection.where('authorId', isEqualTo: userId).get();
+      return snapshot.docs;
+    } on FirebaseException catch (error) {
+      debugPrint(
+        'Activity grid: could not read ${collection.id} '
+        '(${error.code}) — those days will show as empty.',
+      );
+      return const [];
+    }
+  }
+
+  /// Tallies [docs] dated on or after [start] into local calendar days, reading
+  /// the first of [timestampFields] that holds a usable `Timestamp`.
+  static Map<DateTime, int> _countByDay(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    List<String> timestampFields,
+    DateTime start,
+  ) {
+    final counts = <DateTime, int>{};
+    for (final doc in docs) {
+      final data = doc.data();
+      for (final field in timestampFields) {
+        final value = data[field];
+        if (value is! Timestamp) continue;
+        // Timestamp.toDate() returns local time, so the day boundary is the
+        // user's own midnight rather than UTC's.
+        final day = ActivityCalendar.dateOnly(value.toDate());
+        if (day.isBefore(start)) break;
+        counts.update(day, (running) => running + 1, ifAbsent: () => 1);
+        break;
+      }
+    }
+    return counts;
   }
 
   CollectionReference<Map<String, dynamic>> get usersCollection =>
@@ -285,6 +460,12 @@ class FirestoreContentRepository implements ContentRepository {
 
   CollectionReference<Map<String, dynamic>> get runsCollection =>
       _firestore.collection('runs');
+
+  CollectionReference<Map<String, dynamic>> get workoutsCollection =>
+      _firestore.collection('workouts');
+
+  CollectionReference<Map<String, dynamic>> get mealsCollection =>
+      _firestore.collection('meals');
 
   /// Hard ceiling on stored route points.
   ///
@@ -318,6 +499,11 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     WorkoutLogDraft draft,
   ) async {
+    // Written whether or not the workout is shared, mirroring saveRun: the log
+    // is the canonical record, and the activity grid reads from it. Sharing
+    // only decides whether a post is created alongside it.
+    await _writeWorkoutLog(draft);
+
     if (!draft.shareToFeed) {
       await _incrementUser(workoutsDelta: 1);
       return const ActivitySaveResult(message: 'Workout saved.');
@@ -375,6 +561,10 @@ class FirestoreContentRepository implements ContentRepository {
         draft.averagePace,
       ],
       themeKey: 'sunset',
+      // Stamped so a run is identifiable without inspecting its contents. A
+      // manually entered run carries no route, which is why the route alone
+      // was never enough to tell one apart.
+      postType: 'run',
       // Denormalised onto the post so the feed renders the route from the
       // documents it already streams, with no extra read per card.
       routePoints: route,
@@ -382,6 +572,26 @@ class FirestoreContentRepository implements ContentRepository {
     await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
     return ActivitySaveResult(
         message: 'Run saved and shared.', createdPost: post);
+  }
+
+  /// Persists the workout to `workouts/{id}` — what was done and when.
+  ///
+  /// `loggedAt` is stamped client-side so the day bucket reflects the user's
+  /// own clock; `createdAt` stays a server timestamp for ordering and for the
+  /// range filter the activity query runs.
+  Future<void> _writeWorkoutLog(WorkoutLogDraft draft) async {
+    final user = _requireCurrentUser();
+    final title = draft.title.trim();
+    await workoutsCollection.doc().set({
+      'authorId': user.uid,
+      'title': title.isEmpty ? 'Workout' : title,
+      'duration': draft.duration,
+      'calories': draft.calories,
+      'exerciseCount': draft.exercises.length,
+      'sharedToFeed': draft.shareToFeed,
+      'loggedAt': Timestamp.now(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Persists the run to `runs/{id}` — distance, timings and the GPS trace.
@@ -409,6 +619,8 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     MealLogDraft draft,
   ) async {
+    await _writeMealLog(draft);
+
     if (!draft.shareToFeed) {
       await _incrementUser(mealsDelta: 1);
       return const ActivitySaveResult(message: 'Meal saved.');
@@ -424,6 +636,9 @@ class FirestoreContentRepository implements ContentRepository {
         '${draft.fat.trim()}g fat',
       ],
       themeKey: 'graphite',
+      // Same reason as runs: without this a meal is just a text post that
+      // happens to carry a photo, and nothing downstream can tell.
+      postType: 'meal',
       imageUrl: draft.imageUrl,
     );
     await _incrementUser(mealsDelta: 1);
@@ -439,9 +654,15 @@ class FirestoreContentRepository implements ContentRepository {
     final caption = draft.caption.trim();
     final post = await _createPost(
       profile: profile,
-      activity: 'Status Update',
+      // The author's own subtitle when they wrote one. Empty is kept empty —
+      // the header renders as a single line rather than showing a label the
+      // user never asked for.
+      activity: draft.activity.trim(),
       caption: caption.isEmpty ? 'Shared a FitSocial update.' : caption,
-      metricLabels: const ['Post', 'Community', 'Now'],
+      // A plain share has no metrics. The overlay is for posts that measured
+      // something — a run's distance, a meal's macros — so a photo post leaves
+      // it empty rather than stamping filler words across the picture.
+      metricLabels: const [],
       themeKey: 'sunset',
       imageUrl: draft.imageUrl,
       postType: draft.imageUrl != null ? 'image' : 'text',
@@ -540,7 +761,10 @@ class FirestoreContentRepository implements ContentRepository {
       authorName: authorName,
       activity: activity,
       caption: caption,
-      metricLabels: metricLabels,
+      // Every post write lands here, so this is the one place that decides
+      // what may be printed over a photo. Callers pass what they measured;
+      // anything that isn't a measurement never reaches Firestore.
+      metricLabels: PostMetricLabels.measured(metricLabels),
       likesCount: 0,
       commentsCount: 0,
       timestampLabel: 'now',
@@ -552,6 +776,9 @@ class FirestoreContentRepository implements ContentRepository {
       routePoints: RoutePoint.listFromFirestore(routePoints),
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
+      // Local clock, only for the copy handed straight back to the feed — the
+      // stored value is the server timestamp written below.
+      createdAt: DateTime.now(),
     );
 
     await document.set({
@@ -662,6 +889,10 @@ class FirestoreContentRepository implements ContentRepository {
       nextLevelXp: level * AchievementXp.perLevel,
       level: level,
       currentStreak: currentStreak,
+      totalWorkouts: workouts,
+      totalMeals: meals,
+      totalRuns: runs,
+      longestRunKm: maxRunKm,
       badges: [
         BadgeProgress(
           id: 'first_workout',
@@ -773,6 +1004,7 @@ class FirestoreContentRepository implements ContentRepository {
   ) async {
     final user = _requireCurrentUser();
     final authorName = await _resolvePublicAuthorName(profile);
+    final authorAvatarUrl = await _resolveAuthorAvatarUrl(profile);
     final commentRef = postsCollection.doc(postId).collection('comments').doc();
 
     final now = DateTime.now();
@@ -784,6 +1016,7 @@ class FirestoreContentRepository implements ContentRepository {
     batch.set(commentRef, {
       'authorId': user.uid,
       'authorName': authorName,
+      if (authorAvatarUrl != null) 'authorAvatarUrl': authorAvatarUrl,
       'text': text,
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -798,7 +1031,58 @@ class FirestoreContentRepository implements ContentRepository {
       authorName: authorName,
       text: text,
       createdAt: now,
+      authorAvatarUrl: authorAvatarUrl,
     );
+  }
+
+  @override
+  Future<void> deletePost(String postId) async {
+    final user = _requireCurrentUser();
+    final postRef = postsCollection.doc(postId);
+
+    final snapshot = await postRef.get();
+    if (!snapshot.exists) return;
+
+    final data = snapshot.data() ?? const <String, dynamic>{};
+    // Checked here as well as in the rules so the user gets a readable message
+    // rather than a raw permission-denied from the server.
+    if (data['authorId'] != user.uid) {
+      throw StateError('You can only delete your own posts.');
+    }
+
+    // Firestore does not cascade: deleting a document leaves its subcollections
+    // in place, billable and unreachable. Comments must go first — the security
+    // rule that lets a post owner remove someone else's comment checks the
+    // parent post, which has to still exist for that check to pass.
+    final comments = await postRef.collection('comments').get();
+    for (var i = 0; i < comments.docs.length; i += 500) {
+      final batch = _firestore.batch();
+      for (final doc in comments.docs.skip(i).take(500)) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+
+    await postRef.delete();
+
+    // Adjust the counter directly rather than through _incrementUser, which
+    // also advances the daily streak — deleting a post must not count as
+    // activity.
+    await usersCollection.doc(user.uid).update({
+      'postsCount': FieldValue.increment(-1),
+    });
+
+    // Best effort: the image is orphaned the moment the post is gone and keeps
+    // costing storage. A failure here shouldn't report the delete as failed,
+    // since the post itself is already removed.
+    final imageUrl = data['imageUrl'] as String?;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      try {
+        await FirebaseStorage.instance.refFromURL(imageUrl).delete();
+      } catch (_) {
+        // Already deleted, or a URL we can't resolve — nothing to recover.
+      }
+    }
   }
 
   // ── NEW: Social action streams & toggles ──────────────────────────────────
@@ -919,6 +1203,56 @@ class FirestoreContentRepository implements ContentRepository {
 
     final data = Map<String, dynamic>.from(result.data);
     return data;
+  }
+
+  @override
+  Future<List<FoodSearchResult>> searchFoods(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 2) return const [];
+
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'searchFoods',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+    );
+
+    final result = await callable.call<Map<String, dynamic>>({
+      'query': trimmed,
+    });
+
+    final foods = result.data['foods'];
+    if (foods is! List) return const [];
+    return foods
+        .map(FoodSearchResult.fromMap)
+        .whereType<FoodSearchResult>()
+        .toList(growable: false);
+  }
+
+  /// Persists the meal to `meals/{id}` — the totals plus the itemised
+  /// breakdown behind them.
+  ///
+  /// Kept whether or not the meal was shared, for the same reason as runs and
+  /// workouts: this is the user's nutrition history. The feed post carries only
+  /// the three headline numbers, so without this the analysis is lost the
+  /// moment the screen closes.
+  Future<void> _writeMealLog(MealLogDraft draft) async {
+    final user = _requireCurrentUser();
+    int macro(String value) =>
+        int.tryParse(value.trim()) ?? double.tryParse(value.trim())?.round() ?? 0;
+
+    await mealsCollection.doc().set({
+      'authorId': user.uid,
+      'name': draft.name.trim(),
+      'calories': macro(draft.calories),
+      'protein': macro(draft.protein),
+      'carbs': macro(draft.carbs),
+      'fat': macro(draft.fat),
+      'notes': draft.notes.trim(),
+      'items': draft.items.map((item) => item.toMap()).toList(),
+      'itemCount': draft.items.length,
+      'sharedToFeed': draft.shareToFeed,
+      if (draft.imageUrl != null) 'imageUrl': draft.imageUrl,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 }
 

@@ -20,3 +20,10 @@ fitsocial_app/*.iml
 # fitsocial_app/ — workspace.xml in particular churns on every IDE action.
 /.idea/
 /*.iml
+
+# Kotlin build-tool scratch dir, created next to the Gradle project.
+fitsocial_app/android/.kotlin/
+
+# Written analysis/report documents kept alongside the checkout. Binary Office
+# files can't be diffed or merged, so they bloat history to no benefit.
+/*.docx

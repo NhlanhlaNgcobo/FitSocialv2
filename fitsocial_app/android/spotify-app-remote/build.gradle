@@ -1,0 +1,9 @@
+// Publishes the Spotify App Remote .aar as a plain Gradle artifact.
+//
+// Spotify does not publish App Remote to Maven, so the spotify_sdk plugin
+// depends on `project(':spotify-app-remote')` and expects to find the binary
+// here. Groovy rather than Kotlin DSL on purpose: this is the exact file the
+// plugin's own `android_setup` script generates, and keeping it byte-similar
+// means re-running that script (or upgrading the SDK) stays a drop-in.
+configurations.maybeCreate("default")
+artifacts.add("default", file('spotify-app-remote-release-0.8.0.aar'))

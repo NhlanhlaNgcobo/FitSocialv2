@@ -31,6 +31,8 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
       bio: (data['bio'] as String?) ?? '',
       location: (data['location'] as String?) ?? '',
       avatarUrl: data['avatarUrl'] as String?,
+      pronouns: (data['pronouns'] as String?) ?? '',
+      links: (data['links'] as String?) ?? '',
     );
   }
 
@@ -41,6 +43,8 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
     required String bio,
     required String location,
     String? avatarLocalPath,
+    String pronouns = '',
+    String links = '',
   }) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) {
@@ -67,6 +71,8 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
       bio: bio.trim(),
       location: location.trim(),
       avatarUrl: avatarUrl,
+      pronouns: pronouns.trim(),
+      links: links.trim(),
     );
 
     // The profile document is readable by any signed-in user (Explore search
@@ -79,6 +85,8 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
       'handle': profile.handle,
       'bio': profile.bio,
       'location': profile.location,
+      'pronouns': profile.pronouns,
+      'links': profile.links,
       if (avatarUrl != null) 'avatarUrl': avatarUrl,
       // Strips the legacy public copy for accounts created before the email
       // was moved, so saving a profile self-heals the exposure.

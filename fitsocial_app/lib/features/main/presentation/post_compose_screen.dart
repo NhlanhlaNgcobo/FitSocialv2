@@ -7,9 +7,13 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../auth/application/app_session.dart';
+import '../../auth/presentation/account_switcher_sheet.dart';
 import '../application/activity_actions.dart';
 import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
@@ -23,7 +27,12 @@ class PostComposeScreen extends ConsumerStatefulWidget {
 }
 
 class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
+  /// The cap on the activity line: long enough for "5km Morning Run", short
+  /// enough that it stays on one line under the author's name in the feed.
+  static const int _activityLimit = 40;
+
   late final TextEditingController _captionController;
+  late final TextEditingController _activityController;
   String? _imagePath;
   double? _imageAspectRatio;
   bool _isSaving = false;
@@ -34,11 +43,13 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     super.initState();
     final draft = ref.read(createFlowControllerProvider).postDraft;
     _captionController = TextEditingController(text: draft.caption);
+    _activityController = TextEditingController(text: draft.activity);
   }
 
   @override
   void dispose() {
     _captionController.dispose();
+    _activityController.dispose();
     super.dispose();
   }
 
@@ -79,6 +90,15 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     }
   }
 
+  void _syncDraft() {
+    ref.read(createFlowControllerProvider.notifier).updatePost(
+          PostComposerDraftState(
+            caption: _captionController.text,
+            activity: _activityController.text,
+          ),
+        );
+  }
+
   Future<void> _sharePost() async {
     final caption = _captionController.text.trim();
     if (caption.isEmpty) {
@@ -88,9 +108,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       return;
     }
 
-    ref.read(createFlowControllerProvider.notifier).updatePost(
-          PostComposerDraftState(caption: _captionController.text),
-        );
+    _syncDraft();
     setState(() {
       _isSaving = true;
       _errorMessage = null;
@@ -107,6 +125,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       final result = await ref.read(activityActionsProvider).sharePost(
             PostDraft(
               caption: caption,
+              activity: _activityController.text.trim(),
               imageUrl: imageUrl,
               imageAspectRatio: _imageAspectRatio,
             ),
@@ -135,150 +154,614 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+    final profile = ref.watch(appSessionProvider).profile;
+    final displayName = profile?.displayName ?? 'FitSocial User';
+
     return Scaffold(
+      backgroundColor: palette.background,
       appBar: AppBar(title: const Text('Share Post')),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
         children: [
-          GestureDetector(
-            onTap: _isSaving ? null : () => _pickImage(ImageSource.gallery),
-            child: Container(
-              height: 200,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.stroke),
-              ),
-              child: _imagePath != null
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
-                          // image_picker hands back a blob: URL on web, where
-                          // dart:io's File throws when read.
-                          child: kIsWeb
-                              ? Image.network(
-                                  _imagePath!,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                )
-                              : Image.file(
-                                  File(_imagePath!),
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                ),
-                        ),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: GestureDetector(
-                            onTap: _isSaving
-                                ? null
-                                : () => setState(() => _imagePath = null),
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black54,
-                              ),
-                              child: const Icon(
-                                Icons.close_rounded,
-                                color: AppColors.white,
-                                size: 18,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.photo_library_outlined,
-                              color: AppColors.orangeBright, size: 42),
-                          SizedBox(height: 12),
-                          Text('Add photo or workout snapshot'),
-                        ],
-                      ),
-                    ),
+          if (_imagePath == null)
+            _MediaPicker(
+              onGallery:
+                  _isSaving ? null : () => _pickImage(ImageSource.gallery),
+              onCamera: _isSaving ? null : () => _pickImage(ImageSource.camera),
+            )
+          else
+            _SelectedPhoto(
+              path: _imagePath!,
+              aspectRatio: _imageAspectRatio,
+              onChange:
+                  _isSaving ? null : () => _pickImage(ImageSource.gallery),
+              onRemove:
+                  _isSaving ? null : () => setState(() => _imagePath = null),
             ),
-          ),
-          if (_imagePath == null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Center(
-              child: TextButton.icon(
-                onPressed:
-                    _isSaving ? null : () => _pickImage(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt_outlined, size: 18),
-                label: const Text('Take Photo'),
-              ),
-            ),
-          ],
           const SizedBox(height: AppSpacing.md),
-          const Text(
-            'Caption',
-            style:
-                TextStyle(color: AppColors.white, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            maxLines: 5,
-            controller: _captionController,
-            decoration: const InputDecoration(hintText: 'Write a caption'),
-            onChanged: (value) {
-              ref
-                  .read(createFlowControllerProvider.notifier)
-                  .updatePost(PostComposerDraftState(caption: value));
+          _ComposerCard(
+            displayName: displayName,
+            handle: formatHandle(profile?.handle),
+            avatarUrl: profile?.avatarUrl,
+            captionController: _captionController,
+            activityController: _activityController,
+            activityLimit: _activityLimit,
+            onChanged: () {
+              // Rebuilds for the activity counter as well as saving the draft.
+              setState(_syncDraft);
             },
           ),
-          const SizedBox(height: AppSpacing.lg),
           if (_errorMessage != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.stroke),
-              ),
-              child: Text(
-                _errorMessage!,
-                style: const TextStyle(color: AppColors.orangeBright),
-              ),
-            ),
             const SizedBox(height: AppSpacing.md),
+            _ErrorBanner(message: _errorMessage!),
           ],
-          PrimaryButton(
-            label: _isSaving ? 'Uploading...' : 'Share Post',
-            onPressed: _isSaving ? null : _sharePost,
-          ),
-          if (_isSaving && _imagePath != null)
-            const Padding(
-              padding: EdgeInsets.only(top: AppSpacing.md),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.orangeBright,
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Uploading image...',
-                    style: TextStyle(color: AppColors.muted, fontSize: 14),
-                  ),
-                ],
+        ],
+      ),
+      bottomNavigationBar: _ShareBar(
+        isSaving: _isSaving,
+        // Only the photo upload takes long enough to be worth narrating.
+        showProgress: _isSaving && _imagePath != null,
+        onPressed: _isSaving ? null : _sharePost,
+      ),
+    );
+  }
+}
+
+/// The empty media slot: one panel that both explains itself and carries the
+/// two ways of filling it, rather than a blank box with a stray text button
+/// floating underneath it.
+class _MediaPicker extends StatelessWidget {
+  const _MediaPicker({required this.onGallery, required this.onCamera});
+
+  final VoidCallback? onGallery;
+  final VoidCallback? onCamera;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.lg,
+      ),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: palette.stroke),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppColors.orangeBright.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: AppColors.orangeBright.withValues(alpha: 0.28),
               ),
             ),
+            child: const Icon(
+              Icons.add_photo_alternate_rounded,
+              color: AppColors.orangeBright,
+              size: 32,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Add a photo',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Optional — a post without one still lands in the feed.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _MediaAction(
+                  icon: Icons.photo_library_rounded,
+                  label: 'Gallery',
+                  onTap: onGallery,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _MediaAction(
+                  icon: Icons.photo_camera_rounded,
+                  label: 'Camera',
+                  onTap: onCamera,
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _MediaAction extends StatelessWidget {
+  const _MediaAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Material(
+      color: palette.surfaceHigh,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: palette.brandText),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The chosen photo, shown in the shape the user cropped it to — the same
+/// shape the feed will give it.
+class _SelectedPhoto extends StatelessWidget {
+  const _SelectedPhoto({
+    required this.path,
+    required this.aspectRatio,
+    required this.onChange,
+    required this.onRemove,
+  });
+
+  final String path;
+  final double? aspectRatio;
+  final VoidCallback? onChange;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Stack(
+        children: [
+          AspectRatio(
+            // 4:5 only stands in when the decode failed; the cropper's own
+            // default is the same shape, so the fallback is never a surprise.
+            aspectRatio: aspectRatio ?? 4 / 5,
+            child: ColoredBox(
+              color: AppColors.mediaBackdrop,
+              // image_picker hands back a blob: URL on web, where dart:io's
+              // File throws when read.
+              child: kIsWeb
+                  ? Image.network(path, fit: BoxFit.cover)
+                  : Image.file(File(path), fit: BoxFit.cover),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Row(
+              // Without this the row fills the stack and drags both controls
+              // off the left edge.
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GlassButton(
+                  icon: Icons.swap_horiz_rounded,
+                  label: 'Change',
+                  onTap: onChange,
+                ),
+                const SizedBox(width: 8),
+                _GlassIconButton(icon: Icons.close_rounded, onTap: onRemove),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Caption and activity in one card, under the author's own name and photo —
+/// so what is being written looks like the post it becomes.
+class _ComposerCard extends StatelessWidget {
+  const _ComposerCard({
+    required this.displayName,
+    required this.handle,
+    required this.avatarUrl,
+    required this.captionController,
+    required this.activityController,
+    required this.activityLimit,
+    required this.onChanged,
+  });
+
+  final String displayName;
+  final String handle;
+  final String? avatarUrl;
+  final TextEditingController captionController;
+  final TextEditingController activityController;
+  final int activityLimit;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final activityLength = activityController.text.characters.length;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: palette.stroke),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Avatar(
+                initials: accountInitials(displayName),
+                imageUrl: avatarUrl,
+                size: 40,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      handle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: palette.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const _AudienceChip(),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: captionController,
+            minLines: 4,
+            maxLines: 10,
+            textCapitalization: TextCapitalization.sentences,
+            cursorColor: AppColors.orangeBright,
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 16,
+              height: 1.45,
+            ),
+            decoration: InputDecoration(
+              filled: false,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              hintText: 'How did the session go?',
+              hintStyle: TextStyle(
+                color: palette.muted,
+                fontSize: 16,
+                height: 1.45,
+              ),
+            ),
+            onChanged: (_) => onChanged(),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Divider(color: palette.stroke, height: 1),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Icon(
+                Icons.bolt_rounded,
+                size: 18,
+                color: palette.brandText,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: activityController,
+                  textCapitalization: TextCapitalization.sentences,
+                  maxLength: activityLimit,
+                  cursorColor: AppColors.orangeBright,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    filled: false,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    // The built-in counter parks itself below the field and
+                    // pulls the whole row out of line; this one sits in it.
+                    counterText: '',
+                    hintText: 'Add an activity, e.g. 5km Morning Run',
+                    hintStyle: TextStyle(color: palette.muted, fontSize: 14),
+                  ),
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              // Only worth showing once the limit is in sight.
+              if (activityLength > activityLimit - 12) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '${activityLimit - activityLength}',
+                  style: TextStyle(
+                    color: activityLength >= activityLimit
+                        ? palette.danger
+                        : palette.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Says where the post is going. Static for now — there is one audience — but
+/// it is the thing that makes the card read as a post rather than a form.
+class _AudienceChip extends StatelessWidget {
+  const _AudienceChip();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: palette.surfaceHigh,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: palette.stroke),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.public_rounded, size: 13, color: palette.brandText),
+          const SizedBox(width: 6),
+          Text(
+            'Feed',
+            style: TextStyle(
+              color: palette.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The action bar pinned under the list, lifted clear of the phone's own
+/// navigation by its [SafeArea].
+class _ShareBar extends StatelessWidget {
+  const _ShareBar({
+    required this.isSaving,
+    required this.showProgress,
+    required this.onPressed,
+  });
+
+  final bool isSaving;
+  final bool showProgress;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.background,
+        border: Border(top: BorderSide(color: palette.stroke)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.sm,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showProgress) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.orangeBright,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Uploading your photo...',
+                      style: TextStyle(color: palette.muted, fontSize: 13),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              PrimaryButton(
+                label: isSaving ? 'Sharing...' : 'Share Post',
+                icon: isSaving ? null : Icons.send_rounded,
+                onPressed: onPressed,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: palette.danger.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: palette.danger.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline_rounded, size: 18, color: palette.danger),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: palette.danger,
+                fontSize: 13,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Controls that sit on a photo, so their colours are fixed rather than
+/// theme-dependent — the backdrop is the user's own image either way.
+class _GlassButton extends StatelessWidget {
+  const _GlassButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0x66000000),
+      shape: const StadiumBorder(
+        side: BorderSide(color: Color(0x33FFFFFF)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: AppColors.onMedia),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.onMedia,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({required this.icon, required this.onTap});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0x66000000),
+      shape: const CircleBorder(side: BorderSide(color: Color(0x33FFFFFF))),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Icon(icon, size: 17, color: AppColors.onMedia),
+        ),
       ),
     );
   }

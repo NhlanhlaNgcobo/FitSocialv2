@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
-
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/services/profile_photo_picker.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -24,7 +24,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   late final TextEditingController _handleController;
   late final TextEditingController _bioController;
   late final TextEditingController _locationController;
-  final ImagePicker _picker = ImagePicker();
   String? _imagePath;
 
   /// Preview of the freshly picked photo. On web image_picker returns a blob:
@@ -57,6 +56,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final session = ref.watch(appSessionProvider);
 
     return Scaffold(
@@ -66,9 +66,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         children: [
           const FitSocialLogo(size: 36, animated: false),
           const SizedBox(height: AppSpacing.md),
-          const Text(
+          Text(
             'A quick profile makes the feed and community features feel personal from day one.',
-            style: TextStyle(color: AppColors.muted, fontSize: 15, height: 1.5),
+            style: TextStyle(color: palette.muted, fontSize: 15, height: 1.5),
           ),
           const SizedBox(height: AppSpacing.lg),
           DarkCard(
@@ -76,23 +76,17 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               children: [
                 GestureDetector(
                   onTap: () async {
-                    final XFile? image = await _picker.pickImage(
-                      source: ImageSource.gallery,
-                      maxWidth: 800,
-                      maxHeight: 800,
-                      imageQuality: 85,
-                    );
-                    if (image != null && mounted) {
-                      setState(() {
-                        _imagePath = image.path;
-                      });
+                    final path =
+                        await ProfilePhotoPicker.pick(context: context);
+                    if (path != null && mounted) {
+                      setState(() => _imagePath = path);
                     }
                   },
                   child: Stack(
                     children: [
                       CircleAvatar(
                         radius: 34,
-                        backgroundColor: AppColors.surfaceHigh,
+                        backgroundColor: palette.surfaceHigh,
                         backgroundImage: _pickedAvatar,
                         child: _imagePath == null
                             ? const Icon(Icons.person_rounded,
@@ -111,7 +105,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                           child: const Icon(
                             Icons.camera_alt_rounded,
-                            color: AppColors.white,
+                            color: AppColors.onBrand,
                             size: 14,
                           ),
                         ),
@@ -134,7 +128,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                         _imagePath != null
                             ? 'Photo selected — it will upload when you save.'
                             : 'Tap to choose a photo from your gallery.',
-                        style: const TextStyle(color: AppColors.muted),
+                        style: TextStyle(color: palette.muted),
                       ),
                     ],
                   ),
@@ -195,24 +189,25 @@ class _SetupErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.danger),
+        border: Border.all(color: palette.danger),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppColors.danger, size: 20),
+          Icon(Icons.error_outline_rounded,
+              color: palette.danger, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: AppColors.danger, fontSize: 13),
+              style: TextStyle(color: palette.danger, fontSize: 13),
             ),
           ),
         ],
@@ -228,10 +223,11 @@ class _InputLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Text(
       label,
-      style: const TextStyle(
-        color: AppColors.white,
+      style: TextStyle(
+        color: palette.text,
         fontWeight: FontWeight.w700,
       ),
     );

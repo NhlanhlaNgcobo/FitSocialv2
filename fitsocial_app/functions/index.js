@@ -1,78 +1,165 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { OpenAI } = require("openai");
+const nutrition = require("./nutrition_db");
 
 // Set with: firebase functions:secrets:set OPENROUTER_API_KEY
 const openrouterApiKey = defineSecret("OPENROUTER_API_KEY");
 
-// Any OpenRouter vision-capable model id, e.g. "openai/gpt-4o" or
-// "google/gemini-2.5-flash". Override with the VISION_MODEL env var
-// (functions/.env) — no code change needed.
+// Optional USDA FoodData Central fallback, for foods the local table doesn't
+// cover. Free key: https://fdc.nal.usda.gov/api-key-signup — put it in
+// functions/.env as FDC_API_KEY. Read from the environment rather than
+// declared as a secret on purpose: a declared-but-missing secret fails the
+// deploy, and this fallback has to stay genuinely optional.
+const fdcApiKey = () => process.env.FDC_API_KEY || "";
+
+// Any OpenRouter vision-capable model id — they are vendor-prefixed, e.g.
+// "openai/gpt-5.6-luna", "anthropic/claude-sonnet-5", "google/gemini-3.6-flash".
+// Override with the VISION_MODEL env var (functions/.env) — no code change
+// needed, which is what makes comparing models on real photos cheap.
 const visionModel = defineString("VISION_MODEL", {
-  default: "google/gemini-2.5-flash",
+  default: "openai/gpt-5.6-luna",
 });
 
+/**
+ * The model is asked for identification and portion size ONLY — plus a rough
+ * macro estimate used as a last-resort fallback. The authoritative macros come
+ * from the nutrition database, which is why `grams` is the field that matters
+ * most here.
+ */
 const RESPONSE_SHAPE = `Return ONLY a valid JSON object with this exact shape:
 {
   "name": "<short meal name>",
-  "calories": "<estimated total calories as a number string>",
-  "protein": "<total grams of protein as a number string>",
-  "carbs": "<total grams of carbohydrates as a number string>",
-  "fat": "<total grams of fat as a number string>",
   "confidence": "<low | medium | high>",
   "notes": "<one short sentence on portion assumptions, or empty string>",
   "foodItems": [
     {
-      "name": "<food item name>",
-      "quantity": "<estimated portion with grams, e.g. '1 cup (250g)' or '150g'>",
-      "calories": "<calories for this item as a number string>",
-      "protein": "<grams of protein as a number string>",
-      "carbs": "<grams of carbohydrates as a number string>",
-      "fat": "<grams of fat as a number string>"
+      "name": "<plain food name, e.g. 'grilled chicken breast', 'pap', 'chips'>",
+      "grams": <estimated edible weight of this item in grams, as a NUMBER>,
+      "quantity": "<human-readable portion, e.g. '1 cup', '2 slices', 'half a plate'>",
+      "estimatedCalories": <your own rough kcal estimate as a NUMBER>,
+      "estimatedProtein": <grams as a NUMBER>,
+      "estimatedCarbs": <grams as a NUMBER>,
+      "estimatedFat": <grams as a NUMBER>
     }
   ]
 }
 
 Return ONLY the JSON object, no markdown formatting, no explanation, no code fences.`;
 
-const PROMPT = `You are a registered dietitian analysing a meal photo for a South African fitness app. Estimate each food item's portion and macros as accurately as possible.
+const PROMPT = `You are a registered dietitian analysing a meal photo for a South African fitness app.
+
+Your ONE critical job is to identify every food item and estimate its WEIGHT IN GRAMS as accurately as possible. The app looks the macros up in a food-composition database from the weight you give, so the gram estimate drives everything.
 
 METHOD — follow in order:
-1. Identify every distinct food and drink item visible.
-2. Estimate each item's portion in grams using visual reference cues: a standard dinner plate is ~26 cm across, a fork is ~19 cm, an adult fist ≈ 1 cup ≈ 250 ml, a matchbox ≈ 30 g of meat/cheese, a golf ball ≈ 2 tablespoons.
-3. For each item, compute macros from standard food-composition values per 100 g (SAFOODS / USDA style), scaled to the estimated portion.
-4. Adjust for visible cooking method: deep-fried items absorb ~10-15 g oil per 100 g; creamy sauces add fat; grilled/boiled need no adjustment.
-5. Totals MUST equal the sum of the per-item values.
+1. Identify every distinct food and drink item visible. Name each one plainly and specifically ("grilled chicken breast", not "protein"; "pap", not "starch"). Split composite dishes into their parts when they are visibly separate on the plate.
+2. Estimate each item's edible weight in grams using visual reference cues: a standard dinner plate is ~26 cm across, a fork is ~19 cm, an adult fist is about 1 cup which is about 250 ml, a matchbox is about 30 g of meat or cheese, a golf ball is about 2 tablespoons, a deck of cards is about 100 g of cooked meat.
+3. Note the cooking method in the item name when it changes the fat content — "fried", "grilled", "battered", "creamy". Say "fried chips" rather than "potatoes" when they are chips.
+4. Include cooking oil, butter, sauces and dressings as their own items when they are clearly present, with their own gram estimate.
+5. Also give your own rough macro estimate per item. It is only used when a food is missing from the database.
 
-SOUTH AFRICAN FOODS — recognise these correctly when present (typical values per 100 g cooked):
-- Pap / stywe pap (maize porridge): ~120 kcal, 2.5g P, 26g C, 0.5g F. Krummelpap is denser (~180 kcal).
-- Samp and beans (umngqusho): ~130 kcal, 6g P, 22g C, 1.5g F.
-- Boerewors, grilled: ~300 kcal, 14g P, 3g C, 26g F.
-- Biltong: ~250 kcal, 45g P, 2g C, 7g F.
-- Chakalaka: ~80 kcal, 2g P, 10g C, 4g F.
-- Morogo / imifino (wild greens): ~45 kcal, 4g P, 6g C, 0.5g F.
-- Vetkoek (fried): ~330 kcal, 7g P, 40g C, 16g F each (~80g).
-- Bunny chow: count the bread hollow (~200g bread) plus the curry filling separately.
-- Kota / sphatlo: itemise the bread, chips, polony/russian, cheese, atchar separately.
-- Bobotie: ~180 kcal, 12g P, 10g C, 11g F.
-- Boerie roll, gatsby, russians, walkie talkies, amasi (~60 kcal/100ml), mageu, koeksister (~400 kcal each), melktert, rooibos (0 kcal unless milk/sugar visible).
+SOUTH AFRICAN FOODS — name these exactly when you see them so they resolve correctly: pap, krummelpap, samp and beans (umngqusho), chakalaka, morogo, boerewors, biltong, droëwors, vetkoek (magwinya), bunny chow, kota, gatsby, bobotie, russians, polony, atchar, amasi, mageu, chicken feet, tripe (mogodu), koeksister, melktert, malva pudding, braaibroodjie, slap chips.
 
 RULES:
-- Be realistic, not conservative: restaurant and township portions are typically 1.5-2x textbook servings.
+- Be realistic, not conservative: restaurant and township portions are typically 1.5 to 2 times textbook servings.
 - If an item is partially hidden, estimate what is plausible and mention it in "notes".
-- If the image contains NO food or drink at all, return all zeros, name "Not a meal", confidence "low", and say why in "notes".
-- Round every number to the nearest whole number.
+- Every item MUST have a positive "grams" value.
+- If the image contains NO food or drink at all, return an empty foodItems array, name "Not a meal", confidence "low", and say why in "notes".
 
 ${RESPONSE_SHAPE}`;
+
+const toNum = (v) => {
+  const n = parseFloat(String(v ?? "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+const EMPTY_TOTALS = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+/**
+ * Turns one model-reported item into a resolved item with database-backed
+ * macros where possible.
+ *
+ * `source` tells the user (and us) where each number came from:
+ *   "database" — matched the curated food table, macros computed from grams
+ *   "usda"     — matched USDA FoodData Central
+ *   "estimate" — no match; the model's own numbers, used as-is
+ */
+async function resolveItem(item, index, usdaKey) {
+  const name = String(item.name ?? "").trim();
+  const estimate = {
+    calories: Math.round(toNum(item.estimatedCalories ?? item.calories)),
+    protein: Math.round(toNum(item.estimatedProtein ?? item.protein)),
+    carbs: Math.round(toNum(item.estimatedCarbs ?? item.carbs)),
+    fat: Math.round(toNum(item.estimatedFat ?? item.fat)),
+  };
+
+  if (!name) return null;
+
+  const match = nutrition.matchFood(index, name);
+  let food = match?.food ?? null;
+  let source = match ? "database" : null;
+
+  if (!food && usdaKey) {
+    food = await nutrition.lookupUsda(name, usdaKey);
+    if (food) source = "usda";
+  }
+
+  // Grams the model gave, or the matched food's typical portion when it left
+  // the field out — better than dropping the item entirely.
+  let grams = Math.round(toNum(item.grams));
+  if (grams <= 0) grams = food?.defaultPortionGrams ?? 0;
+
+  if (!food || grams <= 0) {
+    return {
+      name,
+      matchedFood: null,
+      grams: grams > 0 ? grams : null,
+      quantity: String(item.quantity ?? (grams > 0 ? `${grams}g` : "")),
+      source: "estimate",
+      per100g: null,
+      ...estimate,
+    };
+  }
+
+  const macros = nutrition.macrosForGrams(food, grams);
+  return {
+    name,
+    matchedFood: food.name,
+    foodId: food.id,
+    grams,
+    quantity: String(item.quantity ?? "").trim() || `${grams}g`,
+    source,
+    // Sent to the client so it can recompute macros locally when the user
+    // corrects a portion, without another round trip.
+    per100g: food.per100g,
+    ...macros,
+  };
+}
+
+function sumTotals(items) {
+  return items.reduce(
+    (acc, item) => ({
+      calories: acc.calories + toNum(item.calories),
+      protein: acc.protein + toNum(item.protein),
+      carbs: acc.carbs + toNum(item.carbs),
+      fat: acc.fat + toNum(item.fat),
+    }),
+    { ...EMPTY_TOTALS }
+  );
+}
 
 /**
  * analyzeMeal — Callable Cloud Function.
  *
- * Receives { imageUrl } from the client, forwards the image to a
- * vision-capable model via OpenRouter (GPT-4o, Gemini, etc.), and returns
- * structured nutritional data.
+ * Receives { imageUrl }, sends the photo to a vision model via OpenRouter for
+ * identification and portion estimation, then resolves every item against the
+ * nutrition database to produce the macros.
  *
- * Returns: { name, calories, protein, carbs, fat, foodItems: [...] }
+ * Returns:
+ *   { name, calories, protein, carbs, fat, confidence, notes,
+ *     foodItems: [{ name, matchedFood, grams, quantity, source, per100g,
+ *                   calories, protein, carbs, fat }],
+ *     databaseCoverage }
  */
 exports.analyzeMeal = onCall(
   {
@@ -118,23 +205,36 @@ exports.analyzeMeal = onCall(
     });
 
     try {
-      const response = await openrouter.chat.completions.create({
-        model: visionModel.value(),
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: PROMPT },
-              {
-                type: "image_url",
-                image_url: { url: imageUrl },
-              },
-            ],
-          },
-        ],
-        max_tokens: 800,
-        temperature: 0.3,
-      });
+      // The food table load runs alongside the vision call rather than after
+      // it — a cold instance would otherwise add its Firestore read to the
+      // user's wait.
+      const [response, index] = await Promise.all([
+        openrouter.chat.completions.create({
+          model: visionModel.value(),
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: PROMPT },
+                {
+                  type: "image_url",
+                  image_url: { url: imageUrl },
+                },
+              ],
+            },
+          ],
+          // Headroom for reasoning as well as the answer. Current reasoning
+          // models on both OpenAI and Anthropic draw their thinking from this
+          // same budget, so a tight cap truncates the JSON mid-object — which
+          // surfaces below as a parse failure rather than as truncation.
+          max_tokens: 4000,
+          // No `temperature` on purpose: current Claude models reject
+          // non-default sampling parameters with a 400, and leaving it unset
+          // keeps this request valid whichever model VISION_MODEL names.
+          // Output shape is pinned by the response contract in the prompt.
+        }),
+        nutrition.loadFoodIndex(),
+      ]);
 
       const content = response.choices?.[0]?.message?.content;
       if (!content) {
@@ -160,66 +260,60 @@ exports.analyzeMeal = onCall(
         );
       }
 
-      // --- Validate required fields ---
-      const requiredFields = ["name", "calories", "protein", "carbs", "fat"];
-      for (const field of requiredFields) {
-        if (parsed[field] === undefined || parsed[field] === null) {
-          throw new HttpsError(
-            "internal",
-            `Model response missing required field: ${field}`
+      if (!parsed.name) {
+        throw new HttpsError(
+          "internal",
+          "Model response missing required field: name"
+        );
+      }
+
+      // --- Resolve every item against the nutrition database ---
+      const rawItems = Array.isArray(parsed.foodItems) ? parsed.foodItems : [];
+      const usdaKey = fdcApiKey();
+      const resolved = (
+        await Promise.all(
+          rawItems.map((item) => resolveItem(item, index, usdaKey))
+        )
+      ).filter(Boolean);
+
+      // --- Totals are the sum of the resolved items ---
+      // Nothing is taken from the model's own totals: the per-item figures are
+      // database-derived, and a total that disagrees with its own breakdown is
+      // what made the old numbers untrustworthy.
+      let totals = sumTotals(resolved);
+
+      // Sanity bound for an all-estimate meal: kcal should roughly match
+      // 4P + 4C + 9F (Atwater). Database-backed items already satisfy this by
+      // construction, so this only catches a model that hallucinated.
+      const fromDatabase = resolved.filter(
+        (item) => item.source !== "estimate"
+      ).length;
+      if (fromDatabase === 0 && resolved.length > 0) {
+        const atwater =
+          4 * totals.protein + 4 * totals.carbs + 9 * totals.fat;
+        if (
+          atwater > 0 &&
+          (totals.calories < atwater * 0.5 || totals.calories > atwater * 2)
+        ) {
+          console.warn(
+            `Calorie/macro mismatch: model said ${totals.calories} kcal, ` +
+              `Atwater gives ${atwater}. Using Atwater.`
           );
+          totals.calories = atwater;
         }
       }
 
-      const toNum = (v) => {
-        const n = parseFloat(String(v ?? "").replace(/[^\d.-]/g, ""));
-        return Number.isFinite(n) && n >= 0 ? n : 0;
-      };
+      const coverage =
+        resolved.length > 0 ? fromDatabase / resolved.length : 0;
 
-      const foodItems = Array.isArray(parsed.foodItems)
-        ? parsed.foodItems.map((item) => ({
-            name: String(item.name ?? ""),
-            quantity: String(item.quantity ?? ""),
-            calories: String(Math.round(toNum(item.calories))),
-            protein: String(Math.round(toNum(item.protein))),
-            carbs: String(Math.round(toNum(item.carbs))),
-            fat: String(Math.round(toNum(item.fat))),
-          }))
-        : [];
-
-      // --- Reconcile totals against the per-item breakdown ---
-      // Vision models frequently return totals that don't match the sum of
-      // their own items. The itemised estimates are the more deliberate
-      // figures, so when items exist, totals are recomputed from them.
-      let totals = {
-        calories: Math.round(toNum(parsed.calories)),
-        protein: Math.round(toNum(parsed.protein)),
-        carbs: Math.round(toNum(parsed.carbs)),
-        fat: Math.round(toNum(parsed.fat)),
-      };
-      if (foodItems.length > 0) {
-        totals = foodItems.reduce(
-          (acc, item) => ({
-            calories: acc.calories + toNum(item.calories),
-            protein: acc.protein + toNum(item.protein),
-            carbs: acc.carbs + toNum(item.carbs),
-            fat: acc.fat + toNum(item.fat),
-          }),
-          { calories: 0, protein: 0, carbs: 0, fat: 0 }
-        );
-      }
-
-      // Sanity bound: kcal should roughly match 4P + 4C + 9F (Atwater).
-      // A wild mismatch means the model hallucinated one side; trust the
-      // macro-derived figure in that case.
-      const atwater =
-        4 * totals.protein + 4 * totals.carbs + 9 * totals.fat;
-      if (atwater > 0 && (totals.calories < atwater * 0.5 || totals.calories > atwater * 2)) {
-        console.warn(
-          `Calorie/macro mismatch: model said ${totals.calories} kcal, ` +
-          `Atwater gives ${atwater}. Using Atwater.`
-        );
-        totals.calories = atwater;
+      // A meal the database recognised end to end is worth more confidence
+      // than the model alone claimed; one it barely recognised is worth less.
+      let confidence = ["low", "medium", "high"].includes(parsed.confidence)
+        ? parsed.confidence
+        : "medium";
+      if (resolved.length > 0) {
+        if (coverage === 1 && confidence === "medium") confidence = "high";
+        if (coverage < 0.5) confidence = "low";
       }
 
       return {
@@ -228,11 +322,17 @@ exports.analyzeMeal = onCall(
         protein: String(Math.round(totals.protein)),
         carbs: String(Math.round(totals.carbs)),
         fat: String(Math.round(totals.fat)),
-        confidence: ["low", "medium", "high"].includes(parsed.confidence)
-          ? parsed.confidence
-          : "medium",
+        confidence,
         notes: String(parsed.notes ?? ""),
-        foodItems,
+        foodItems: resolved.map((item) => ({
+          ...item,
+          calories: String(item.calories),
+          protein: String(item.protein),
+          carbs: String(item.carbs),
+          fat: String(item.fat),
+        })),
+        databaseCoverage: coverage,
+        nutritionSource: index.source,
       };
     } catch (error) {
       if (error instanceof HttpsError) {
@@ -245,5 +345,43 @@ exports.analyzeMeal = onCall(
         "Failed to analyze meal image: " + (error.message || "Unknown error")
       );
     }
+  }
+);
+
+/**
+ * searchFoods — Callable Cloud Function.
+ *
+ * Text search over the nutrition table so the app can correct a misidentified
+ * item or add one by hand and still get real macros. Returns entries with their
+ * per-100 g composition; the client scales them to whatever portion the user
+ * enters.
+ */
+exports.searchFoods = onCall(
+  { timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "You must be signed in to search foods."
+      );
+    }
+
+    const query = String(request.data?.query ?? "").trim();
+    if (query.length < 2) return { foods: [] };
+
+    const limit = Math.min(Math.max(Number(request.data?.limit) || 20, 1), 50);
+    const foods = await nutrition.searchFoods(query, limit);
+
+    return {
+      foods: foods.map((food) => ({
+        id: food.id,
+        name: food.name,
+        category: food.category,
+        per100g: food.per100g,
+        unitGrams: food.unitGrams,
+        unitName: food.unitName,
+        defaultPortionGrams: food.defaultPortionGrams,
+      })),
+    };
   }
 );

@@ -63,6 +63,17 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        // Spotify's auth library (pulled in by spotify_sdk) declares its
+        // callback activity with these placeholders. They must resolve or the
+        // manifest merger fails the build, and together they have to spell the
+        // App Remote redirect URI registered in the Spotify dashboard — see
+        // SpotifyConfig.appRemoteRedirectUri.
+        //
+        // Deliberately *not* the same host as the flutter_web_auth_2 callback:
+        // two activities claiming one URI makes Android show a chooser dialog
+        // mid-sign-in.
+        manifestPlaceholders["redirectSchemeName"] = "fitsocial"
+        manifestPlaceholders["redirectHostName"] = "spotify-sdk-auth"
     }
 
     signingConfigs {

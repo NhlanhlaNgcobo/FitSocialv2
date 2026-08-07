@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/brand_image_tile.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
@@ -106,6 +107,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final session = ref.watch(appSessionProvider);
 
     return Scaffold(
@@ -131,7 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                     ),
-                    border: Border.all(color: AppColors.stroke),
+                    border: Border.all(color: palette.stroke),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Stack(
@@ -169,16 +171,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const FitSocialLogo(size: 36),
+                            // This whole header sits on the athlete photo and
+                            // its dark scrim, which are the same in both
+                            // themes — so nothing in it takes the palette.
+                            const FitSocialLogo(
+                              size: 36,
+                              color: AppColors.onMedia,
+                            ),
                             const SizedBox(height: AppSpacing.lg),
                             Text(
                               widget.isLoginMode ? 'Welcome back' : 'Create your account',
-                              style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+                              style: const TextStyle(
+                                color: AppColors.onMedia,
+                                fontSize: 30,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               widget.isLoginMode ? 'Log in to continue.' : 'Join the fitness community.',
-                              style: const TextStyle(color: AppColors.muted, fontSize: 16),
+                              style: const TextStyle(
+                                color: AppColors.onMediaMuted,
+                                fontSize: 16,
+                              ),
                             ),
                           ],
                         ),
@@ -216,9 +231,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: palette.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.stroke),
+                    border: Border.all(color: palette.stroke),
                   ),
                   child: Text(
                     session.errorMessage!,
@@ -270,19 +285,20 @@ class _EmailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.stroke),
+        border: Border.all(color: palette.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Email',
-            style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700),
+            style: TextStyle(color: palette.text, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -293,9 +309,9 @@ class _EmailPanel extends StatelessWidget {
             decoration: const InputDecoration(hintText: 'you@example.com'),
           ),
           const SizedBox(height: AppSpacing.md),
-          const Text(
+          Text(
             'Password',
-            style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w700),
+            style: TextStyle(color: palette.text, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -368,11 +384,12 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return AlertDialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: palette.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: AppColors.stroke),
+        side: BorderSide(color: palette.stroke),
       ),
       title: const Text(
         'Reset your password',
@@ -382,9 +399,9 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "We'll email you a link to set a new password.",
-            style: TextStyle(color: AppColors.muted, height: 1.4),
+            style: TextStyle(color: palette.muted, height: 1.4),
           ),
           const SizedBox(height: AppSpacing.md),
           TextField(
@@ -404,7 +421,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(foregroundColor: AppColors.muted),
+          style: TextButton.styleFrom(foregroundColor: palette.muted),
           child: const Text('Cancel'),
         ),
         TextButton(
@@ -437,13 +454,14 @@ class _SocialButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.white,
+          foregroundColor: palette.text,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-          side: const BorderSide(color: AppColors.stroke),
+          side: BorderSide(color: palette.stroke),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),

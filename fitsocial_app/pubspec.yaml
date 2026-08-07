@@ -19,13 +19,7 @@ dependencies:
   # Platform-agnostic file handle. XFile.readAsBytes() works on mobile and web
   # alike, which lets uploads use putData instead of dart:io's File.
   cross_file: ^0.3.5
-  # Instagram-style upload pipeline (lib/features/main/data/image_pipeline.dart):
-  # `image` does the exact resize/centre-crop geometry, flutter_image_compress
-  # does the native JPEG encode, uuid names the Storage object. The first two
-  # were already in the dependency graph transitively — declared here because
-  # the pipeline imports them directly.
-  flutter_image_compress: ^2.3.0
-  image: ^4.8.0
+  # Used by ble_heart_rate_service.dart for device identifiers.
   uuid: ^4.5.1
   flutter_riverpod: ^2.5.1
   geolocator: ^14.0.2
@@ -44,6 +38,12 @@ dependencies:
   crypto: ^3.0.7
   http: ^1.6.0
   image_cropper: ^12.2.1
+  # Pulse playback: video segments in the viewer and the composer preview.
+  video_player: ^2.9.2
+  # Renders the Spotify / Apple Music / YouTube Music marks from their official
+  # vector outlines, so the connect buttons stay sharp at any size.
+  flutter_svg: ^2.0.10
+  spotify_sdk: ^3.0.2
 
 dev_dependencies:
   flutter_test:

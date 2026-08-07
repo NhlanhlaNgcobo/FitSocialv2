@@ -2,11 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/bottom_nav.dart';
+import '../../../shared/widgets/post_gradient.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
+import '../domain/explore_models.dart';
+import 'post_detail_sheet.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -50,6 +56,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final query = ref.watch(userSearchQueryProvider);
     final isSearching = query.trim().isNotEmpty;
 
@@ -69,32 +76,32 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               onChanged: _onChanged,
               textInputAction: TextInputAction.search,
               autocorrect: false,
-              style: const TextStyle(color: AppColors.white),
+              style: TextStyle(color: palette.text),
               decoration: InputDecoration(
                 hintText: 'Search people by name or handle',
-                hintStyle: const TextStyle(color: AppColors.muted),
-                prefixIcon: const Icon(
+                hintStyle: TextStyle(color: palette.muted),
+                prefixIcon: Icon(
                   Icons.search_rounded,
-                  color: AppColors.muted,
+                  color: palette.muted,
                 ),
                 suffixIcon: isSearching || _controller.text.isNotEmpty
                     ? IconButton(
                         onPressed: _clear,
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.close_rounded,
-                          color: AppColors.muted,
+                          color: palette.muted,
                         ),
                       )
                     : null,
                 filled: true,
-                fillColor: AppColors.surface,
+                fillColor: palette.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
-                  borderSide: const BorderSide(color: AppColors.stroke),
+                  borderSide: BorderSide(color: palette.stroke),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
-                  borderSide: const BorderSide(color: AppColors.stroke),
+                  borderSide: BorderSide(color: palette.stroke),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
@@ -146,11 +153,11 @@ class _SearchResults extends ConsumerWidget {
         }
 
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.md,
             0,
             AppSpacing.md,
-            AppSpacing.xl,
+            AppSpacing.md + FitSocialBottomNav.clearance(context),
           ),
           itemCount: users.length,
           separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
@@ -168,20 +175,16 @@ class _UserResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return InkWell(
       borderRadius: BorderRadius.circular(20),
-      onTap: () => showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        builder: (_) => _UserPostsSheet(user: user),
-      ),
+      onTap: () => context.push('/user/${user.id}'),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: palette.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.stroke),
+          border: Border.all(color: palette.stroke),
         ),
         child: Row(
           children: [
@@ -205,16 +208,16 @@ class _UserResultTile extends StatelessWidget {
                     user.handle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted),
+                    style: TextStyle(color: palette.muted),
                   ),
                 ],
               ),
             ),
             Text(
               '${user.postsCount} ${user.postsCount == 1 ? 'post' : 'posts'}',
-              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+              style: TextStyle(color: palette.muted, fontSize: 13),
             ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            Icon(Icons.chevron_right_rounded, color: palette.muted),
           ],
         ),
       ),
@@ -231,15 +234,20 @@ class _UserAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasAvatar = user.avatarUrl != null && user.avatarUrl!.isNotEmpty;
+    final palette = context.palette;
 
     return Container(
       width: size,
       height: size,
       clipBehavior: Clip.antiAlias,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
+        // The disc the initials sit on when there is no photo. Listed per theme
+        // rather than derived, so the dark values stay what they were.
         gradient: LinearGradient(
-          colors: [Color(0xFF444444), Color(0xFF2A2A2A)],
+          colors: palette.isDark
+              ? const [Color(0xFF444444), Color(0xFF2A2A2A)]
+              : const [Color(0xFFE8E1D6), Color(0xFFD8D0C2)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -251,254 +259,22 @@ class _UserAvatar extends StatelessWidget {
               fit: BoxFit.cover,
               width: size,
               height: size,
-              errorBuilder: (_, __, ___) => _initialsText(),
+              errorBuilder: (_, __, ___) => _initialsText(palette),
               loadingBuilder: (_, child, progress) =>
-                  progress == null ? child : _initialsText(),
+                  progress == null ? child : _initialsText(palette),
             )
-          : _initialsText(),
+          : _initialsText(palette),
     );
   }
 
-  Widget _initialsText() {
+  Widget _initialsText(AppPalette palette) {
     return Text(
       user.initials,
       style: TextStyle(
-        color: AppColors.white,
+        color: palette.text,
         fontWeight: FontWeight.w700,
         fontSize: size * 0.34,
       ),
-    );
-  }
-}
-
-/// Tapping a search result opens their posts here. FitSocial has no public
-/// profile route yet, so this shows the same content inline.
-class _UserPostsSheet extends ConsumerWidget {
-  const _UserPostsSheet({required this.user});
-
-  final UserSearchResult user;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final posts = ref.watch(userPostsProvider(user.id));
-
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.8,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 4),
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.stroke,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                _UserAvatar(user: user, size: 52),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.displayName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        user.handle,
-                        style: const TextStyle(color: AppColors.muted),
-                      ),
-                      if (user.bio.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          user.bio,
-                          style: const TextStyle(
-                            color: AppColors.muted,
-                            fontSize: 13,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              0,
-              AppSpacing.md,
-              AppSpacing.md,
-            ),
-            child: FollowButton(targetUserId: user.id),
-          ),
-          Container(height: 1, color: AppColors.stroke),
-          Flexible(
-            child: posts.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.orangeBright,
-                  ),
-                ),
-              ),
-              error: (_, __) => const Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Text(
-                  "Couldn't load these posts.",
-                  style: TextStyle(color: AppColors.muted),
-                ),
-              ),
-              data: (items) {
-                if (items.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(AppSpacing.xl),
-                    child: Text(
-                      "This person hasn't posted yet.",
-                      style: TextStyle(color: AppColors.muted),
-                    ),
-                  );
-                }
-                return GridView.builder(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  itemCount: items.length,
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemBuilder: (context, index) =>
-                      _PostThumb(post: items[index]),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Follow / Unfollow toggle for another user's profile. Hides itself on the
-/// signed-in user's own profile, since you can't follow yourself.
-class FollowButton extends ConsumerStatefulWidget {
-  const FollowButton({required this.targetUserId, super.key});
-
-  final String targetUserId;
-
-  @override
-  ConsumerState<FollowButton> createState() => _FollowButtonState();
-}
-
-class _FollowButtonState extends ConsumerState<FollowButton> {
-  bool _isPending = false;
-
-  Future<void> _toggle(bool isFollowing) async {
-    setState(() => _isPending = true);
-    try {
-      await ref
-          .read(followActionsProvider)
-          .toggle(widget.targetUserId, isFollowing: isFollowing);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isFollowing
-                ? "Couldn't unfollow: $error"
-                : "Couldn't follow: $error",
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isPending = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final currentUserId = ref.watch(currentUserIdProvider);
-    if (currentUserId == null || currentUserId == widget.targetUserId) {
-      return const SizedBox.shrink();
-    }
-
-    final isFollowing =
-        ref.watch(isFollowingProvider(widget.targetUserId)).valueOrNull ??
-            false;
-
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: isFollowing
-          ? OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.white,
-                side: const BorderSide(color: AppColors.stroke),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: _isPending ? null : () => _toggle(true),
-              child: _isPending
-                  ? const _ButtonSpinner(color: AppColors.white)
-                  : const Text(
-                      'Following',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-            )
-          : FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.orange,
-                foregroundColor: AppColors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: _isPending ? null : () => _toggle(false),
-              child: _isPending
-                  ? const _ButtonSpinner(color: AppColors.white)
-                  : const Text(
-                      'Follow',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-            ),
-    );
-  }
-}
-
-class _ButtonSpinner extends StatelessWidget {
-  const _ButtonSpinner({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 18,
-      height: 18,
-      child: CircularProgressIndicator(strokeWidth: 2, color: color),
     );
   }
 }
@@ -527,59 +303,167 @@ class _TrendingSection extends ConsumerWidget {
           return const _ExploreMessage(
             icon: Icons.trending_up_rounded,
             title: 'Nothing trending yet',
-            message: 'Once the community starts posting, the most-liked '
-                'workouts, runs and meals land here.',
+            message: 'Once the community starts posting, the workouts, runs '
+                'and meals people are reacting to land here.',
           );
         }
 
-        return RefreshIndicator(
-          color: AppColors.orangeBright,
-          backgroundColor: AppColors.surface,
-          onRefresh: () async => ref.invalidate(trendingPostsProvider),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              0,
-              AppSpacing.md,
-              AppSpacing.xl,
-            ),
-            children: [
-              const Row(
-                children: [
-                  Icon(
-                    Icons.trending_up_rounded,
-                    color: AppColors.orangeBright,
-                    size: 20,
-                  ),
-                  SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Trending Posts',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: posts.length,
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: 0.85,
-                ),
-                itemBuilder: (context, index) =>
-                    _TrendingTile(post: posts[index]),
-              ),
-            ],
-          ),
+        // Chips sit outside the scrollable so they stay reachable however far
+        // down the grid the user has gone — switching category is the main
+        // thing this screen is for, and burying it at the top would make it a
+        // scroll-to-top-first action.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _FilterChipRow(),
+            const SizedBox(height: AppSpacing.md),
+            Expanded(child: _TrendingGrid(posts: posts)),
+          ],
         );
       },
+    );
+  }
+}
+
+/// The category selector, pinned above the grid.
+class _FilterChipRow extends ConsumerWidget {
+  const _FilterChipRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(exploreFilterProvider);
+
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        itemCount: ExploreFilter.values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+        itemBuilder: (context, index) {
+          final filter = ExploreFilter.values[index];
+          return _FilterChip(
+            filter: filter,
+            isSelected: filter == selected,
+            onTap: () =>
+                ref.read(exploreFilterProvider.notifier).state = filter,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.filter,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final ExploreFilter filter;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.orangeBright : palette.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isSelected ? AppColors.orangeBright : palette.stroke,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _iconFor(filter),
+              size: 15,
+              // The selected pill is orange, so its contents go dark rather
+              // than white — brand-on-brand would be unreadable. Fixed, not
+              // themed: the pill is the same orange on the light theme, so
+              // the page colour would put cream on orange there.
+              color: isSelected ? AppColors.onBrandInk : palette.muted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              filter.label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: isSelected ? AppColors.onBrandInk : palette.text,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static IconData _iconFor(ExploreFilter filter) => switch (filter) {
+        ExploreFilter.all => Icons.auto_awesome_rounded,
+        ExploreFilter.runs => Icons.directions_run_rounded,
+        ExploreFilter.workouts => Icons.fitness_center_rounded,
+        ExploreFilter.meals => Icons.restaurant_rounded,
+        ExploreFilter.photos => Icons.photo_camera_rounded,
+      };
+}
+
+class _TrendingGrid extends ConsumerWidget {
+  const _TrendingGrid({required this.posts});
+
+  final List<FeedPost> posts;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final filter = ref.watch(exploreFilterProvider);
+    final visible = applyExploreFilter(posts, filter);
+
+    if (visible.isEmpty) {
+      return _ExploreMessage(
+        icon: _FilterChip._iconFor(filter),
+        title: 'No ${filter.label.toLowerCase()} trending',
+        message: 'Nobody has posted a ${filter.label.toLowerCase()} that '
+            'caught on yet. Try another category.',
+        actionLabel: 'Show everything',
+        onRetry: () =>
+            ref.read(exploreFilterProvider.notifier).state = ExploreFilter.all,
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.orangeBright,
+      backgroundColor: palette.surface,
+      onRefresh: () async => ref.invalidate(trendingPostsProvider),
+      child: GridView.builder(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md + FitSocialBottomNav.clearance(context),
+        ),
+        // Always scrollable so the pull-to-refresh gesture still works when
+        // the filtered set is short enough to fit on one screen.
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: visible.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 0.85,
+        ),
+        itemBuilder: (context, index) => _TrendingTile(post: visible[index]),
+      ),
     );
   }
 }
@@ -591,81 +475,114 @@ class _TrendingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          _PostBackground(post: post),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.sm + 2),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.transparent, Color(0xE6050505)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+    return GestureDetector(
+      onTap: () => showPostDetailSheet(context, post),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _PostBackground(post: post),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.sm + 2),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.transparent, Color(0xE6050505)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The caption band is a dark scrim in both themes — it has
+                    // to survive an arbitrary photo underneath it — so what
+                    // sits on it is fixed rather than themed.
+                    Text(
+                      post.userName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.onMedia,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      post.activity,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.onMediaMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            // Both counts, not just likes: comments are weighted double in the
+            // ranking, so a post sitting high on the strength of its replies
+            // would otherwise look mysteriously placed.
+            Positioned(
+              top: AppSpacing.sm,
+              right: AppSpacing.sm,
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    post.userName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                  if (post.comments > 0) ...[
+                    _CountPill(
+                      icon: Icons.mode_comment_rounded,
+                      count: post.comments,
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    post.activity,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  _CountPill(
+                    icon: Icons.favorite_rounded,
+                    count: post.likes,
                   ),
                 ],
               ),
             ),
-          ),
-          Positioned(
-            top: AppSpacing.sm,
-            right: AppSpacing.sm,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.favorite_rounded,
-                    color: AppColors.orangeBright,
-                    size: 13,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${post.likes}',
-                    style: const TextStyle(
-                      color: AppColors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CountPill extends StatelessWidget {
+  const _CountPill({required this.icon, required this.count});
+
+  final IconData icon;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      // A dark pill over the tile, whichever theme is on — so is its content.
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppColors.orangeBright, size: 13),
+          const SizedBox(width: 4),
+          Text(
+            '$count',
+            style: const TextStyle(
+              color: AppColors.onMedia,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -675,20 +592,6 @@ class _TrendingTile extends StatelessWidget {
 }
 
 // ── Shared post visuals ─────────────────────────────────────────────────────
-
-class _PostThumb extends StatelessWidget {
-  const _PostThumb({required this.post});
-
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: _PostBackground(post: post),
-    );
-  }
-}
 
 /// The post's photo when it has one, otherwise its gradient theme with the
 /// activity label.
@@ -719,14 +622,12 @@ class _GradientFill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = post.backgroundColors.isNotEmpty
-        ? post.backgroundColors
-        : const [AppColors.surfaceHigh, AppColors.surface];
+    final palette = context.palette;
 
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: colors,
+          colors: postGradientColors(post.backgroundColors, palette),
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -738,8 +639,8 @@ class _GradientFill extends StatelessWidget {
         textAlign: TextAlign.center,
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.white,
+        style: TextStyle(
+          color: postGradientTextColor(palette),
           fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
@@ -754,6 +655,7 @@ class _ExploreMessage extends StatelessWidget {
     required this.title,
     required this.message,
     this.onRetry,
+    this.actionLabel = 'Retry',
   });
 
   final IconData icon;
@@ -761,8 +663,13 @@ class _ExploreMessage extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
 
+  /// What the button says. Not every dead end is a failure to retry — an empty
+  /// category is a filter to clear.
+  final String actionLabel;
+
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xl),
@@ -771,9 +678,9 @@ class _ExploreMessage extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.surfaceHigh,
+                color: palette.surfaceHigh,
               ),
               child: Icon(icon, size: 56, color: AppColors.orangeBright),
             ),
@@ -781,19 +688,19 @@ class _ExploreMessage extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
-                color: AppColors.white,
+                color: palette.text,
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
-                color: AppColors.muted,
+                color: palette.muted,
                 height: 1.5,
               ),
             ),
@@ -801,8 +708,8 @@ class _ExploreMessage extends StatelessWidget {
               const SizedBox(height: AppSpacing.lg),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.white,
-                  side: const BorderSide(color: AppColors.stroke),
+                  foregroundColor: palette.text,
+                  side: BorderSide(color: palette.stroke),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 14,
@@ -812,7 +719,7 @@ class _ExploreMessage extends StatelessWidget {
                   ),
                 ),
                 onPressed: onRetry,
-                child: const Text('Retry'),
+                child: Text(actionLabel),
               ),
             ],
           ],

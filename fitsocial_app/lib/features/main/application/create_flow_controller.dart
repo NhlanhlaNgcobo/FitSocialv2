@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/app_models.dart';
+
 enum CreateCanvasDestination {
   workout,
   run,
@@ -158,7 +160,41 @@ class MealDraftState {
     this.notes = '',
     this.shareToFeed = true,
     this.imageUrl,
+    this.items = const [],
+    this.confidence,
+    this.databaseCoverage,
   });
+
+  /// Builds a draft from an analyzeMeal response.
+  ///
+  /// The totals are taken from the items rather than the response's own total
+  /// fields when items are present: the two agree by construction server-side,
+  /// and deriving here keeps them agreeing after the user edits a portion.
+  factory MealDraftState.fromAnalysis(
+    Map<String, dynamic> analysis, {
+    String? imageUrl,
+  }) {
+    final items = MealFoodItem.listFrom(analysis['foodItems']);
+    final totals = MacroTotals.of(items);
+    String field(String key, int derived) {
+      if (items.isNotEmpty) return derived.toString();
+      final raw = (analysis[key] ?? '').toString().trim();
+      return raw;
+    }
+
+    return MealDraftState(
+      name: (analysis['name'] ?? '').toString(),
+      calories: field('calories', totals.calories),
+      protein: field('protein', totals.protein),
+      carbs: field('carbs', totals.carbs),
+      fat: field('fat', totals.fat),
+      notes: (analysis['notes'] ?? '').toString(),
+      imageUrl: imageUrl,
+      items: items,
+      confidence: (analysis['confidence'] as Object?)?.toString(),
+      databaseCoverage: (analysis['databaseCoverage'] as num?)?.toDouble(),
+    );
+  }
 
   final String name;
   final String calories;
@@ -171,6 +207,16 @@ class MealDraftState {
   /// Firebase Storage URL of the uploaded meal photo, when present.
   final String? imageUrl;
 
+  /// The analysed breakdown behind the totals. Empty for a hand-typed meal.
+  final List<MealFoodItem> items;
+
+  /// The analyzer's own confidence: 'low', 'medium' or 'high'.
+  final String? confidence;
+
+  /// Fraction of the items that resolved against the nutrition database, 0-1.
+  /// Null when the meal was never analysed.
+  final double? databaseCoverage;
+
   bool get hasContent =>
       name.trim().isNotEmpty ||
       calories.trim().isNotEmpty ||
@@ -178,6 +224,21 @@ class MealDraftState {
       carbs.trim().isNotEmpty ||
       fat.trim().isNotEmpty ||
       notes.trim().isNotEmpty;
+
+  /// Whether this draft has already been through the analyzer — an uploaded
+  /// photo, an itemised breakdown, or macros on the form.
+  ///
+  /// This is what separates a meal worth returning to the review screen from
+  /// a photo flow that never got past the picker. Resuming an analyzed meal at
+  /// the picker would discard the analysis and cost another vision call to
+  /// recreate it.
+  bool get isAnalyzed =>
+      imageUrl != null ||
+      items.isNotEmpty ||
+      calories.trim().isNotEmpty ||
+      protein.trim().isNotEmpty ||
+      carbs.trim().isNotEmpty ||
+      fat.trim().isNotEmpty;
 
   MealDraftState copyWith({
     String? name,
@@ -188,6 +249,9 @@ class MealDraftState {
     String? notes,
     bool? shareToFeed,
     String? imageUrl,
+    List<MealFoodItem>? items,
+    String? confidence,
+    double? databaseCoverage,
   }) {
     return MealDraftState(
       name: name ?? this.name,
@@ -198,6 +262,9 @@ class MealDraftState {
       notes: notes ?? this.notes,
       shareToFeed: shareToFeed ?? this.shareToFeed,
       imageUrl: imageUrl ?? this.imageUrl,
+      items: items ?? this.items,
+      confidence: confidence ?? this.confidence,
+      databaseCoverage: databaseCoverage ?? this.databaseCoverage,
     );
   }
 }
@@ -205,14 +272,22 @@ class MealDraftState {
 class PostComposerDraftState {
   const PostComposerDraftState({
     this.caption = '',
+    this.activity = '',
   });
 
   final String caption;
 
-  bool get hasContent => caption.trim().isNotEmpty;
+  /// Optional activity subtitle shown under the author's name in the feed.
+  final String activity;
 
-  PostComposerDraftState copyWith({String? caption}) {
-    return PostComposerDraftState(caption: caption ?? this.caption);
+  bool get hasContent =>
+      caption.trim().isNotEmpty || activity.trim().isNotEmpty;
+
+  PostComposerDraftState copyWith({String? caption, String? activity}) {
+    return PostComposerDraftState(
+      caption: caption ?? this.caption,
+      activity: activity ?? this.activity,
+    );
   }
 }
 
@@ -240,6 +315,44 @@ class CreateFlowState {
       runDraft.hasContent ||
       mealDraft.hasContent ||
       postDraft.hasContent;
+
+  /// Which canvas the resume card should reopen.
+  ///
+  /// [activeDestination] is normally set, but a draft can outlive it (the app
+  /// was restarted, or a flow was entered from a shortcut), so fall back to
+  /// whichever draft actually holds content.
+  CreateCanvasDestination get resumeDestination =>
+      activeDestination ??
+      (workoutDraft.hasContent
+          ? CreateCanvasDestination.workout
+          : runDraft.hasContent
+              ? CreateCanvasDestination.run
+              : mealDraft.hasContent
+                  ? CreateCanvasDestination.meal
+                  : CreateCanvasDestination.post);
+
+  /// Where resuming should actually land — not always the destination's own
+  /// route.
+  ///
+  /// The photo canvas owns the picker, but once its meal has been analyzed the
+  /// work lives on the review screen. Sending the user back to the picker
+  /// would silently throw away the analysis they already paid for.
+  String get resumeRoute {
+    // A run entered by hand has no live tracking session to return to.
+    if (activeDestination == null &&
+        runDraft.hasContent &&
+        !workoutDraft.hasContent) {
+      return '/log-run-manual';
+    }
+
+    final destination = resumeDestination;
+    final isMealFlow = destination == CreateCanvasDestination.photo ||
+        destination == CreateCanvasDestination.meal;
+    if (isMealFlow && mealDraft.isAnalyzed) {
+      return CreateCanvasDestination.meal.route;
+    }
+    return destination.route;
+  }
 
   CreateFlowState copyWith({
     CreateCanvasDestination? activeDestination,

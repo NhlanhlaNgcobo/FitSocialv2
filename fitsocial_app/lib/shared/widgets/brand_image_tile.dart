@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 
 const kFitSocialBrandSheetAsset = 'assets/images/fitsocial_brand_sheet.png';
 
@@ -55,7 +55,8 @@ class BrandImageTile extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: radius,
-          border: showBorder ? Border.all(color: AppColors.stroke) : null,
+          border:
+              showBorder ? Border.all(color: context.palette.stroke) : null,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
