@@ -24,6 +24,10 @@ fitsocial_app/*.iml
 # Kotlin build-tool scratch dir, created next to the Gradle project.
 fitsocial_app/android/.kotlin/
 
+# Shareable build output from tool/package_apk.ps1 — a ~70 MB APK and a ~50 MB
+# R8 mapping file per build. Attach these to a release, never to a commit.
+fitsocial_app/dist/
+
 # Written analysis/report documents kept alongside the checkout. Binary Office
 # files can't be diffed or merged, so they bloat history to no benefit.
 /*.docx
