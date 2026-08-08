@@ -27,6 +27,31 @@ class WorkoutSummaryCard extends StatelessWidget {
 
   final EdgeInsetsGeometry margin;
 
+  /// One exercise chip's text.
+  ///
+  /// Firestore stores each exercise as a map, so calling toString() on it
+  /// renders the literal `{reps: 25, sets: 5, name: legs}` in the feed. Older
+  /// posts wrote plain strings, so both shapes have to survive here.
+  static String _exerciseLabel(dynamic exercise) {
+    if (exercise is! Map) {
+      return exercise?.toString().trim() ?? '';
+    }
+    final name = exercise['name']?.toString().trim() ?? '';
+    if (name.isEmpty) {
+      return '';
+    }
+    final sets = exercise['sets']?.toString().trim() ?? '';
+    final reps = exercise['reps']?.toString().trim() ?? '';
+    if (sets.isEmpty && reps.isEmpty) {
+      return name;
+    }
+    // "legs · 5 × 25", falling back to whichever number is present.
+    final volume = (sets.isNotEmpty && reps.isNotEmpty)
+        ? '$sets × $reps'
+        : (sets.isNotEmpty ? '$sets sets' : '$reps reps');
+    return '$name · $volume';
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -35,7 +60,8 @@ class WorkoutSummaryCard extends StatelessWidget {
     final duration = data['duration'] as String?;
     final calories = data['calories'] as String?;
     final exercises = (data['exercises'] as List<dynamic>?)
-            ?.map((e) => e.toString())
+            ?.map(_exerciseLabel)
+            .where((label) => label.isNotEmpty)
             .toList() ??
         const [];
 

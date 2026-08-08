@@ -8,6 +8,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../auth/domain/auth_models.dart';
+import '../../notifications/data/firestore_notification_repository.dart';
+import '../../notifications/domain/notification_models.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
 import 'content_repository_contract.dart';
@@ -23,18 +25,123 @@ class FirestoreContentRepository implements ContentRepository {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _firebaseAuth;
 
-  @override
-  Future<List<FeedPost>> getFeedPosts(UserProfileDraft? profile) async {
-    final snapshot = await postsCollection
-        .orderBy('createdAt', descending: true)
-        .limit(30)
-        .get();
+  /// Notifications are raised from here rather than from a screen, because the
+  /// action and the notification have to commit together — see
+  /// [NotificationWrites].
+  late final NotificationWrites _notifications = NotificationWrites(_firestore);
 
-    return snapshot.docs
-        .map((doc) => FirestorePostRecord.fromMap(doc.id, doc.data()))
-        .map(FirestoreMapper.toFeedPost)
-        .toList();
+  @override
+  Future<HomeFeed> getFeedPosts(UserProfileDraft? profile) async {
+    final userId = _firebaseAuth.currentUser?.uid;
+    // Signed out there is no follow graph to read, so the community's best
+    // stands in rather than an empty page.
+    if (userId == null) return _suggestedFeed();
+
+    final following = await _followingIds(userId);
+    // Nobody followed yet: a strictly personal feed would be blank on a new
+    // account, which reads as a broken app rather than an empty one.
+    if (following.isEmpty) return _suggestedFeed();
+
+    final posts = await _postsByAuthors({...following, userId});
+    // Everyone they follow has been quiet — or has only posted from before
+    // createdAt was recorded. Either way, an empty screen is the worst answer.
+    if (posts.isEmpty) return _suggestedFeed();
+
+    return HomeFeed(posts: posts, source: FeedSource.following);
   }
+
+  Future<HomeFeed> _suggestedFeed() async {
+    return HomeFeed(
+      posts: await fetchTrendingPosts(),
+      source: FeedSource.suggested,
+    );
+  }
+
+  /// Who [userId] follows.
+  ///
+  /// Capped: past a few hundred followed accounts the chunked query below
+  /// stops being the right shape and the feed wants a fan-out inbox written
+  /// server-side. This ceiling keeps the read bounded until that day comes.
+  Query<Map<String, dynamic>> _followingQuery(String userId) {
+    return usersCollection
+        .doc(userId)
+        .collection('following')
+        .limit(_maxFollowedAuthors);
+  }
+
+  /// The followed uid is the document id — the body only records when.
+  static Set<String> _idsOf(QuerySnapshot<Map<String, dynamic>> snapshot) =>
+      snapshot.docs.map((doc) => doc.id).toSet();
+
+  Future<Set<String>> _followingIds(String userId) async =>
+      _idsOf(await _followingQuery(userId).get());
+
+  @override
+  Stream<Set<String>> watchFollowingIds(String userId) =>
+      _followingQuery(userId).snapshots().map(_idsOf);
+
+  /// The newest posts by any of [authorIds], newest first.
+  ///
+  /// Firestore's `whereIn` takes at most [_authorChunkSize] values, so the
+  /// authors are split into chunks and queried in parallel. Each chunk asks
+  /// for [_feedLimit] posts, which is what makes the merge below correct: the
+  /// newest [_feedLimit] posts overall cannot fall outside the newest
+  /// [_feedLimit] of every chunk they could have come from.
+  Future<List<FeedPost>> _postsByAuthors(Set<String> authorIds) async {
+    final ids = authorIds.toList(growable: false);
+
+    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (var i = 0; i < ids.length; i += _authorChunkSize) {
+      futures.add(
+        postsCollection
+            .where('authorId', whereIn: ids.skip(i).take(_authorChunkSize).toList())
+            .orderBy('createdAt', descending: true)
+            .limit(_feedLimit)
+            .get(),
+      );
+    }
+
+    final snapshots = await Future.wait(futures);
+    final records = <FirestorePostRecord>[
+      for (final snapshot in snapshots)
+        for (final doc in snapshot.docs)
+          FirestorePostRecord.fromMap(doc.id, doc.data()),
+    ];
+
+    return newestFirst(records, limit: _feedLimit)
+        .map(FirestoreMapper.toFeedPost)
+        .toList(growable: false);
+  }
+
+  /// The [limit] newest of [records].
+  ///
+  /// Each chunk query comes back ordered, but their union does not — this is
+  /// where several queries become one feed. Anything without a timestamp sorts
+  /// last rather than jumping to the top of someone's feed.
+  static List<FirestorePostRecord> newestFirst(
+    List<FirestorePostRecord> records, {
+    required int limit,
+  }) {
+    final sorted = [...records]..sort((a, b) {
+        final left = a.createdAt;
+        final right = b.createdAt;
+        if (left == null && right == null) return 0;
+        if (left == null) return 1;
+        if (right == null) return -1;
+        return right.compareTo(left);
+      });
+
+    return sorted.take(limit).toList(growable: false);
+  }
+
+  /// How many posts the home feed holds.
+  static const int _feedLimit = 30;
+
+  /// Firestore's ceiling on the number of values in a `whereIn` filter.
+  static const int _authorChunkSize = 30;
+
+  /// Upper bound on followed accounts a single feed load will consider.
+  static const int _maxFollowedAuthors = 300;
 
   @override
   Future<FeedPost?> fetchPost(String postId) async {
@@ -136,7 +243,11 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> followUser(String currentUserId, String targetUserId) async {
+  Future<void> followUser(
+    String currentUserId,
+    String targetUserId, {
+    UserProfileDraft? profile,
+  }) async {
     if (currentUserId == targetUserId) {
       throw ArgumentError("You can't follow your own profile.");
     }
@@ -147,6 +258,11 @@ class FirestoreContentRepository implements ContentRepository {
     // increment the counters twice for a single relationship.
     final existing = await followingRef.get();
     if (existing.exists) return;
+
+    // Resolved before the batch opens: it may need a profile read, and a batch
+    // is a write set, not a place to go looking things up.
+    final actorName = await _resolvePublicAuthorName(profile);
+    final actorAvatarUrl = await _resolveAuthorAvatarUrl(profile);
 
     final batch = _firestore.batch();
     batch.set(followingRef, {
@@ -169,6 +285,17 @@ class FirestoreContentRepository implements ContentRepository {
       usersCollection.doc(targetUserId),
       {'followersCount': FieldValue.increment(1)},
       SetOptions(merge: true),
+    );
+    // In the same batch as the edges themselves. A follow that moved the
+    // counters but never reached the other person's inbox is a follow they
+    // have no way of finding out about.
+    batch.set(
+      _notifications.ref(targetUserId, NotificationIds.follow(currentUserId)),
+      _notifications.followPayload(
+        actorId: currentUserId,
+        actorName: actorName,
+        actorAvatarUrl: actorAvatarUrl,
+      ),
     );
     await batch.commit();
   }
@@ -194,6 +321,13 @@ class FirestoreContentRepository implements ContentRepository {
       usersCollection.doc(targetUserId),
       {'followersCount': FieldValue.increment(-1)},
       SetOptions(merge: true),
+    );
+    // Withdraw the notification the follow raised, so the inbox stops
+    // announcing a relationship that no longer exists. Deleting a document
+    // that was never there — a follow made before notifications existed — is
+    // a no-op, which is why this needs no existence check.
+    batch.delete(
+      _notifications.ref(targetUserId, NotificationIds.follow(currentUserId)),
     );
     await batch.commit();
   }
@@ -940,13 +1074,24 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> toggleLike(String postId, String userId) async {
+  Future<void> toggleLike(
+    String postId,
+    String userId, {
+    UserProfileDraft? profile,
+  }) async {
     final postRef = postsCollection.doc(postId);
     final likeRef = _firestore
         .collection('likes')
         .doc(postId)
         .collection('users')
         .doc(userId);
+
+    // Resolved up front, for the same reason as in [followUser] — and, when
+    // the session profile is passed in, off no reads at all. The author is not
+    // known until the post is read inside the transaction, so this is prepared
+    // whether or not it ends up being used.
+    final actorName = await _resolvePublicAuthorName(profile);
+    final actorAvatarUrl = await _resolveAuthorAvatarUrl(profile);
 
     await _firestore.runTransaction((transaction) async {
       final postSnapshot = await transaction.get(postRef);
@@ -960,6 +1105,15 @@ class FirestoreContentRepository implements ContentRepository {
         (data['likedBy'] as List<dynamic>?) ?? [],
       );
 
+      // Nobody is told about their own like.
+      final authorId = (data['authorId'] as String?) ?? '';
+      final notificationRef = (authorId.isEmpty || authorId == userId)
+          ? null
+          : _notifications.ref(
+              authorId,
+              NotificationIds.like(postId, userId),
+            );
+
       if (likeSnapshot.exists) {
         // ── Unlike ──
         transaction.delete(likeRef);
@@ -968,6 +1122,8 @@ class FirestoreContentRepository implements ContentRepository {
           'likedBy': likedBy,
           'likesCount': FieldValue.increment(-1),
         });
+        // Taking the like back takes the notification with it.
+        if (notificationRef != null) transaction.delete(notificationRef);
       } else {
         // ── Like ──
         transaction.set(likeRef, {
@@ -978,6 +1134,21 @@ class FirestoreContentRepository implements ContentRepository {
           'likedBy': likedBy,
           'likesCount': FieldValue.increment(1),
         });
+        if (notificationRef != null) {
+          transaction.set(
+            notificationRef,
+            _notifications.likePayload(
+              actorId: userId,
+              actorName: actorName,
+              actorAvatarUrl: actorAvatarUrl,
+              postId: postId,
+              // Carried onto the notification so the row can show what was
+              // liked without reading the post back.
+              postImageUrl: data['imageUrl'] as String?,
+              postType: data['postType'] as String?,
+            ),
+          );
+        }
       }
     });
   }

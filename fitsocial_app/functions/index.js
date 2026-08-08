@@ -1,7 +1,17 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { OpenAI } = require("openai");
+const admin = require("firebase-admin");
 const nutrition = require("./nutrition_db");
+
+// The Firebase Web API key, used to verify a password against Identity
+// Toolkit. Not a secret — it ships inside every copy of the client app, and is
+// the same value as `web.apiKey` in lib/firebase_options.dart — which is why it
+// is read from functions/.env rather than declared with defineSecret.
+//
+// Deliberately not called FIREBASE_WEB_API_KEY: the Functions runtime reserves
+// the FIREBASE_ prefix and refuses to load a .env file that uses it.
+const webApiKey = () => process.env.WEB_API_KEY || "";
 
 // Set with: firebase functions:secrets:set OPENROUTER_API_KEY
 const openrouterApiKey = defineSecret("OPENROUTER_API_KEY");
@@ -345,6 +355,160 @@ exports.analyzeMeal = onCall(
         "Failed to analyze meal image: " + (error.message || "Unknown error")
       );
     }
+  }
+);
+
+/**
+ * Must agree exactly with normalizeUsername in
+ * lib/features/auth/domain/username.dart. This decides which document id a
+ * typed username maps to, and a second opinion about that would mean a name
+ * resolving to one account at signup and another at login.
+ */
+function normalizeUsername(raw) {
+  return String(raw ?? "")
+    .trim()
+    .replace(/^@+/, "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * signInWithUsername — Callable Cloud Function.
+ *
+ * Trades a username and password for a Firebase custom token, so the app can
+ * offer the same "username, or email" login field Instagram does. Firebase
+ * Auth itself only knows email/password; something has to bridge the two, and
+ * that bridge cannot live in the client.
+ *
+ * The reason is the email address. Resolving a username client-side would mean
+ * publishing a username→email map to anyone who asked, which is a scraper's
+ * dream and a straight privacy breach for every user. So the lookup happens
+ * here, under Admin credentials, and the email NEVER crosses back over the
+ * wire — the caller gets a token or an error, and learns nothing else.
+ *
+ * Deliberately not auth-gated: the whole point is that the caller has no
+ * session yet.
+ *
+ * Brute-force protection is Identity Toolkit's, which rate-limits password
+ * attempts per IP and returns TOO_MANY_ATTEMPTS_TRY_LATER. A per-username
+ * counter was considered and rejected: it would let anyone lock a named
+ * account out of its own login by failing at it repeatedly. Enabling App Check
+ * on this function is the right next hardening step.
+ */
+exports.signInWithUsername = onCall(
+  { timeoutSeconds: 20, memory: "256MiB" },
+  async (request) => {
+    const username = normalizeUsername(request.data?.username);
+    const password = String(request.data?.password ?? "");
+
+    if (!username || !password) {
+      throw new HttpsError(
+        "invalid-argument",
+        "A username and password are both required."
+      );
+    }
+
+    const apiKey = webApiKey();
+    if (!apiKey) {
+      console.error(
+        "WEB_API_KEY is not set — username login cannot verify " +
+          "passwords. Add it to functions/.env and redeploy."
+      );
+      throw new HttpsError(
+        "failed-precondition",
+        "Username sign-in is not configured on this server."
+      );
+    }
+
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+
+    // One error for every failure below this point. Saying "no such username"
+    // separately from "wrong password" would turn this endpoint into an
+    // oracle for which accounts exist, and it matches what the email path
+    // already tells users, since Firebase collapses the same two cases into
+    // invalid-credential.
+    const rejectCredentials = () =>
+      new HttpsError(
+        "unauthenticated",
+        "That username and password combination is incorrect."
+      );
+
+    const claim = await admin
+      .firestore()
+      .collection("usernames")
+      .doc(username)
+      .get();
+
+    if (!claim.exists) throw rejectCredentials();
+
+    const { uid, releaseAt } = claim.data() || {};
+    if (!uid) throw rejectCredentials();
+
+    // A vacated name still inside its grace period must not sign anyone in.
+    // It is reserved so its previous owner can take it back, not so it keeps
+    // working as their login after they have moved on.
+    if (releaseAt) throw rejectCredentials();
+
+    let email;
+    try {
+      email = (await admin.auth().getUser(uid)).email;
+    } catch (error) {
+      console.error(`Username @${username} points at missing uid ${uid}`, error);
+      throw rejectCredentials();
+    }
+
+    // An account created through Google or Apple has no password to check.
+    if (!email) throw rejectCredentials();
+
+    // Admin SDK has no verify-password call, so the password goes to the same
+    // Identity Toolkit endpoint the client SDK uses. Verifying here rather
+    // than returning the email is what keeps the address private.
+    let verification;
+    try {
+      verification = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, returnSecureToken: false }),
+        }
+      );
+    } catch (error) {
+      console.error("Identity Toolkit unreachable:", error);
+      throw new HttpsError(
+        "unavailable",
+        "Could not reach the sign-in service. Try again."
+      );
+    }
+
+    if (!verification.ok) {
+      const body = await verification.json().catch(() => ({}));
+      const reason = body?.error?.message || "";
+
+      // Passed through rather than flattened: these are about the account or
+      // the service, not about whether the credentials were right, and a user
+      // who is locked out or throttled needs to be told which.
+      if (reason.startsWith("TOO_MANY_ATTEMPTS_TRY_LATER")) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "Too many attempts. Wait a minute and try again."
+        );
+      }
+      if (reason === "USER_DISABLED") {
+        throw new HttpsError(
+          "permission-denied",
+          "This account has been disabled. Contact support for help."
+        );
+      }
+      throw rejectCredentials();
+    }
+
+    // The account exists and the password checked out. A custom token hands
+    // the client a session for this uid without the email ever leaving here.
+    const token = await admin.auth().createCustomToken(uid);
+    return { token };
   }
 );
 

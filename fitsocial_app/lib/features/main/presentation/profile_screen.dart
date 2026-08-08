@@ -12,7 +12,6 @@ import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/bottom_nav.dart';
-import '../../../shared/widgets/brand_image_tile.dart';
 import '../../../shared/widgets/post_gradient.dart';
 import '../../../shared/widgets/profile_bio.dart';
 import '../../../shared/widgets/profile_stats_bar.dart';
@@ -234,13 +233,7 @@ class _PulseAvatar extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Avatar(
-            initials: initials,
-            size: _size,
-            imageUrl: imageUrl,
-            // Only reached when the user has no uploaded photo.
-            visualTile: AppVisualTile.heroPortrait,
-          ),
+          Avatar(initials: initials, size: _size, imageUrl: imageUrl),
           Positioned(
             // Pulled out by the invisible padding so the badge itself still
             // sits just inside the circle's bounding box.

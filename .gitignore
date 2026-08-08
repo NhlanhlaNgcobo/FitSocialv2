@@ -31,3 +31,12 @@ fitsocial_app/dist/
 # Written analysis/report documents kept alongside the checkout. Binary Office
 # files can't be diffed or merged, so they bloat history to no benefit.
 /*.docx
+
+# Service-account keys. These grant full admin access to the Firebase project —
+# every user record, every document — and committing one cannot be undone by
+# deleting it later: the key stays in history and must be revoked instead.
+# Firebase downloads them as <project>-firebase-adminsdk-<hash>.json.
+*-firebase-adminsdk-*.json
+*serviceAccount*.json
+*service-account*.json
+application_default_credentials.json

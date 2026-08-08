@@ -9,10 +9,15 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/profile_photo_picker.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../application/app_session.dart';
+import '../application/username_availability_checker.dart';
+import '../data/username_repository.dart';
+import '../domain/username.dart';
 import 'account_switcher_sheet.dart';
+import 'username_availability_hint.dart';
 
-/// Host for the user's public profile link. Handles are unique, so the
-/// handle is what identifies the page.
+/// Host for the user's public profile link. Usernames are unique — enforced by
+/// the `usernames` collection, whose document ids are the names themselves —
+/// so the username is what identifies the page.
 const _profileLinkHost = 'fitsocial.app';
 
 /// Editing a profile, one field at a time.
@@ -35,6 +40,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final profile = session.profile;
     final displayName = profile?.displayName ?? '';
     final handle = formatHandle(profile?.handle);
+    final cooldown = usernameCooldownRemaining(profile?.handleChangedAt);
 
     return Scaffold(
       body: SafeArea(
@@ -74,10 +80,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         label: 'Username',
                         value: handle,
                         bold: false,
-                        onTap: () => _edit(
-                          title: 'Username',
-                          initial: profile?.handle ?? '',
-                          onSaved: (value) => _save(handle: value),
+                        // Locked rather than hidden while the cooldown runs:
+                        // the row still has to show what the username is.
+                        trailingIcon: cooldown == null
+                            ? Icons.chevron_right_rounded
+                            : Icons.lock_clock_rounded,
+                        onTap: () => _editUsername(
+                          current: profile?.handle ?? '',
+                          cooldown: cooldown,
                         ),
                       ),
                       _LinkRow(
@@ -86,6 +96,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       ),
                     ],
                   ),
+                  if (cooldown != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    UsernameCooldownNotice(remaining: cooldown),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   const _CardLabel('Basic info'),
                   _Card(
@@ -139,6 +153,51 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final path = await ProfilePhotoPicker.pick(context: context);
     if (path == null) return;
     await _save(avatarLocalPath: path);
+  }
+
+  /// The username row's own editor, because it is the only field with a
+  /// gatekeeper in front of it and a live lookup inside it.
+  Future<void> _editUsername({
+    required String current,
+    required Duration? cooldown,
+  }) async {
+    if (cooldown != null) {
+      // The notice under the card already explains the rule; this is for the
+      // person who tapped the row anyway.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'You can change your username again in '
+            '${describeCooldownRemaining(cooldown)}.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final checker = UsernameAvailabilityChecker(
+      ref.read(usernameRepositoryProvider),
+    );
+
+    try {
+      final value = await showModalBottomSheet<String>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (_) => _FieldEditorSheet(
+          title: 'Username',
+          initial: normalizeUsername(current),
+          maxLines: 1,
+          checker: checker,
+        ),
+      );
+
+      if (value == null) return;
+      if (normalizeUsername(value) == normalizeUsername(current)) return;
+      await _save(handle: value);
+    } finally {
+      checker.dispose();
+    }
   }
 
   Future<void> _edit({
@@ -379,6 +438,7 @@ class _FieldRow extends StatelessWidget {
     required this.onTap,
     this.placeholder = '',
     this.bold = true,
+    this.trailingIcon = Icons.chevron_right_rounded,
   });
 
   final String label;
@@ -389,6 +449,10 @@ class _FieldRow extends StatelessWidget {
   /// Whether a filled value is set in bold. Empty values never are — the
   /// placeholder has to read as absent, not as content.
   final bool bold;
+
+  /// The affordance on the right. A chevron for a row that opens; something
+  /// else for a row that will not.
+  final IconData trailingIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -426,7 +490,7 @@ class _FieldRow extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.sm),
             Icon(
-              Icons.chevron_right_rounded,
+              trailingIcon,
               color: palette.muted,
               size: 22,
             ),
@@ -484,12 +548,19 @@ class _FieldEditorSheet extends StatefulWidget {
     required this.initial,
     required this.maxLines,
     this.keyboardType,
+    this.checker,
   });
 
   final String title;
   final String initial;
   final int maxLines;
   final TextInputType? keyboardType;
+
+  /// Present only for the username field, which is the one field whose value
+  /// somebody else can already own. Its presence is what turns this sheet into
+  /// a username editor: filtered input, a live verdict, and a Save button that
+  /// waits for it.
+  final UsernameAvailabilityChecker? checker;
 
   @override
   State<_FieldEditorSheet> createState() => _FieldEditorSheetState();
@@ -498,10 +569,15 @@ class _FieldEditorSheet extends StatefulWidget {
 class _FieldEditorSheetState extends State<_FieldEditorSheet> {
   late final TextEditingController _controller;
 
+  bool get _isUsername => widget.checker != null;
+
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initial);
+    // Seeds the verdict from the value already in the field, so opening the
+    // sheet on your own username says so rather than showing nothing.
+    widget.checker?.check(widget.initial);
   }
 
   @override
@@ -544,30 +620,66 @@ class _FieldEditorSheetState extends State<_FieldEditorSheet> {
                 autofocus: true,
                 maxLines: widget.maxLines,
                 keyboardType: widget.keyboardType,
+                autocorrect: !_isUsername,
+                maxLength: _isUsername ? usernameMaxLength : null,
+                // Lowercased and filtered as it is typed, so what the user
+                // sees is exactly what gets saved — and exactly what becomes
+                // the reservation's document id.
+                inputFormatters: _isUsername
+                    ? [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[A-Za-z0-9._]'),
+                        ),
+                        TextInputFormatter.withFunction(
+                          (_, newValue) => newValue.copyWith(
+                            text: newValue.text.toLowerCase(),
+                          ),
+                        ),
+                      ]
+                    : null,
+                onChanged: widget.checker?.check,
                 textInputAction: widget.maxLines > 1
                     ? TextInputAction.newline
                     : TextInputAction.done,
                 onSubmitted: widget.maxLines > 1 ? null : (_) => _submit(),
                 style: TextStyle(color: palette.text),
+                decoration: _isUsername
+                    ? const InputDecoration(prefixText: '@', counterText: '')
+                    : null,
               ),
+              if (widget.checker != null)
+                UsernameAvailabilityHint(checker: widget.checker!),
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 width: double.infinity,
                 height: 52,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.orangeBright,
-                    foregroundColor: AppColors.onBrand,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  onPressed: _submit,
-                  child: const Text('Save'),
+                child: AnimatedBuilder(
+                  animation: widget.checker ?? kAlwaysDismissedAnimation,
+                  builder: (context, _) {
+                    // Disabled while a lookup is outstanding as well as when
+                    // it came back negative: neither is a yes, and letting the
+                    // save through on a maybe just moves the rejection to a
+                    // less helpful place.
+                    final blocked =
+                        _isUsername && widget.checker!.canUse != true;
+                    return FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.orangeBright,
+                        foregroundColor: AppColors.onBrand,
+                        disabledBackgroundColor: palette.surfaceHigh,
+                        disabledForegroundColor: palette.muted,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      onPressed: blocked ? null : _submit,
+                      child: const Text('Save'),
+                    );
+                  },
                 ),
               ),
             ],
@@ -577,5 +689,8 @@ class _FieldEditorSheetState extends State<_FieldEditorSheet> {
     );
   }
 
-  void _submit() => Navigator.of(context).pop(_controller.text);
+  void _submit() {
+    if (_isUsername && widget.checker!.canUse != true) return;
+    Navigator.of(context).pop(_controller.text);
+  }
 }

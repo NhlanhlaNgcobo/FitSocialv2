@@ -7,11 +7,12 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../features/auth/application/app_session.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
 import '../../features/main/domain/app_models.dart';
+import '../identity/profile_identity.dart';
 import 'avatar.dart';
-import 'brand_image_tile.dart';
 import 'confirm_destructive_sheet.dart';
 import 'quick_toast.dart';
 import 'run_route_map.dart';
@@ -29,7 +30,6 @@ class PostCard extends StatelessWidget {
     this.likes = 0,
     this.comments = 0,
     this.backgroundColors = const [Color(0xFF332113), Color(0xFF0E0E0E)],
-    this.visualTile,
     this.onCommentTapped,
     this.onDeleted,
     this.postType = PostType.text,
@@ -53,7 +53,6 @@ class PostCard extends StatelessWidget {
   final int likes;
   final int comments;
   final List<Color> backgroundColors;
-  final AppVisualTile? visualTile;
   final VoidCallback? onCommentTapped;
 
   /// Called once the post has actually been deleted. A card inside a list can
@@ -165,9 +164,8 @@ class PostCard extends StatelessWidget {
       child: Row(
         children: [
           Avatar(
-            initials: _initials(userName),
+            initials: avatarInitials(userName),
             size: 34,
-            visualTile: visualTile,
             imageUrl: authorAvatarUrl,
           ),
           const SizedBox(width: 10),
@@ -466,13 +464,6 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  String _initials(String name) {
-    final parts = name.split(' ');
-    if (parts.length == 1) {
-      return parts.first.characters.take(2).toString().toUpperCase();
-    }
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
 }
 
 /// Like, comment and save for one post.
@@ -528,9 +519,13 @@ class PostInteractionRow extends ConsumerWidget {
             onTap: () async {
               final userId = FirebaseAuth.instance.currentUser?.uid;
               if (userId == null) return;
-              await ref
-                  .read(contentRepositoryProvider)
-                  .toggleLike(postId, userId);
+              await ref.read(contentRepositoryProvider).toggleLike(
+                    postId,
+                    userId,
+                    // Names the liker on the notification the post's author
+                    // receives, from the profile the session already holds.
+                    profile: ref.read(appSessionProvider).profile,
+                  );
             },
           ),
           _ActionIcon(

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/comment_composer.dart';
 import '../application/content_providers.dart';
@@ -175,7 +176,7 @@ class CommentTile extends StatelessWidget {
         // Shared Avatar so a commenter's photo renders here exactly as it does
         // on their posts, falling back to initials when they have none.
         Avatar(
-          initials: _initials(comment.authorName),
+          initials: avatarInitials(comment.authorName),
           size: 34,
           imageUrl: comment.authorAvatarUrl,
         ),
@@ -220,15 +221,6 @@ class CommentTile extends StatelessWidget {
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length < 2) {
-      final first = parts.first;
-      if (first.isEmpty) return 'FS';
-      return first.substring(0, first.length > 1 ? 2 : 1).toUpperCase();
-    }
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
 
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);

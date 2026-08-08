@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../shared/widgets/brand_image_tile.dart';
 
 /// What a post is, as recorded on the document.
 ///
@@ -27,7 +26,6 @@ class FeedPost {
     required this.comments,
     required this.backgroundColors,
     required this.likedBy,
-    this.visualTile,
     this.postType = PostType.text,
     this.imageUrl,
     this.workoutData,
@@ -50,7 +48,6 @@ class FeedPost {
   final int comments;
   final List<Color> backgroundColors;
   final List<String> likedBy;
-  final AppVisualTile? visualTile;
   final PostType postType;
   final String? imageUrl;
   final Map<String, dynamic>? workoutData;
@@ -79,7 +76,6 @@ class FeedPost {
     int? comments,
     List<Color>? backgroundColors,
     List<String>? likedBy,
-    AppVisualTile? visualTile,
     PostType? postType,
     String? imageUrl,
     Map<String, dynamic>? workoutData,
@@ -99,7 +95,6 @@ class FeedPost {
       comments: comments ?? this.comments,
       backgroundColors: backgroundColors ?? this.backgroundColors,
       likedBy: likedBy ?? this.likedBy,
-      visualTile: visualTile ?? this.visualTile,
       postType: postType ?? this.postType,
       imageUrl: imageUrl ?? this.imageUrl,
       workoutData: workoutData ?? this.workoutData,
@@ -108,6 +103,42 @@ class FeedPost {
       imageAspectRatio: imageAspectRatio ?? this.imageAspectRatio,
     );
   }
+}
+
+/// Where the posts on the home feed came from.
+enum FeedSource {
+  /// The people the user follows, plus the user themselves. The feed proper.
+  following,
+
+  /// The community's best, standing in because the following feed had nothing
+  /// to show. Labelled as such on screen: a new user should never be left
+  /// thinking the people they follow have gone quiet when they simply haven't
+  /// followed anyone yet.
+  suggested,
+}
+
+/// The home feed: the posts, and an honest account of where they came from.
+///
+/// The source travels with the posts rather than being worked out in the UI,
+/// because only the query knows whether it fell back — by the time a list of
+/// posts reaches a widget, a following feed and a suggested one are
+/// indistinguishable.
+class HomeFeed {
+  const HomeFeed({required this.posts, required this.source});
+
+  const HomeFeed.empty()
+      : posts = const [],
+        source = FeedSource.following;
+
+  final List<FeedPost> posts;
+  final FeedSource source;
+
+  bool get isEmpty => posts.isEmpty;
+
+  /// The same feed with its posts replaced — for the in-place edits the feed
+  /// makes as the user likes and comments, which never change its source.
+  HomeFeed withPosts(List<FeedPost> posts) =>
+      HomeFeed(posts: posts, source: source);
 }
 
 /// Guards the metric strip burned across the bottom of a post's photo.

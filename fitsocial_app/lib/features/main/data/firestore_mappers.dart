@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/identity/profile_identity.dart';
 import '../domain/app_models.dart';
 import 'firestore_models.dart';
 
@@ -88,7 +89,7 @@ class FirestoreMapper {
       id: user.id,
       displayName: displayName,
       handle: user.handle,
-      initials: _initials(displayName),
+      initials: avatarInitials(displayName),
       postsCount: user.postsCount,
       avatarUrl: user.avatarUrl,
       bio: user.bio,
@@ -137,16 +138,5 @@ class FirestoreMapper {
       default:
         return const [Color(0xFF7A4D2E), Color(0xFF121212)];
     }
-  }
-
-  static String _initials(String value) {
-    final parts = value.trim().split(' ');
-    if (parts.length < 2) {
-      final first = parts.first;
-      if (first.isEmpty) return 'FS';
-      final end = first.length > 1 ? 2 : 1;
-      return first.substring(0, end).toUpperCase();
-    }
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 }

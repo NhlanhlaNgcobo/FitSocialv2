@@ -19,7 +19,7 @@ class UnconfiguredContentRepository implements ContentRepository {
   const UnconfiguredContentRepository();
 
   @override
-  Future<List<FeedPost>> getFeedPosts(UserProfileDraft? profile) async {
+  Future<HomeFeed> getFeedPosts(UserProfileDraft? profile) async {
     throw StateError(_firebaseSetupMessage);
   }
 
@@ -74,7 +74,11 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> followUser(String currentUserId, String targetUserId) async {
+  Future<void> followUser(
+    String currentUserId,
+    String targetUserId, {
+    UserProfileDraft? profile,
+  }) async {
     throw StateError(_firebaseSetupMessage);
   }
 
@@ -87,6 +91,10 @@ class UnconfiguredContentRepository implements ContentRepository {
   Stream<bool> watchIsFollowing(String currentUserId, String targetUserId) {
     return Stream.value(false);
   }
+
+  @override
+  Stream<Set<String>> watchFollowingIds(String userId) =>
+      Stream.value(const {});
 
   @override
   Stream<bool> watchUserNotifications(
@@ -143,7 +151,11 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> toggleLike(String postId, String userId) async {
+  Future<void> toggleLike(
+    String postId,
+    String userId, {
+    UserProfileDraft? profile,
+  }) async {
     throw StateError(_firebaseSetupMessage);
   }
 

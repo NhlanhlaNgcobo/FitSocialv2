@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../application/app_session.dart';
 
@@ -129,15 +130,9 @@ class _AccountSwitcherSheet extends ConsumerWidget {
   }
 }
 
-/// Initials to stand in for a missing profile photo.
-String accountInitials(String value) {
-  final parts = value.trim().split(RegExp(r'\s+'));
-  if (parts.isEmpty || parts.first.isEmpty) return 'FS';
-  if (parts.length == 1) {
-    return parts.first.substring(0, 1).toUpperCase();
-  }
-  return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-}
+/// Initials to stand in for a missing profile photo, empty when the account
+/// has no real name yet — see [avatarInitials].
+String accountInitials(String value) => avatarInitials(value);
 
 /// Handles are stored bare or with a leading '@' depending on what the user
 /// typed, so normalise to exactly one before showing it.

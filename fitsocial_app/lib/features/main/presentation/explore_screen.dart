@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/post_gradient.dart';
 import '../application/content_providers.dart';
@@ -233,48 +234,15 @@ class _UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasAvatar = user.avatarUrl != null && user.avatarUrl!.isNotEmpty;
-    final palette = context.palette;
-
-    return Container(
-      width: size,
-      height: size,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        // The disc the initials sit on when there is no photo. Listed per theme
-        // rather than derived, so the dark values stay what they were.
-        gradient: LinearGradient(
-          colors: palette.isDark
-              ? const [Color(0xFF444444), Color(0xFF2A2A2A)]
-              : const [Color(0xFFE8E1D6), Color(0xFFD8D0C2)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      alignment: Alignment.center,
-      child: hasAvatar
-          ? Image.network(
-              user.avatarUrl!,
-              fit: BoxFit.cover,
-              width: size,
-              height: size,
-              errorBuilder: (_, __, ___) => _initialsText(palette),
-              loadingBuilder: (_, child, progress) =>
-                  progress == null ? child : _initialsText(palette),
-            )
-          : _initialsText(palette),
-    );
-  }
-
-  Widget _initialsText(AppPalette palette) {
-    return Text(
-      user.initials,
-      style: TextStyle(
-        color: palette.text,
-        fontWeight: FontWeight.w700,
-        fontSize: size * 0.34,
-      ),
+    // The shared avatar, so a search result shows the same photo, monogram or
+    // empty-profile glyph the person carries everywhere else. Search rows sit
+    // on the plain page rather than on a card, and the hairline that separates
+    // an avatar from a card would read as an outline here.
+    return Avatar(
+      initials: user.initials,
+      size: size,
+      imageUrl: user.avatarUrl,
+      border: AvatarBorder.none,
     );
   }
 }

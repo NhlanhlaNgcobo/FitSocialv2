@@ -3,12 +3,17 @@ import '../domain/pulse_models.dart';
 
 /// Storage and retrieval for Pulses — FitSocial's 24-hour ephemeral posts.
 abstract class PulseRepository {
-  /// Every Pulse that has not expired yet, across all authors.
+  /// Every unexpired Pulse by any of [authorIds].
+  ///
+  /// The audience is passed in rather than derived here: a Pulse is only for
+  /// the people its author lets see it, and that list lives in the follow
+  /// graph, which is not this repository's to read. Callers pass the people
+  /// the viewer follows, plus the viewer — you always see your own.
   ///
   /// Emits loose segments rather than grouped rings: grouping needs the
   /// viewer's seen markers, which arrive on their own stream, so the two are
   /// joined a layer up by [buildPulseTray].
-  Stream<List<PulseSegment>> watchActivePulses();
+  Stream<List<PulseSegment>> watchActivePulses(Set<String> authorIds);
 
   /// The viewer's "last watched" cursor per author, keyed by author id.
   ///

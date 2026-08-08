@@ -24,7 +24,8 @@ class UnconfiguredPulseRepository implements PulseRepository {
   const UnconfiguredPulseRepository();
 
   @override
-  Stream<List<PulseSegment>> watchActivePulses() => Stream.value(const []);
+  Stream<List<PulseSegment>> watchActivePulses(Set<String> authorIds) =>
+      Stream.value(const []);
 
   @override
   Stream<Map<String, DateTime>> watchSeenMarkers(String userId) =>

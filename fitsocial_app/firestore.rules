@@ -44,6 +44,14 @@ service cloud.firestore {
           && !followerEdgeExistsAfter(userId);
     }
 
+    // Whether the caller follows {authorId}. The follower edge is the
+    // audience: following someone is how you ask to see their day.
+    function isFollowerOf(authorId) {
+      return exists(
+        /databases/$(database)/documents/users/$(authorId)/followers/$(request.auth.uid)
+      );
+    }
+
     // The Pulse's author, for rules that live on its subcollections.
     function isPulseAuthor(pulseId) {
       return get(/databases/$(database)/documents/pulses/$(pulseId))
@@ -65,6 +73,64 @@ service cloud.firestore {
           && pulseViewExistsAfter(pulseId);
     }
 
+    // --- Usernames -------------------------------------------------------
+    //
+    // How long an account waits between renames, and how long its old name
+    // stays reserved for it afterwards. Both are duplicated from
+    // lib/features/auth/domain/username.dart, which cannot be imported here —
+    // change one and you must change the other.
+    function usernameCooldown() { return duration.value(14, 'd'); }
+
+    // The username the profile will carry once this write commits.
+    function requestedHandle() {
+      return request.resource.data.get('handle', '');
+    }
+
+    // Whether the caller holds the reservation for the handle they are writing
+    // onto their profile, as of the end of this batch.
+    //
+    // getAfter, not get: the reservation and the profile are written in one
+    // transaction, so the claim is still pending when this runs. Without the
+    // "After" variant a first-time claim would always fail.
+    function ownsRequestedHandle(userId) {
+      let name = requestedHandle();
+      let claim = /databases/$(database)/documents/usernames/$(name);
+      return name != ''
+             && existsAfter(claim)
+             && getAfter(claim).data.uid == userId;
+    }
+
+    function handleIsUnchanged() {
+      return requestedHandle() == resource.data.get('handle', '');
+    }
+
+    // An account with no handle yet is claiming, not renaming. Not throttled:
+    // the cooldown exists to make identity changes expensive, and there is no
+    // identity to change out of.
+    function isFirstHandleClaim() {
+      return resource.data.get('handle', '') == '';
+    }
+
+    function usernameCooldownElapsed() {
+      let last = resource.data.get('handleChangedAt', null);
+      return last == null || request.time >= last + usernameCooldown();
+    }
+
+    // A rename must stamp handleChangedAt with the request time. Requiring the
+    // exact request time is what stops a client backdating the field to clear
+    // its own cooldown — FieldValue.serverTimestamp() resolves to precisely
+    // this value, so an honest client passes and a crafted one cannot.
+    function stampsHandleChange() {
+      return request.resource.data.get('handleChangedAt', null) == request.time;
+    }
+
+    function isAllowedHandleWrite(userId) {
+      return handleIsUnchanged()
+             || (ownsRequestedHandle(userId)
+                 && (isFirstHandleClaim()
+                     || (usernameCooldownElapsed() && stampsHandleChange())));
+    }
+
     // Profile documents.
     //
     // Reads are open to any signed-in user because Explore search and post
@@ -74,11 +140,19 @@ service cloud.firestore {
     // Writes are owner-only, with one narrow exception: another user may move
     // followersCount by exactly ±1, and only when their follower edge ends up
     // in the matching state. No other field can ride along on that write.
+    //
+    // The owner's own writes carry a second condition: the handle they display
+    // must be one they hold in /usernames, and changing it is rate-limited.
+    // Without that check the reservation collection would be decorative — a
+    // client could simply write any username straight onto its profile.
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && ownsRequestedHandle(userId);
       allow update: if request.auth != null
-                    && (request.auth.uid == userId
+                    && ((request.auth.uid == userId
+                         && isAllowedHandleWrite(userId))
                         || (request.resource.data.diff(resource.data)
                               .affectedKeys()
                               .hasOnly(['followersCount'])
@@ -131,6 +205,108 @@ service cloud.firestore {
         allow read, write: if request.auth != null
                            && request.auth.uid == userId;
       }
+
+      // This user's inbox: who followed them, who liked their posts.
+      //
+      // Written by the ACTOR, read by the owner — the mirror image of
+      // /followers above. Two rules keep that honest: a notification can only
+      // be created naming its author as the actor, so nobody can put words in
+      // someone else's mouth; and the owner may only ever flip `read`, so
+      // marking the list seen can't be used to rewrite what it says.
+      //
+      // Delete is open to both. The actor withdraws their own notification
+      // when they unfollow or unlike, and `resource == null` is allowed
+      // because those deletes are unconditional — a follow made before this
+      // collection existed has nothing to remove, and that must not fail the
+      // unfollow it is batched with.
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null
+                      && request.auth.uid != userId
+                      && request.resource.data.actorId == request.auth.uid;
+        allow update: if request.auth != null
+                      && ((request.auth.uid == userId
+                           && request.resource.data.diff(resource.data)
+                                .affectedKeys().hasOnly(['read']))
+                          || (request.resource.data.actorId == request.auth.uid
+                              && resource.data.actorId == request.auth.uid));
+        allow delete: if request.auth != null
+                      && (request.auth.uid == userId
+                          || resource == null
+                          || resource.data.actorId == request.auth.uid);
+      }
+    }
+
+    // Username reservations. The document id IS the username, normalized —
+    // lowercase, no leading '@'. Firestore has no unique-column constraint, so
+    // the id is the only thing that can enforce one, and `create` failing on an
+    // existing document is the entire uniqueness guarantee.
+    //
+    // Shape: { uid, claimedAt, releaseAt? }. A live reservation has no
+    // releaseAt. Vacating stamps one 14 days out rather than deleting the
+    // document, so the name stays held for the account that left it — see the
+    // grace-period note in domain/username.dart for why releasing immediately
+    // is the dangerous option.
+    //
+    // The login Cloud Function reads this collection through the Admin SDK,
+    // which bypasses these rules entirely.
+    match /usernames/{username} {
+
+      // Whether the vacated hold on this name has run out, leaving it free.
+      function isReleased() {
+        let releaseAt = resource.data.get('releaseAt', null);
+        return releaseAt != null && request.time > releaseAt;
+      }
+
+      function isVacating() {
+        return 'releaseAt' in request.resource.data;
+      }
+
+      // Caps how long a name can be held after being vacated. Without a bound
+      // a client could stamp releaseAt years out and sit on names it no longer
+      // uses. 15 days rather than 14 leaves room for clock skew.
+      function releaseAtWithinBounds() {
+        return request.resource.data.releaseAt
+               <= request.time + duration.value(15, 'd');
+      }
+
+      // Ties an active reservation to the profile that displays it, so one
+      // account can hold exactly one live name. Without this, nothing stops a
+      // client writing reservation documents in a loop and squatting the
+      // namespace.
+      function matchesOwnProfile() {
+        let profile = /databases/$(database)/documents/users/$(request.auth.uid);
+        return existsAfter(profile)
+               && getAfter(profile).data.get('handle', '') == username;
+      }
+
+      // Any signed-in user may check whether a name is free — that is what the
+      // hint under the username field is doing. Only a uid and two timestamps
+      // live here, and the uid→username mapping is already public through
+      // /users; no contact detail is exposed.
+      allow read: if request.auth != null;
+
+      // `create` only ever fires when the document is absent, which is exactly
+      // "this name is unclaimed". Claiming on someone else's behalf, or
+      // creating a name already marked as vacated, are both refused.
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && !isVacating()
+                    && matchesOwnProfile();
+
+      // Two legitimate updates: the owner stepping away from a name (stamping
+      // releaseAt), and someone taking on a name — their own during its grace
+      // period, or anyone's once that period has lapsed.
+      allow update: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid
+                    && (resource.data.uid == request.auth.uid || isReleased())
+                    && ((isVacating() && releaseAtWithinBounds())
+                        || (!isVacating() && matchesOwnProfile()));
+
+      // Never deleted. Vacating is a stamp, not a removal: a delete would drop
+      // the grace period along with the record and put the name straight back
+      // in the pool.
+      allow delete: if false;
     }
 
     // Feed posts — authenticated users can read all, write only their own.
@@ -199,8 +375,19 @@ service cloud.firestore {
     // Any signed-in user may update a Pulse they don't own, but only to move
     // viewCount up by one, and only when their own view record exists after
     // the write. No other field can ride along.
+    // Readable by the author and by the people who follow them, and nobody
+    // else. Enforced per document, which is also why the client query is
+    // scoped to authors the reader follows: a list query is checked against
+    // every document it returns, so an unscoped one now fails outright rather
+    // than quietly handing back strangers' Pulses.
+    //
+    // The follower lookups are what set the chunk size in
+    // FirestorePulseRepository: the rules engine allows 20 document lookups
+    // per query, identical ones cached, so a chunk covers ten authors.
     match /pulses/{pulseId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+                  && (resource.data.authorId == request.auth.uid
+                      || isFollowerOf(resource.data.authorId));
       allow create: if request.auth != null
                     && request.resource.data.authorId == request.auth.uid;
       allow update: if request.auth != null

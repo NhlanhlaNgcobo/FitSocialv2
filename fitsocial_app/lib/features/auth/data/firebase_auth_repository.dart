@@ -1,7 +1,9 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../domain/username.dart';
 import 'auth_repository_contract.dart';
 
 class FirebaseAuthRepository implements AuthRepository {
@@ -23,6 +25,30 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<bool> hasValidSession() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return false;
+    try {
+      // Forces a round-trip to Firebase. A deleted or disabled account throws
+      // here; without it the stale cached credential would look valid forever.
+      await user.reload();
+      return _firebaseAuth.currentUser != null;
+    } on FirebaseAuthException catch (error) {
+      const revoked = {
+        'user-not-found',
+        'user-disabled',
+        'user-token-expired',
+        'invalid-user-token',
+      };
+      return !revoked.contains(error.code);
+    } catch (_) {
+      // Anything else (offline, plugin hiccup) is not proof the account is
+      // gone, so keep the session.
+      return true;
+    }
+  }
+
+  @override
   Future<String> signInWithEmail({
     required String email,
     required String password,
@@ -32,6 +58,33 @@ class FirebaseAuthRepository implements AuthRepository {
       password: password,
     );
     return credential.user?.email ?? email.trim();
+  }
+
+  @override
+  Future<String> signInWithUsername({
+    required String username,
+    required String password,
+  }) async {
+    final callable = FirebaseFunctions.instance.httpsCallable(
+      'signInWithUsername',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+    );
+
+    final result = await callable.call<Map<String, dynamic>>({
+      'username': normalizeUsername(username),
+      'password': password,
+    });
+
+    final token = result.data['token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw StateError('The sign-in service did not return a session.');
+    }
+
+    // The function has already verified the password; the token is proof of
+    // that, and exchanging it here produces a session for the same uid an
+    // email login would have produced.
+    final credential = await _firebaseAuth.signInWithCustomToken(token);
+    return credential.user?.email ?? credential.user?.uid ?? '';
   }
 
   @override

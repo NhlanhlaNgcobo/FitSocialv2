@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../domain/auth_models.dart';
+import '../domain/username.dart';
+import 'firebase_username_repository.dart';
 import 'user_profile_repository_contract.dart';
 
 class FirebaseUserProfileRepository implements UserProfileRepository {
@@ -27,15 +29,28 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
     final data = snapshot.data() ?? const <String, dynamic>{};
     return UserProfileDraft(
       displayName: (data['displayName'] as String?) ?? user.displayName ?? 'FitSocial User',
-      handle: (data['handle'] as String?) ?? '@fitsocial',
+      handle: normalizeUsername(data['handle'] as String?),
       bio: (data['bio'] as String?) ?? '',
       location: (data['location'] as String?) ?? '',
       avatarUrl: data['avatarUrl'] as String?,
       pronouns: (data['pronouns'] as String?) ?? '',
       links: (data['links'] as String?) ?? '',
+      handleChangedAt: (data['handleChangedAt'] as Timestamp?)?.toDate(),
     );
   }
 
+  /// Writes the profile, claiming the username in the same transaction.
+  ///
+  /// The claim cannot be a separate step. If the reservation were written
+  /// first and the profile write then failed, the name would be held by an
+  /// account that does not display it; if the profile went first, two accounts
+  /// could show the same username while only one held the reservation. One
+  /// transaction is what keeps the two facts from ever disagreeing.
+  ///
+  /// The avatar upload is the exception, and has to be: Cloud Storage is not
+  /// part of a Firestore transaction. It runs first, so the worst case is an
+  /// orphaned image rather than a profile pointing at a file that was never
+  /// written.
   @override
   Future<UserProfileDraft> saveProfile({
     required String displayName,
@@ -51,57 +66,154 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
       throw StateError('No authenticated Firebase user found for profile save.');
     }
 
-    final userRef = _firestore.collection('users').doc(user.uid);
-
-    String? avatarUrl;
-    if (avatarLocalPath != null) {
-      avatarUrl = await _uploadAvatar(user.uid, avatarLocalPath);
-    } else {
-      // No new photo picked: carry the stored avatar forward. The Firestore
-      // write below skips a null avatarUrl, so the document kept its value —
-      // but the returned profile populates the in-memory session, and without
-      // this the avatar would vanish from the UI after any other profile edit.
-      final existing = await userRef.get();
-      avatarUrl = existing.data()?['avatarUrl'] as String?;
+    final requestedHandle = normalizeUsername(handle);
+    // Carries its own sentence, and StateError is what the error describer
+    // passes through verbatim — so the user reads "Letters, numbers, dots and
+    // underscores only" rather than a generic failure.
+    final formatError = validateUsernameFormat(requestedHandle);
+    if (formatError != null) {
+      throw StateError(formatError);
     }
 
-    final profile = UserProfileDraft(
-      displayName: displayName.trim(),
-      handle: handle.trim(),
-      bio: bio.trim(),
-      location: location.trim(),
-      avatarUrl: avatarUrl,
-      pronouns: pronouns.trim(),
-      links: links.trim(),
-    );
+    final userRef = _firestore.collection('users').doc(user.uid);
+    final usernames = _firestore.collection(usernamesCollection);
 
-    // The profile document is readable by any signed-in user (Explore search
-    // needs it), so contact details must not live on it. Email goes to a
-    // private subcollection that only the owner can read.
-    final batch = _firestore.batch();
+    final uploadedAvatarUrl = avatarLocalPath == null
+        ? null
+        : await _uploadAvatar(user.uid, avatarLocalPath);
 
-    batch.set(userRef, {
-      'displayName': profile.displayName,
-      'handle': profile.handle,
-      'bio': profile.bio,
-      'location': profile.location,
-      'pronouns': profile.pronouns,
-      'links': profile.links,
-      if (avatarUrl != null) 'avatarUrl': avatarUrl,
-      // Strips the legacy public copy for accounts created before the email
-      // was moved, so saving a profile self-heals the exposure.
-      'email': FieldValue.delete(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    late UserProfileDraft saved;
 
-    batch.set(userRef.collection('private').doc('account'), {
-      'email': user.email,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await _firestore.runTransaction((transaction) async {
+      // Firestore requires every read in a transaction to precede every write,
+      // so the whole picture is gathered up front.
+      final userSnapshot = await transaction.get(userRef);
+      final existing = userSnapshot.data() ?? const <String, dynamic>{};
+      final currentHandle = normalizeUsername(existing['handle'] as String?);
+      final isRename =
+          currentHandle.isNotEmpty && currentHandle != requestedHandle;
+      final isNewClaim = currentHandle != requestedHandle;
 
-    await batch.commit();
+      DocumentSnapshot<Map<String, dynamic>>? claimSnapshot;
+      DocumentSnapshot<Map<String, dynamic>>? previousSnapshot;
+      if (isNewClaim) {
+        claimSnapshot = await transaction.get(usernames.doc(requestedHandle));
+        if (currentHandle.isNotEmpty) {
+          previousSnapshot = await transaction.get(usernames.doc(currentHandle));
+        }
+      }
 
-    return profile;
+      if (isRename) {
+        // Only an actual rename is throttled. The first claim on a new account
+        // is not a change, and neither is re-saving the name you already have
+        // — an edit to the bio must not be refused because of the username.
+        final remaining = usernameCooldownRemaining(
+          (existing['handleChangedAt'] as Timestamp?)?.toDate(),
+        );
+        if (remaining != null) {
+          throw UsernameChangeTooSoonException(remaining);
+        }
+      }
+
+      if (isNewClaim) {
+        // Re-checked here rather than trusted from the UI's earlier lookup:
+        // that was a plain read, and another account can commit in the gap
+        // between it and this transaction. This is the check that counts.
+        final status = readReservationStatus(
+          claimSnapshot?.data(),
+          viewerUid: user.uid,
+        );
+        final claimable = status == UsernameStatus.available ||
+            status == UsernameStatus.yours ||
+            status == UsernameStatus.reclaimable;
+        if (!claimable) {
+          throw UsernameTakenException(requestedHandle);
+        }
+
+        // A full set, not a merge: taking over a name whose grace period has
+        // lapsed must clear the previous holder's releaseAt, or the name would
+        // arrive already marked as vacated.
+        transaction.set(usernames.doc(requestedHandle), {
+          'uid': user.uid,
+          'claimedAt': FieldValue.serverTimestamp(),
+        });
+
+        // The old name is held, not freed. Releasing it now would let someone
+        // take the identity this account just stepped out of, while the
+        // cooldown keeps the owner from taking it back — the exact window an
+        // impersonator wants.
+        if (previousSnapshot != null && previousSnapshot.exists) {
+          final previousOwner = previousSnapshot.data()?['uid'] as String?;
+          if (previousOwner == user.uid) {
+            transaction.set(
+              usernames.doc(currentHandle),
+              {
+                'uid': user.uid,
+                'releaseAt': Timestamp.fromDate(
+                  DateTime.now().toUtc().add(usernameGracePeriod),
+                ),
+              },
+              SetOptions(merge: true),
+            );
+          }
+        }
+      }
+
+      // No new photo picked: carry the stored avatar forward. The write below
+      // skips a null avatarUrl, so the document kept its value — but the
+      // returned profile populates the in-memory session, and without this the
+      // avatar would vanish from the UI after any other profile edit.
+      final avatarUrl = uploadedAvatarUrl ?? existing['avatarUrl'] as String?;
+
+      // The profile document is readable by any signed-in user (Explore search
+      // needs it), so contact details must not live on it. Email goes to a
+      // private subcollection that only the owner can read.
+      transaction.set(userRef, {
+        'displayName': displayName.trim(),
+        'handle': requestedHandle,
+        'bio': bio.trim(),
+        'location': location.trim(),
+        'pronouns': pronouns.trim(),
+        'links': links.trim(),
+        if (avatarUrl != null) 'avatarUrl': avatarUrl,
+        // Stamped only on a rename, and always from the server clock. The
+        // security rules require it to equal the request time, so a client
+        // cannot backdate it to shorten its own cooldown.
+        if (isRename) 'handleChangedAt': FieldValue.serverTimestamp(),
+        // Strips the legacy public copy for accounts created before the email
+        // was moved, so saving a profile self-heals the exposure.
+        'email': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      transaction.set(
+        userRef.collection('private').doc('account'),
+        {
+          'email': user.email,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      saved = UserProfileDraft(
+        displayName: displayName.trim(),
+        handle: requestedHandle,
+        bio: bio.trim(),
+        location: location.trim(),
+        avatarUrl: avatarUrl,
+        pronouns: pronouns.trim(),
+        links: links.trim(),
+        // The server timestamp is not readable until the write lands, so the
+        // local clock stands in for the session's copy. Only the stored value
+        // is ever used to judge a cooldown; this one just drives the UI until
+        // the next load.
+        handleChangedAt: isRename
+            ? DateTime.now()
+            : (existing['handleChangedAt'] as Timestamp?)?.toDate(),
+      );
+    });
+
+    return saved;
   }
 
   Future<String> _uploadAvatar(String userId, String localFilePath) async {

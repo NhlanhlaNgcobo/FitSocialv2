@@ -204,12 +204,14 @@ void main() {
       expect(pulseInitials('Bear Mdlalose'), 'BM');
     });
 
-    test('falls back to the first two letters of a single name', () {
-      expect(pulseInitials('Bear'), 'BE');
+    test('takes one letter from a single name', () {
+      expect(pulseInitials('Bear'), 'B');
     });
 
-    test('never returns empty', () {
-      expect(pulseInitials('   '), 'FS');
+    test('is empty when there is no real name, which is what puts the '
+        'empty-profile glyph in the ring', () {
+      expect(pulseInitials('   '), '');
+      expect(pulseInitials('FitSocial Member'), '');
     });
   });
 }

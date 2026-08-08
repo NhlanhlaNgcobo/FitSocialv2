@@ -11,6 +11,7 @@ import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/app_session.dart';
 import '../data/auth_repository.dart';
+import '../domain/username.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.isLoginMode = true});
@@ -22,25 +23,41 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
+  late final TextEditingController _confirmController;
+  // Seeded from the route, then owned locally so "Log in ⇄ Sign up" can swap
+  // in place without a navigation that would wipe what has been typed.
+  late bool _isLoginMode;
   bool _showEmailForm = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   @override
   void initState() {
     super.initState();
+    _isLoginMode = widget.isLoginMode;
     _emailController = TextEditingController();
     _passwordController = TextEditingController();
+    _confirmController = TextEditingController();
   }
 
   void _submit(AppSession session) {
+    if (session.isLoading) return;
+
     if (!_showEmailForm) {
       setState(() => _showEmailForm = true);
       return;
     }
-    if (widget.isLoginMode) {
-      session.signInWithEmail(
-        email: _emailController.text,
+    // Validates before hitting the network, so an empty field or a typo'd
+    // confirmation is caught here rather than coming back as a Firebase error.
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    if (_isLoginMode) {
+      // Either a username or an email — the session works out which.
+      session.signInWithIdentifier(
+        identifier: _emailController.text,
         password: _passwordController.text,
       );
     } else {
@@ -51,10 +68,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  void _toggleMode(AppSession session) {
+    // The old mode's failure ("that email is already registered") is not about
+    // the form the user is now looking at.
+    session.clearError();
+    setState(() {
+      _isLoginMode = !_isLoginMode;
+      _confirmController.clear();
+    });
+  }
+
+  /// Validates the one field that takes a username *or* an email when logging
+  /// in, and an email only when signing up.
+  ///
+  /// Signup stays email-only because an account needs a reachable address
+  /// before it has a username: password resets go there, and there is nowhere
+  /// else to send them.
+  String? _validateIdentifier(String? value) {
+    final identifier = value?.trim() ?? '';
+
+    if (identifier.isEmpty) {
+      return _isLoginMode
+          ? 'Enter your username or email.'
+          : 'Enter your email address.';
+    }
+
+    if (_isLoginMode && !looksLikeEmail(identifier)) {
+      // A username. Checked no further than this on purpose: whether the
+      // account exists is the server's answer, and holding old usernames to
+      // today's format rules would lock out whoever registered under the old
+      // ones.
+      if (identifier.contains(RegExp(r'\s'))) {
+        return "That username doesn't look valid.";
+      }
+      return null;
+    }
+
+    // Deliberately loose: the goal is to catch fat-fingered input, not to
+    // adjudicate RFC 5322. Firebase is the real authority.
+    if (!RegExp(r'^[^@\s]+@[^@\s.]+\.[^@\s]+$').hasMatch(identifier)) {
+      return "That email address doesn't look valid.";
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    final password = value ?? '';
+    if (password.isEmpty) return 'Enter your password.';
+    // Only enforced on signup — an existing account may predate this rule, and
+    // rejecting its password at the door would lock the owner out.
+    if (!_isLoginMode && password.length < 6) {
+      return 'Use at least 6 characters.';
+    }
+    return null;
+  }
+
+  String? _validateConfirm(String? value) {
+    if (_isLoginMode) return null;
+    if ((value ?? '').isEmpty) return 'Re-enter your password.';
+    if (value != _passwordController.text) return 'Passwords do not match.';
+    return null;
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmController.dispose();
     super.dispose();
   }
 
@@ -180,7 +260,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             Text(
-                              widget.isLoginMode ? 'Welcome back' : 'Create your account',
+                              _isLoginMode ? 'Welcome back' : 'Create your account',
                               style: const TextStyle(
                                 color: AppColors.onMedia,
                                 fontSize: 30,
@@ -189,7 +269,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              widget.isLoginMode ? 'Log in to continue.' : 'Join the fitness community.',
+                              _isLoginMode ? 'Log in to continue.' : 'Join the fitness community.',
                               style: const TextStyle(
                                 color: AppColors.onMediaMuted,
                                 fontSize: 16,
@@ -215,14 +295,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               // Email fields appear ABOVE the primary CTA once revealed, so
               // the flow reads top-to-bottom: enter details, then submit.
               if (_showEmailForm) ...[
-                _EmailPanel(
-                  emailController: _emailController,
-                  passwordController: _passwordController,
-                  onSubmitted: () => _submit(session),
-                  // Only offered when logging in — there is no password to
-                  // reset while creating an account.
-                  onForgotPassword:
-                      widget.isLoginMode ? _handleForgotPassword : null,
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: _EmailPanel(
+                      formKey: _formKey,
+                      emailController: _emailController,
+                      passwordController: _passwordController,
+                      confirmController: _confirmController,
+                      isLoginMode: _isLoginMode,
+                      obscurePassword: _obscurePassword,
+                      obscureConfirm: _obscureConfirm,
+                      onTogglePassword: () => setState(
+                        () => _obscurePassword = !_obscurePassword,
+                      ),
+                      onToggleConfirm: () => setState(
+                        () => _obscureConfirm = !_obscureConfirm,
+                      ),
+                      validateEmail: _validateIdentifier,
+                      validatePassword: _validatePassword,
+                      validateConfirm: _validateConfirm,
+                      onSubmitted: () => _submit(session),
+                      // Only offered when logging in — there is no password to
+                      // reset while creating an account.
+                      onForgotPassword:
+                          _isLoginMode ? _handleForgotPassword : null,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
               ],
@@ -249,18 +347,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 label: session.isLoading
                     ? 'Please wait…'
                     : _showEmailForm
-                        ? (widget.isLoginMode ? 'Log In' : 'Sign Up')
+                        ? (_isLoginMode ? 'Log In' : 'Create Account')
                         : 'Use Email',
                 onPressed: session.isLoading ? null : () => _submit(session),
               ),
               const SizedBox(height: AppSpacing.md),
               _SocialButton(
                 icon: Icons.mail_outline_rounded,
-                label: 'Continue with Google',
+                label: _isLoginMode
+                    ? 'Continue with Google'
+                    : 'Sign up with Google',
                 loading: session.isLoading,
                 onPressed: () {
                   ref.read(appSessionProvider).continueWithProvider('google');
                 },
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Center(
+                child: TextButton(
+                  onPressed:
+                      session.isLoading ? null : () => _toggleMode(session),
+                  child: RichText(
+                    text: TextSpan(
+                      style: TextStyle(color: palette.muted, fontSize: 14),
+                      children: [
+                        TextSpan(
+                          text: _isLoginMode
+                              ? "Don't have an account? "
+                              : 'Already have an account? ',
+                        ),
+                        TextSpan(
+                          text: _isLoginMode ? 'Sign up' : 'Log in',
+                          style: const TextStyle(
+                            color: AppColors.orangeBright,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -272,14 +398,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
 class _EmailPanel extends StatelessWidget {
   const _EmailPanel({
+    required this.formKey,
     required this.emailController,
     required this.passwordController,
+    required this.confirmController,
+    required this.isLoginMode,
+    required this.obscurePassword,
+    required this.obscureConfirm,
+    required this.onTogglePassword,
+    required this.onToggleConfirm,
+    required this.validateEmail,
+    required this.validatePassword,
+    required this.validateConfirm,
     required this.onSubmitted,
     this.onForgotPassword,
   });
 
+  final GlobalKey<FormState> formKey;
   final TextEditingController emailController;
   final TextEditingController passwordController;
+  final TextEditingController confirmController;
+  final bool isLoginMode;
+  final bool obscurePassword;
+  final bool obscureConfirm;
+  final VoidCallback onTogglePassword;
+  final VoidCallback onToggleConfirm;
+  final FormFieldValidator<String> validateEmail;
+  final FormFieldValidator<String> validatePassword;
+  final FormFieldValidator<String> validateConfirm;
   final VoidCallback onSubmitted;
   final VoidCallback? onForgotPassword;
 
@@ -293,20 +439,35 @@ class _EmailPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: palette.stroke),
       ),
-      child: Column(
+      child: Form(
+        key: formKey,
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Email',
+            isLoginMode ? 'Username or email' : 'Email',
             style: TextStyle(color: palette.text, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          TextField(
+          TextFormField(
             controller: emailController,
-            keyboardType: TextInputType.emailAddress,
+            // The email keyboard is right for signup and wrong for logging in
+            // with a username, where its layout buries the letters people
+            // actually need behind an '@' and a '.com'.
+            keyboardType: isLoginMode
+                ? TextInputType.text
+                : TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             autocorrect: false,
-            decoration: const InputDecoration(hintText: 'you@example.com'),
+            // Offering `username` as well lets a password manager fill either
+            // credential; `email` alone would leave a saved username unfilled.
+            autofillHints: isLoginMode
+                ? const [AutofillHints.username, AutofillHints.email]
+                : const [AutofillHints.email],
+            validator: validateEmail,
+            decoration: InputDecoration(
+              hintText: isLoginMode ? 'yourhandle or you@example.com' : 'you@example.com',
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
@@ -314,13 +475,52 @@ class _EmailPanel extends StatelessWidget {
             style: TextStyle(color: palette.text, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          TextField(
+          TextFormField(
             controller: passwordController,
-            obscureText: true,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => onSubmitted(),
-            decoration: const InputDecoration(hintText: 'Enter your password'),
+            obscureText: obscurePassword,
+            textInputAction:
+                isLoginMode ? TextInputAction.done : TextInputAction.next,
+            autofillHints: [
+              isLoginMode ? AutofillHints.password : AutofillHints.newPassword,
+            ],
+            validator: validatePassword,
+            onFieldSubmitted: (_) {
+              if (isLoginMode) onSubmitted();
+            },
+            decoration: InputDecoration(
+              hintText: isLoginMode
+                  ? 'Enter your password'
+                  : 'At least 6 characters',
+              suffixIcon: _VisibilityToggle(
+                obscured: obscurePassword,
+                onPressed: onTogglePassword,
+              ),
+            ),
           ),
+          if (!isLoginMode) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Confirm Password',
+              style:
+                  TextStyle(color: palette.text, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: confirmController,
+              obscureText: obscureConfirm,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.newPassword],
+              validator: validateConfirm,
+              onFieldSubmitted: (_) => onSubmitted(),
+              decoration: InputDecoration(
+                hintText: 'Re-enter your password',
+                suffixIcon: _VisibilityToggle(
+                  obscured: obscureConfirm,
+                  onPressed: onToggleConfirm,
+                ),
+              ),
+            ),
+          ],
           if (onForgotPassword != null)
             Align(
               alignment: Alignment.centerRight,
@@ -339,6 +539,31 @@ class _EmailPanel extends StatelessWidget {
               ),
             ),
         ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The eye button inside a password field. Split out so the password and the
+/// confirmation get an identical control.
+class _VisibilityToggle extends StatelessWidget {
+  const _VisibilityToggle({required this.obscured, required this.onPressed});
+
+  final bool obscured;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      iconSize: 20,
+      color: context.palette.muted,
+      tooltip: obscured ? 'Show password' : 'Hide password',
+      icon: Icon(
+        obscured
+            ? Icons.visibility_outlined
+            : Icons.visibility_off_outlined,
       ),
     );
   }

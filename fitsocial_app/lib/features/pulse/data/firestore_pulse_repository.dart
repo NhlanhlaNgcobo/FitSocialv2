@@ -5,6 +5,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import '../../../shared/async/combine_latest.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../main/domain/app_models.dart' show PublicAuthorName;
 import '../domain/pulse_models.dart';
@@ -33,10 +34,28 @@ class FirestorePulseRepository implements PulseRepository {
   final FirebaseAuth _firebaseAuth;
   final FirebaseStorage _storage;
 
-  /// Ceiling on how many live Pulses a single tray load will consider. Well
-  /// clear of anything a community this size produces in a day, and it keeps
-  /// one runaway account from unbounding the query.
-  static const int _trayLimit = 300;
+  /// How many authors go into one `whereIn` filter.
+  ///
+  /// Ten, not the thirty Firestore allows — this number is set by the security
+  /// rules, not by the query. The rule on `/pulses` checks each returned
+  /// document against a follower lookup, and the rules engine permits 20
+  /// document lookups per query. Identical lookups are cached, so the cost is
+  /// one per distinct author in the result: keeping chunks at ten leaves that
+  /// comfortably inside the budget.
+  static const int _authorChunkSize = 10;
+
+  /// Ceiling on how many live Pulses one chunk will consider. Well clear of
+  /// anything ten accounts produce in a day, and it keeps one runaway account
+  /// from unbounding the query.
+  static const int _chunkLimit = 100;
+
+  /// Upper bound on the audience a single tray will query for.
+  ///
+  /// Each chunk is a live listener, so this is really a cap on open listeners
+  /// — ten of them here. Someone following more people than this gets a tray
+  /// built from the first hundred; past that the right shape is a fan-out
+  /// inbox written server-side, not more sockets.
+  static const int _maxTrayAuthors = 100;
 
   static const Duration _imageUploadTimeout = Duration(seconds: 60);
   static const Duration _videoUploadTimeout = Duration(minutes: 3);
@@ -54,18 +73,31 @@ class FirestorePulseRepository implements PulseRepository {
       _users.doc(userId).collection('pulseSeen');
 
   @override
-  Stream<List<PulseSegment>> watchActivePulses() {
-    // Ordering by expiresAt is equivalent to ordering by createdAt — every
-    // Pulse has the same lifetime — and keeps this on a single-field index
-    // that Firestore provides automatically.
-    return _pulses
-        .where('expiresAt', isGreaterThan: Timestamp.now())
-        .orderBy('expiresAt', descending: true)
-        .limit(_trayLimit)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => _segmentFromDoc(doc.id, doc.data()))
-            .toList(growable: false));
+  Stream<List<PulseSegment>> watchActivePulses(Set<String> authorIds) {
+    if (authorIds.isEmpty) return Stream.value(const []);
+
+    final ids = authorIds.take(_maxTrayAuthors).toList(growable: false);
+
+    final chunks = <Stream<List<PulseSegment>>>[];
+    for (var i = 0; i < ids.length; i += _authorChunkSize) {
+      final chunk = ids.skip(i).take(_authorChunkSize).toList(growable: false);
+      chunks.add(
+        // Ordering by expiresAt is equivalent to ordering by createdAt — every
+        // Pulse has the same lifetime — and it is the field the range filter
+        // is on, which Firestore requires the first orderBy to match.
+        _pulses
+            .where('authorId', whereIn: chunk)
+            .where('expiresAt', isGreaterThan: Timestamp.now())
+            .orderBy('expiresAt', descending: true)
+            .limit(_chunkLimit)
+            .snapshots()
+            .map((snapshot) => snapshot.docs
+                .map((doc) => _segmentFromDoc(doc.id, doc.data()))
+                .toList(growable: false)),
+      );
+    }
+
+    return combineLatestLists(chunks);
   }
 
   @override

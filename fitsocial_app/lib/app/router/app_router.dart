@@ -24,6 +24,7 @@ import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
 import '../../features/messages/presentation/messages_screen.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/pulse/presentation/pulse_composer_screen.dart';
 import '../../features/pulse/presentation/pulse_viewer_screen.dart';
@@ -157,6 +158,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/messages',
         builder: (context, state) => const MessagesScreen(),
+      ),
+      // Outside the shell, like /messages: it is opened from the bell and
+      // returned from, not one of the five tabs.
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
       ),
       GoRoute(
         path: '/settings',

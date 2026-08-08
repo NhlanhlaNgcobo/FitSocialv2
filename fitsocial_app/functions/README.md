@@ -1,11 +1,30 @@
 # FitSocial Cloud Functions
 
-Two callables, both requiring a signed-in user:
+| Function | Auth | What it does |
+| --- | --- | --- |
+| `analyzeMeal` | Signed in | Takes a meal photo URL, identifies the foods with a vision model, and returns macros looked up from the nutrition database. |
+| `searchFoods` | Signed in | Text search over the nutrition database, for adding or correcting a food by hand. |
+| `signInWithUsername` | **None** | Trades a username and password for a Firebase custom token, so the app can offer a "username or email" login field. |
 
-| Function | What it does |
-| --- | --- |
-| `analyzeMeal` | Takes a meal photo URL, identifies the foods with a vision model, and returns macros looked up from the nutrition database. |
-| `searchFoods` | Text search over the nutrition database, for adding or correcting a food by hand. |
+## Why username login needs a function
+
+Firebase Auth only understands email/password, so signing in with a username
+means resolving it to an email first. Doing that in the client would require
+publishing a username→email map readable by anyone — every user's address, free
+for the scraping.
+
+`signInWithUsername` does the lookup under Admin credentials and verifies the
+password against Identity Toolkit itself. **The email never crosses back over
+the wire.** The caller receives a custom token or an error, and learns nothing
+about the account either way — including whether the username exists, since
+every failure returns the same message.
+
+It is intentionally callable without a session, which is the one thing that
+makes it worth hardening further: turn on **App Check** for this function before
+you have real users. Brute-force protection today is Identity Toolkit's own
+per-IP rate limiting. A per-username attempt counter was deliberately left out —
+it would let anyone lock a named account out of its own login just by failing at
+it repeatedly.
 
 ## How the meal analyzer works
 
@@ -33,7 +52,28 @@ firebase functions:secrets:set OPENROUTER_API_KEY
 
 Paste the key when prompted. It is never committed — `firebase-functions/params` reads it from Secret Manager at runtime.
 
-### 2. Choose a vision model (optional)
+### 2. Web API key (required for username login)
+
+`functions/.env`:
+
+```
+WEB_API_KEY="AIza..."
+```
+
+Already set for this project. It is the same value as `web.apiKey` in
+`lib/firebase_options.dart` — or Firebase console → Project settings → General →
+**Web API Key**. Not a secret: it ships inside every copy of the client app,
+which is why it lives in `.env` rather than Secret Manager.
+
+`signInWithUsername` uses it to verify a password against Identity Toolkit;
+without it that function returns `failed-precondition` and username login stops
+working while email login carries on.
+
+Note the name. The Functions runtime reserves the `FIREBASE_` prefix and will
+refuse to load a `.env` containing `FIREBASE_WEB_API_KEY`, failing the deploy
+before it starts.
+
+### 3. Choose a vision model (optional)
 
 `functions/.env`:
 
@@ -66,13 +106,33 @@ Both in `index.js`, and both deliberately provider-neutral so `VISION_MODEL` can
 - `max_tokens` is 4000. Reasoning models on both OpenAI and Anthropic draw thinking from the same budget as the response, so a tight cap truncates the JSON mid-object — which the code reports as a parse failure, not as truncation.
 - `temperature` is not sent. Current Claude models reject non-default sampling parameters with a 400, and omitting it keeps the request valid on every provider.
 
-### 3. Deploy
+### 4. Deploy
 
 ```bash
 firebase deploy --only functions
 ```
 
-### 4. Firestore rules
+### 5. Back-fill username reservations (required, once)
+
+Run this **before** deploying the username security rules. Those rules refuse
+any profile write whose handle the caller does not hold a reservation for, so
+an account created before the `usernames` collection existed cannot save its own
+profile — not even a bio edit — until it has one.
+
+```bash
+npm run backfill:usernames
+```
+
+Reports only. Re-run with `--commit` to write:
+
+```bash
+node scripts/backfill_usernames.js --commit
+```
+
+Accounts already sharing a handle are reported, never silently resolved — the
+oldest profile keeps the name and the report names who else needs contacting.
+
+### 6. Firestore rules
 
 The new `meals` and `nutritionFoods` rules ship in `../firestore.rules`:
 

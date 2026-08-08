@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/identity/profile_identity.dart';
+
 /// Timing rules for Pulse playback and expiry.
 ///
 /// These mirror Instagram Stories: a still frame holds for 5 seconds, a video
@@ -325,16 +327,9 @@ List<PulseTrayEntry> buildPulseTray({
   return entries;
 }
 
-/// Two-letter fallback shown in a ring when someone has no profile photo.
-String pulseInitials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+'));
-  if (parts.length >= 2 && parts.first.isNotEmpty && parts.last.isNotEmpty) {
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
-  final first = parts.first;
-  if (first.isEmpty) return 'FS';
-  return first.substring(0, first.length > 1 ? 2 : 1).toUpperCase();
-}
+/// Monogram shown in a ring when someone has no profile photo, empty when
+/// there is no real name to build one from — see [avatarInitials].
+String pulseInitials(String name) => avatarInitials(name);
 
 /// Compact age label for the Pulse header — "now", "42m", "6h".
 ///

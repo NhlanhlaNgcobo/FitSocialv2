@@ -1,16 +1,32 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/app_session.dart';
-import '../../main/application/content_providers.dart' show currentUserIdProvider;
+import '../../main/application/content_providers.dart'
+    show currentUserIdProvider, followingIdsProvider;
 import '../data/pulse_repository.dart';
 import '../domain/pulse_models.dart';
 
-/// Every unexpired Pulse, live. Loose segments — see [pulseTrayProvider] for
-/// the grouped form the UI actually renders.
+/// Every unexpired Pulse the signed-in user is allowed to see, live. Loose
+/// segments — see [pulseTrayProvider] for the grouped form the UI renders.
+///
+/// The audience is the people they follow, plus themselves. A Pulse is a
+/// 24-hour glimpse of someone's day, and it goes to the people who asked for
+/// it — not to everyone holding an account.
 final activePulsesProvider = StreamProvider<List<PulseSegment>>((ref) {
   // Re-subscribe on sign-in/out: the query requires an authenticated reader.
   ref.watch(appSessionProvider);
-  return ref.watch(pulseRepositoryProvider).watchActivePulses();
+
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return Stream.value(const <PulseSegment>[]);
+
+  // Treated as empty while it loads rather than holding the tray back: your
+  // own ring appears immediately, and the rest arrive a beat later when the
+  // follow graph lands.
+  final following = ref.watch(followingIdsProvider).valueOrNull ?? const {};
+
+  return ref
+      .watch(pulseRepositoryProvider)
+      .watchActivePulses({...following, currentUserId});
 });
 
 /// The signed-in user's per-author "last watched" cursors.

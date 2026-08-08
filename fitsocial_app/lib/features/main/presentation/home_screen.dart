@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../application/create_flow_controller.dart';
@@ -11,6 +12,7 @@ import '../../../shared/widgets/activity_grid.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/post_card.dart';
+import '../../notifications/application/notification_providers.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
 
@@ -30,8 +32,8 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.monitor_heart_outlined),
           ),
           IconButton(
-            onPressed: () => context.push('/achievements'),
-            icon: const Icon(Icons.notifications_none_rounded),
+            onPressed: () => context.push('/notifications'),
+            icon: const _NotificationBell(),
           ),
           IconButton(
             onPressed: () {
@@ -61,7 +63,7 @@ class HomeScreen extends ConsumerWidget {
           const ActivityGridCard(fixedRange: ActivityRange.week),
           const SizedBox(height: AppSpacing.sm),
           posts.when(
-            data: (data) => _buildPostColumn(data, ref),
+            data: (feed) => _buildFeed(feed, ref),
             loading: () => const _SectionPlaceholder(label: 'Loading feed...'),
             error: (_, __) =>
                 const _SectionPlaceholder(label: 'Feed unavailable'),
@@ -71,9 +73,20 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPostColumn(List<FeedPost> posts, WidgetRef ref) {
+  Widget _buildFeed(HomeFeed feed, WidgetRef ref) {
+    if (feed.isEmpty) return const _NothingPostedYet();
+
     return Column(
-      children: _buildPosts(posts, ref),
+      children: [
+        // Said out loud when these are not the people you follow, so a quiet
+        // feed is never mistaken for a quiet community — or the other way
+        // round.
+        if (feed.source == FeedSource.suggested) ...[
+          const _SuggestedHeader(),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        ..._buildPosts(feed.posts, ref),
+      ],
     );
   }
 
@@ -93,7 +106,6 @@ class HomeScreen extends ConsumerWidget {
           likes: post.likes,
           comments: post.comments,
           backgroundColors: post.backgroundColors,
-          visualTile: post.visualTile,
           postType: post.postType,
           imageUrl: post.imageUrl,
           workoutData: post.workoutData,
@@ -122,6 +134,189 @@ class HomeScreen extends ConsumerWidget {
       }
     }
     return items;
+  }
+}
+
+/// Says that what follows is the community rather than the people you follow,
+/// and offers the one action that changes that.
+class _SuggestedHeader extends StatelessWidget {
+  const _SuggestedHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: palette.stroke),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.explore_outlined,
+                size: 18,
+                color: AppColors.orangeBright,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Suggested for you',
+                style: TextStyle(
+                  color: palette.text,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Follow people and their posts land here first.',
+            style: TextStyle(color: palette.muted, fontSize: 13.5, height: 1.4),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: palette.text,
+              side: BorderSide(color: palette.stroke),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () => context.go('/explore'),
+            icon: const Icon(Icons.person_search_outlined, size: 18),
+            label: const Text('Find people'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The one case the suggested feed can't cover: nobody in the app has posted
+/// anything yet.
+class _NothingPostedYet extends StatelessWidget {
+  const _NothingPostedYet();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xl,
+      ),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: palette.stroke),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.orangeBright.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.bolt_rounded,
+              color: AppColors.orangeBright,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'The feed is empty',
+            style: TextStyle(
+              color: palette.text,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Nobody has posted yet. Log a session and start it off.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.muted, fontSize: 14),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.orangeBright,
+              side: const BorderSide(color: AppColors.orangeBright),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 12,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: () => context.go('/create'),
+            child: const Text('Create a post'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The bell, carrying a count of what is waiting behind it.
+///
+/// The count is read from the same stream the notifications list renders, so
+/// the badge can never claim something the list doesn't show. It clears
+/// because opening the list marks it read, not because it was tapped.
+class _NotificationBell extends ConsumerWidget {
+  const _NotificationBell();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadNotificationCountProvider);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_none_rounded),
+        if (unread > 0)
+          Positioned(
+            right: -4,
+            top: -3,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              constraints: const BoxConstraints(minWidth: 16),
+              decoration: BoxDecoration(
+                color: AppColors.orangeBright,
+                borderRadius: BorderRadius.circular(999),
+                // Separates the badge from the glyph underneath it, whichever
+                // way the theme has painted the bar.
+                border: Border.all(color: context.palette.background, width: 1.5),
+              ),
+              child: Text(
+                // Past nine the exact number stops being information; what
+                // matters is that there is a lot.
+                unread > 9 ? '9+' : '$unread',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.onBrand,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 

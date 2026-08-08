@@ -7,7 +7,8 @@
   "main": "index.js",
   "scripts": {
     "seed:nutrition": "node scripts/seed_nutrition_db.js",
-    "check:nutrition": "node scripts/check_nutrition_matching.js"
+    "check:nutrition": "node scripts/check_nutrition_matching.js",
+    "backfill:usernames": "node scripts/backfill_usernames.js"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",

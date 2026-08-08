@@ -83,7 +83,6 @@ class PostDetailSheet extends StatelessWidget {
                 likes: post.likes,
                 comments: post.comments,
                 backgroundColors: post.backgroundColors,
-                visualTile: post.visualTile,
                 postType: post.postType,
                 imageUrl: post.imageUrl,
                 workoutData: post.workoutData,

@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/comment_composer.dart';
 import '../../../shared/widgets/post_card.dart';
@@ -224,9 +225,8 @@ class _AuthorRow extends ConsumerWidget {
       child: Row(
         children: [
           Avatar(
-            initials: _initials(post.userName),
+            initials: avatarInitials(post.userName),
             size: 44,
-            visualTile: post.visualTile,
             imageUrl: post.authorAvatarUrl,
           ),
           const SizedBox(width: AppSpacing.sm + 4),
@@ -273,16 +273,6 @@ class _AuthorRow extends ConsumerWidget {
       onTap: () => context.push('/user/${post.authorId}'),
       child: row,
     );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.isEmpty || parts.first.isEmpty) return 'FS';
-    if (parts.length == 1) {
-      final first = parts.first;
-      return first.substring(0, first.length > 1 ? 2 : 1).toUpperCase();
-    }
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 }
 

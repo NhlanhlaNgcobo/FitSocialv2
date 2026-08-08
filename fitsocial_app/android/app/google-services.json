@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "801328750075-cfe797f3fvd1uaf8vfjtp9osslig90lj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitsocial.fitsocial_app",
+            "certificate_hash": "9045a15e019228117746c360be33371e4350a9e6"
+          }
+        },
+        {
           "client_id": "801328750075-ig5o6f1u6c3152klac8faijnies1iunh.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

@@ -12,8 +12,19 @@ class UnconfiguredAuthRepository implements AuthRepository {
   String? currentUserEmail() => null;
 
   @override
+  Future<bool> hasValidSession() async => false;
+
+  @override
   Future<String> signInWithEmail({
     required String email,
+    required String password,
+  }) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<String> signInWithUsername({
+    required String username,
     required String password,
   }) async {
     throw StateError(_firebaseSetupMessage);

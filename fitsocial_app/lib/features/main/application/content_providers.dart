@@ -12,7 +12,7 @@ import '../domain/explore_models.dart';
 // Feed posts — StateNotifier for optimistic like toggling
 // ---------------------------------------------------------------------------
 
-class FeedPostsNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
+class FeedPostsNotifier extends StateNotifier<AsyncValue<HomeFeed>> {
   FeedPostsNotifier(this._repository, this._profile)
       : super(const AsyncValue.loading()) {
     _load();
@@ -23,7 +23,15 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
 
   Future<void> _load() async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => _repository.getFeedPosts(_profile));
+    final loaded =
+        await AsyncValue.guard(() => _repository.getFeedPosts(_profile));
+
+    // The feed can be invalidated — by following someone, by logging an
+    // activity — while a load is still in the air, which disposes this
+    // notifier and hands the work to a fresh one. Writing the late result
+    // then throws, so the abandoned load simply stops here.
+    if (!mounted) return;
+    state = loaded;
   }
 
   Future<void> refresh() => _load();
@@ -34,7 +42,7 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     if (current == null) return;
 
     // Optimistic update
-    state = AsyncValue.data(current.map((p) {
+    state = AsyncValue.data(current.withPosts(current.posts.map((p) {
       if (p.id != postId) return p;
       final liked = p.likedBy.contains(userId);
       final newLikedBy = liked
@@ -44,11 +52,11 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
         likedBy: newLikedBy,
         likes: newLikedBy.length,
       );
-    }).toList());
+    }).toList()));
 
     // Sync to Firestore
     try {
-      await _repository.toggleLike(postId, userId);
+      await _repository.toggleLike(postId, userId, profile: _profile);
     } catch (_) {
       // Roll back on error
       state = AsyncValue.data(current);
@@ -63,7 +71,9 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     if (current == null) return;
 
     state = AsyncValue.data(
-      current.where((post) => post.id != postId).toList(growable: false),
+      current.withPosts(
+        current.posts.where((post) => post.id != postId).toList(growable: false),
+      ),
     );
   }
 
@@ -72,15 +82,15 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<List<FeedPost>>> {
     final current = state.valueOrNull;
     if (current == null) return;
 
-    state = AsyncValue.data(current.map((p) {
+    state = AsyncValue.data(current.withPosts(current.posts.map((p) {
       if (p.id != postId) return p;
       return p.copyWith(comments: p.comments + 1);
-    }).toList());
+    }).toList()));
   }
 }
 
 final feedPostsProvider =
-    StateNotifierProvider<FeedPostsNotifier, AsyncValue<List<FeedPost>>>((ref) {
+    StateNotifierProvider<FeedPostsNotifier, AsyncValue<HomeFeed>>((ref) {
   final profile = ref.watch(appSessionProvider).profile;
   final repository = ref.watch(contentRepositoryProvider);
   return FeedPostsNotifier(repository, profile);
@@ -244,6 +254,17 @@ final isFollowingProvider =
       .watchIsFollowing(currentUserId, targetUserId);
 });
 
+/// Everyone the signed-in user follows, live.
+///
+/// The audience for anything scoped to the follow graph. Kept as a stream so
+/// following someone changes what they can see immediately, rather than at the
+/// next load.
+final followingIdsProvider = StreamProvider<Set<String>>((ref) {
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return Stream.value(const <String>{});
+  return ref.watch(contentRepositoryProvider).watchFollowingIds(currentUserId);
+});
+
 /// Whether the signed-in user has push notifications turned on for
 /// [targetUserId]'s activity.
 final userNotificationsProvider =
@@ -286,12 +307,25 @@ class FollowActions {
     if (isFollowing) {
       await repository.unfollowUser(currentUserId, targetUserId);
     } else {
-      await repository.followUser(currentUserId, targetUserId);
+      // The session profile names the follower on the notification this
+      // raises, sparing the repository a read of a profile the app already
+      // has in hand.
+      await repository.followUser(
+        currentUserId,
+        targetUserId,
+        profile: _ref.read(appSessionProvider).profile,
+      );
     }
 
     // isFollowingProvider is a live stream and updates itself; the profile
     // header counts are one-shot reads and need refreshing.
     _ref.invalidate(profileStatsProvider);
+
+    // The home feed is built from the follow graph, so following someone is
+    // exactly the moment it stops being right. Rebuilt rather than patched:
+    // the new author's back catalogue has to be merged in by date, which is
+    // the query's job and not something the list can do to itself.
+    _ref.invalidate(feedPostsProvider);
   }
 }
 

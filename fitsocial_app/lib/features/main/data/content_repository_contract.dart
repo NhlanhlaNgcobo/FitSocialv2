@@ -2,7 +2,13 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 
 abstract class ContentRepository {
-  Future<List<FeedPost>> getFeedPosts(UserProfileDraft? profile);
+  /// The home feed: posts by the people the signed-in user follows, plus
+  /// their own, newest first.
+  ///
+  /// Falls back to the community's trending posts — flagged as such on the
+  /// returned [HomeFeed] — when the user follows nobody or the people they
+  /// follow have posted nothing. A blank home screen is never the answer.
+  Future<HomeFeed> getFeedPosts(UserProfileDraft? profile);
   Future<List<ProgressMetric>> getProgressMetrics();
 
   /// The signed-in user's runs and workouts bucketed per calendar day, from
@@ -43,16 +49,33 @@ abstract class ContentRepository {
   /// one — see `TrendingScore` — so results change as posts age.
   Future<List<FeedPost>> fetchTrendingPosts();
 
-  /// Creates the follow edges between the two users and adjusts both profile
-  /// counters. No-op when the edge already exists.
-  Future<void> followUser(String currentUserId, String targetUserId);
+  /// Creates the follow edges between the two users, adjusts both profile
+  /// counters and drops a notification in the target's inbox. No-op when the
+  /// edge already exists.
+  ///
+  /// [profile] supplies the follower's public name and photo for that
+  /// notification, following the same rule as posts: attribution comes from
+  /// the user's profile and never from their credentials. Passing it is an
+  /// optimisation — omitted, the stored profile is read instead.
+  Future<void> followUser(
+    String currentUserId,
+    String targetUserId, {
+    UserProfileDraft? profile,
+  });
 
-  /// Removes the follow edges and adjusts both profile counters. No-op when
-  /// there is no edge to remove.
+  /// Removes the follow edges, adjusts both profile counters and withdraws the
+  /// notification the follow raised. No-op when there is no edge to remove.
   Future<void> unfollowUser(String currentUserId, String targetUserId);
 
   /// Watches whether [currentUserId] currently follows [targetUserId].
   Stream<bool> watchIsFollowing(String currentUserId, String targetUserId);
+
+  /// Everyone [userId] follows, by uid, live.
+  ///
+  /// A stream rather than a read because it is what audiences are built from:
+  /// following someone should light up their Pulse ring there and then, not on
+  /// the next cold start.
+  Stream<Set<String>> watchFollowingIds(String userId);
 
   /// Watches whether [currentUserId] has asked to be notified about
   /// [targetUserId]'s activity.
@@ -84,7 +107,16 @@ abstract class ContentRepository {
   /// and its uploaded image. Throws if the caller is not the author.
   Future<void> deletePost(String postId);
 
-  Future<void> toggleLike(String postId, String userId);
+  /// Likes the post, or takes the like back when it is already there.
+  ///
+  /// Liking someone else's post notifies them; unliking withdraws that
+  /// notification. [profile] names the liker on it, on the same terms as
+  /// [followUser].
+  Future<void> toggleLike(
+    String postId,
+    String userId, {
+    UserProfileDraft? profile,
+  });
   Future<void> toggleBookmark(String postId, String userId);
   Future<List<Comment>> getComments(String postId);
   /// Adds a comment attributed to [profile]. The profile is passed in (rather
