@@ -1,9 +1,11 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 import '../reactions/fit_reaction.dart';
 
 /// Wraps any widget in the reaction gesture, and opens the tray above it.
@@ -52,10 +54,18 @@ class ReactionTrigger extends StatefulWidget {
 
 class _ReactionTriggerState extends State<ReactionTrigger>
     with SingleTickerProviderStateMixin {
-  /// Widest a single reaction's slot gets. Below this the row is squeezed to fit
-  /// rather than overflowing — seven reactions have to land on a narrow phone.
-  static const double _maxItemExtent = 46;
-  static const double _trayPadding = 8;
+  /// Widest a single reaction's slot gets. Below this the row is squeezed to
+  /// fit rather than overflowing — seven reactions have to land on a narrow
+  /// phone.
+  ///
+  /// Deliberately snug. At 46 the emoji swam in their slots and the capsule
+  /// ran nearly the full width of the screen, which read as a bar rather than
+  /// as a tray; the emoji themselves fill more of the slot than they used to.
+  static const double _maxItemExtent = 40;
+
+  /// Breathing room inside the capsule. Sets its corner radius too — the
+  /// capsule is exactly a stadium, so the radius is half its height.
+  static const double _trayPadding = 9;
 
   /// Gap between the tray and the button it springs from.
   static const double _trayLift = 14;
@@ -81,6 +91,14 @@ class _ReactionTriggerState extends State<ReactionTrigger>
   /// hit test on every frame of the drag.
   Rect _trayRect = Rect.zero;
   double _itemExtent = _maxItemExtent;
+
+  /// The theme the tray paints itself in, taken when it opens.
+  ///
+  /// Read from the host's context and held, not read live from the overlay's:
+  /// an OverlayEntry builds above the route, so the theme in scope there is
+  /// not the one the page is drawn in. Nothing restyles the app mid-press, so
+  /// a snapshot is as correct as a subscription and far simpler.
+  AppPalette? _palette;
 
   FitReaction? _hovered;
 
@@ -152,6 +170,7 @@ class _ReactionTriggerState extends State<ReactionTrigger>
       trayHeight,
     );
     _hovered = null;
+    _palette = context.palette;
 
     _tray = OverlayEntry(builder: (context) => _buildTray());
     overlay.insert(_tray!);
@@ -222,19 +241,30 @@ class _ReactionTriggerState extends State<ReactionTrigger>
   }
 
   Widget _buildTray() {
+    final palette = _palette;
+    if (palette == null) return const SizedBox.shrink();
+
     return Positioned.fromRect(
       rect: _trayRect,
       // The row must not swallow the long-press that opened it — the gesture
       // is still live on the button underneath, and it is the one steering.
       child: IgnorePointer(
-        child: AnimatedBuilder(
-          animation: _reveal,
-          builder: (context, _) => _ReactionTray(
-            reveal: _reveal.value,
-            hovered: _hovered,
-            selected: widget.selected,
-            itemExtent: _itemExtent,
-            padding: _trayPadding,
+        // Overlay entries sit above the route's Material, so text inside one
+        // inherits WidgetsApp's fallback style — the yellow double underline
+        // meant to flag unstyled text. A transparent Material restores a real
+        // DefaultTextStyle without painting anything of its own.
+        child: Material(
+          type: MaterialType.transparency,
+          child: AnimatedBuilder(
+            animation: _reveal,
+            builder: (context, _) => _ReactionTray(
+              reveal: _reveal.value,
+              hovered: _hovered,
+              selected: widget.selected,
+              itemExtent: _itemExtent,
+              padding: _trayPadding,
+              palette: palette,
+            ),
           ),
         ),
       ),
@@ -242,7 +272,14 @@ class _ReactionTriggerState extends State<ReactionTrigger>
   }
 }
 
-/// The row of seven reactions, and the name of whichever one is under the finger.
+/// The row of seven reactions, and the name of whichever is under the finger.
+///
+/// Drawn as tinted glass rather than a flat slab, matching the bottom nav —
+/// same tokens, same order of operations: shadow outside the clip, blur and
+/// gradient inside it, a sheen along the top edge, a lit rim over everything.
+/// That treatment is duplicated rather than shared because the nav's copy is
+/// tuned around keeping one blur layer alive across its show/hide animation,
+/// and is not worth disturbing for this.
 class _ReactionTray extends StatelessWidget {
   const _ReactionTray({
     required this.reveal,
@@ -250,7 +287,12 @@ class _ReactionTray extends StatelessWidget {
     required this.selected,
     required this.itemExtent,
     required this.padding,
+    required this.palette,
   });
+
+  /// Built once and shared, so the engine can keep the blur's layer instead of
+  /// tearing it down on every frame of the reveal.
+  static final ImageFilter _blur = ImageFilter.blur(sigmaX: 16, sigmaY: 16);
 
   /// 0 closed, 1 fully open. Drives the whole tray's rise and each reaction's
   /// staggered pop.
@@ -260,51 +302,110 @@ class _ReactionTray extends StatelessWidget {
   final FitReaction? selected;
   final double itemExtent;
   final double padding;
+  final AppPalette palette;
+
+  double get _radius => (itemExtent + padding * 2) / 2;
 
   @override
   Widget build(BuildContext context) {
+    final eased = Curves.easeOutCubic.transform(reveal.clamp(0.0, 1.0));
+
     return Opacity(
-      opacity: reveal.clamp(0.0, 1.0),
+      opacity: eased,
       child: Transform.translate(
         // Rises out of the button rather than appearing in place.
-        offset: Offset(0, (1 - reveal) * 18),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            DecoratedBox(
+        offset: Offset(0, (1 - eased) * 16),
+        child: Transform.scale(
+          // Grows from just under full size as it rises. Small enough to read
+          // as the tray arriving rather than as a zoom.
+          scale: 0.92 + (0.08 * eased),
+          alignment: Alignment.bottomCenter,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _glass(),
+              if (hovered != null) _label(hovered!),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _glass() {
+    return CustomPaint(
+      // The rim sits outside the BackdropFilter: it changes only with the
+      // theme, and keeping it out of the filtered subtree spares it the
+      // repaint the blur cannot avoid.
+      foregroundPainter: _TrayRim(
+        radius: _radius,
+        highlight: palette.glassRimHigh,
+        soft: palette.glassRimSoft,
+      ),
+      child: DecoratedBox(
+        // Outside the clip on purpose: a shadow drawn inside ClipRRect would
+        // be clipped away by the very shape casting it.
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(_radius),
+          boxShadow: [
+            BoxShadow(
+              color: palette.navShadow,
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(_radius),
+          child: BackdropFilter(
+            filter: _blur,
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: const Color(0xF21C1C1E),
-                borderRadius: BorderRadius.circular(itemExtent),
-                border: Border.all(color: const Color(0x26FFFFFF)),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x66000000),
-                    blurRadius: 18,
-                    offset: Offset(0, 6),
-                  ),
-                ],
+                // Tinted glass, not frosted, and tinted from the theme's own
+                // surfaces — a white overlay on the black app reads as a pale
+                // slab, a dark one on the cream app reads as a smudge.
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [palette.glassTop, palette.glassBottom],
+                ),
               ),
-              child: Padding(
-                padding: EdgeInsets.all(padding),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < FitReaction.all.length; i++)
-                      _TrayReaction(
-                        reaction: FitReaction.all[i],
-                        extent: itemExtent,
-                        // Each lands a beat after the one before it,
-                        // which is what reads as the row unrolling.
-                        entrance: _staggered(i),
-                        isHovered: FitReaction.all[i] == hovered,
-                        isSelected: FitReaction.all[i] == selected,
-                      ),
-                  ],
+              child: DecoratedBox(
+                // The sheen: a band of light along the top, gone by a third of
+                // the way down. Its own layer so it lifts the top edge rather
+                // than washing out the whole capsule.
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: const [0, 0.34],
+                    colors: [
+                      palette.glassSheen,
+                      palette.glassSheen.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(padding),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < FitReaction.all.length; i++)
+                        _TrayReaction(
+                          reaction: FitReaction.all[i],
+                          extent: itemExtent,
+                          // Each lands a beat after the one before it, which is
+                          // what reads as the row unrolling.
+                          entrance: _staggered(i),
+                          isHovered: FitReaction.all[i] == hovered,
+                          isSelected: FitReaction.all[i] == selected,
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            if (hovered != null) _label(hovered!),
-          ],
+          ),
         ),
       ),
     );
@@ -312,37 +413,53 @@ class _ReactionTray extends StatelessWidget {
 
   /// One reaction's share of the reveal, offset so the row arrives in order.
   double _staggered(int index) {
-    const step = 0.07;
+    const step = 0.06;
     final start = index * step;
     final span = 1 - (step * (FitReaction.all.length - 1));
     final local = ((reveal - start) / span).clamp(0.0, 1.0);
     return Curves.easeOutBack.transform(local);
   }
 
-  /// The name of the aimed-at reaction, in a bubble above the row — the only
+  /// The name of the aimed-at reaction, in a capsule above the row — the only
   /// thing that tells "Respect" from "Champion" before committing to it.
+  ///
+  /// Deliberately unmeasured: the capsule is centred on its reaction and left
+  /// to size itself, which is why it hangs in a fixed-width box wider than any
+  /// of the seven words. Measuring text to place it would cost a layout pass
+  /// per frame of the drag for a label that is only ever one short word.
   Widget _label(FitReaction reaction) {
     final index = FitReaction.all.indexOf(reaction);
     final centre = padding + (index * itemExtent) + (itemExtent / 2);
+    const boxWidth = 120.0;
 
     return Positioned(
-      top: -30,
-      left: centre - 44,
-      width: 88,
+      top: -38,
+      left: centre - (boxWidth / 2),
+      width: boxWidth,
       child: Center(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xF2000000),
-            borderRadius: BorderRadius.circular(12),
+            color: reaction.accent,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: palette.navShadow,
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             child: Text(
               reaction.label,
+              // Ink, not white: four of the seven accents are bright enough
+              // that white type on them is unreadable.
               style: const TextStyle(
-                color: AppColors.onMedia,
+                color: AppColors.onBrandInk,
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
               ),
             ),
           ),
@@ -350,6 +467,49 @@ class _ReactionTray extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The lit rim around the tray: brightest at the top, fading to nothing at the
+/// bottom, so the capsule reads as a piece of glass catching light rather than
+/// a shape with a border drawn on it.
+class _TrayRim extends CustomPainter {
+  const _TrayRim({
+    required this.radius,
+    required this.highlight,
+    required this.soft,
+  });
+
+  final double radius;
+  final Color highlight;
+  final Color soft;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    // Inset by half the stroke so the rim sits on the edge rather than
+    // straddling it, which would leave it half-clipped.
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(0.5),
+      Radius.circular(radius),
+    );
+
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [highlight, soft, soft.withValues(alpha: 0)],
+          stops: const [0, 0.5, 1],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TrayRim old) =>
+      old.radius != radius || old.highlight != highlight || old.soft != soft;
 }
 
 class _TrayReaction extends StatelessWidget {
@@ -367,38 +527,62 @@ class _TrayReaction extends StatelessWidget {
   final bool isHovered;
   final bool isSelected;
 
+  /// How much of its slot the emoji fills at rest.
+  ///
+  /// Chosen against [_hoveredScale] so the aimed-at one still fits its own
+  /// slot: 0.68 × 1.34 is a hair under 1, which is what keeps a raised emoji
+  /// from colliding with the two beside it. Raising either number without
+  /// lowering the other brings the overlap back.
+  static const double _restingFill = 0.68;
+  static const double _hoveredScale = 1.34;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: extent,
       height: extent,
-      child: AnimatedScale(
-        // The aimed-at reaction grows well past its neighbours: at a thumb's
-        // distance the size difference is more readable than the label is.
-        scale: isHovered ? 1.42 : 1,
-        duration: const Duration(milliseconds: 130),
-        curve: Curves.easeOut,
-        child: AnimatedSlide(
-          offset: isHovered ? const Offset(0, -0.22) : Offset.zero,
-          duration: const Duration(milliseconds: 130),
-          curve: Curves.easeOut,
+      child: AnimatedSlide(
+        // Lifts clear of the row rather than growing in place — the gap it
+        // leaves behind is as much of the signal as the size is.
+        offset: isHovered ? const Offset(0, -0.3) : Offset.zero,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutBack,
+        child: AnimatedScale(
+          scale: isHovered ? _hoveredScale : 1,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutBack,
           child: Transform.scale(
             scale: entrance,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                // A ring under the reaction you already hold, so the tray opens
-                // showing where you stand.
-                color: isSelected
-                    ? reaction.accent.withValues(alpha: 0.28)
-                    : Colors.transparent,
-              ),
-              child: Center(
-                child: Text(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // A dot under the reaction you already hold, so the tray opens
+                // showing where you stand. Under rather than behind: a disc
+                // behind an emoji muddies it, and at this size the emoji has
+                // to stay the most legible thing in the slot.
+                if (isSelected)
+                  Positioned(
+                    bottom: 0,
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: reaction.accent,
+                      ),
+                    ),
+                  ),
+                Text(
                   reaction.emoji,
-                  style: TextStyle(fontSize: extent * 0.62),
+                  style: TextStyle(
+                    fontSize: extent * _restingFill,
+                    // Emoji ignore colour but not height: an unset height lets
+                    // the font's own line spacing pad the glyph off-centre in
+                    // its slot, which is what makes a row of them sit crooked.
+                    height: 1,
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -452,14 +636,28 @@ class _ReactionPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
         color: accent == null
-            ? const Color(0x33FFFFFF)
-            : accent.withValues(alpha: 0.24),
+            // Barely there at rest: this sits over somebody's photo, and the
+            // photo is what the screen is for.
+            ? const Color(0x24FFFFFF)
+            : accent.withValues(alpha: 0.26),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: accent == null
-              ? const Color(0x40FFFFFF)
-              : accent.withValues(alpha: 0.9),
+              ? const Color(0x38FFFFFF)
+              : accent.withValues(alpha: 0.85),
+          width: accent == null ? 1 : 1.4,
         ),
+        boxShadow: [
+          // Lifts the pill off whatever is behind it. Over a bright frame an
+          // unshadowed translucent pill disappears entirely.
+          BoxShadow(
+            color: accent == null
+                ? const Color(0x4D000000)
+                : accent.withValues(alpha: 0.35),
+            blurRadius: accent == null ? 10 : 16,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -24,6 +24,49 @@ void main() {
     );
   }
 
+  group('stored values that changed type', () {
+    // `calories` and `duration` were written as display strings before they
+    // became numbers, and both shapes are live in the same collection. A cast
+    // straight to num throws on the older ones, and one such document was
+    // enough to fail the whole read — the streak, the grid and the Progress
+    // tab all went blank together.
+    test('reads a number written as a number', () {
+      expect(intFromStoredValue(320), 320);
+      expect(intFromStoredValue(45.7), 45);
+    });
+
+    test('reads a number written as the old display label', () {
+      expect(intFromStoredValue('0 kcal'), 0);
+      expect(intFromStoredValue('320 kcal'), 320);
+      expect(intFromStoredValue('45 min'), 45);
+    });
+
+    test('never throws on anything else', () {
+      expect(intFromStoredValue(null), 0);
+      expect(intFromStoredValue(''), 0);
+      expect(intFromStoredValue(const {'nested': 1}), 0);
+      expect(intFromStoredValue(const ['list']), 0);
+      expect(intFromStoredValue(true), 0);
+    });
+
+    test('booleans survive every shape they were stored in', () {
+      expect(boolFromStoredValue(true), isTrue);
+      expect(boolFromStoredValue(false), isFalse);
+      expect(boolFromStoredValue('true'), isTrue);
+      expect(boolFromStoredValue(1), isTrue);
+      expect(boolFromStoredValue(null), isFalse);
+      expect(boolFromStoredValue(const {}), isFalse);
+    });
+
+    test('doubles survive every shape they were stored in', () {
+      expect(doubleFromStoredValue(5.02), 5.02);
+      expect(doubleFromStoredValue(5), 5.0);
+      expect(doubleFromStoredValue('5.02'), 5.02);
+      expect(doubleFromStoredValue(null), isNull);
+      expect(doubleFromStoredValue('not a number'), isNull);
+    });
+  });
+
   group('duration labels', () {
     test('reads the minutes a workout post stored', () {
       expect(minutesFromDurationLabel('45 min'), 45);

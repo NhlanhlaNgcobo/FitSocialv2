@@ -25,6 +25,36 @@ int minutesFromDurationLabel(String? label) {
 /// which is the honest reading: nothing was recorded.
 int kcalFromLabel(String? label) => minutesFromDurationLabel(label);
 
+/// An int out of a stored field that may not be one.
+///
+/// `duration` and `calories` were written as display strings — "45 min",
+/// "0 kcal" — before they became numbers, so both shapes are live in the same
+/// collection. Casting straight to `num` throws on the older documents, and a
+/// single one of those is enough to fail the whole read: that is what left the
+/// grid, the streak and the Progress tab all reading "couldn't load".
+///
+/// Anything unrecognisable reads as zero rather than throwing.
+int intFromStoredValue(Object? value) {
+  if (value is num) return value.toInt();
+  if (value is String) return minutesFromDurationLabel(value);
+  return 0;
+}
+
+/// A bool out of a stored field that may be missing or another type.
+bool boolFromStoredValue(Object? value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) return value.toLowerCase() == 'true';
+  return false;
+}
+
+/// A double out of a stored field, or null when there is no usable number.
+double? doubleFromStoredValue(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value.trim());
+  return null;
+}
+
 /// The first "5.02 km" metric as a number, or null when none of them is one.
 double? distanceFromMetricLabels(List<String> labels) {
   final pattern = RegExp(r'^([\d.]+)\s*km$', caseSensitive: false);

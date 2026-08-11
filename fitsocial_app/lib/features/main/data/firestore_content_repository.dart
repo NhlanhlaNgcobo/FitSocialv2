@@ -628,8 +628,8 @@ class FirestoreContentRepository implements ContentRepository {
     ]);
 
     final logged = <ActivitySession>[
-      ...results[0].map(_toRunSession).nonNulls,
-      ...results[1].map(_toWorkoutSession).nonNulls,
+      ..._mapDocs(results[0], _toRunSession),
+      ..._mapDocs(results[1], _toWorkoutSession),
     ];
 
     // Sessions from before the log collections existed survive only as the
@@ -672,9 +672,9 @@ class FirestoreContentRepository implements ContentRepository {
         }
       }
       return sessions;
-    } on FirebaseException catch (error) {
+    } catch (error) {
       debugPrint(
-        'Progress: could not read posts for older sessions (${error.code}) — '
+        'Progress: could not read posts for older sessions ($error) — '
         'anything logged before the run and workout collections will be '
         'missing.',
       );
@@ -735,17 +735,17 @@ class FirestoreContentRepository implements ContentRepository {
     final startedAt = _firstTimestamp(data, const ['startedAt', 'createdAt']);
     if (startedAt == null) return null;
 
-    final distanceKm = (data['distanceKm'] as num?)?.toDouble();
+    final distanceKm = doubleFromStoredValue(data['distanceKm']);
     return ActivitySession(
       id: doc.id,
       kind: ActivityKind.run,
       title: 'Run',
       startedAt: startedAt,
-      duration: Duration(seconds: (data['durationSeconds'] as num?)?.toInt() ?? 0),
+      duration: Duration(seconds: intFromStoredValue(data['durationSeconds'])),
       calories: estimatedRunCalories(distanceKm),
       caloriesAreEstimated: true,
       distanceKm: distanceKm,
-      sharedToFeed: data['sharedToFeed'] as bool? ?? false,
+      sharedToFeed: boolFromStoredValue(data['sharedToFeed']),
       postId: _text(data['postId']),
     );
   }
@@ -762,8 +762,13 @@ class FirestoreContentRepository implements ContentRepository {
     final startedAt = _firstTimestamp(data, const ['loggedAt', 'createdAt']);
     if (startedAt == null) return null;
 
-    final minutes = (data['durationMinutes'] as num?)?.toInt() ??
-        minutesFromDurationLabel(data['duration'] as String?);
+    // Both fields have lived as numbers and as display strings ("45 min",
+    // "0 kcal"), and both shapes are still in the collection — see
+    // [intFromStoredValue]. `durationMinutes` is preferred where it exists
+    // because it is the exact figure; `duration` is the label to fall back to.
+    final minutes = data.containsKey('durationMinutes')
+        ? intFromStoredValue(data['durationMinutes'])
+        : intFromStoredValue(data['duration']);
 
     return ActivitySession(
       id: doc.id,
@@ -771,9 +776,11 @@ class FirestoreContentRepository implements ContentRepository {
       title: _text(data['title']) ?? 'Workout',
       startedAt: startedAt,
       duration: Duration(minutes: minutes),
-      calories: (data['calories'] as num?)?.toInt() ?? 0,
-      exerciseCount: (data['exerciseCount'] as num?)?.toInt(),
-      sharedToFeed: data['sharedToFeed'] as bool? ?? false,
+      calories: intFromStoredValue(data['calories']),
+      exerciseCount: data.containsKey('exerciseCount')
+          ? intFromStoredValue(data['exerciseCount'])
+          : null,
+      sharedToFeed: boolFromStoredValue(data['sharedToFeed']),
       postId: _text(data['postId']),
     );
   }
@@ -784,10 +791,10 @@ class FirestoreContentRepository implements ContentRepository {
     if (user == null) return FirestoreUserRecord.defaultWeeklyGoalDays;
     try {
       return (await _loadUserRecord()).weeklyGoalDays;
-    } on FirebaseException catch (error) {
+    } catch (error) {
       // The goal is only a denominator; falling back to the default beats
       // failing the whole overview card over an unreadable profile.
-      debugPrint('Weekly goal unavailable (${error.code}) — using default.');
+      debugPrint('Weekly goal unavailable ($error) — using default.');
       return FirestoreUserRecord.defaultWeeklyGoalDays;
     }
   }
@@ -807,6 +814,29 @@ class FirestoreContentRepository implements ContentRepository {
       {'weeklyGoalDays': days.clamp(1, 7)},
       SetOptions(merge: true),
     );
+  }
+
+  /// Maps [docs] with [toSession], dropping any that cannot be read.
+  ///
+  /// Per document rather than per collection: these documents span every
+  /// schema this app has ever written, and one that does not parse must cost
+  /// its own row and nothing else. Mapping the list as a whole is what let a
+  /// single stale document fail the entire Progress tab.
+  static List<ActivitySession> _mapDocs(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    ActivitySession? Function(QueryDocumentSnapshot<Map<String, dynamic>>)
+        toSession,
+  ) {
+    final sessions = <ActivitySession>[];
+    for (final doc in docs) {
+      try {
+        final session = toSession(doc);
+        if (session != null) sessions.add(session);
+      } catch (error) {
+        debugPrint('Progress: skipping ${doc.reference.path} — $error');
+      }
+    }
+    return sessions;
   }
 
   /// A trimmed string field, or null when it is absent or blank.
@@ -853,10 +883,12 @@ class FirestoreContentRepository implements ContentRepository {
       final snapshot =
           await collection.where('authorId', isEqualTo: userId).get();
       return snapshot.docs;
-    } on FirebaseException catch (error) {
+    } catch (error) {
+      // Every failure, not just FirebaseException: a read that throws anything
+      // at all should cost this collection's rows and nothing else.
       debugPrint(
-        'Activity grid: could not read ${collection.id} '
-        '(${error.code}) — those days will show as empty.',
+        'Progress: could not read ${collection.id} ($error) — those sessions '
+        'will be missing.',
       );
       return const [];
     }
@@ -920,7 +952,7 @@ class FirestoreContentRepository implements ContentRepository {
     // Written whether or not the workout is shared, mirroring saveRun: the log
     // is the canonical record, and the Progress tab reads from it. Sharing
     // only decides whether a post is created alongside it.
-    final logRef = await _writeWorkoutLog(draft);
+    final logRef = await _tryWriteLog('workout', () => _writeWorkoutLog(draft));
 
     if (!draft.shareToFeed) {
       await _incrementUser(workoutsDelta: 1);
@@ -955,16 +987,42 @@ class FirestoreContentRepository implements ContentRepository {
         message: 'Workout saved and shared.', createdPost: post);
   }
 
+  /// Runs [write], returning null rather than throwing if it fails.
+  ///
+  /// A log is a secondary record. What the user actually asked for is the
+  /// session saved, the counter moved and — if they said so — the post
+  /// shared. An unwritable log collection (undeployed security rules being
+  /// the usual cause) must cost the Progress tab a row, never the save
+  /// itself. Awaiting these unguarded is what took every workout, run and
+  /// meal down with it.
+  Future<DocumentReference<Map<String, dynamic>>?> _tryWriteLog(
+    String label,
+    Future<DocumentReference<Map<String, dynamic>>> Function() write,
+  ) async {
+    try {
+      return await write();
+    } catch (error) {
+      debugPrint(
+        'Could not write the $label log ($error). The save itself went '
+        'through — deploy firestore.rules so sessions are recorded for '
+        'Progress.',
+      );
+      return null;
+    }
+  }
+
   /// Points a saved log at the post it produced.
   ///
   /// A separate write rather than part of the original set: the log has to
   /// exist whether or not the post does, so it is written first and the id is
-  /// added once there is one. A failure here costs the Progress tab's link
-  /// through to the post, not the record of the session.
+  /// added once there is one. A null ref means the log was never written; a
+  /// failure here costs the Progress tab's link through to the post, not the
+  /// record of the session.
   Future<void> _linkLogToPost(
-    DocumentReference<Map<String, dynamic>> logRef,
+    DocumentReference<Map<String, dynamic>>? logRef,
     String postId,
   ) async {
+    if (logRef == null) return;
     try {
       await logRef.update({'postId': postId});
     } on FirebaseException catch (error) {
@@ -981,7 +1039,7 @@ class FirestoreContentRepository implements ContentRepository {
     // The run log is the canonical record and is written whether or not the
     // run is shared, so an unshared GPS run still keeps its route.
     final route = _serializeRoute(draft.routePoints);
-    final logRef = await _writeRunLog(draft, route);
+    final logRef = await _tryWriteLog('run', () => _writeRunLog(draft, route));
 
     if (!draft.shareToFeed) {
       await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
@@ -1072,7 +1130,7 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     MealLogDraft draft,
   ) async {
-    await _writeMealLog(draft);
+    await _tryWriteLog('meal', () => _writeMealLog(draft));
 
     if (!draft.shareToFeed) {
       await _incrementUser(mealsDelta: 1);
@@ -1890,14 +1948,17 @@ class FirestoreContentRepository implements ContentRepository {
   /// workouts: this is the user's nutrition history. The feed post carries only
   /// the three headline numbers, so without this the analysis is lost the
   /// moment the screen closes.
-  Future<void> _writeMealLog(MealLogDraft draft) async {
+  Future<DocumentReference<Map<String, dynamic>>> _writeMealLog(
+    MealLogDraft draft,
+  ) async {
     final user = _requireCurrentUser();
     int macro(String value) =>
         int.tryParse(value.trim()) ??
         double.tryParse(value.trim())?.round() ??
         0;
 
-    await mealsCollection.doc().set({
+    final ref = mealsCollection.doc();
+    await ref.set({
       'authorId': user.uid,
       'name': draft.name.trim(),
       'calories': macro(draft.calories),
@@ -1911,6 +1972,7 @@ class FirestoreContentRepository implements ContentRepository {
       if (draft.imageUrl != null) 'imageUrl': draft.imageUrl,
       'createdAt': FieldValue.serverTimestamp(),
     });
+    return ref;
   }
 }
 
