@@ -5,16 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
-import '../../../shared/widgets/activity_grid.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/brand_image_tile.dart';
-import '../../../shared/widgets/stat_tile.dart';
 import '../../music/application/music_providers.dart';
 import '../../music/presentation/connect_music_action.dart';
 import '../../music/presentation/music_player_card.dart';
-import '../application/content_providers.dart';
 import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
+import 'progress_section.dart';
 
 class ActivityScreen extends ConsumerWidget {
   const ActivityScreen({super.key});
@@ -51,63 +49,12 @@ class ActivityScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           switch (musicState.selectedSection) {
-            ActivitySection.progress => const _ProgressSection(),
+            ActivitySection.progress => const ProgressSection(),
             ActivitySection.music => const _MusicSection(),
           },
         ],
       ),
     );
-  }
-}
-
-class _ProgressSection extends ConsumerWidget {
-  const _ProgressSection();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final metrics = ref.watch(progressMetricsProvider);
-
-    return Column(
-      children: [
-        // No fixed range: this is the card you switch between 7D, 30D and 1Y.
-        const ActivityGridCard(),
-        const SizedBox(height: AppSpacing.md),
-        metrics.when(
-          data: (data) => data.isEmpty
-              ? const _EmptyState(
-                  icon: Icons.insights_rounded,
-                  title: 'No progress yet',
-                  message:
-                      'Log a workout, run, or meal and your stats will start '
-                      'showing up here.',
-                  ctaLabel: 'Log an activity',
-                  ctaRoute: '/create',
-                )
-              : Column(children: _buildMetricTiles(data)),
-          loading: () => const _ProgressPlaceholder(label: 'Loading progress...'),
-          error: (_, __) => const _ProgressPlaceholder(label: 'Progress unavailable'),
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _buildMetricTiles(List<ProgressMetric> metrics) {
-    final items = <Widget>[];
-    for (var i = 0; i < metrics.length; i++) {
-      final metric = metrics[i];
-      items.add(
-        StatTile(
-          label: metric.label,
-          value: metric.value,
-          delta: metric.delta,
-          chartBars: metric.chartBars,
-        ),
-      );
-      if (i != metrics.length - 1) {
-        items.add(const SizedBox(height: AppSpacing.md));
-      }
-    }
-    return items;
   }
 }
 
@@ -297,108 +244,4 @@ class _MusicBadge extends StatelessWidget {
   }
 }
 
-class _ProgressPlaceholder extends StatelessWidget {
-  const _ProgressPlaceholder({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: palette.muted),
-      ),
-    );
-  }
-}
-
-/// A friendly empty-state card: icon, title, message, and an optional CTA
-/// that routes somewhere useful. Used where a list can legitimately be empty.
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.message,
-    this.ctaLabel,
-    this.ctaRoute,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-  final String? ctaLabel;
-  final String? ctaRoute;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xl,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppColors.orangeBright.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: AppColors.orangeBright, size: 30),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: palette.text,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: palette.muted, fontSize: 14),
-          ),
-          if (ctaLabel != null && ctaRoute != null) ...[
-            const SizedBox(height: AppSpacing.lg),
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.orangeBright,
-                side: const BorderSide(color: AppColors.orangeBright),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () => context.go(ctaRoute!),
-              child: Text(ctaLabel!),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
 

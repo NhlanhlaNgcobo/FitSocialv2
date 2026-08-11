@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/app_session.dart';
 import '../../features/main/domain/app_models.dart';
+import '../../features/main/domain/shared_post.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_setup_screen.dart';
@@ -23,15 +24,16 @@ import '../../features/main/presentation/profile_screen.dart';
 import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
-import '../../features/messages/presentation/messages_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/pulse/presentation/pulse_composer_screen.dart';
 import '../../features/pulse/presentation/pulse_viewer_screen.dart';
+import '../../features/pulse/presentation/share_post_to_pulse_screen.dart';
 import '../../features/tracking/presentation/health_dashboard_screen.dart';
 import '../../features/tracking/presentation/live_run_screen.dart';
 import '../../shared/layout/app_shell.dart';
 import '../../shared/layout/branch_transition.dart';
+import 'pending_deep_link.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -45,6 +47,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   // notifier rebuilds only if the AppSession instance itself is replaced;
   // refreshListenable below is what re-runs `redirect` when its state changes.
   final session = ref.watch(appSessionProvider.notifier);
+  // Shared links can arrive before the app is in any state to show them — on a
+  // cold start, or with nobody signed in. Each branch below that turns such a
+  // link away parks it here first, and the branches that land somebody in the
+  // app redeem it in place of /home.
+  final pendingLink = ref.watch(pendingDeepLinkProvider);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -55,8 +62,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final stage = session.stage;
       const authRoutes = {'/welcome', '/login'};
 
-      // While restoring a persisted session, stay on the splash screen.
+      // While restoring a persisted session, stay on the splash screen. A deep
+      // link is the usual reason to be anywhere else this early — the platform
+      // hands the app its initial route before the session has resolved — so
+      // it is kept rather than dropped on the way to the splash.
       if (stage == AuthStage.initializing) {
+        if (location != '/splash') pendingLink.remember(location);
         return location == '/splash' ? null : '/splash';
       }
 
@@ -64,11 +75,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (location == '/splash') {
         if (stage == AuthStage.unauthenticated) return '/welcome';
         if (stage == AuthStage.profileSetup) return '/profile-setup';
-        return '/home';
+        return pendingLink.take() ?? '/home';
       }
 
       if (stage == AuthStage.unauthenticated) {
         if (!authRoutes.contains(location)) {
+          pendingLink.remember(location);
           return '/welcome';
         }
         return null;
@@ -76,13 +88,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (stage == AuthStage.profileSetup) {
         if (location != '/profile-setup') {
+          pendingLink.remember(location);
           return '/profile-setup';
         }
         return null;
       }
 
+      // Just signed in, or just finished setting up. Someone who got here by
+      // tapping a shared post lands on the post rather than the feed.
       if (authRoutes.contains(location) || location == '/profile-setup') {
-        return '/home';
+        return pendingLink.take() ?? '/home';
       }
 
       return null;
@@ -155,12 +170,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           initialPost: state.extra as FeedPost?,
         ),
       ),
-      GoRoute(
-        path: '/messages',
-        builder: (context, state) => const MessagesScreen(),
-      ),
-      // Outside the shell, like /messages: it is opened from the bell and
-      // returned from, not one of the five tabs.
+      // Outside the shell: it is opened from the bell and returned from, not
+      // one of the five tabs.
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsScreen(),
@@ -188,6 +199,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pulse-compose',
         builder: (context, state) => const PulseComposerScreen(),
+      ),
+      // Putting somebody's post on your own Pulse. The post rides along as
+      // `extra` rather than as a path id: it is a snapshot taken from the card
+      // the user tapped, not something to be re-fetched — and there is nothing
+      // to show if you arrive here without one, so a bare visit goes home.
+      GoRoute(
+        path: '/share-to-pulse',
+        redirect: (context, state) =>
+            state.extra is SharedPostRef ? null : '/home',
+        builder: (context, state) => SharePostToPulseScreen(
+          post: state.extra! as SharedPostRef,
+        ),
       ),
       // Playback opens on one author's ring and can then be swiped across the
       // rest of the tray, which the viewer reads from the provider itself —

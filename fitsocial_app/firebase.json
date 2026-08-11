@@ -35,6 +35,35 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "hosting": {
+    "public": "hosting",
+    "ignore": [
+      "firebase.json",
+      "**/node_modules/**",
+      "**/README.md"
+    ],
+    "rewrites": [
+      {
+        "source": "/post/**",
+        "destination": "/open.html"
+      },
+      {
+        "source": "/user/**",
+        "destination": "/open.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      }
+    ]
+  },
   "storage": {
     "rules": "storage.rules"
   },

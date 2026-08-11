@@ -59,9 +59,40 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Hands the launch URL to the Flutter engine, which passes it to
+                 GoRouter as the initial route. Without this the intent filters
+                 below still open the app, but always on the feed. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Shared post/profile links.
+                 https://fitsocialv2.web.app/post/{id} — an App Link, so a
+                 phone with FitSocial installed opens it here instead of in a
+                 browser. autoVerify makes Android check
+                 /.well-known/assetlinks.json on that host at install time; it
+                 must list this package and the SHA-256 fingerprint of the
+                 signing key, or the link keeps opening the web page (which
+                 still works — see hosting/open.html). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="fitsocialv2.web.app"/>
+            </intent-filter>
+            <!-- fitsocial://app/post/{id} — the hand-off the hosted page uses
+                 when the App Link above was not verified for this install
+                 (sideloaded build, or a link opened before verification
+                 finished). The `app` host is a placeholder that keeps the path
+                 intact for the router; see FitSocialLinks. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="fitsocial" android:host="app"/>
             </intent-filter>
             <!-- Health Connect: show why we request health permissions -->
             <intent-filter>

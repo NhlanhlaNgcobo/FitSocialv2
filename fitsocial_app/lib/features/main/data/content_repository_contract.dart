@@ -1,5 +1,7 @@
+import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
+import '../domain/progress_models.dart';
 
 abstract class ContentRepository {
   /// The home feed: posts by the people the signed-in user follows, plus
@@ -11,12 +13,28 @@ abstract class ContentRepository {
   Future<HomeFeed> getFeedPosts(UserProfileDraft? profile);
   Future<List<ProgressMetric>> getProgressMetrics();
 
-  /// The signed-in user's runs and workouts bucketed per calendar day, from
-  /// [from] (local midnight) to now.
+  /// Every run and workout the signed-in user has logged, newest first.
   ///
-  /// Sparse by design: only days with at least one logged session come back.
-  /// [ActivityCalendar.fromLoggedDays] fills in the empty cells.
-  Future<List<ActivityDay>> getActivityDays(DateTime from);
+  /// Unwindowed on purpose. The Progress tab reads the same history four
+  /// different ways at once — the streak grid, the overview totals, that
+  /// period's deltas, and the session list — and one user's own training
+  /// history is small enough that fetching it once beats a query per view.
+  Future<List<ActivitySession>> getActivitySessions();
+
+  /// Days a week the user is aiming to train — the consistency denominator.
+  /// Falls back to the default when they have never set one.
+  Future<int> getWeeklyGoalDays();
+
+  /// Sets the weekly training-days goal, clamped to 1-7.
+  Future<void> setWeeklyGoalDays(int days);
+
+  /// Removes a logged run or workout.
+  ///
+  /// The log only. A session that was shared keeps its post — deleting the
+  /// record of a session is not the same as retracting what you told people
+  /// about it, and the post has its own delete.
+  Future<void> deleteActivitySession(String id, ActivityKind kind);
+
   /// Uploads / Followers / Following for [userId].
   ///
   /// "Uploads" is how much of the app the user has actually used: every run
@@ -43,6 +61,22 @@ abstract class ContentRepository {
 
   /// Profiles whose display name or handle starts with [query].
   Future<List<UserSearchResult>> searchUsers(String query);
+
+  /// Candidates for the `@` being typed in a composer.
+  ///
+  /// Narrower than [searchUsers] on purpose: a mention has to resolve to a
+  /// username, so the handle is what is matched and the signed-in user is
+  /// included — quoting your own handle is a normal thing to write. An empty
+  /// [prefix] is the moment just after the '@' and returns the people most
+  /// worth offering first rather than nothing.
+  Future<List<UserSearchResult>> suggestMentions(String prefix);
+
+  /// The uid behind `@username`, or null when nobody holds that name.
+  ///
+  /// Reads the reservation collection rather than searching profiles: the
+  /// document id there *is* the normalized username, so this is one get and it
+  /// agrees with whatever the uniqueness rules allowed.
+  Future<String?> resolveUsername(String username);
 
   /// The community's posts ranked by engagement against age, newest-weighted,
   /// for the Explore grid. Ordering is a live judgement rather than a stored
@@ -79,7 +113,8 @@ abstract class ContentRepository {
 
   /// Watches whether [currentUserId] has asked to be notified about
   /// [targetUserId]'s activity.
-  Stream<bool> watchUserNotifications(String currentUserId, String targetUserId);
+  Stream<bool> watchUserNotifications(
+      String currentUserId, String targetUserId);
 
   /// Turns notifications about [targetUserId] on or off for [currentUserId].
   Future<void> setUserNotifications(
@@ -103,22 +138,30 @@ abstract class ContentRepository {
     UserProfileDraft? profile,
     PostDraft draft,
   );
+
   /// Permanently removes a post the caller authored, along with its comments
   /// and its uploaded image. Throws if the caller is not the author.
   Future<void> deletePost(String postId);
 
-  /// Likes the post, or takes the like back when it is already there.
+  /// Sets, changes, or clears [userId]'s reaction to a post. Null takes it
+  /// back.
   ///
-  /// Liking someone else's post notifies them; unliking withdraws that
-  /// notification. [profile] names the liker on it, on the same terms as
-  /// [followUser].
-  Future<void> toggleLike(
+  /// One reaction per person: picking a second replaces the first rather than
+  /// adding to it, so `likesCount` counts people and not taps. Re-picking what
+  /// is already held does nothing at all.
+  ///
+  /// Reacting to someone else's post notifies them, changing your reaction
+  /// updates that notification, and clearing it withdraws it. [profile] names
+  /// the reactor on it, on the same terms as [followUser].
+  Future<void> setPostReaction(
     String postId,
-    String userId, {
+    String userId,
+    FitReaction? reaction, {
     UserProfileDraft? profile,
   });
   Future<void> toggleBookmark(String postId, String userId);
   Future<List<Comment>> getComments(String postId);
+
   /// Adds a comment attributed to [profile]. The profile is passed in (rather
   /// than read from auth) so the stored author name comes from the user's
   /// public profile and never from their credentials.
@@ -128,9 +171,12 @@ abstract class ContentRepository {
     String text,
   );
 
-  /// Watches whether the current user has liked a specific post.
-  /// Reads from `likes/{postId}/users/{userId}`.
-  Stream<bool> watchPostLikeStatus(String postId, String userId);
+  /// Watches which reaction [userId] has given a post, null when none.
+  ///
+  /// Reads from `likes/{postId}/users/{userId}` — the same document the single
+  /// Like button always wrote, now carrying which of the seven it was. One
+  /// written before reactions has no key on it and reads as the default.
+  Stream<FitReaction?> watchPostReaction(String postId, String userId);
 
   /// Watches whether the current user has bookmarked a specific post.
   /// Reads from `users/{userId}/bookmarks/{postId}`.

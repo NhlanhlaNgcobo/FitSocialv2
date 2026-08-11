@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,6 +7,9 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/comment_composer.dart';
+import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
+import '../../../shared/widgets/mention_text.dart';
+import '../../../shared/widgets/profile_link.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 
@@ -21,16 +22,6 @@ class CommentsSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final commentsAsync = ref.watch(commentsProvider(postId));
-    final media = MediaQuery.of(context);
-
-    // Keep the composer clear of whatever is occupying the bottom edge. With
-    // the keyboard up that's viewInsets; with it down it's the system nav bar,
-    // which viewInsets never reports — take whichever is larger so the send
-    // row is never tucked under the gesture pill or the 3-button bar.
-    final bottomInset = math.max(
-      media.viewInsets.bottom,
-      media.viewPadding.bottom,
-    );
 
     return Container(
       constraints: BoxConstraints(
@@ -148,10 +139,7 @@ class CommentsSheet extends ConsumerWidget {
           // Input bar. The sheet floats over its own barrier, so nothing else
           // lifts the composer clear of the keyboard or the system nav bar —
           // it pads for whichever is taller itself.
-          Padding(
-            padding: EdgeInsets.only(bottom: bottomInset),
-            child: CommentComposer(postId: postId),
-          ),
+          KeyboardSafeBottomBar(child: CommentComposer(postId: postId)),
         ],
       ),
     );
@@ -175,10 +163,13 @@ class CommentTile extends StatelessWidget {
       children: [
         // Shared Avatar so a commenter's photo renders here exactly as it does
         // on their posts, falling back to initials when they have none.
-        Avatar(
-          initials: avatarInitials(comment.authorName),
-          size: 34,
-          imageUrl: comment.authorAvatarUrl,
+        ProfileLink(
+          userId: comment.authorId,
+          child: Avatar(
+            initials: avatarInitials(comment.authorName),
+            size: 34,
+            imageUrl: comment.authorAvatarUrl,
+          ),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
@@ -187,12 +178,21 @@ class CommentTile extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    comment.authorName,
-                    style: TextStyle(
-                      color: palette.text,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                  // Only the name, not the age beside it: the whole row would
+                  // swallow the long-press that removes a Pulse comment.
+                  Flexible(
+                    child: ProfileLink(
+                      userId: comment.authorId,
+                      child: Text(
+                        comment.authorName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.text,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -206,8 +206,8 @@ class CommentTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                comment.text,
+              MentionText(
+                text: comment.text,
                 style: TextStyle(
                   color: palette.text,
                   fontSize: 14,
@@ -220,7 +220,6 @@ class CommentTile extends StatelessWidget {
       ],
     );
   }
-
 
   String _relativeTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);

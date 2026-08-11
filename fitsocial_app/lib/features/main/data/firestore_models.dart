@@ -1,7 +1,6 @@
 import '../domain/app_models.dart';
 
 class FirestoreUserRecord {
-
   factory FirestoreUserRecord.fromMap(String id, Map<String, dynamic> data) {
     return FirestoreUserRecord(
       id: id,
@@ -16,6 +15,8 @@ class FirestoreUserRecord {
       workoutsCount: (data['workoutsCount'] as num?)?.toInt() ?? 0,
       mealsCount: (data['mealsCount'] as num?)?.toInt() ?? 0,
       runsCount: (data['runsCount'] as num?)?.toInt() ?? 0,
+      weeklyGoalDays: (data['weeklyGoalDays'] as num?)?.toInt() ??
+          defaultWeeklyGoalDays,
     );
   }
   const FirestoreUserRecord({
@@ -31,7 +32,15 @@ class FirestoreUserRecord {
     required this.workoutsCount,
     required this.mealsCount,
     this.runsCount = 0,
+    this.weeklyGoalDays = defaultWeeklyGoalDays,
   });
+
+  /// Training days a week to aim for, when the user has not set their own.
+  ///
+  /// Four is the middle of the usual "train most weekdays" advice — enough
+  /// that hitting it means something, not so many that a normal week reads as
+  /// a failure.
+  static const int defaultWeeklyGoalDays = 4;
 
   final String id;
   final String displayName;
@@ -45,10 +54,13 @@ class FirestoreUserRecord {
   final int workoutsCount;
   final int mealsCount;
   final int runsCount;
+
+  /// Days a week the user is aiming to train — the denominator behind the
+  /// consistency figure on the Progress tab.
+  final int weeklyGoalDays;
 }
 
 class FirestorePostRecord {
-
   factory FirestorePostRecord.fromMap(String id, Map<String, dynamic> data) {
     final metrics = (data['metricLabels'] as List<dynamic>? ?? const [])
         .map((item) => item.toString())
@@ -57,6 +69,19 @@ class FirestorePostRecord {
     final likedByList = (data['likedBy'] as List<dynamic>? ?? const [])
         .map((item) => item.toString())
         .toList();
+
+    // uid -> reaction key. Absent on every post written before reactions, and
+    // absent per-person for anyone whose like predates them — the mapper reads
+    // those through likedBy instead, so nothing has to be backfilled.
+    final reactionsByMap = <String, String>{};
+    final rawReactionsBy = data['reactionsBy'];
+    if (rawReactionsBy is Map) {
+      for (final entry in rawReactionsBy.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (key is String && value is String) reactionsByMap[key] = value;
+      }
+    }
 
     // Kept dynamic rather than importing cloud_firestore's Timestamp, matching
     // FirestoreCommentRecord below — this file stays free of plugin types.
@@ -74,14 +99,21 @@ class FirestorePostRecord {
       timestampLabel: (data['timestampLabel'] as String?) ?? 'now',
       themeKey: (data['themeKey'] as String?) ?? 'sunset',
       likedBy: likedByList,
+      reactionsBy: reactionsByMap,
+      // Handed on raw. Turning it into a summary needs likesCount as well, and
+      // that reconciliation belongs in the mapper rather than here — this
+      // record stays a transcription of the document.
+      reactionCounts: data['reactionCounts'],
       postType: (data['postType'] as String?) ?? 'text',
       imageUrl: data['imageUrl'] as String?,
       workoutData: (data['workoutData'] as Map<String, dynamic>?),
       routePoints: RoutePoint.listFromFirestore(data['routePoints']),
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
       imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
-      createdAt:
-          rawCreatedAt == null ? null : (rawCreatedAt as dynamic).toDate() as DateTime,
+      taggedUsers: TaggedUser.listFrom(data['taggedUsers']),
+      createdAt: rawCreatedAt == null
+          ? null
+          : (rawCreatedAt as dynamic).toDate() as DateTime,
     );
   }
   const FirestorePostRecord({
@@ -96,12 +128,15 @@ class FirestorePostRecord {
     required this.timestampLabel,
     required this.themeKey,
     required this.likedBy,
+    this.reactionsBy = const {},
+    this.reactionCounts,
     this.postType = 'text',
     this.imageUrl,
     this.workoutData,
     this.routePoints = const [],
     this.authorAvatarUrl,
     this.imageAspectRatio,
+    this.taggedUsers = const [],
     this.createdAt,
   });
 
@@ -116,6 +151,17 @@ class FirestorePostRecord {
   final String timestampLabel;
   final String themeKey;
   final List<String> likedBy;
+
+  /// Which reaction each person gave, by uid. Empty for anyone who liked the
+  /// post before reactions existed — [likedBy] still names them, and that is
+  /// what the mapper falls back to.
+  final Map<String, String> reactionsBy;
+
+  /// The stored `reactionCounts` map, untouched. Reconciled against
+  /// [likesCount] by the mapper, because on its own it under-reports a post
+  /// that carries old likes.
+  final Object? reactionCounts;
+
   final String postType;
   final String? imageUrl;
   final Map<String, dynamic>? workoutData;
@@ -134,6 +180,11 @@ class FirestorePostRecord {
   /// user's chosen crop rather than forcing a shape.
   final double? imageAspectRatio;
 
+  /// People the author attached to the post, denormalised for the "with @..."
+  /// line. The uids are also stored flat as `taggedUserIds` on the document,
+  /// which is the queryable half; this is the renderable one.
+  final List<TaggedUser> taggedUsers;
+
   /// When the post was written, per the server clock.
   ///
   /// This — not [timestampLabel] — is what the feed's "2 hours ago" line is
@@ -145,7 +196,6 @@ class FirestorePostRecord {
 }
 
 class FirestoreProgressRecord {
-
   factory FirestoreProgressRecord.fromMap(Map<String, dynamic> data) {
     final bars = (data['chartBars'] as List<dynamic>? ?? const [])
         .map((item) => (item as num).toDouble())
@@ -172,7 +222,6 @@ class FirestoreProgressRecord {
 }
 
 class FirestoreCommentRecord {
-
   factory FirestoreCommentRecord.fromMap(String id, Map<String, dynamic> data) {
     DateTime? timestamp;
     final raw = data['createdAt'];

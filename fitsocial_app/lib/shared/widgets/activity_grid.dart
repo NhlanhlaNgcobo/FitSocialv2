@@ -15,18 +15,52 @@ import 'dark_card.dart';
 /// rather than something to explore. Leave it null for the switchable card on
 /// the Progress tab.
 class ActivityGridCard extends ConsumerStatefulWidget {
-  const ActivityGridCard({this.fixedRange, super.key});
+  const ActivityGridCard({this.fixedRange, this.expanded = false, super.key});
 
   final ActivityRange? fixedRange;
+
+  /// The full Progress-tab treatment rather than the compact home one — see
+  /// [ActivityGrid.expanded].
+  final bool expanded;
 
   @override
   ConsumerState<ActivityGridCard> createState() => _ActivityGridCardState();
 }
 
 class _ActivityGridCardState extends ConsumerState<ActivityGridCard> {
-  ActivityRange _range = ActivityRange.month;
+  /// Where the switchable card opens, every time.
+  ///
+  /// Deliberately not remembered: the full 53-week wall is the view worth
+  /// landing on, so a trip to Progress starts there even if the user drilled
+  /// into 7D last time.
+  static const _openingRange = ActivityRange.year;
+
+  ActivityRange _range = _openingRange;
+
+  /// Whether the tab this card lives on was on screen at the last dependency
+  /// change — see [didChangeDependencies].
+  bool _wasOnScreen = false;
 
   ActivityRange get _activeRange => widget.fixedRange ?? _range;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Switching sections within the Activity screen rebuilds this widget, so
+    // that route back to Progress resets on its own. Switching *tabs* does
+    // not: the shell parks every branch rather than disposing it, precisely so
+    // scroll positions and forms survive, which means this State would come
+    // back still holding whatever range was last picked.
+    //
+    // TickerMode is what the shell toggles as a branch parks and wakes, so
+    // reading it here both registers the dependency and gives us the "this tab
+    // is being entered" edge. A rebuild follows this callback, so assigning
+    // without setState is correct.
+    final onScreen = TickerMode.valuesOf(context).enabled;
+    if (onScreen && !_wasOnScreen) _range = _openingRange;
+    _wasOnScreen = onScreen;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +79,7 @@ class _ActivityGridCardState extends ConsumerState<ActivityGridCard> {
       onRangeChanged: widget.fixedRange != null
           ? null
           : (next) => setState(() => _range = next),
+      expanded: widget.expanded,
       notice: calendar.hasError ? "Couldn't load your activity" : null,
     );
   }
@@ -70,6 +105,7 @@ class ActivityGrid extends StatefulWidget {
     required this.calendar,
     required this.range,
     required this.onRangeChanged,
+    this.expanded = false,
     this.notice,
     super.key,
   });
@@ -79,6 +115,15 @@ class ActivityGrid extends StatefulWidget {
 
   /// Null pins the card to [range] and hides the picker entirely.
   final ValueChanged<ActivityRange>? onRangeChanged;
+
+  /// The full Progress-tab treatment — the "N active days" headline and the
+  /// key explaining the two square states — rather than the compact variant
+  /// the home feed shows.
+  ///
+  /// One flag rather than two because the pieces belong together: on the feed
+  /// the card is a glance at the streak, and both the headline and the key
+  /// restate what the squares already say.
+  final bool expanded;
 
   /// Shown in place of the per-day detail when the squares cannot be trusted —
   /// a failed read, say. The grid still draws, so the message has to say why
@@ -145,20 +190,12 @@ class _ActivityGridState extends State<ActivityGrid> {
   @override
   Widget build(BuildContext context) {
     final calendar = widget.calendar;
-    // A switchable card is the full Progress-tab treatment: range picker and
-    // the key explaining the squares. A pinned one is the compact home
-    // variant, which carries neither.
-    final isExpanded = widget.onRangeChanged != null;
 
     return DarkCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // The "N active days this week" headline only earns its space on the
-          // switchable card, where the window it refers to can change. Pinned
-          // to one range on the home feed it restates the card's own premise,
-          // so the compact variant drops it and shortens by that much.
-          _Header(calendar: calendar, showHeadline: isExpanded),
+          _Header(calendar: calendar, showHeadline: widget.expanded),
           const SizedBox(height: AppSpacing.md),
           if (widget.onRangeChanged case final onRangeChanged?) ...[
             _RangePicker(
@@ -186,7 +223,7 @@ class _ActivityGridState extends State<ActivityGrid> {
             isFuture: _selectedDay != null && calendar.isFuture(_selectedDay!),
             notice: widget.notice,
           ),
-          if (isExpanded) ...[
+          if (widget.expanded) ...[
             const SizedBox(height: AppSpacing.sm),
             const _Legend(),
           ],

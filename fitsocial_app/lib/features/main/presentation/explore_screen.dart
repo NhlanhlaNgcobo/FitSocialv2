@@ -9,7 +9,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/bottom_nav.dart';
-import '../../../shared/widgets/post_gradient.dart';
+import '../../../shared/widgets/post_summary_tile.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
@@ -441,8 +441,16 @@ class _TrendingTile extends StatelessWidget {
 
   final FeedPost post;
 
+  /// A photo wins when there is one: whatever the author shot is more worth
+  /// looking at than a rendering of what they wrote or measured. Everything
+  /// else — a run, a workout, a meal logged without a picture, a written post
+  /// — is summarised on a card.
+  bool get _hasPhoto => post.imageUrl != null && post.imageUrl!.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
+    final hasPhoto = _hasPhoto;
+
     return GestureDetector(
       onTap: () => showPostDetailSheet(context, post),
       child: ClipRRect(
@@ -450,51 +458,17 @@ class _TrendingTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _PostBackground(post: post),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.sm + 2),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.transparent, Color(0xE6050505)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // The caption band is a dark scrim in both themes — it has
-                    // to survive an arbitrary photo underneath it — so what
-                    // sits on it is fixed rather than themed.
-                    Text(
-                      post.userName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.onMedia,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      post.activity,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.onMediaMuted,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+            if (!hasPhoto)
+              PostSummaryTile(post: post, showAuthor: true)
+            else ...[
+              _PostPhoto(url: post.imageUrl!),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _MediaCaption(post: post),
               ),
-            ),
+            ],
             // Both counts, not just likes: comments are weighted double in the
             // ranking, so a post sitting high on the strength of its replies
             // would otherwise look mysteriously placed.
@@ -508,12 +482,14 @@ class _TrendingTile extends StatelessWidget {
                     _CountPill(
                       icon: Icons.mode_comment_rounded,
                       count: post.comments,
+                      onMedia: hasPhoto,
                     ),
                     const SizedBox(width: 4),
                   ],
                   _CountPill(
                     icon: Icons.favorite_rounded,
                     count: post.likes,
+                    onMedia: hasPhoto,
                   ),
                 ],
               ),
@@ -525,30 +501,97 @@ class _TrendingTile extends StatelessWidget {
   }
 }
 
-class _CountPill extends StatelessWidget {
-  const _CountPill({required this.icon, required this.count});
+/// Author and activity burned over the bottom of a photo tile.
+class _MediaCaption extends StatelessWidget {
+  const _MediaCaption({required this.post});
 
-  final IconData icon;
-  final int count;
+  final FeedPost post;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm + 2),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.transparent, Color(0xE6050505)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The caption band is a dark scrim in both themes — it has to
+          // survive an arbitrary photo underneath it — so what sits on it is
+          // fixed rather than themed.
+          Text(
+            post.userName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.onMedia,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            post.activity,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.onMediaMuted,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountPill extends StatelessWidget {
+  const _CountPill({
+    required this.icon,
+    required this.count,
+    this.onMedia = true,
+  });
+
+  final IconData icon;
+  final int count;
+
+  /// Whether the pill sits over a photo or gradient. Over media it stays a
+  /// dark plate with fixed contents in both themes; on an activity card it is
+  /// part of the card and follows the palette, because a black lozenge on a
+  /// cream tile reads as a hole in it.
+  final bool onMedia;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      // A dark pill over the tile, whichever theme is on — so is its content.
       decoration: BoxDecoration(
-        color: Colors.black54,
+        color: onMedia ? Colors.black54 : palette.surfaceHigh,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: AppColors.orangeBright, size: 13),
+          Icon(
+            icon,
+            // The bright orange is tuned for fills and glyphs on black; at
+            // 13px on cream it needs the heavier weight.
+            color: onMedia ? AppColors.orangeBright : palette.brandText,
+            size: 13,
+          ),
           const SizedBox(width: 4),
           Text(
             '$count',
-            style: const TextStyle(
-              color: AppColors.onMedia,
+            style: TextStyle(
+              color: onMedia ? AppColors.onMedia : palette.text,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -561,58 +604,25 @@ class _CountPill extends StatelessWidget {
 
 // ── Shared post visuals ─────────────────────────────────────────────────────
 
-/// The post's photo when it has one, otherwise its gradient theme with the
-/// activity label.
-class _PostBackground extends StatelessWidget {
-  const _PostBackground({required this.post});
+/// The post's photo, filling the tile.
+///
+/// The caption scrim and the count pills are drawn over this in their media
+/// register, so what stands in while the photo loads has to be dark-tolerant
+/// chrome rather than a card — swapping in a summary card here would put a
+/// black scrim across a cream tile for as long as the download took.
+class _PostPhoto extends StatelessWidget {
+  const _PostPhoto({required this.url});
 
-  final FeedPost post;
+  final String url;
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
-    if (!hasImage) return _GradientFill(post: post);
-
     return Image.network(
-      post.imageUrl!,
+      url,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => _GradientFill(post: post),
+      errorBuilder: (_, __, ___) => const MediaPlaceholder(failed: true),
       loadingBuilder: (_, child, progress) =>
-          progress == null ? child : _GradientFill(post: post),
-    );
-  }
-}
-
-class _GradientFill extends StatelessWidget {
-  const _GradientFill({required this.post});
-
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: postGradientColors(post.backgroundColors, palette),
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: const EdgeInsets.all(8),
-      alignment: Alignment.center,
-      child: Text(
-        post.activity,
-        textAlign: TextAlign.center,
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: postGradientTextColor(palette),
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
-      ),
+          progress == null ? child : const MediaPlaceholder(),
     );
   }
 }

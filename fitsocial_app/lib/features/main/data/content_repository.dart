@@ -2,10 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/bootstrap/bootstrap_status.dart';
+import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
+import '../domain/progress_models.dart';
 import 'content_repository_contract.dart';
 import 'firestore_content_repository.dart';
+import 'firestore_models.dart';
 
 final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   final status = ref.watch(bootstrapStatusProvider);
@@ -29,7 +32,21 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<ActivityDay>> getActivityDays(DateTime from) async {
+  Future<List<ActivitySession>> getActivitySessions() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<int> getWeeklyGoalDays() async =>
+      FirestoreUserRecord.defaultWeeklyGoalDays;
+
+  @override
+  Future<void> setWeeklyGoalDays(int days) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> deleteActivitySession(String id, ActivityKind kind) async {
     throw StateError(_firebaseSetupMessage);
   }
 
@@ -67,6 +84,17 @@ class UnconfiguredContentRepository implements ContentRepository {
   Future<List<UserSearchResult>> searchUsers(String query) async {
     throw StateError(_firebaseSetupMessage);
   }
+
+  @override
+  Future<List<UserSearchResult>> suggestMentions(String prefix) async {
+    // An empty list rather than a throw: the suggestion list is an affordance
+    // on top of typing, and a composer that explodes because Firebase is
+    // unconfigured would take the whole caption field with it.
+    return const [];
+  }
+
+  @override
+  Future<String?> resolveUsername(String username) async => null;
 
   @override
   Future<List<FeedPost>> fetchTrendingPosts() async {
@@ -151,9 +179,10 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> toggleLike(
+  Future<void> setPostReaction(
     String postId,
-    String userId, {
+    String userId,
+    FitReaction? reaction, {
     UserProfileDraft? profile,
   }) async {
     throw StateError(_firebaseSetupMessage);
@@ -199,8 +228,8 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Stream<bool> watchPostLikeStatus(String postId, String userId) {
-    return Stream.value(false);
+  Stream<FitReaction?> watchPostReaction(String postId, String userId) {
+    return Stream.value(null);
   }
 
   @override

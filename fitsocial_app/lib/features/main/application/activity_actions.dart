@@ -54,10 +54,10 @@ class ActivityActions {
       // so the author's profile grids pick the new post up.
       ..invalidate(userPostsProvider)
       ..invalidate(userMediaPostsProvider)
-      // Likewise every range of the activity grid — without this the square
-      // for today keeps the value it was first built with and a run logged
-      // mid-session never lights up.
-      ..invalidate(activityCalendarProvider);
+      // Likewise the training log every Progress view is derived from —
+      // without this the square for today keeps the value it was first built
+      // with and a run logged mid-session never lights up.
+      ..invalidate(activitySessionsProvider);
     return result;
   }
 }

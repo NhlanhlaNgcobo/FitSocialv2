@@ -5,9 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/post_summary_tile.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/follow_button.dart';
-import '../../../shared/widgets/post_gradient.dart';
 import '../../../shared/widgets/profile_bio.dart';
 import '../../../shared/widgets/profile_stats_bar.dart';
 import '../application/content_providers.dart';
@@ -271,46 +271,15 @@ class _PostTile extends StatelessWidget {
               child: Image.network(
                 url,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _GradientTile(post: post),
-                loadingBuilder: (_, child, progress) =>
-                    progress == null ? child : _GradientTile(post: post),
+                errorBuilder: (_, __, ___) =>
+                    const MediaPlaceholder(borderRadius: 16, failed: true),
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : const MediaPlaceholder(borderRadius: 16),
               ),
             )
-          : _GradientTile(post: post),
-    );
-  }
-}
-
-class _GradientTile extends StatelessWidget {
-  const _GradientTile({required this.post});
-
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: postGradientColors(post.backgroundColors, palette),
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: const EdgeInsets.all(8),
-      alignment: Alignment.bottomLeft,
-      child: Text(
-        post.activity,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: postGradientTextColor(palette),
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
-      ),
+          // Same treatment as the owner's own grid.
+          : PostSummaryTile(post: post, compact: true, borderRadius: 16),
     );
   }
 }

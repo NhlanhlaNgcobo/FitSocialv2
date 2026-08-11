@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/identity/profile_identity.dart';
+import '../../../shared/reactions/fit_reaction.dart';
 import '../domain/app_models.dart';
 import 'firestore_models.dart';
 
@@ -22,12 +23,21 @@ class FirestoreMapper {
       comments: post.commentsCount,
       backgroundColors: _themeColors(post.themeKey),
       likedBy: post.likedBy,
+      // Reconciled against likesCount, not read straight off the map: a post
+      // carrying likes from before reactions has a total and no breakdown, and
+      // those are read as the default reaction rather than as nothing.
+      reactions: readReactionCountsAgainstTotal(
+        post.reactionCounts,
+        post.likesCount,
+      ),
+      reactionsBy: _parseReactionsBy(post.reactionsBy),
       postType: _parsePostType(post.postType),
       imageUrl: post.imageUrl,
       workoutData: post.workoutData,
       routePoints: post.routePoints,
       authorAvatarUrl: post.authorAvatarUrl,
       imageAspectRatio: post.imageAspectRatio,
+      taggedUsers: post.taggedUsers,
     );
   }
 
@@ -66,6 +76,19 @@ class FirestoreMapper {
 
   static String _plural(int count, String unit) =>
       '$count $unit${count == 1 ? '' : 's'} ago';
+
+  /// uid -> reaction, dropping anyone whose stored key this build doesn't
+  /// know. A reaction added in a later release then reads as "no reaction from
+  /// that person" rather than as the wrong one; they still count towards the
+  /// total, which comes off likesCount.
+  static Map<String, FitReaction> _parseReactionsBy(Map<String, String> raw) {
+    final parsed = <String, FitReaction>{};
+    for (final entry in raw.entries) {
+      final reaction = FitReaction.fromKey(entry.value);
+      if (reaction != null) parsed[entry.key] = reaction;
+    }
+    return parsed;
+  }
 
   static PostType _parsePostType(String value) {
     switch (value) {

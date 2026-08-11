@@ -7,6 +7,7 @@ import 'package:fitsocial_app/features/main/data/content_repository.dart';
 import 'package:fitsocial_app/features/main/data/firestore_content_repository.dart';
 import 'package:fitsocial_app/features/main/data/firestore_models.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
+import 'package:fitsocial_app/shared/reactions/fit_reaction.dart';
 
 FeedPost post(String id, {int likes = 0, List<String> likedBy = const []}) {
   return FeedPost(
@@ -55,9 +56,10 @@ class _FakeContentRepository extends UnconfiguredContentRepository {
   }
 
   @override
-  Future<void> toggleLike(
+  Future<void> setPostReaction(
     String postId,
-    String userId, {
+    String userId,
+    FitReaction? reaction, {
     UserProfileDraft? profile,
   }) async {}
 }
@@ -129,23 +131,42 @@ void main() {
       expect(notifier.state.valueOrNull?.posts.single.id, 'a');
     });
 
-    test('an optimistic like updates the post without changing the source',
+    test('an optimistic reaction updates the post without changing the source',
         () async {
       final notifier = await loadedNotifier(
         HomeFeed(posts: [post('a'), post('b')], source: FeedSource.following),
       );
       addTearDown(notifier.dispose);
 
-      await notifier.toggleLike('a', 'me');
+      await notifier.setReaction('a', 'me', FitReaction.fire);
 
       final feed = notifier.state.valueOrNull!;
       expect(feed.source, FeedSource.following);
       expect(feed.posts.first.likedBy, ['me']);
       expect(feed.posts.first.likes, 1);
+      expect(feed.posts.first.reactionOf('me'), FitReaction.fire);
+      expect(feed.posts.first.reactions.countOf(FitReaction.fire), 1);
       expect(feed.posts.last.likedBy, isEmpty);
     });
 
-    test('unliking takes the like back off the card', () async {
+    test('changing reaction moves the breakdown but not the total', () async {
+      final notifier = await loadedNotifier(
+        HomeFeed(posts: [post('a')], source: FeedSource.following),
+      );
+      addTearDown(notifier.dispose);
+
+      await notifier.setReaction('a', 'me', FitReaction.fire);
+      await notifier.setReaction('a', 'me', FitReaction.champion);
+
+      final card = notifier.state.valueOrNull!.posts.single;
+      // One person, one reaction: swapping is not a second vote.
+      expect(card.likes, 1);
+      expect(card.reactionOf('me'), FitReaction.champion);
+      expect(card.reactions.countOf(FitReaction.fire), 0);
+      expect(card.reactions.countOf(FitReaction.champion), 1);
+    });
+
+    test('clearing takes the reaction back off the card', () async {
       final notifier = await loadedNotifier(
         HomeFeed(
           posts: [post('a', likes: 1, likedBy: ['me'])],
@@ -154,10 +175,14 @@ void main() {
       );
       addTearDown(notifier.dispose);
 
-      await notifier.toggleLike('a', 'me');
+      // Seeded through likedBy with no stored reaction — a like from before
+      // reactions existed. Clearing it has to work the same as clearing one
+      // given today.
+      await notifier.setReaction('a', 'me', null);
 
       expect(notifier.state.valueOrNull!.posts.single.likedBy, isEmpty);
       expect(notifier.state.valueOrNull!.posts.single.likes, 0);
+      expect(notifier.state.valueOrNull!.posts.single.reactionOf('me'), isNull);
     });
 
     test('a deleted post leaves the feed, source intact', () async {

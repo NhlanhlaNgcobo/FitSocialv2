@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/reactions/fit_reaction.dart';
+
 /// What a post is, as recorded on the document.
 ///
 /// [run] and [meal] were added after launch. Posts written before that carry
@@ -11,6 +13,53 @@ enum PostType {
   workout,
   run,
   meal,
+}
+
+/// Someone attached to a post from its composer.
+///
+/// Name and handle ride along on the post document rather than being resolved
+/// per render: the "with @bear" line is drawn for every card in the feed, and
+/// a profile read per tagged person would be a query per card. The uid is what
+/// makes the chip navigable and is the only field that can't go stale.
+class TaggedUser {
+  const TaggedUser({
+    required this.id,
+    required this.displayName,
+    required this.handle,
+  });
+
+  final String id;
+  final String displayName;
+
+  /// Normalized username, no '@' — the UI adds one.
+  final String handle;
+
+  Map<String, String> toMap() => {
+        'id': id,
+        'displayName': displayName,
+        'handle': handle,
+      };
+
+  /// Null for an entry missing the uid, which is the one field the chip cannot
+  /// do without — a tag that leads nowhere is worse than no tag.
+  static TaggedUser? fromMap(Object? value) {
+    if (value is! Map) return null;
+    final id = (value['id'] ?? '').toString().trim();
+    if (id.isEmpty) return null;
+    return TaggedUser(
+      id: id,
+      displayName:
+          PublicAuthorName.sanitize((value['displayName'] ?? '').toString()),
+      handle: (value['handle'] ?? '').toString().trim(),
+    );
+  }
+
+  static List<TaggedUser> listFrom(Object? value) {
+    if (value is! List) return const [];
+    return value.map(TaggedUser.fromMap).whereType<TaggedUser>().toList(
+          growable: false,
+        );
+  }
 }
 
 class FeedPost {
@@ -26,12 +75,15 @@ class FeedPost {
     required this.comments,
     required this.backgroundColors,
     required this.likedBy,
+    this.reactions = FitReactionSummary.empty,
+    this.reactionsBy = const {},
     this.postType = PostType.text,
     this.imageUrl,
     this.workoutData,
     this.routePoints = const [],
     this.authorAvatarUrl,
     this.imageAspectRatio,
+    this.taggedUsers = const [],
   });
 
   final String id;
@@ -47,7 +99,20 @@ class FeedPost {
   final int likes;
   final int comments;
   final List<Color> backgroundColors;
+
+  /// Everyone who has reacted. Still called this because it is still the same
+  /// field: the single Like button became the reaction control, the way it did
+  /// on Facebook, and the people it named did not change.
   final List<String> likedBy;
+
+  /// The breakdown — how many gave each reaction. [likes] remains the total,
+  /// and the two agree because the summary is reconciled against it on read.
+  final FitReactionSummary reactions;
+
+  /// Which reaction each person gave. Missing for anyone whose like predates
+  /// reactions; [reactionOf] resolves those through [likedBy] instead.
+  final Map<String, FitReaction> reactionsBy;
+
   final PostType postType;
   final String? imageUrl;
   final Map<String, dynamic>? workoutData;
@@ -64,6 +129,24 @@ class FeedPost {
   /// recorded — the feed falls back to square, Instagram's historical default.
   final double? imageAspectRatio;
 
+  /// People the author attached to the post. Empty on everything written
+  /// before tagging existed, and on any post nobody was tagged in.
+  final List<TaggedUser> taggedUsers;
+
+  /// What [userId] reacted with, or null if they haven't reacted.
+  ///
+  /// Falls back to the default reaction for someone who is named in [likedBy]
+  /// but absent from [reactionsBy] — that is a like cast under the old single
+  /// button, and the honest reading of it is 🧡. Without this, everyone who
+  /// liked a post before today would find their own like had vanished from
+  /// the bar while still counting towards the total.
+  FitReaction? reactionOf(String? userId) {
+    if (userId == null) return null;
+    final given = reactionsBy[userId];
+    if (given != null) return given;
+    return likedBy.contains(userId) ? FitReaction.defaultReaction : null;
+  }
+
   FeedPost copyWith({
     String? id,
     String? authorId,
@@ -76,12 +159,15 @@ class FeedPost {
     int? comments,
     List<Color>? backgroundColors,
     List<String>? likedBy,
+    FitReactionSummary? reactions,
+    Map<String, FitReaction>? reactionsBy,
     PostType? postType,
     String? imageUrl,
     Map<String, dynamic>? workoutData,
     List<RoutePoint>? routePoints,
     String? authorAvatarUrl,
     double? imageAspectRatio,
+    List<TaggedUser>? taggedUsers,
   }) {
     return FeedPost(
       id: id ?? this.id,
@@ -95,12 +181,15 @@ class FeedPost {
       comments: comments ?? this.comments,
       backgroundColors: backgroundColors ?? this.backgroundColors,
       likedBy: likedBy ?? this.likedBy,
+      reactions: reactions ?? this.reactions,
+      reactionsBy: reactionsBy ?? this.reactionsBy,
       postType: postType ?? this.postType,
       imageUrl: imageUrl ?? this.imageUrl,
       workoutData: workoutData ?? this.workoutData,
       routePoints: routePoints ?? this.routePoints,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       imageAspectRatio: imageAspectRatio ?? this.imageAspectRatio,
+      taggedUsers: taggedUsers ?? this.taggedUsers,
     );
   }
 }
@@ -233,7 +322,6 @@ class ActivitySaveResult {
 }
 
 class ExerciseEntry {
-
   factory ExerciseEntry.fromMap(Map<String, dynamic> map) => ExerciseEntry(
         name: (map['name'] as String?) ?? '',
         sets: (map['sets'] as num?)?.toInt() ?? 0,
@@ -261,7 +349,7 @@ class ExerciseEntry {
 class WorkoutLogDraft {
   const WorkoutLogDraft({
     required this.title,
-    required this.duration,
+    required this.durationMinutes,
     required this.calories,
     required this.exercises,
     required this.notes,
@@ -269,11 +357,26 @@ class WorkoutLogDraft {
   });
 
   final String title;
-  final String duration;
-  final String calories;
+
+  /// How long the session lasted. Numeric rather than a "45 min" label so the
+  /// Progress tab can add durations up; the label is derived where it is shown.
+  final int durationMinutes;
+
+  /// Energy burned in kcal, as entered. Zero when the user left it blank —
+  /// the field is optional and no figure is invented for a workout.
+  final int calories;
+
   final List<ExerciseEntry> exercises;
   final String notes;
   final bool shareToFeed;
+
+  Duration get duration => Duration(minutes: durationMinutes);
+
+  /// "45 min", for the post's metric strip.
+  String get durationLabel => '$durationMinutes min';
+
+  /// "320 kcal", for the post's metric strip.
+  String get caloriesLabel => '$calories kcal';
 }
 
 /// One GPS coordinate on a saved run route.
@@ -676,6 +779,7 @@ class PostDraft {
     this.activity = '',
     this.imageUrl,
     this.imageAspectRatio,
+    this.taggedUsers = const [],
   });
 
   final String caption;
@@ -690,6 +794,11 @@ class PostDraft {
   /// width / height of the cropped photo. Stored so the feed can render the
   /// image at the shape the user actually chose instead of forcing one.
   final double? imageAspectRatio;
+
+  /// People the author picked in the composer's tag sheet. Separate from the
+  /// mentions inside [caption]: a tag is a deliberate attachment, a mention is
+  /// something written in a sentence, and the two are notified differently.
+  final List<TaggedUser> taggedUsers;
 }
 
 class ProgressMetric {
@@ -1073,7 +1182,8 @@ class AchievementsData {
   int get totalActivities => totalWorkouts + totalMeals + totalRuns;
 
   /// XP banked since this level began — what the progress bar fills with.
-  int get xpIntoCurrentLevel => currentXp - (level - 1) * AchievementXp.perLevel;
+  int get xpIntoCurrentLevel =>
+      currentXp - (level - 1) * AchievementXp.perLevel;
 
   /// XP still owed before the next level unlocks.
   int get xpRemaining => (nextLevelXp - currentXp).clamp(0, nextLevelXp);

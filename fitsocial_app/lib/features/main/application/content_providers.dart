@@ -1,12 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/domain/auth_models.dart';
 import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
+import '../domain/progress_models.dart';
 
 // ---------------------------------------------------------------------------
 // Feed posts — StateNotifier for optimistic like toggling
@@ -36,31 +38,78 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<HomeFeed>> {
 
   Future<void> refresh() => _load();
 
-  /// Optimistic like toggle — updates the single post in-place, then syncs.
-  Future<void> toggleLike(String postId, String userId) async {
+  /// Optimistic reaction — updates the single post in-place, then syncs.
+  ///
+  /// Pass null to take the reaction back. The card has to answer the tap on
+  /// the same frame; a round trip before the emoji changes would make the
+  /// whole tray feel broken.
+  Future<void> setReaction(
+    String postId,
+    String userId,
+    FitReaction? reaction,
+  ) async {
     final current = state.valueOrNull;
     if (current == null) return;
 
-    // Optimistic update
-    state = AsyncValue.data(current.withPosts(current.posts.map((p) {
-      if (p.id != postId) return p;
-      final liked = p.likedBy.contains(userId);
-      final newLikedBy = liked
-          ? (List<String>.from(p.likedBy)..remove(userId))
-          : [...p.likedBy, userId];
-      return p.copyWith(
-        likedBy: newLikedBy,
-        likes: newLikedBy.length,
-      );
+    state = AsyncValue.data(current.withPosts(current.posts.map((post) {
+      if (post.id != postId) return post;
+      return _withReaction(post, userId, reaction);
     }).toList()));
 
-    // Sync to Firestore
     try {
-      await _repository.toggleLike(postId, userId, profile: _profile);
+      await _repository.setPostReaction(
+        postId,
+        userId,
+        reaction,
+        profile: _profile,
+      );
     } catch (_) {
-      // Roll back on error
+      // Roll back on error — the bar reads from this state, so the reaction
+      // simply springs back to what it was.
       state = AsyncValue.data(current);
     }
+  }
+
+  /// [post] with [userId]'s reaction set to [reaction], counters and all.
+  ///
+  /// Mirrors what the transaction does on the server so the optimistic frame
+  /// and the one that arrives afterwards agree: the total moves only when
+  /// someone joins or leaves, never when they merely change their mind.
+  static FeedPost _withReaction(
+    FeedPost post,
+    String userId,
+    FitReaction? reaction,
+  ) {
+    final previous = post.reactionOf(userId);
+    if (previous == reaction) return post;
+
+    final likedBy = List<String>.from(post.likedBy)..remove(userId);
+    final reactionsBy = Map<FitReaction, int>.from(post.reactions.counts);
+    final by = Map<String, FitReaction>.from(post.reactionsBy)..remove(userId);
+
+    if (previous != null) {
+      final left = (reactionsBy[previous] ?? 1) - 1;
+      if (left > 0) {
+        reactionsBy[previous] = left;
+      } else {
+        reactionsBy.remove(previous);
+      }
+    }
+    if (reaction != null) {
+      likedBy.add(userId);
+      by[userId] = reaction;
+      reactionsBy[reaction] = (reactionsBy[reaction] ?? 0) + 1;
+    }
+
+    final total = (post.likes - (previous == null ? 0 : 1)) +
+        (reaction == null ? 0 : 1);
+
+    return post.copyWith(
+      likedBy: likedBy,
+      likes: total,
+      reactionsBy: by,
+      reactions: FitReactionSummary(counts: reactionsBy, total: total),
+    );
   }
 
   /// Drops a post from the in-memory feed after it has been deleted on the
@@ -72,7 +121,9 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<HomeFeed>> {
 
     state = AsyncValue.data(
       current.withPosts(
-        current.posts.where((post) => post.id != postId).toList(growable: false),
+        current.posts
+            .where((post) => post.id != postId)
+            .toList(growable: false),
       ),
     );
   }
@@ -109,13 +160,15 @@ final commentsProvider =
 // NEW: Real-time social action streams
 // ---------------------------------------------------------------------------
 
-/// Watches whether the active user has liked a specific post.
-/// Falls back to `false` when no user is signed in.
-final postLikeStatusProvider =
-    StreamProvider.family<bool, String>((ref, postId) {
+/// Watches which reaction the active user has given a post.
+/// Null when they have given none, and when nobody is signed in.
+final postReactionProvider =
+    StreamProvider.family<FitReaction?, String>((ref, postId) {
   final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId == null) return Stream.value(false);
-  return ref.watch(contentRepositoryProvider).watchPostLikeStatus(postId, userId);
+  if (userId == null) return Stream.value(null);
+  return ref
+      .watch(contentRepositoryProvider)
+      .watchPostReaction(postId, userId);
 });
 
 /// Watches whether the active user has bookmarked a specific post.
@@ -124,7 +177,9 @@ final postBookmarkStatusProvider =
     StreamProvider.family<bool, String>((ref, postId) {
   final userId = FirebaseAuth.instance.currentUser?.uid;
   if (userId == null) return Stream.value(false);
-  return ref.watch(contentRepositoryProvider).watchBookmarkStatus(postId, userId);
+  return ref
+      .watch(contentRepositoryProvider)
+      .watchBookmarkStatus(postId, userId);
 });
 
 /// Real-time stream of comments for a given post, ordered by createdAt asc.
@@ -141,25 +196,74 @@ final progressMetricsProvider = FutureProvider<List<ProgressMetric>>((ref) {
   return ref.watch(contentRepositoryProvider).getProgressMetrics();
 });
 
-/// The gap-filled run/workout calendar behind the progress grid.
+/// Days a week the user is aiming to train.
+final weeklyGoalDaysProvider = FutureProvider.autoDispose<int>((ref) {
+  return ref.watch(contentRepositoryProvider).getWeeklyGoalDays();
+});
+
+/// Every run and workout the signed-in user has logged, newest first.
+///
+/// The single read behind the whole Progress tab — the streak grid, the
+/// overview totals and the session list are all views onto this one list, so
+/// paging between periods or ranges costs nothing.
+///
+/// autoDispose because everything derived from it is anchored to "today": a
+/// cached result outlives the day it was built for, and the grid would still
+/// be showing yesterday's week after midnight. Logging an activity also
+/// invalidates it — see [ActivityActions].
+final activitySessionsProvider =
+    FutureProvider.autoDispose<List<ActivitySession>>((ref) {
+  return ref.watch(contentRepositoryProvider).getActivitySessions();
+});
+
+/// The gap-filled run/workout calendar behind the streak grid.
 ///
 /// The window is derived from the range here rather than in the widget so the
-/// query and the rendered grid can never disagree about where it starts.
-///
-/// autoDispose because the window is anchored to "today": a cached calendar
-/// outlives the day it was built for, and would still be showing yesterday's
-/// week after midnight. Re-reading on each visit to the tab costs two small
-/// queries. Logging an activity also invalidates this — see [ActivityActions].
+/// data and the rendered grid can never disagree about where it starts.
 final activityCalendarProvider = FutureProvider.autoDispose
     .family<ActivityCalendar, ActivityRange>((ref, range) async {
+  final sessions = await ref.watch(activitySessionsProvider.future);
   final today = DateTime.now();
-  final start = ActivityCalendar.startOfWindow(range, today);
-  final logged = await ref.watch(contentRepositoryProvider).getActivityDays(start);
+
+  // Sessions collapse to per-day counts here: the grid asks "did I train that
+  // day", not "what did I do".
+  final byDay = <DateTime, ActivityDay>{};
+  for (final session in sessions) {
+    final existing = byDay[session.day];
+    byDay[session.day] = ActivityDay(
+      date: session.day,
+      runs: (existing?.runs ?? 0) + (session.kind == ActivityKind.run ? 1 : 0),
+      workouts: (existing?.workouts ?? 0) +
+          (session.kind == ActivityKind.workout ? 1 : 0),
+    );
+  }
+
   return ActivityCalendar.fromLoggedDays(
     range: range,
-    logged: logged,
+    logged: byDay.values.toList(growable: false),
     today: today,
   );
+});
+
+/// The four headline numbers for [window], against the window before it.
+final progressOverviewProvider = FutureProvider.autoDispose
+    .family<ProgressOverview, ProgressWindow>((ref, window) async {
+  final sessions = await ref.watch(activitySessionsProvider.future);
+  final goal = await ref.watch(weeklyGoalDaysProvider.future);
+  return ProgressOverview.from(
+    sessions: sessions,
+    window: window,
+    weeklyGoalDays: goal,
+  );
+});
+
+/// The sessions inside [window], newest first.
+final windowSessionsProvider = FutureProvider.autoDispose
+    .family<List<ActivitySession>, ProgressWindow>((ref, window) async {
+  final sessions = await ref.watch(activitySessionsProvider.future);
+  return sessions
+      .where((session) => window.contains(session.startedAt))
+      .toList(growable: false);
 });
 
 /// Following / Followers / Likes for one profile. Keyed by user id so the
@@ -186,8 +290,7 @@ final userProfileProvider =
 /// One post by id. Only reached when the detail screen was opened without the
 /// post already in hand — a tap from a grid passes the loaded post straight
 /// through instead.
-final postProvider =
-    FutureProvider.family<FeedPost?, String>((ref, postId) {
+final postProvider = FutureProvider.family<FeedPost?, String>((ref, postId) {
   if (postId.isEmpty) return Future.value(null);
   return ref.watch(contentRepositoryProvider).fetchPost(postId);
 });
@@ -224,14 +327,24 @@ final userSearchResultsProvider =
   return ref.watch(contentRepositoryProvider).searchUsers(query);
 });
 
+/// Accounts matching the `@` currently being typed in a composer.
+///
+/// autoDispose because the key is a half-typed word: every keystroke that
+/// survives the debounce mints a new one, and keeping them all would grow a
+/// cache nobody reads twice. Keyed on the prefix rather than held in the widget
+/// so the comment box and the caption field share one set of results.
+final mentionSuggestionsProvider = FutureProvider.autoDispose
+    .family<List<UserSearchResult>, String>((ref, prefix) {
+  return ref.watch(contentRepositoryProvider).suggestMentions(prefix);
+});
+
 /// The Explore grid, ranked by engagement against age.
 ///
 /// autoDispose because the ranking is computed against "now": a cached list
 /// outlives the hour it was scored in, and a user returning to the tab
 /// tomorrow would still be looking at yesterday's ordering. Re-ranking costs
 /// one query per visit.
-final trendingPostsProvider =
-    FutureProvider.autoDispose<List<FeedPost>>((ref) {
+final trendingPostsProvider = FutureProvider.autoDispose<List<FeedPost>>((ref) {
   return ref.watch(contentRepositoryProvider).fetchTrendingPosts();
 });
 

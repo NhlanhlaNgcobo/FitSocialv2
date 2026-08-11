@@ -36,6 +36,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
   late final AnimationController _entranceController;
   late final TextEditingController _titleController;
   late final TextEditingController _durationController;
+  late final TextEditingController _caloriesController;
   late final TextEditingController _notesController;
 
   int _sets = 0;
@@ -53,6 +54,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
     )..forward();
     _titleController = TextEditingController();
     _durationController = TextEditingController();
+    _caloriesController = TextEditingController();
     _notesController = TextEditingController();
   }
 
@@ -61,12 +63,15 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
     _entranceController.dispose();
     _titleController.dispose();
     _durationController.dispose();
+    _caloriesController.dispose();
     _notesController.dispose();
     super.dispose();
   }
 
   int get _durationMinutes =>
       int.tryParse(_durationController.text.trim()) ?? 0;
+
+  int get _calories => int.tryParse(_caloriesController.text.trim()) ?? 0;
 
   int get _totalReps => _sets * _reps;
 
@@ -80,10 +85,17 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
   }
 
   void _bumpDuration(int minutes) {
-    final next = (_durationMinutes + minutes).clamp(0, 600);
-    _durationController.text = next.toString();
-    _durationController.selection =
-        TextSelection.collapsed(offset: _durationController.text.length);
+    _bump(_durationController, _durationMinutes + minutes, max: 600);
+  }
+
+  void _bumpCalories(int kcal) {
+    _bump(_caloriesController, _calories + kcal, max: 5000);
+  }
+
+  void _bump(TextEditingController controller, int next, {required int max}) {
+    controller.text = next.clamp(0, max).toString();
+    controller.selection =
+        TextSelection.collapsed(offset: controller.text.length);
     setState(() {});
   }
 
@@ -112,8 +124,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
       final result = await ref.read(activityActionsProvider).saveWorkout(
             WorkoutLogDraft(
               title: title,
-              duration: '$_durationMinutes min',
-              calories: '0 kcal',
+              durationMinutes: _durationMinutes,
+              calories: _calories,
               exercises: exercises,
               notes: _notesController.text.trim(),
               shareToFeed: _shareToFeed,
@@ -168,10 +180,30 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
             controller: _entranceController,
             index: sectionIndex++,
             itemCount: _sectionCount,
-            child: _DurationSection(
+            child: _NumberWellSection(
+              icon: Icons.timer_outlined,
+              label: 'Duration',
+              unit: 'min',
               controller: _durationController,
+              bumpValues: const [5, 10, 15, 30],
               onChanged: () => setState(() {}),
               onBump: _bumpDuration,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: _NumberWellSection(
+              icon: Icons.local_fire_department_outlined,
+              label: 'Calories',
+              hint: 'Optional',
+              unit: 'kcal',
+              controller: _caloriesController,
+              bumpValues: const [50, 100, 200],
+              onChanged: () => setState(() {}),
+              onBump: _bumpCalories,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -388,16 +420,36 @@ class _TitleSection extends StatelessWidget {
   }
 }
 
-class _DurationSection extends StatelessWidget {
-  const _DurationSection({
+/// A big centred number with a unit and quick-add chips.
+///
+/// Duration and calories are the same control with different words, so they
+/// share one — the alternative was two near-identical seventy-line widgets
+/// that would drift apart the first time either was restyled.
+class _NumberWellSection extends StatelessWidget {
+  const _NumberWellSection({
+    required this.icon,
+    required this.label,
+    required this.unit,
     required this.controller,
+    required this.bumpValues,
     required this.onChanged,
     required this.onBump,
+    this.hint,
   });
 
+  final IconData icon;
+  final String label;
+  final String unit;
   final TextEditingController controller;
+
+  /// Amounts offered as one-tap additions under the field.
+  final List<int> bumpValues;
+
   final VoidCallback onChanged;
   final ValueChanged<int> onBump;
+
+  /// Shown beside the label, e.g. "Optional".
+  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -406,10 +458,7 @@ class _DurationSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(
-          icon: Icons.timer_outlined,
-          label: 'Duration',
-        ),
+        _SectionHeader(icon: icon, label: label, hint: hint),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 18),
           decoration: _wellDecoration(context),
@@ -440,7 +489,7 @@ class _DurationSection extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Text(
-                  'min',
+                  unit,
                   style: TextStyle(
                     color: palette.muted,
                     fontWeight: FontWeight.w700,
@@ -454,11 +503,11 @@ class _DurationSection extends StatelessWidget {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: [5, 10, 15, 30]
+          children: bumpValues
               .map(
-                (minutes) => BouncyChip(
-                  label: '+$minutes min',
-                  onTap: () => onBump(minutes),
+                (amount) => BouncyChip(
+                  label: '+$amount $unit',
+                  onTap: () => onBump(amount),
                 ),
               )
               .toList(),

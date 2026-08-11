@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/identity/profile_identity.dart';
+import '../../../shared/reactions/fit_reaction.dart';
+import '../../main/domain/shared_post.dart';
 
 /// Timing rules for Pulse playback and expiry.
 ///
@@ -25,7 +27,14 @@ abstract final class PulseTiming {
 enum PulseMediaType {
   photo,
   video,
-  text;
+  text,
+
+  /// Somebody else's post, put on your Pulse — Instagram's "add to story".
+  ///
+  /// Carries no media of its own: the card is drawn from the [PulseSegment]'s
+  /// `sharedPost` snapshot over the chosen gradient, and tapping it opens the
+  /// post it came from.
+  post;
 
   /// Stored form. Kept explicit rather than using `name` so a rename of the
   /// enum can never silently change what is already in Firestore.
@@ -37,6 +46,8 @@ enum PulseMediaType {
         return 'video';
       case PulseMediaType.text:
         return 'text';
+      case PulseMediaType.post:
+        return 'post';
     }
   }
 
@@ -46,11 +57,18 @@ enum PulseMediaType {
         return PulseMediaType.video;
       case 'text':
         return PulseMediaType.text;
+      case 'post':
+        return PulseMediaType.post;
       case 'photo':
       default:
         return PulseMediaType.photo;
     }
   }
+
+  /// Whether this kind uploads a file. Text and shared posts do not, which is
+  /// what lets both publish without touching Storage.
+  bool get carriesMedia =>
+      this == PulseMediaType.photo || this == PulseMediaType.video;
 }
 
 /// A background for a text Pulse.
@@ -120,8 +138,10 @@ class PulseSegment {
     this.text = '',
     this.gradientKey = 'ember',
     this.viewCount = 0,
+    this.reactions = FitReactionSummary.empty,
     this.videoDuration,
     this.aspectRatio,
+    this.sharedPost,
   });
 
   final String id;
@@ -155,12 +175,30 @@ class PulseSegment {
 
   final int viewCount;
 
+  /// How many people picked each reaction, denormalised onto the Pulse.
+  ///
+  /// Kept here rather than counted from the reactions subcollection because
+  /// this number is on screen for every frame of playback: the tray already
+  /// streams these documents, so the summary arrives for free, while counting
+  /// the subcollection would mean opening a second live query per segment the
+  /// viewer scrolls past.
+  ///
+  /// Unlike [viewCount], this is not the author's alone. Facebook's reactions
+  /// are a public signal — the count and the reactions are part of what makes
+  /// people join in — so everyone who can see the Pulse can see them.
+  final FitReactionSummary reactions;
+
   /// Real length of the video, recorded at compose time so the progress bar
   /// can be sized before the player has loaded.
   final Duration? videoDuration;
 
   /// width / height of the media, for fitting it without distortion.
   final double? aspectRatio;
+
+  /// The post this Pulse is a share of, on a [PulseMediaType.post] segment and
+  /// null on every other kind. Snapshotted rather than looked up — see
+  /// [SharedPostRef].
+  final SharedPostRef? sharedPost;
 
   PulseGradient get gradient => PulseGradient.fromKey(gradientKey);
 
@@ -251,12 +289,13 @@ class PulseDraft {
     this.gradientKey = 'ember',
     this.videoDuration,
     this.aspectRatio,
+    this.sharedPost,
   });
 
   final PulseMediaType type;
 
-  /// Path to the photo or video on the device. Null on a text Pulse, which
-  /// uploads nothing.
+  /// Path to the photo or video on the device. Null on a text Pulse and on a
+  /// shared post, neither of which uploads anything.
   final String? localFilePath;
 
   final String text;
@@ -264,9 +303,19 @@ class PulseDraft {
   final Duration? videoDuration;
   final double? aspectRatio;
 
+  /// The post being shared, on a [PulseMediaType.post] draft.
+  final SharedPostRef? sharedPost;
+
   bool get isPublishable {
-    if (type == PulseMediaType.text) return text.trim().isNotEmpty;
-    return (localFilePath ?? '').isNotEmpty;
+    switch (type) {
+      case PulseMediaType.text:
+        return text.trim().isNotEmpty;
+      case PulseMediaType.post:
+        return sharedPost != null;
+      case PulseMediaType.photo:
+      case PulseMediaType.video:
+        return (localFilePath ?? '').isNotEmpty;
+    }
   }
 }
 

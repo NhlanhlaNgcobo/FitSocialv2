@@ -7,11 +7,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
+import '../../auth/domain/username.dart';
 import '../../notifications/data/firestore_notification_repository.dart';
 import '../../notifications/domain/notification_models.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
+import '../domain/mentions.dart';
+import '../domain/progress_models.dart';
+import 'activity_session_parsing.dart';
 import 'content_repository_contract.dart';
 import 'firestore_mappers.dart';
 import 'firestore_models.dart';
@@ -94,7 +99,8 @@ class FirestoreContentRepository implements ContentRepository {
     for (var i = 0; i < ids.length; i += _authorChunkSize) {
       futures.add(
         postsCollection
-            .where('authorId', whereIn: ids.skip(i).take(_authorChunkSize).toList())
+            .where('authorId',
+                whereIn: ids.skip(i).take(_authorChunkSize).toList())
             .orderBy('createdAt', descending: true)
             .limit(_feedLimit)
             .get(),
@@ -414,9 +420,8 @@ class FirestoreContentRepository implements ContentRepository {
     if (currentUserId != null) byId.remove(currentUserId);
 
     final results = byId.values.toList()
-      ..sort((a, b) => a.displayName
-          .toLowerCase()
-          .compareTo(b.displayName.toLowerCase()));
+      ..sort((a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
     return results;
   }
 
@@ -431,6 +436,121 @@ class FirestoreContentRepository implements ContentRepository {
         .where(field, isLessThanOrEqualTo: '$prefix')
         .limit(20)
         .get();
+  }
+
+  /// How many names a composer offers at once. Long enough to be useful,
+  /// short enough that the list never covers the text being written.
+  static const int _mentionSuggestionLimit = 8;
+
+  @override
+  Future<List<UserSearchResult>> suggestMentions(String prefix) async {
+    final term = normalizeUsername(prefix);
+
+    // Just after the '@' there is nothing to match on, so the list opens on
+    // the people the user follows — who they mean is far more often someone
+    // they already have a relationship with than a stranger.
+    if (term.isEmpty) return _mentionableFollowing();
+
+    // Handles are stored normalized, but accounts predating that carry a
+    // leading '@' in the field. Both forms are probed so neither generation of
+    // profile is invisible to the composer.
+    final snapshots = await Future.wait([
+      _prefixQuery('handle', term),
+      _prefixQuery('handle', '@$term'),
+    ]);
+
+    final byId = <String, UserSearchResult>{};
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        byId.putIfAbsent(
+          doc.id,
+          () => FirestoreMapper.toUserSearchResult(
+            FirestoreUserRecord.fromMap(doc.id, doc.data()),
+          ),
+        );
+      }
+    }
+
+    // Unlike searchUsers, the signed-in user is left in: writing your own
+    // handle into a caption is ordinary, and dropping yourself from the list
+    // makes the composer look broken rather than tactful.
+    final results = byId.values.toList()
+      ..sort((a, b) =>
+          normalizeUsername(a.handle).compareTo(normalizeUsername(b.handle)));
+    return results.take(_mentionSuggestionLimit).toList(growable: false);
+  }
+
+  /// The opening suggestion list: people the user follows, alphabetically.
+  Future<List<UserSearchResult>> _mentionableFollowing() async {
+    final userId = _firebaseAuth.currentUser?.uid;
+    if (userId == null) return const [];
+
+    final edges = await usersCollection
+        .doc(userId)
+        .collection('following')
+        .limit(_mentionSuggestionLimit)
+        .get();
+    if (edges.docs.isEmpty) return const [];
+
+    final profiles = await Future.wait(
+      edges.docs.map((doc) => usersCollection.doc(doc.id).get()),
+    );
+
+    final results = <UserSearchResult>[];
+    for (final profile in profiles) {
+      final data = profile.data();
+      if (data == null) continue;
+      results.add(
+        FirestoreMapper.toUserSearchResult(
+          FirestoreUserRecord.fromMap(profile.id, data),
+        ),
+      );
+    }
+    results.sort((a, b) =>
+        a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+    return results;
+  }
+
+  /// The accounts that should be told about the `@handles` in [text].
+  ///
+  /// Silently drops names nobody holds — a typo'd handle still renders as a
+  /// link, it just has nothing to notify — and drops [actorId], because being
+  /// told you mentioned yourself is noise.
+  Future<List<String>> _resolveMentionRecipients(
+    String text,
+    String actorId,
+  ) async {
+    final names = mentionedUsernames(text);
+    if (names.isEmpty) return const [];
+
+    final resolved = await Future.wait(names.map(resolveUsername));
+
+    final recipients = <String>{};
+    for (final uid in resolved) {
+      if (uid == null || uid.isEmpty || uid == actorId) continue;
+      recipients.add(uid);
+    }
+    return recipients.toList(growable: false);
+  }
+
+  @override
+  Future<String?> resolveUsername(String username) async {
+    final name = normalizeUsername(username);
+    if (name.isEmpty) return null;
+
+    final snapshot = await usernamesCollection.doc(name).get();
+    final data = snapshot.data();
+    if (data == null) return null;
+
+    // A vacated name still has a document — it is held, not deleted — so a
+    // reservation past its release date belongs to nobody.
+    final releaseAt = data['releaseAt'];
+    if (releaseAt is Timestamp && releaseAt.toDate().isBefore(DateTime.now())) {
+      return null;
+    }
+
+    final uid = (data['uid'] as String?) ?? '';
+    return uid.isEmpty ? null : uid;
   }
 
   @override
@@ -498,7 +618,7 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<ActivityDay>> getActivityDays(DateTime from) async {
+  Future<List<ActivitySession>> getActivitySessions() async {
     final user = _firebaseAuth.currentUser;
     if (user == null) return const [];
 
@@ -507,26 +627,209 @@ class FirestoreContentRepository implements ContentRepository {
       _activityLogs(workoutsCollection, user.uid),
     ]);
 
-    // The window is applied here rather than in the query — see _activityLogs.
-    //
-    // `createdAt` is a server timestamp, so it is the field that is always
-    // present and comparable. For bucketing, the client-side stamp is
-    // preferred: it carries the moment the session actually happened in the
-    // user's own timezone, which is the day the grid should light up.
-    final start = ActivityCalendar.dateOnly(from);
-    final runsByDay = _countByDay(results[0], ['startedAt', 'createdAt'], start);
-    final workoutsByDay =
-        _countByDay(results[1], ['loggedAt', 'createdAt'], start);
-
-    final dates = {...runsByDay.keys, ...workoutsByDay.keys}.toList()..sort();
-    return [
-      for (final date in dates)
-        ActivityDay(
-          date: date,
-          runs: runsByDay[date] ?? 0,
-          workouts: workoutsByDay[date] ?? 0,
-        ),
+    final logged = <ActivitySession>[
+      ...results[0].map(_toRunSession).nonNulls,
+      ...results[1].map(_toWorkoutSession).nonNulls,
     ];
+
+    // Sessions from before the log collections existed survive only as the
+    // posts they were shared as. Those posts are the record for that period,
+    // so they are read back as sessions too — otherwise the grid and the
+    // totals start on the day the log collections were added and everything
+    // earlier looks like rest days.
+    return mergeSessions(
+      logged: logged,
+      fromPosts: await _postSessions(user.uid),
+    );
+  }
+
+  /// The user's runs and workouts as recorded on their posts.
+  ///
+  /// Recognition goes through [ExploreFilterX], which already knows every form
+  /// a run or workout post has taken — including the ones written before the
+  /// `run` and `workout` post types existed, where the route or the activity
+  /// label is the only tell.
+  Future<List<ActivitySession>> _postSessions(String userId) async {
+    try {
+      final snapshot =
+          await postsCollection.where('authorId', isEqualTo: userId).get();
+
+      final sessions = <ActivitySession>[];
+      for (final doc in snapshot.docs) {
+        final record = FirestorePostRecord.fromMap(doc.id, doc.data());
+        final createdAt = record.createdAt;
+        // No date, no place on a calendar.
+        if (createdAt == null) continue;
+
+        final post = FirestoreMapper.toFeedPost(record);
+        // Runs first: a run post carries no workoutData, but checking in this
+        // order means a post that somehow has both is read as the run it says
+        // it is rather than as a workout.
+        if (ExploreFilterX.isRun(post)) {
+          sessions.add(_runSessionFromPost(post, createdAt));
+        } else if (ExploreFilterX.isWorkout(post)) {
+          sessions.add(_workoutSessionFromPost(post, createdAt));
+        }
+      }
+      return sessions;
+    } on FirebaseException catch (error) {
+      debugPrint(
+        'Progress: could not read posts for older sessions (${error.code}) — '
+        'anything logged before the run and workout collections will be '
+        'missing.',
+      );
+      return const [];
+    }
+  }
+
+  /// A run post as a session. Distance and elapsed time come back off the
+  /// metric strip, which is the only place a legacy run post recorded them.
+  static ActivitySession _runSessionFromPost(FeedPost post, DateTime when) {
+    final distanceKm = distanceFromMetricLabels(post.metricLabels);
+    return ActivitySession(
+      id: post.id,
+      kind: ActivityKind.run,
+      title: 'Run',
+      startedAt: when,
+      duration: durationFromMetricLabels(post.metricLabels) ?? Duration.zero,
+      calories: estimatedRunCalories(distanceKm),
+      caloriesAreEstimated: true,
+      distanceKm: distanceKm,
+      sharedToFeed: true,
+      postId: post.id,
+    );
+  }
+
+  /// A workout post as a session, read out of the workoutData map the share
+  /// flow denormalised onto it.
+  static ActivitySession _workoutSessionFromPost(FeedPost post, DateTime when) {
+    final data = post.workoutData ?? const <String, dynamic>{};
+    final exercises = data['exercises'];
+
+    return ActivitySession(
+      id: post.id,
+      kind: ActivityKind.workout,
+      title: _text(data['title']) ?? _text(post.activity) ?? 'Workout',
+      startedAt: when,
+      duration: Duration(
+        minutes: minutesFromDurationLabel(data['duration'] as String?),
+      ),
+      calories: kcalFromLabel(data['calories'] as String?),
+      exerciseCount: exercises is List ? exercises.length : null,
+      sharedToFeed: true,
+      postId: post.id,
+    );
+  }
+
+
+  /// A run document as a session, or null when it carries no usable date.
+  ///
+  /// `startedAt` is preferred over `createdAt`: it is the client-side stamp
+  /// for when the run actually happened, in the user's own timezone, which is
+  /// the day it should count towards. `createdAt` is the server's write time
+  /// and only stands in when there is no better answer.
+  static ActivitySession? _toRunSession(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final startedAt = _firstTimestamp(data, const ['startedAt', 'createdAt']);
+    if (startedAt == null) return null;
+
+    final distanceKm = (data['distanceKm'] as num?)?.toDouble();
+    return ActivitySession(
+      id: doc.id,
+      kind: ActivityKind.run,
+      title: 'Run',
+      startedAt: startedAt,
+      duration: Duration(seconds: (data['durationSeconds'] as num?)?.toInt() ?? 0),
+      calories: estimatedRunCalories(distanceKm),
+      caloriesAreEstimated: true,
+      distanceKm: distanceKm,
+      sharedToFeed: data['sharedToFeed'] as bool? ?? false,
+      postId: _text(data['postId']),
+    );
+  }
+
+  /// A workout document as a session, or null when it carries no usable date.
+  ///
+  /// Duration falls back to parsing the "45 min" label for workouts logged
+  /// before the numeric field existed; calories simply read as zero on those,
+  /// because nothing was ever captured to recover.
+  static ActivitySession? _toWorkoutSession(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final startedAt = _firstTimestamp(data, const ['loggedAt', 'createdAt']);
+    if (startedAt == null) return null;
+
+    final minutes = (data['durationMinutes'] as num?)?.toInt() ??
+        minutesFromDurationLabel(data['duration'] as String?);
+
+    return ActivitySession(
+      id: doc.id,
+      kind: ActivityKind.workout,
+      title: _text(data['title']) ?? 'Workout',
+      startedAt: startedAt,
+      duration: Duration(minutes: minutes),
+      calories: (data['calories'] as num?)?.toInt() ?? 0,
+      exerciseCount: (data['exerciseCount'] as num?)?.toInt(),
+      sharedToFeed: data['sharedToFeed'] as bool? ?? false,
+      postId: _text(data['postId']),
+    );
+  }
+
+  @override
+  Future<int> getWeeklyGoalDays() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return FirestoreUserRecord.defaultWeeklyGoalDays;
+    try {
+      return (await _loadUserRecord()).weeklyGoalDays;
+    } on FirebaseException catch (error) {
+      // The goal is only a denominator; falling back to the default beats
+      // failing the whole overview card over an unreadable profile.
+      debugPrint('Weekly goal unavailable (${error.code}) — using default.');
+      return FirestoreUserRecord.defaultWeeklyGoalDays;
+    }
+  }
+
+  @override
+  Future<void> deleteActivitySession(String id, ActivityKind kind) async {
+    _requireCurrentUser();
+    final collection =
+        kind == ActivityKind.run ? runsCollection : workoutsCollection;
+    await collection.doc(id).delete();
+  }
+
+  @override
+  Future<void> setWeeklyGoalDays(int days) async {
+    final user = _requireCurrentUser();
+    await usersCollection.doc(user.uid).set(
+      {'weeklyGoalDays': days.clamp(1, 7)},
+      SetOptions(merge: true),
+    );
+  }
+
+  /// A trimmed string field, or null when it is absent or blank.
+  ///
+  /// A stored empty string and a missing key mean the same thing here — no
+  /// title, no linked post — and callers should not have to tell them apart.
+  static String? _text(Object? value) {
+    final text = (value as String?)?.trim();
+    return (text == null || text.isEmpty) ? null : text;
+  }
+
+  /// The first of [fields] holding a `Timestamp`, as local time.
+  static DateTime? _firstTimestamp(
+    Map<String, dynamic> data,
+    List<String> fields,
+  ) {
+    for (final field in fields) {
+      final value = data[field];
+      // Timestamp.toDate() returns local time, so the day boundary is the
+      // user's own midnight rather than UTC's.
+      if (value is Timestamp) return value.toDate();
+    }
+    return null;
   }
 
   /// Every log [userId] owns in [collection], or an empty list if that read
@@ -559,32 +862,13 @@ class FirestoreContentRepository implements ContentRepository {
     }
   }
 
-  /// Tallies [docs] dated on or after [start] into local calendar days, reading
-  /// the first of [timestampFields] that holds a usable `Timestamp`.
-  static Map<DateTime, int> _countByDay(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    List<String> timestampFields,
-    DateTime start,
-  ) {
-    final counts = <DateTime, int>{};
-    for (final doc in docs) {
-      final data = doc.data();
-      for (final field in timestampFields) {
-        final value = data[field];
-        if (value is! Timestamp) continue;
-        // Timestamp.toDate() returns local time, so the day boundary is the
-        // user's own midnight rather than UTC's.
-        final day = ActivityCalendar.dateOnly(value.toDate());
-        if (day.isBefore(start)) break;
-        counts.update(day, (running) => running + 1, ifAbsent: () => 1);
-        break;
-      }
-    }
-    return counts;
-  }
-
   CollectionReference<Map<String, dynamic>> get usersCollection =>
       _firestore.collection('users');
+
+  /// Username reservations, keyed by the normalized name itself. This is the
+  /// only mapping from `@handle` to a uid — see domain/username.dart.
+  CollectionReference<Map<String, dynamic>> get usernamesCollection =>
+      _firestore.collection('usernames');
 
   CollectionReference<Map<String, dynamic>> get postsCollection =>
       _firestore.collection('posts');
@@ -634,9 +918,9 @@ class FirestoreContentRepository implements ContentRepository {
     WorkoutLogDraft draft,
   ) async {
     // Written whether or not the workout is shared, mirroring saveRun: the log
-    // is the canonical record, and the activity grid reads from it. Sharing
+    // is the canonical record, and the Progress tab reads from it. Sharing
     // only decides whether a post is created alongside it.
-    await _writeWorkoutLog(draft);
+    final logRef = await _writeWorkoutLog(draft);
 
     if (!draft.shareToFeed) {
       await _incrementUser(workoutsDelta: 1);
@@ -652,22 +936,41 @@ class FirestoreContentRepository implements ContentRepository {
           ? 'Logged ${draft.exercises.length} exercises.'
           : draft.notes.trim(),
       metricLabels: [
-        draft.duration,
-        draft.calories,
+        draft.durationLabel,
+        draft.caloriesLabel,
         '${draft.exercises.length} moves'
       ],
       themeKey: 'burn',
       postType: 'workout',
       workoutData: {
         'title': draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
-        'duration': draft.duration,
-        'calories': draft.calories,
+        'duration': draft.durationLabel,
+        'calories': draft.caloriesLabel,
         'exercises': draft.exercises.map((e) => e.toMap()).toList(),
       },
     );
+    await _linkLogToPost(logRef, post.id);
     await _incrementUser(workoutsDelta: 1);
     return ActivitySaveResult(
         message: 'Workout saved and shared.', createdPost: post);
+  }
+
+  /// Points a saved log at the post it produced.
+  ///
+  /// A separate write rather than part of the original set: the log has to
+  /// exist whether or not the post does, so it is written first and the id is
+  /// added once there is one. A failure here costs the Progress tab's link
+  /// through to the post, not the record of the session.
+  Future<void> _linkLogToPost(
+    DocumentReference<Map<String, dynamic>> logRef,
+    String postId,
+  ) async {
+    try {
+      await logRef.update({'postId': postId});
+    } on FirebaseException catch (error) {
+      debugPrint('Could not link ${logRef.path} to post $postId: '
+          '${error.code}');
+    }
   }
 
   @override
@@ -678,7 +981,7 @@ class FirestoreContentRepository implements ContentRepository {
     // The run log is the canonical record and is written whether or not the
     // run is shared, so an unshared GPS run still keeps its route.
     final route = _serializeRoute(draft.routePoints);
-    await _writeRunLog(draft, route);
+    final logRef = await _writeRunLog(draft, route);
 
     if (!draft.shareToFeed) {
       await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
@@ -703,6 +1006,7 @@ class FirestoreContentRepository implements ContentRepository {
       // documents it already streams, with no extra read per card.
       routePoints: route,
     );
+    await _linkLogToPost(logRef, post.id);
     await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
     return ActivitySaveResult(
         message: 'Run saved and shared.', createdPost: post);
@@ -711,30 +1015,44 @@ class FirestoreContentRepository implements ContentRepository {
   /// Persists the workout to `workouts/{id}` — what was done and when.
   ///
   /// `loggedAt` is stamped client-side so the day bucket reflects the user's
-  /// own clock; `createdAt` stays a server timestamp for ordering and for the
-  /// range filter the activity query runs.
-  Future<void> _writeWorkoutLog(WorkoutLogDraft draft) async {
+  /// own clock; `createdAt` stays a server timestamp for ordering.
+  ///
+  /// Duration and calories are written as numbers. They are also written as
+  /// the labels the feed shows, because the post carries those strings and the
+  /// two should not be re-derived differently in two places.
+  Future<DocumentReference<Map<String, dynamic>>> _writeWorkoutLog(
+    WorkoutLogDraft draft,
+  ) async {
     final user = _requireCurrentUser();
     final title = draft.title.trim();
-    await workoutsCollection.doc().set({
+    final ref = workoutsCollection.doc();
+    await ref.set({
       'authorId': user.uid,
       'title': title.isEmpty ? 'Workout' : title,
-      'duration': draft.duration,
+      'durationMinutes': draft.durationMinutes,
       'calories': draft.calories,
+      'duration': draft.durationLabel,
+      'caloriesLabel': draft.caloriesLabel,
       'exerciseCount': draft.exercises.length,
       'sharedToFeed': draft.shareToFeed,
       'loggedAt': Timestamp.now(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    return ref;
   }
 
   /// Persists the run to `runs/{id}` — distance, timings and the GPS trace.
-  Future<void> _writeRunLog(
+  ///
+  /// No calories field: a run's energy cost is worked out from its distance on
+  /// read (see [estimatedRunCalories]), so it is not frozen into the document
+  /// and every run already logged gets one too.
+  Future<DocumentReference<Map<String, dynamic>>> _writeRunLog(
     RunLogDraft draft,
     List<Map<String, double>> route,
   ) async {
     final user = _requireCurrentUser();
-    await runsCollection.doc().set({
+    final ref = runsCollection.doc();
+    await ref.set({
       'authorId': user.uid,
       'distanceKm': draft.distanceKm,
       'durationSeconds': draft.elapsed.inSeconds,
@@ -746,6 +1064,7 @@ class FirestoreContentRepository implements ContentRepository {
         'startedAt': Timestamp.fromDate(draft.startedAt!),
       'createdAt': FieldValue.serverTimestamp(),
     });
+    return ref;
   }
 
   @override
@@ -801,6 +1120,7 @@ class FirestoreContentRepository implements ContentRepository {
       imageUrl: draft.imageUrl,
       postType: draft.imageUrl != null ? 'image' : 'text',
       imageAspectRatio: draft.imageAspectRatio,
+      taggedUsers: draft.taggedUsers,
     );
     return ActivitySaveResult(message: 'Post shared.', createdPost: post);
   }
@@ -882,6 +1202,7 @@ class FirestoreContentRepository implements ContentRepository {
     Map<String, dynamic>? workoutData,
     List<Map<String, double>> routePoints = const [],
     double? imageAspectRatio,
+    List<TaggedUser> taggedUsers = const [],
   }) async {
     final user = _requireCurrentUser();
     final userId = user.uid;
@@ -910,10 +1231,22 @@ class FirestoreContentRepository implements ContentRepository {
       routePoints: RoutePoint.listFromFirestore(routePoints),
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
+      // The author can't tag themselves — their name is already on the post —
+      // and a duplicate entry would draw the same chip twice.
+      taggedUsers: _dedupeTags(taggedUsers, userId),
       // Local clock, only for the copy handed straight back to the feed — the
       // stored value is the server timestamp written below.
       createdAt: DateTime.now(),
     );
+
+    final taggedIds =
+        record.taggedUsers.map((tagged) => tagged.id).toList(growable: false);
+    // Anyone already tagged is skipped: being tagged and named in the same
+    // caption is one event to the person on the other end, and the tag is the
+    // more deliberate of the two.
+    final mentioned = (await _resolveMentionRecipients(caption, userId))
+        .where((uid) => !taggedIds.contains(uid))
+        .toList(growable: false);
 
     await document.set({
       'authorId': record.authorId,
@@ -934,11 +1267,96 @@ class FirestoreContentRepository implements ContentRepository {
         'imageAspectRatio': record.imageAspectRatio,
       if (record.workoutData != null) 'workoutData': record.workoutData,
       if (routePoints.isNotEmpty) 'routePoints': routePoints,
+      if (record.taggedUsers.isNotEmpty)
+        'taggedUsers': record.taggedUsers
+            .map((tagged) => tagged.toMap())
+            .toList(growable: false),
+      // The flat uid list is the queryable half of the same fact — "posts I am
+      // tagged in" is an array-contains away, which a list of maps is not.
+      if (taggedIds.isNotEmpty) 'taggedUserIds': taggedIds,
+      if (mentioned.isNotEmpty) 'mentionedUserIds': mentioned,
       'createdAt': FieldValue.serverTimestamp(),
     });
     await _incrementUser(postsDelta: 1);
+    await _notifyPostAudience(
+      postId: document.id,
+      actorId: userId,
+      actorName: authorName,
+      actorAvatarUrl: authorAvatarUrl,
+      postImageUrl: imageUrl,
+      postType: postType,
+      taggedIds: taggedIds,
+      mentionedIds: mentioned,
+    );
 
     return FirestoreMapper.toFeedPost(record);
+  }
+
+  /// [tags] with the author and any repeats removed.
+  static List<TaggedUser> _dedupeTags(List<TaggedUser> tags, String authorId) {
+    final seen = <String>{authorId};
+    final kept = <TaggedUser>[];
+    for (final tagged in tags) {
+      if (!seen.add(tagged.id)) continue;
+      kept.add(tagged);
+      if (kept.length >= maxMentionsPerItem) break;
+    }
+    return kept;
+  }
+
+  /// Tells the people a new post names that it names them.
+  ///
+  /// Deliberately after the post itself rather than batched with it: the post
+  /// is the thing the user asked for, and a notification that fails must not
+  /// take the post down with it. A swallowed failure costs an alert, which is
+  /// recoverable — the post is on the tagged user's feed either way.
+  Future<void> _notifyPostAudience({
+    required String postId,
+    required String actorId,
+    required String actorName,
+    required List<String> taggedIds,
+    required List<String> mentionedIds,
+    String? actorAvatarUrl,
+    String? postImageUrl,
+    String? postType,
+  }) async {
+    if (taggedIds.isEmpty && mentionedIds.isEmpty) return;
+
+    try {
+      final batch = _firestore.batch();
+      for (final recipientId in taggedIds) {
+        batch.set(
+          _notifications.ref(recipientId, NotificationIds.tag(postId, actorId)),
+          _notifications.tagPayload(
+            actorId: actorId,
+            actorName: actorName,
+            actorAvatarUrl: actorAvatarUrl,
+            postId: postId,
+            postImageUrl: postImageUrl,
+            postType: postType,
+          ),
+        );
+      }
+      for (final recipientId in mentionedIds) {
+        batch.set(
+          _notifications.ref(
+            recipientId,
+            NotificationIds.mention(postId, actorId),
+          ),
+          _notifications.mentionPayload(
+            actorId: actorId,
+            actorName: actorName,
+            actorAvatarUrl: actorAvatarUrl,
+            postId: postId,
+            postImageUrl: postImageUrl,
+            postType: postType,
+          ),
+        );
+      }
+      await batch.commit();
+    } catch (error) {
+      debugPrint('Post $postId saved, but its mentions were not sent: $error');
+    }
   }
 
   /// Applies activity counters and advances the daily streak.
@@ -979,18 +1397,21 @@ class FirestoreContentRepository implements ContentRepository {
       final storedMaxRunKm =
           (data['maxRunDistanceKm'] as num?)?.toDouble() ?? 0;
 
-      transaction.set(documentRef, {
-        if (postsDelta != 0) 'postsCount': FieldValue.increment(postsDelta),
-        if (workoutsDelta != 0)
-          'workoutsCount': FieldValue.increment(workoutsDelta),
-        if (mealsDelta != 0) 'mealsCount': FieldValue.increment(mealsDelta),
-        if (runsDelta != 0) 'runsCount': FieldValue.increment(runsDelta),
-        if (runDistanceKm != null && runDistanceKm > storedMaxRunKm)
-          'maxRunDistanceKm': runDistanceKm,
-        'currentStreak': streak,
-        'lastActivityDay': today,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      transaction.set(
+          documentRef,
+          {
+            if (postsDelta != 0) 'postsCount': FieldValue.increment(postsDelta),
+            if (workoutsDelta != 0)
+              'workoutsCount': FieldValue.increment(workoutsDelta),
+            if (mealsDelta != 0) 'mealsCount': FieldValue.increment(mealsDelta),
+            if (runsDelta != 0) 'runsCount': FieldValue.increment(runsDelta),
+            if (runDistanceKm != null && runDistanceKm > storedMaxRunKm)
+              'maxRunDistanceKm': runDistanceKm,
+            'currentStreak': streak,
+            'lastActivityDay': today,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
     });
   }
 
@@ -1074,9 +1495,10 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Future<void> toggleLike(
+  Future<void> setPostReaction(
     String postId,
-    String userId, {
+    String userId,
+    FitReaction? reaction, {
     UserProfileDraft? profile,
   }) async {
     final postRef = postsCollection.doc(postId);
@@ -1099,13 +1521,29 @@ class FirestoreContentRepository implements ContentRepository {
 
       if (!postSnapshot.exists) return;
 
-      // Read the legacy likedBy array for backward compatibility.
       final data = postSnapshot.data() ?? {};
+      // likedBy remains the roll of everyone who has reacted — the field kept
+      // its name when the Like button became the reaction control, because the
+      // people it names did not change.
       final likedBy = List<String>.from(
         (data['likedBy'] as List<dynamic>?) ?? [],
       );
 
-      // Nobody is told about their own like.
+      // What they were holding before this write. A like cast before reactions
+      // existed has a like document but no reaction key, and reads as the
+      // default — so switching away from it decrements the right counter.
+      final storedPrevious = likeSnapshot.exists
+          ? FitReaction.fromKey(likeSnapshot.data()?['reaction'] as String?)
+          : null;
+      final previous = likeSnapshot.exists
+          ? (storedPrevious ?? FitReaction.defaultReaction)
+          : null;
+
+      // Picking what you already hold is not an event. Bailing here is what
+      // makes a double tap harmless rather than a double count.
+      if (previous == reaction) return;
+
+      // Nobody is told about their own reaction.
       final authorId = (data['authorId'] as String?) ?? '';
       final notificationRef = (authorId.isEmpty || authorId == userId)
           ? null
@@ -1114,36 +1552,54 @@ class FirestoreContentRepository implements ContentRepository {
               NotificationIds.like(postId, userId),
             );
 
-      if (likeSnapshot.exists) {
-        // ── Unlike ──
-        transaction.delete(likeRef);
+      // The total moves only when someone joins or leaves; swapping one
+      // reaction for another leaves it where it is.
+      final totalDelta = (reaction == null ? 0 : 1) - (previous == null ? 0 : 1);
+
+      if (reaction == null) {
         likedBy.remove(userId);
-        transaction.update(postRef, {
-          'likedBy': likedBy,
-          'likesCount': FieldValue.increment(-1),
-        });
-        // Taking the like back takes the notification with it.
-        if (notificationRef != null) transaction.delete(notificationRef);
+        transaction.delete(likeRef);
       } else {
-        // ── Like ──
+        if (!likedBy.contains(userId)) likedBy.add(userId);
         transaction.set(likeRef, {
+          'reaction': reaction.key,
           'likedAt': FieldValue.serverTimestamp(),
         });
-        if (!likedBy.contains(userId)) likedBy.add(userId);
-        transaction.update(postRef, {
-          'likedBy': likedBy,
-          'likesCount': FieldValue.increment(1),
-        });
-        if (notificationRef != null) {
+      }
+
+      transaction.update(postRef, {
+        'likedBy': likedBy,
+        if (totalDelta != 0) 'likesCount': FieldValue.increment(totalDelta),
+        // Dotted paths, so the two counters move inside one map without this
+        // client having to read and rewrite the whole thing.
+        if (previous != null)
+          'reactionCounts.${previous.key}': FieldValue.increment(-1),
+        if (reaction != null)
+          'reactionCounts.${reaction.key}': FieldValue.increment(1),
+        if (reaction == null)
+          'reactionsBy.$userId': FieldValue.delete()
+        else
+          'reactionsBy.$userId': reaction.key,
+      });
+
+      if (notificationRef != null) {
+        if (reaction == null) {
+          // Taking the reaction back takes the notification with it.
+          transaction.delete(notificationRef);
+        } else {
+          // Written whole rather than patched, so changing your reaction
+          // refreshes the row's timestamp and lifts it back to the top —
+          // the author should see the change, not just the first version.
           transaction.set(
             notificationRef,
-            _notifications.likePayload(
+            _notifications.reactionPayload(
               actorId: userId,
               actorName: actorName,
               actorAvatarUrl: actorAvatarUrl,
               postId: postId,
+              reaction: reaction,
               // Carried onto the notification so the row can show what was
-              // liked without reading the post back.
+              // reacted to without reading the post back.
               postImageUrl: data['imageUrl'] as String?,
               postType: data['postType'] as String?,
             ),
@@ -1178,6 +1634,12 @@ class FirestoreContentRepository implements ContentRepository {
     final authorAvatarUrl = await _resolveAuthorAvatarUrl(profile);
     final commentRef = postsCollection.doc(postId).collection('comments').doc();
 
+    // Resolved before the batch opens, because turning `@handle` into a uid is
+    // a read and a batch may not read. The notifications themselves then ride
+    // in the same commit as the comment: a mention nobody was told about is a
+    // mention that did not happen.
+    final mentioned = await _resolveMentionRecipients(text, user.uid);
+
     final now = DateTime.now();
 
     // Write the comment and bump the post's counter atomically. Done as two
@@ -1189,8 +1651,27 @@ class FirestoreContentRepository implements ContentRepository {
       'authorName': authorName,
       if (authorAvatarUrl != null) 'authorAvatarUrl': authorAvatarUrl,
       'text': text,
+      // Stored as an index for the notifications above, never as the source of
+      // truth for what the comment says — the links are re-parsed from `text`
+      // on every render, so the two can't drift.
+      if (mentioned.isNotEmpty) 'mentionedUserIds': mentioned,
       'createdAt': FieldValue.serverTimestamp(),
     });
+    for (final recipientId in mentioned) {
+      batch.set(
+        _notifications.ref(
+          recipientId,
+          NotificationIds.mention(commentRef.id, user.uid),
+        ),
+        _notifications.mentionPayload(
+          actorId: user.uid,
+          actorName: authorName,
+          actorAvatarUrl: authorAvatarUrl,
+          postId: postId,
+          commentId: commentRef.id,
+        ),
+      );
+    }
     batch.update(postsCollection.doc(postId), {
       'commentsCount': FieldValue.increment(1),
     });
@@ -1260,10 +1741,8 @@ class FirestoreContentRepository implements ContentRepository {
 
   @override
   Future<void> toggleBookmark(String postId, String userId) async {
-    final bookmarkRef = usersCollection
-        .doc(userId)
-        .collection('bookmarks')
-        .doc(postId);
+    final bookmarkRef =
+        usersCollection.doc(userId).collection('bookmarks').doc(postId);
 
     final snapshot = await bookmarkRef.get();
     if (snapshot.exists) {
@@ -1277,14 +1756,21 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Stream<bool> watchPostLikeStatus(String postId, String userId) {
+  Stream<FitReaction?> watchPostReaction(String postId, String userId) {
     return _firestore
         .collection('likes')
         .doc(postId)
         .collection('users')
         .doc(userId)
         .snapshots()
-        .map((snapshot) => snapshot.exists);
+        .map((snapshot) {
+      if (!snapshot.exists) return null;
+      // The document existing is what says they reacted; the key says which.
+      // A like cast before reactions has no key, and 🧡 is the honest reading
+      // of it — falling through to null would make their own like vanish.
+      return FitReaction.fromKey(snapshot.data()?['reaction'] as String?) ??
+          FitReaction.defaultReaction;
+    });
   }
 
   @override
@@ -1305,8 +1791,7 @@ class FirestoreContentRepository implements ContentRepository {
         .orderBy('createdAt', descending: false)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) =>
-                FirestoreCommentRecord.fromMap(doc.id, doc.data()))
+            .map((doc) => FirestoreCommentRecord.fromMap(doc.id, doc.data()))
             .map(FirestoreMapper.toComment)
             .toList());
   }
@@ -1408,7 +1893,9 @@ class FirestoreContentRepository implements ContentRepository {
   Future<void> _writeMealLog(MealLogDraft draft) async {
     final user = _requireCurrentUser();
     int macro(String value) =>
-        int.tryParse(value.trim()) ?? double.tryParse(value.trim())?.round() ?? 0;
+        int.tryParse(value.trim()) ??
+        double.tryParse(value.trim())?.round() ??
+        0;
 
     await mealsCollection.doc().set({
       'authorId': user.uid,

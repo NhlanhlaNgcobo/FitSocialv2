@@ -77,7 +77,7 @@ class CreateScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Pick a canvas and start logging.',
+              'Pick a category and start logging.',
               style: TextStyle(color: palette.muted, fontSize: 14),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -97,24 +97,17 @@ class CreateScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
             ],
-            // Two columns keeps every tile inside the thumb arc, and a square-ish
-            // ratio leaves the icon room to breathe above the label.
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: AppSpacing.md,
-              crossAxisSpacing: AppSpacing.md,
-              childAspectRatio: 0.95,
-              children: [
-                for (final action in actions)
-                  _ActionTile(
-                    action: action,
-                    isActive: action.destination != null &&
-                        action.destination == flowState.activeDestination,
-                  ),
-              ],
-            ),
+            // A single column of full-width rows: the titles are the thing you
+            // scan here, and a list keeps them all left-aligned on one edge.
+            for (final action in actions) ...[
+              _ActionTile(
+                action: action,
+                isActive: action.destination != null &&
+                    action.destination == flowState.activeDestination,
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            const _YouTubeTile(),
           ],
         ),
       ),
@@ -129,6 +122,9 @@ const Color _kWorkoutAccent = AppColors.orangeBright;
 const Color _kRunAccent = Color(0xFF2ECBFF);
 const Color _kMealAccent = Color(0xFF31C46C);
 const Color _kPostAccent = Color(0xFFB06BFF);
+
+/// YouTube red. Not an app accent — it identifies someone else's brand.
+const Color _kYouTubeAccent = Color(0xFFFF0033);
 
 class _ActionTile extends StatefulWidget {
   const _ActionTile({required this.action, required this.isActive});
@@ -167,95 +163,153 @@ class _ActionTileState extends State<_ActionTile> {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accent.withValues(alpha: widget.isActive ? 0.28 : 0.16),
-                palette.surface,
-              ],
-            ),
+            borderRadius: BorderRadius.circular(20),
+            color: palette.surface,
             border: Border.all(
               color: widget.isActive
                   ? accent.withValues(alpha: 0.75)
-                  : accent.withValues(alpha: 0.22),
+                  : palette.stroke,
               width: widget.isActive ? 1.5 : 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: accent.withValues(alpha: widget.isActive ? 0.22 : 0.10),
-                blurRadius: 22,
-                spreadRadius: -6,
-                offset: const Offset(0, 10),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(action.icon, color: accent, size: 24),
               ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      action.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      action.subtitle,
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 13,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.isActive) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'Active',
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+              ],
+              Icon(Icons.chevron_right_rounded, color: palette.muted),
             ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        ),
+      ),
+    );
+  }
+}
+
+/// The FitSocial YouTube channel, shaded out until the channel is ready.
+///
+/// Deliberately not tappable rather than tappable-and-inert: a row that reacts
+/// to a press and then does nothing reads as a bug. When the channel goes live
+/// this becomes a `url_launcher` call to the channel URL and loses the dimming.
+class _YouTubeTile extends StatelessWidget {
+  const _YouTubeTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Opacity(
+      opacity: 0.55,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: palette.surface,
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: _kYouTubeAccent.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.smart_display_rounded,
+                color: _kYouTubeAccent,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: accent.withValues(alpha: 0.35),
-                      ),
+                  const Text(
+                    'FitSocial on YouTube',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
                     ),
-                    child: Icon(action.icon, color: accent, size: 24),
                   ),
-                  const Spacer(),
-                  if (widget.isActive)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.20),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        'Active',
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    )
-                  else
-                    Icon(
-                      Icons.arrow_outward_rounded,
-                      size: 18,
-                      color: accent.withValues(alpha: 0.55),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Workout videos and guides',
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 13,
+                      height: 1.25,
                     ),
+                  ),
                 ],
               ),
-              const Spacer(),
-              Text(
-                action.title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: 4,
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                action.subtitle,
+              decoration: BoxDecoration(
+                color: palette.surfaceHigh,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Coming soon',
                 style: TextStyle(
                   color: palette.muted,
-                  fontSize: 12.5,
-                  height: 1.25,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

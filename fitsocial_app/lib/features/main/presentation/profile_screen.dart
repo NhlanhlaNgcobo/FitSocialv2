@@ -10,9 +10,9 @@ import '../../auth/presentation/account_switcher_sheet.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
+import '../../../shared/widgets/post_summary_tile.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/bottom_nav.dart';
-import '../../../shared/widgets/post_gradient.dart';
 import '../../../shared/widgets/profile_bio.dart';
 import '../../../shared/widgets/profile_stats_bar.dart';
 
@@ -57,7 +57,8 @@ class ProfileScreen extends ConsumerWidget {
               const Expanded(
                 child: TabBarView(
                   children: [
-                    // First tab is the photo grid; the rest filter the user's
+                    // First tab is the photo grid — every photo except meals,
+                    // which get their own tab; the rest filter the user's
                     // posts by what kind of activity they are.
                     _MediaGrid(mediaOnly: true),
                     _MediaGrid(filter: ExploreFilter.workouts),
@@ -74,7 +75,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-/// Add-people on the left, messages and settings on the right.
+/// Add-people on the left, settings on the right.
 class _TopActionBar extends StatelessWidget {
   const _TopActionBar();
 
@@ -94,12 +95,6 @@ class _TopActionBar extends StatelessWidget {
             icon: const Icon(Icons.person_add_alt),
           ),
           const Spacer(),
-          IconButton(
-            onPressed: () => context.push('/messages'),
-            tooltip: 'Messages',
-            color: palette.text,
-            icon: const Icon(Icons.mail_outline_rounded),
-          ),
           IconButton(
             onPressed: () => context.push('/settings'),
             tooltip: 'Settings',
@@ -335,7 +330,8 @@ class _SectionIndicator extends StatelessWidget {
 class _MediaGrid extends ConsumerWidget {
   const _MediaGrid({this.mediaOnly = false, this.filter});
 
-  /// Photo grid: query only posts that carry an uploaded image.
+  /// Photo grid: query only posts that carry an uploaded image. Meal photos
+  /// are left out of it — the Meals tab is where those live.
   final bool mediaOnly;
 
   /// Which kind of post this tab shows. Shared with Explore's chips rather
@@ -367,9 +363,13 @@ class _MediaGrid extends ConsumerWidget {
       ),
       data: (all) {
         final activeFilter = filter;
-        final visible = activeFilter == null
-            ? all
-            : applyExploreFilter(all, activeFilter);
+        // Meals have a tab of their own, so the photo grid leaves them out —
+        // a logged plate belongs under Meals, not spread across both sections.
+        final visible = activeFilter != null
+            ? applyExploreFilter(all, activeFilter)
+            : all
+                .where((post) => !ExploreFilterX.isMeal(post))
+                .toList(growable: false);
 
         if (visible.isEmpty) {
           return _EmptyGrid(
@@ -454,8 +454,9 @@ class _ErrorGrid extends StatelessWidget {
   }
 }
 
-/// A single post tile — the uploaded photo when present, otherwise a
-/// gradient card labelled with the activity.
+/// A single post tile — the uploaded photo when there is one, otherwise the
+/// post summarised on a card: a run's route, a workout's numbers, or what the
+/// author wrote.
 class _PostTile extends StatelessWidget {
   const _PostTile({required this.post});
 
@@ -467,7 +468,7 @@ class _PostTile extends StatelessWidget {
     final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
 
     return GestureDetector(
-      // Opaque so the gaps inside a gradient tile are part of the target too;
+      // Opaque so the gaps inside a summary tile are part of the target too;
       // the post rides along so the detail screen doesn't re-fetch what this
       // grid already loaded.
       behavior: HitTestBehavior.opaque,
@@ -478,45 +479,16 @@ class _PostTile extends StatelessWidget {
               child: Image.network(
                 post.imageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _GradientTile(post: post),
-                loadingBuilder: (context, child, progress) =>
-                    progress == null ? child : _GradientTile(post: post),
+                errorBuilder: (_, __, ___) =>
+                    const MediaPlaceholder(borderRadius: 16, failed: true),
+                loadingBuilder: (context, child, progress) => progress == null
+                    ? child
+                    : const MediaPlaceholder(borderRadius: 16),
               ),
             )
-          : _GradientTile(post: post),
-    );
-  }
-}
-
-class _GradientTile extends StatelessWidget {
-  const _GradientTile({required this.post});
-
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: postGradientColors(post.backgroundColors, palette),
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: const EdgeInsets.all(8),
-      alignment: Alignment.bottomLeft,
-      child: Text(
-        post.activity,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: postGradientTextColor(palette),
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
-      ),
+          // Three across is tight, hence compact; and a profile grid is one
+          // person's work throughout, so nothing needs naming them.
+          : PostSummaryTile(post: post, compact: true, borderRadius: 16),
     );
   }
 }

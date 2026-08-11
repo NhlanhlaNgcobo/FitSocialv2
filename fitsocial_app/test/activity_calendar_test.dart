@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:fitsocial_app/features/main/application/content_providers.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/shared/widgets/activity_grid.dart';
 
@@ -175,6 +177,96 @@ void main() {
     });
   });
 
+  group('ActivityGridCard opening range', () {
+    /// The card under a [TickerMode], which is what the shell toggles as a tab
+    /// parks and wakes. `onScreen: false` stands in for the Progress tab
+    /// sitting behind another tab.
+    Widget wrap({required bool onScreen}) {
+      return ProviderScope(
+        overrides: [
+          activityCalendarProvider.overrideWith(
+            (ref, range) async => ActivityCalendar.fromLoggedDays(
+              range: range,
+              logged: [ActivityDay(date: today, workouts: 1)],
+              today: today,
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TickerMode(
+                enabled: onScreen,
+                child: const ActivityGridCard(expanded: true),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('opens on 1Y', (tester) async {
+      await tester.pumpWidget(wrap(onScreen: true));
+      await tester.pumpAndSettle();
+
+      // The year is the only view with weekday labels down the side.
+      expect(find.text('Mon'), findsOneWidget);
+      expect(find.text('active days in the last year'), findsNothing);
+      expect(
+        find.textContaining('in the last year'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('returns to 1Y after the tab is left and re-entered',
+        (tester) async {
+      await tester.pumpWidget(wrap(onScreen: true));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('7D'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('this week'), findsOneWidget);
+
+      // Park the branch, as tapping another nav destination would.
+      await tester.pumpWidget(wrap(onScreen: false));
+      await tester.pumpAndSettle();
+
+      // Come back to it.
+      await tester.pumpWidget(wrap(onScreen: true));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('in the last year'), findsOneWidget);
+      expect(find.textContaining('this week'), findsNothing);
+    });
+
+    testWidgets('a pinned card ignores all of this', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activityCalendarProvider.overrideWith(
+              (ref, range) async => ActivityCalendar.fromLoggedDays(
+                range: range,
+                logged: const [],
+                today: today,
+              ),
+            ),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: ActivityGridCard(
+                fixedRange: ActivityRange.week,
+                expanded: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('this week'), findsOneWidget);
+    });
+  });
+
   group('ActivityGrid', () {
     Widget wrap(
       ActivityRange range,
@@ -195,6 +287,7 @@ void main() {
               ),
               range: range,
               onRangeChanged: onChanged,
+              expanded: true,
               notice: notice,
             ),
           ),

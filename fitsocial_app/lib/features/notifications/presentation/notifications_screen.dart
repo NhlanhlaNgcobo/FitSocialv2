@@ -170,7 +170,6 @@ class _ActorAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final isFollow = notification.type == FitNotificationType.follow;
 
     return SizedBox(
       width: 50,
@@ -196,7 +195,7 @@ class _ActorAvatar extends StatelessWidget {
                 border: Border.all(color: palette.background, width: 2),
               ),
               child: Icon(
-                isFollow ? Icons.person_add_alt_1_rounded : Icons.favorite_rounded,
+                _glyph(notification.type),
                 size: 10,
                 color: AppColors.onBrand,
               ),
@@ -206,9 +205,25 @@ class _ActorAvatar extends StatelessWidget {
       ),
     );
   }
+
+  /// The badge that says what happened, before the sentence is read. A mention
+  /// and a tag get the same '@' — both mean "your name is on this" — and are
+  /// told apart by the words beside them.
+  static IconData _glyph(FitNotificationType type) {
+    switch (type) {
+      case FitNotificationType.follow:
+        return Icons.person_add_alt_1_rounded;
+      case FitNotificationType.like:
+        return Icons.favorite_rounded;
+      case FitNotificationType.mention:
+      case FitNotificationType.tag:
+        return Icons.alternate_email_rounded;
+    }
+  }
 }
 
-/// A follow-back button on a follow; a thumbnail of what was liked on a like.
+/// A follow-back button on a follow; a thumbnail of the post on everything
+/// else, which is what those all hang off.
 class _Trailing extends StatelessWidget {
   const _Trailing({required this.notification});
 
@@ -253,8 +268,8 @@ class _EmptyState extends StatelessWidget {
     return const _Message(
       icon: Icons.notifications_none_rounded,
       title: 'Nothing here yet',
-      message: 'When someone follows you or likes what you post, '
-          'it shows up here.',
+      message: 'When someone follows you, likes what you post or mentions '
+          'you, it shows up here.',
     );
   }
 }

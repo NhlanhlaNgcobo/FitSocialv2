@@ -21,6 +21,31 @@ const follow = FitNotification(
   isRead: true,
 );
 
+FitNotification mention({String? commentId, String? postType}) {
+  return FitNotification(
+    id: 'n3',
+    type: FitNotificationType.mention,
+    actorId: 'u4',
+    actorName: 'Nhlanhla',
+    isRead: false,
+    postId: 'p1',
+    postType: postType,
+    commentId: commentId,
+  );
+}
+
+FitNotification tag({String? postType}) {
+  return FitNotification(
+    id: 'n4',
+    type: FitNotificationType.tag,
+    actorId: 'u5',
+    actorName: 'Bear',
+    isRead: false,
+    postId: 'p1',
+    postType: postType,
+  );
+}
+
 void main() {
   group('notification type keys', () {
     test('round-trip through their stored form', () {
@@ -49,6 +74,22 @@ void main() {
         isNot(NotificationIds.like('p2', 'u2')),
       );
     });
+
+    test('a mention in a caption and one in a comment are separate events', () {
+      // Keyed on the thing the words were written in, so naming someone in a
+      // comment on a post you already mentioned them in still reaches them.
+      expect(
+        NotificationIds.mention('p1', 'u2'),
+        isNot(NotificationIds.mention('c9', 'u2')),
+      );
+    });
+
+    test('a tag and a mention on the same post do not collide', () {
+      expect(
+        NotificationIds.tag('p1', 'u2'),
+        isNot(NotificationIds.mention('p1', 'u2')),
+      );
+    });
   });
 
   group('message', () {
@@ -68,6 +109,22 @@ void main() {
     test('reads as a follow without a target', () {
       expect(follow.message, 'started following you');
     });
+
+    test('a mention says where the words were', () {
+      expect(
+        mention(postType: 'image').message,
+        'mentioned you in a photo',
+      );
+      expect(
+        mention(commentId: 'c9', postType: 'image').message,
+        'mentioned you in a comment',
+      );
+    });
+
+    test('a tag names what it is attached to', () {
+      expect(tag(postType: 'run').message, 'tagged you in a run');
+      expect(tag().message, 'tagged you in a post');
+    });
   });
 
   group('route', () {
@@ -79,6 +136,14 @@ void main() {
     test('a like with no post id has nowhere to go', () {
       expect(like(postId: null).route, isNull);
       expect(like(postId: '').route, isNull);
+    });
+
+    test('mentions and tags open the post the words are on', () {
+      // Including a comment mention: the post is where the comment can be
+      // read in context, and the comment list is already on that page.
+      expect(mention().route, '/post/p1');
+      expect(mention(commentId: 'c9').route, '/post/p1');
+      expect(tag().route, '/post/p1');
     });
   });
 

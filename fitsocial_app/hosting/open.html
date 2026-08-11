@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Open in FitSocial</title>
+<meta name="description" content="Open this on FitSocial — track runs and workouts with the people you train with.">
+<!-- Link previews. Chat apps read these when the link is pasted, so a shared
+     post arrives as a FitSocial card rather than a bare URL. -->
+<meta property="og:site_name" content="FitSocial">
+<meta property="og:title" content="Open in FitSocial">
+<meta property="og:description" content="Track runs and workouts with the people you train with.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #f7f7f7;
+    --muted: #aaaaaa;
+    --brand: #ff6b1a;
+    --brand-deep: #d35400;
+    --surface: #141414;
+    --stroke: rgba(255, 255, 255, 0.12);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100svh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: radial-gradient(120% 80% at 50% 0%, #2a1a0f 0%, #050505 60%);
+    color: var(--ink);
+    font: 400 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    text-align: center;
+  }
+  main { width: 100%; max-width: 380px; }
+  .mark {
+    width: 76px; height: 76px; margin: 0 auto 20px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+    display: grid; place-items: center;
+    font-size: 38px; line-height: 1;
+    box-shadow: 0 12px 40px rgba(255, 107, 26, 0.32);
+  }
+  h1 { margin: 0 0 8px; font-size: 24px; font-weight: 800; letter-spacing: -0.3px; }
+  p { margin: 0 0 28px; color: var(--muted); font-size: 14.5px; }
+  a.btn {
+    display: block; padding: 15px 20px; margin-bottom: 12px;
+    border-radius: 16px; text-decoration: none; font-weight: 700; font-size: 15px;
+  }
+  a.primary { background: var(--brand); color: #050505; }
+  a.secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--stroke); }
+  .fine { font-size: 12px; color: var(--muted); margin: 18px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark" aria-hidden="true">⚡</div>
+  <h1 id="heading">Open in FitSocial</h1>
+  <p id="blurb">Track runs and workouts with the people you train with.</p>
+  <a class="btn primary" id="open" href="#">Open in the app</a>
+  <a class="btn secondary" id="store" href="#" rel="noopener">Get FitSocial</a>
+  <p class="fine">Already have the app? It should open on its own.</p>
+</main>
+<script>
+(function () {
+  // Kinds this page knows how to describe. Anything else is shown the generic
+  // copy rather than a sentence built from whatever was in the URL.
+  var KINDS = {
+    post: { heading: 'View this post on FitSocial', blurb: 'See the workout, the route and the conversation around it.' },
+    user: { heading: 'View this profile on FitSocial', blurb: 'Follow their training and cheer them on.' }
+  };
+  var ANDROID_PACKAGE = 'com.fitsocial.fitsocial_app';
+  var IOS_APP_ID = '';           // fill in once the App Store listing exists
+  var SITE = 'https://fitsocialv2.web.app';
+
+  var parts = location.pathname.split('/').filter(Boolean);
+  var kind = parts[0] || '';
+  var id = parts[1] || '';
+  // Same shape the app enforces on an incoming id — see FitSocialLinks.
+  var validId = /^[A-Za-z0-9_-]{1,128}$/.test(id);
+  var known = Object.prototype.hasOwnProperty.call(KINDS, kind) && validId;
+
+  if (known) {
+    document.getElementById('heading').textContent = KINDS[kind].heading;
+    document.getElementById('blurb').textContent = KINDS[kind].blurb;
+  }
+
+  var ua = navigator.userAgent || '';
+  var isAndroid = /Android/i.test(ua);
+  var isIOS = /iPad|iPhone|iPod/.test(ua) ||
+              (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // The app's own scheme. Registered in AndroidManifest.xml and Info.plist;
+  // the `app` host is a placeholder that keeps the path intact for the router.
+  var appUrl = known ? 'fitsocial://app/' + kind + '/' + id : 'fitsocial://app/';
+
+  var storeUrl;
+  if (isIOS && IOS_APP_ID) {
+    storeUrl = 'https://apps.apple.com/app/id' + IOS_APP_ID;
+  } else if (isIOS) {
+    storeUrl = SITE;
+  } else {
+    storeUrl = 'https://play.google.com/store/apps/details?id=' + ANDROID_PACKAGE;
+  }
+
+  var openLink = document.getElementById('open');
+  var storeLink = document.getElementById('store');
+  openLink.href = appUrl;
+  storeLink.href = storeUrl;
+
+  // Android's intent: URL carries its own fallback, so an install-less phone
+  // lands in the Play Store without this page having to guess whether the
+  // hand-off worked.
+  if (isAndroid && known) {
+    openLink.href = 'intent://app/' + kind + '/' + id +
+      '#Intent;scheme=fitsocial;package=' + ANDROID_PACKAGE +
+      ';S.browser_fallback_url=' + encodeURIComponent(storeUrl) + ';end';
+  }
+
+  // One automatic attempt, and only where it is safe to make one. A phone with
+  // the app installed goes straight through; a phone without it stays on this
+  // page, because nothing here navigates away on a timer — a timed redirect to
+  // a store is what makes these pages feel like a trap, and it fires on the
+  // people who already declined.
+  //
+  // Desktop is left alone entirely: there is no app to open there.
+  if ((isAndroid || isIOS) && known) {
+    // Deferred a tick so the page has painted first. If the hand-off succeeds
+    // the user never sees it; if it doesn't, they are looking at the buttons.
+    setTimeout(function () { window.location.href = openLink.href; }, 60);
+  }
+})();
+</script>
+</body>
+</html>

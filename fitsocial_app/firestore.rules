@@ -3,16 +3,109 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // True when this write only adds or removes the caller's own uid in
-    // likedBy, leaving everyone else's likes untouched.
-    function isSelfLikeToggle() {
-      let before = resource.data.get('likedBy', []);
-      let after = request.resource.data.get('likedBy', []);
+    // --- Post reactions ---------------------------------------------------
+    //
+    // The single Like button became the reaction control, so a post now
+    // carries four fields that move together on one tap: likedBy (who),
+    // likesCount (how many people), reactionCounts (how many of each), and
+    // reactionsBy (which one each person gave).
+    //
+    // The record of truth is the caller's own document under
+    // likes/{postId}/users/{uid}. Every clause below ties one of those four
+    // fields back to it, so a client cannot move a counter it did not earn or
+    // touch anybody else's reaction. Reading that document before *and* after
+    // the batch is what makes the arithmetic checkable.
+
+    function postReactionPath(postId) {
+      return /databases/$(database)/documents/likes/$(postId)/users/$(request.auth.uid);
+    }
+
+    // The default reaction, duplicated from FitReaction.defaultReaction in
+    // lib/shared/reactions/fit_reaction.dart, which cannot be imported here —
+    // change one and you must change the other.
+    //
+    // It is the answer for a like document with no reaction on it, which is
+    // what every like cast before reactions existed looks like. Reading those
+    // as "no reaction" instead would refuse the first person to change their
+    // mind about an old like.
+    function defaultReaction() { return 'love'; }
+
+    function postReactionBefore(postId) {
+      return exists(postReactionPath(postId))
+             ? get(postReactionPath(postId)).data.get('reaction',
+                                                      defaultReaction())
+             : '';
+    }
+
+    function postReactionAfter(postId) {
+      return existsAfter(postReactionPath(postId))
+             ? getAfter(postReactionPath(postId)).data.get('reaction',
+                                                          defaultReaction())
+             : '';
+    }
+
+    // likedBy still names everyone who has reacted. The caller may only add or
+    // remove themselves, and their presence has to agree with whether they
+    // hold a reaction once the batch lands.
+    function movesOwnLikedByEntry(current) {
       let uid = request.auth.uid;
-      return (after.toSet() == before.toSet().union([uid].toSet())
-              && !(uid in before))
-          || (after.toSet() == before.toSet().difference([uid].toSet())
-              && (uid in before));
+      let before = resource.data.get('likedBy', []).toSet();
+      let after = request.resource.data.get('likedBy', []).toSet();
+      return (current == '' ? !(uid in after) : (uid in after))
+          && after.difference([uid].toSet())
+             == before.difference([uid].toSet());
+    }
+
+    // reactionsBy records which reaction each person gave. Only the caller's
+    // own key may move, and it must say what their like document says.
+    function movesOwnReactionsByEntry(current) {
+      let uid = request.auth.uid;
+      let before = resource.data.get('reactionsBy', {});
+      let after = request.resource.data.get('reactionsBy', {});
+      return after.diff(before).affectedKeys().hasOnly([uid])
+          && (current == ''
+              ? !(uid in after)
+              : after.get(uid, '') == current);
+    }
+
+    // The per-reaction totals move by exactly the one give and the one take
+    // that the caller's own change implies, and by nothing else — the same
+    // test the Pulse counters get, for the same reason.
+    function movesReactionCounts(previous, current) {
+      let before = resource.data.get('reactionCounts', {});
+      let after = request.resource.data.get('reactionCounts', {});
+      let changed = after.diff(before).affectedKeys();
+
+      return (previous == ''
+              || after.get(previous, 0) == before.get(previous, 0) - 1)
+          && (current == ''
+              || after.get(current, 0) == before.get(current, 0) + 1)
+          && changed.size()
+             == (previous == '' ? 0 : 1) + (current == '' ? 0 : 1)
+          && (previous == '' || changed.hasAny([previous]))
+          && (current == '' || changed.hasAny([current]));
+    }
+
+    // likesCount counts people, not taps: it moves when somebody joins or
+    // leaves, and stays put when they merely swap one reaction for another.
+    function movesLikesCount(previous, current) {
+      return request.resource.data.get('likesCount', 0)
+             == resource.data.get('likesCount', 0)
+                + (current == '' ? 0 : 1)
+                - (previous == '' ? 0 : 1);
+    }
+
+    function isSelfReactionWrite(postId) {
+      let previous = postReactionBefore(postId);
+      let current = postReactionAfter(postId);
+
+      // A write claiming these counters moved while the reaction stayed put is
+      // a bare counter edit, which is the whole thing being defended against.
+      return previous != current
+          && movesOwnLikedByEntry(current)
+          && movesOwnReactionsByEntry(current)
+          && movesReactionCounts(previous, current)
+          && movesLikesCount(previous, current);
     }
 
     // Adding a comment bumps commentsCount on the parent post. Allow that
@@ -58,6 +151,16 @@ service cloud.firestore {
                .data.authorId == request.auth.uid;
     }
 
+    // Everyone allowed to see a Pulse: its author, and the people who follow
+    // them. The same test the Pulse document itself carries, restated for the
+    // subcollections — rules do not cascade, and a reaction or a comment must
+    // not be readable by anyone the Pulse is not.
+    function isPulseAudience(pulseId) {
+      let authorId = get(/databases/$(database)/documents/pulses/$(pulseId))
+                       .data.authorId;
+      return authorId == request.auth.uid || isFollowerOf(authorId);
+    }
+
     // Whether the caller's view record under {pulseId} exists once this batch
     // commits. Ties a viewCount change to an actual view, so the number can't
     // be inflated by repeat writes.
@@ -71,6 +174,71 @@ service cloud.firestore {
       return request.resource.data.get('viewCount', 0)
              == resource.data.get('viewCount', 0) + 1
           && pulseViewExistsAfter(pulseId);
+    }
+
+    // --- Pulse reactions -------------------------------------------------
+    //
+    // A person holds at most one reaction per Pulse, stored as a document
+    // under their own uid, and the per-reaction totals are denormalised onto
+    // the Pulse itself so the bar can draw a live count during playback.
+    //
+    // That denormalisation is the thing these rules have to defend: nothing
+    // stops a client sending whatever increments it likes, so the counters are
+    // only allowed to move in the exact way the caller's OWN reaction document
+    // moved. Reading the reaction both before and after the batch is what ties
+    // the two together — an arbitrary bump has no matching change of
+    // reaction, and is refused.
+
+    function pulseReactionPath(pulseId) {
+      return /databases/$(database)/documents/pulses/$(pulseId)/reactions/$(request.auth.uid);
+    }
+
+    // The caller's reaction before this write, '' when they had none.
+    function pulseReactionBefore(pulseId) {
+      return exists(pulseReactionPath(pulseId))
+             ? get(pulseReactionPath(pulseId)).data.get('reaction', '')
+             : '';
+    }
+
+    // The caller's reaction once this write commits, '' when they have taken it
+    // back. getAfter, not get: the reaction document and the counters are sent
+    // in one batch, so the new reaction is still pending when this runs.
+    function pulseReactionAfter(pulseId) {
+      return existsAfter(pulseReactionPath(pulseId))
+             ? getAfter(pulseReactionPath(pulseId)).data.get('reaction', '')
+             : '';
+    }
+
+    // Whether the reactionCounts map moved by exactly the one give and the one
+    // take that the caller's own change of reaction implies.
+    //
+    // Four conditions, and all four are needed:
+    //   * the reaction actually changed — a write claiming a count moved
+    //     while the reaction stayed put is a bare counter edit, which is the
+    //     whole thing being defended against;
+    //   * the one given went up by one, and the one taken back went down by
+    //     one;
+    //   * exactly that many keys moved, and they are exactly those keys — so
+    //     no third reaction can ride along on the same batch.
+    //
+    // A first reaction has nothing to take back and a withdrawal has nothing
+    // to give, which is what the empty-string arms cover.
+    function isPulseReactionCountMove(pulseId) {
+      let before = resource.data.get('reactionCounts', {});
+      let after = request.resource.data.get('reactionCounts', {});
+      let previous = pulseReactionBefore(pulseId);
+      let current = pulseReactionAfter(pulseId);
+      let changed = after.diff(before).affectedKeys();
+
+      return previous != current
+          && (previous == ''
+              || after.get(previous, 0) == before.get(previous, 0) - 1)
+          && (current == ''
+              || after.get(current, 0) == before.get(current, 0) + 1)
+          && changed.size()
+             == (previous == '' ? 0 : 1) + (current == '' ? 0 : 1)
+          && (previous == '' || changed.hasAny([previous]))
+          && (current == '' || changed.hasAny([current]));
     }
 
     // --- Usernames -------------------------------------------------------
@@ -311,8 +479,9 @@ service cloud.firestore {
 
     // Feed posts — authenticated users can read all, write only their own.
     // Any signed-in user may update a post when the only fields touched are
-    // the like counters, and only to add/remove THEIR OWN uid — so nobody can
-    // like on someone else's behalf or tamper with the rest of the document.
+    // the reaction bookkeeping, and only in the way THEIR OWN reaction
+    // document moved — so nobody can react on someone else's behalf, inflate a
+    // counter, or tamper with the rest of the document.
     match /posts/{postId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
@@ -321,8 +490,9 @@ service cloud.firestore {
                     && (resource.data.authorId == request.auth.uid
                         || (request.resource.data.diff(resource.data)
                               .affectedKeys()
-                              .hasOnly(['likedBy', 'likesCount'])
-                            && isSelfLikeToggle())
+                              .hasOnly(['likedBy', 'likesCount',
+                                        'reactionCounts', 'reactionsBy'])
+                            && isSelfReactionWrite(postId))
                         || (request.resource.data.diff(resource.data)
                               .affectedKeys()
                               .hasOnly(['commentsCount'])
@@ -352,13 +522,18 @@ service cloud.firestore {
       }
     }
 
-    // Per-post like records at likes/{postId}/users/{uid}, written alongside
-    // the post's likesCount inside one transaction. A user may only create or
-    // remove their OWN like document.
+    // Per-post reaction records at likes/{postId}/users/{uid}, written
+    // alongside the post's counters inside one transaction. A user may only
+    // create, change or remove their OWN.
+    //
+    // The document id is the reactor's uid, which is what enforces one
+    // reaction per person — there is nowhere to put a second. `update` is what
+    // changing your mind needs; the collection kept its name because these are
+    // the same documents the Like button always wrote.
     match /likes/{postId}/users/{userId} {
       allow read: if request.auth != null;
-      allow create, delete: if request.auth != null
-                            && request.auth.uid == userId;
+      allow create, update, delete: if request.auth != null
+                                    && request.auth.uid == userId;
     }
 
     // Pulses — the 24-hour ephemeral posts.
@@ -367,10 +542,16 @@ service cloud.firestore {
     // field cheaply enough to guard every read, so lapsing is handled by the
     // expiresAt filter every client query carries, plus a Firestore TTL policy
     // on that same field to actually remove the documents. Enable the policy
-    // once per project:
+    // once per project, in the Cloud console under Firestore > Databases >
+    // (default) > Time-to-live > Create Policy, with collection group `pulses`
+    // and field `expiresAt` — or, where the CLI is installed:
     //
     //   gcloud firestore fields ttls update expiresAt \
     //     --collection-group=pulses --enable-ttl --project=fitsocialv2
+    //
+    // The reactions and comments subcollections carry their own expiresAt and
+    // want their own policies; see _subdocumentExpiry in
+    // FirestorePulseRepository for why, and for the collection-group caveat.
     //
     // Any signed-in user may update a Pulse they don't own, but only to move
     // viewCount up by one, and only when their own view record exists after
@@ -395,7 +576,11 @@ service cloud.firestore {
                         || (request.resource.data.diff(resource.data)
                               .affectedKeys()
                               .hasOnly(['viewCount'])
-                            && isPulseViewIncrement(pulseId)));
+                            && isPulseViewIncrement(pulseId))
+                        || (request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['reactionCounts'])
+                            && isPulseReactionCountMove(pulseId)));
       allow delete: if request.auth != null
                     && resource.data.authorId == request.auth.uid;
 
@@ -417,6 +602,54 @@ service cloud.firestore {
         // parent still exists for this check to read.
         allow delete: if request.auth != null
                       && (request.auth.uid == viewerId
+                          || isPulseAuthor(pulseId));
+      }
+
+      // Which reaction each person picked.
+      //
+      // Readable by everyone the Pulse is, unlike /views above: a reaction is
+      // a public signal, offered on purpose, and the counts and the names
+      // behind them are half of what makes anyone join in. Watching is not the
+      // same thing, and stays the author's alone.
+      //
+      // The document id is the reactor's uid, which is what enforces one
+      // reaction per person — there is nowhere to put a second.
+      //
+      // Reactions carry an expiresAt so a TTL policy can sweep them when the
+      // Pulse lapses without its author deleting it; the field is written by
+      // the reactor and read by nothing in the app.
+      match /reactions/{reactorId} {
+        allow read: if request.auth != null && isPulseAudience(pulseId);
+        allow create, update: if request.auth != null
+                              && request.auth.uid == reactorId
+                              && request.resource.data.reactorId
+                                 == request.auth.uid;
+        allow delete: if request.auth != null
+                      && (request.auth.uid == reactorId
+                          || isPulseAuthor(pulseId));
+      }
+
+      // The conversation under a Pulse.
+      //
+      // Same audience as the Pulse, for the same reason its reactions are: a
+      // comment is part of the exchange around it, not a private note. A
+      // comment can only be written naming its own author, so nobody can put
+      // words in somebody else's mouth.
+      //
+      // Deleting allows the one extra case a post's comments do: the author of
+      // the Pulse may remove anything under it. That covers moderating your
+      // own thread, and it is what lets deleting a Pulse clean up after itself
+      // — Firestore leaves subcollections behind, so the client empties them
+      // while the parent still exists for this check to read.
+      match /comments/{commentId} {
+        allow read: if request.auth != null && isPulseAudience(pulseId);
+        allow create: if request.auth != null
+                      && request.resource.data.authorId == request.auth.uid;
+        allow update: if request.auth != null
+                      && resource.data.authorId == request.auth.uid
+                      && request.resource.data.authorId == request.auth.uid;
+        allow delete: if request.auth != null
+                      && (resource.data.authorId == request.auth.uid
                           || isPulseAuthor(pulseId));
       }
     }

@@ -9,12 +9,15 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/comment_composer.dart';
+import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
+import '../../../shared/widgets/mention_text.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/post_gradient.dart';
 import '../../../shared/widgets/run_route_map.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
+import '../domain/shared_post.dart';
 import 'comments_sheet.dart';
 
 /// A single post on its own page.
@@ -125,21 +128,17 @@ class _PostPageState extends ConsumerState<_PostPage> {
           // no header of its own to hang a `⋯` off, and delete/share belong to
           // the whole screen anyway.
           PostMenuButton(
-            postId: post.id,
-            authorId: post.authorId,
-            userName: post.userName,
-            activity: post.activity.trim(),
-            caption: post.caption,
+            post: SharedPostRef.fromFeedPost(post),
             // Nothing left to show once the post is gone.
             onDeleted: () => context.pop(),
           ),
           const SizedBox(width: AppSpacing.xs),
         ],
       ),
-      // The Scaffold lifts this clear of the keyboard; SafeArea keeps it off
-      // the gesture bar when the keyboard is down.
-      bottomNavigationBar: SafeArea(
-        top: false,
+      // Not a SafeArea: a Scaffold leaves its bottomNavigationBar under the
+      // keyboard — see [KeyboardSafeBottomBar] — so the composer has to lift
+      // itself clear of it.
+      bottomNavigationBar: KeyboardSafeBottomBar(
         child: CommentComposer(postId: post.id, focusNode: _composerFocus),
       ),
       body: ListView(
@@ -147,6 +146,16 @@ class _PostPageState extends ConsumerState<_PostPage> {
         padding: EdgeInsets.zero,
         children: [
           _AuthorRow(post: post),
+          if (post.taggedUsers.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: TaggedUsersLine(tagged: post.taggedUsers),
+            ),
           if (media == _MediaKind.none)
             _TextHero(post: post)
           else
@@ -157,7 +166,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
             _MetricStrip(labels: post.metricLabels),
           const SizedBox(height: AppSpacing.xs),
           PostInteractionRow(
-            postId: post.id,
+            post: SharedPostRef.fromFeedPost(post),
             likes: post.likes,
             comments: post.comments,
             // Aligns the glyphs with the page gutter — the icons carry 10px of
@@ -405,8 +414,8 @@ class _TextHero extends StatelessWidget {
         ),
         border: Border.all(color: palette.stroke),
       ),
-      child: Text(
-        post.caption,
+      child: MentionText(
+        text: post.caption,
         style: TextStyle(
           color: postGradientTextColor(palette),
           fontSize: 19,
@@ -526,23 +535,14 @@ class _Caption extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.md, 2, AppSpacing.md, 0),
-      // RichText, unlike Text, inherits nothing — the root span has to name
-      // the colour itself.
-      child: RichText(
-        text: TextSpan(
-          style: TextStyle(
-            fontSize: 15,
-            height: 1.5,
-            color: palette.text,
-          ),
-          children: [
-            TextSpan(
-              text: post.userName,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const TextSpan(text: '  '),
-            TextSpan(text: post.caption),
-          ],
+      child: MentionText(
+        text: post.caption,
+        leadingName: post.userName,
+        leadingUserId: post.authorId,
+        style: TextStyle(
+          fontSize: 15,
+          height: 1.5,
+          color: palette.text,
         ),
       ),
     );

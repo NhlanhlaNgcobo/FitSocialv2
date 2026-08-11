@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../shared/reactions/fit_reaction.dart';
 import '../domain/notification_models.dart';
 import 'notification_repository_contract.dart';
 
@@ -81,6 +82,8 @@ class FirestoreNotificationRepository implements NotificationRepository {
       postId: data['postId'] as String?,
       postImageUrl: data['postImageUrl'] as String?,
       postType: data['postType'] as String?,
+      commentId: data['commentId'] as String?,
+      reaction: FitReaction.fromKey(data['reaction'] as String?),
     );
   }
 }
@@ -121,7 +124,72 @@ class NotificationWrites {
     );
   }
 
-  Map<String, dynamic> likePayload({
+  /// Someone reacted to a post.
+  ///
+  /// Typed as `like` on the wire, because that is what this event has always
+  /// been stored as and the inboxes written before reactions still hold rows
+  /// under that key. [reaction] is the new part, and its absence is what marks
+  /// a row as predating the seven.
+  ///
+  /// Rewritten in full each time someone changes their mind, which is what
+  /// lifts the row back to the top of the list: being told "Bear liked this"
+  /// and never told they switched to 🏆 would be the worse failure.
+  Map<String, dynamic> reactionPayload({
+    required String actorId,
+    required String actorName,
+    required String postId,
+    required FitReaction reaction,
+    String? actorAvatarUrl,
+    String? postImageUrl,
+    String? postType,
+  }) {
+    return _payload(
+      type: FitNotificationType.like,
+      actorId: actorId,
+      actorName: actorName,
+      actorAvatarUrl: actorAvatarUrl,
+      extra: {
+        'postId': postId,
+        'reaction': reaction.key,
+        if (postImageUrl != null && postImageUrl.isNotEmpty)
+          'postImageUrl': postImageUrl,
+        if (postType != null && postType.isNotEmpty) 'postType': postType,
+      },
+    );
+  }
+
+  /// Someone wrote `@recipient` in a caption or a comment.
+  ///
+  /// [commentId] is what separates the two on the recipient's side: present
+  /// means the words were in a comment, absent means they were the post's own
+  /// caption. Both route to the post, which is where the sentence can be read
+  /// in context.
+  Map<String, dynamic> mentionPayload({
+    required String actorId,
+    required String actorName,
+    required String postId,
+    String? commentId,
+    String? actorAvatarUrl,
+    String? postImageUrl,
+    String? postType,
+  }) {
+    return _payload(
+      type: FitNotificationType.mention,
+      actorId: actorId,
+      actorName: actorName,
+      actorAvatarUrl: actorAvatarUrl,
+      extra: {
+        'postId': postId,
+        if (commentId != null && commentId.isNotEmpty) 'commentId': commentId,
+        if (postImageUrl != null && postImageUrl.isNotEmpty)
+          'postImageUrl': postImageUrl,
+        if (postType != null && postType.isNotEmpty) 'postType': postType,
+      },
+    );
+  }
+
+  /// Someone attached the recipient to a post from its composer.
+  Map<String, dynamic> tagPayload({
     required String actorId,
     required String actorName,
     required String postId,
@@ -130,7 +198,7 @@ class NotificationWrites {
     String? postType,
   }) {
     return _payload(
-      type: FitNotificationType.like,
+      type: FitNotificationType.tag,
       actorId: actorId,
       actorName: actorName,
       actorAvatarUrl: actorAvatarUrl,

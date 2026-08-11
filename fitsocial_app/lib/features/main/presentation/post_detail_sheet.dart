@@ -89,6 +89,7 @@ class PostDetailSheet extends StatelessWidget {
                 routePoints: post.routePoints,
                 authorAvatarUrl: post.authorAvatarUrl,
                 imageAspectRatio: post.imageAspectRatio,
+                taggedUsers: post.taggedUsers,
                 onCommentTapped: () {
                   showModalBottomSheet(
                     context: context,

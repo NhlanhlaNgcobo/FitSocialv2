@@ -11,6 +11,8 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
+import '../../../shared/widgets/mention_suggestions.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
@@ -18,6 +20,7 @@ import '../application/activity_actions.dart';
 import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../domain/app_models.dart';
+import 'tag_people_sheet.dart';
 
 class PostComposeScreen extends ConsumerStatefulWidget {
   const PostComposeScreen({super.key});
@@ -33,8 +36,19 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
   late final TextEditingController _captionController;
   late final TextEditingController _activityController;
+
+  /// The suggestion list has to know when the caption is being typed in, and
+  /// only in — an '@' left in the activity line must not open it.
+  final _captionFocus = FocusNode();
+
   String? _imagePath;
   double? _imageAspectRatio;
+
+  /// People picked in the tag sheet. Held here rather than in the create-flow
+  /// draft because the draft is a resume point for text, and a stale tag list
+  /// restored days later would attach people to a different post.
+  List<TaggedUser> _taggedUsers = const [];
+
   bool _isSaving = false;
   String? _errorMessage;
 
@@ -50,7 +64,16 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   void dispose() {
     _captionController.dispose();
     _activityController.dispose();
+    _captionFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickTaggedPeople() async {
+    final picked = await showTagPeopleSheet(context, selected: _taggedUsers);
+    // Null is a dismissal, which leaves the existing selection alone; an empty
+    // list is a deliberate "nobody", which clears it.
+    if (picked == null || !mounted) return;
+    setState(() => _taggedUsers = picked);
   }
 
   /// Picks a photo, then hands the user the crop screen so they choose the
@@ -128,6 +151,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               activity: _activityController.text.trim(),
               imageUrl: imageUrl,
               imageAspectRatio: _imageAspectRatio,
+              taggedUsers: _taggedUsers,
             ),
           );
       if (!mounted) return;
@@ -190,8 +214,11 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             handle: formatHandle(profile?.handle),
             avatarUrl: profile?.avatarUrl,
             captionController: _captionController,
+            captionFocusNode: _captionFocus,
             activityController: _activityController,
             activityLimit: _activityLimit,
+            taggedUsers: _taggedUsers,
+            onTagPeople: _isSaving ? null : _pickTaggedPeople,
             onChanged: () {
               // Rebuilds for the activity counter as well as saving the draft.
               setState(_syncDraft);
@@ -203,11 +230,15 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
           ],
         ],
       ),
-      bottomNavigationBar: _ShareBar(
-        isSaving: _isSaving,
-        // Only the photo upload takes long enough to be worth narrating.
-        showProgress: _isSaving && _imagePath != null,
-        onPressed: _isSaving ? null : _sharePost,
+      // Without this the Share button sits under the keyboard the caption
+      // field raises — a Scaffold does not lift its bottom bar for it.
+      bottomNavigationBar: KeyboardSafeBottomBar(
+        child: _ShareBar(
+          isSaving: _isSaving,
+          // Only the photo upload takes long enough to be worth narrating.
+          showProgress: _isSaving && _imagePath != null,
+          onPressed: _isSaving ? null : _sharePost,
+        ),
       ),
     );
   }
@@ -405,8 +436,11 @@ class _ComposerCard extends StatelessWidget {
     required this.handle,
     required this.avatarUrl,
     required this.captionController,
+    required this.captionFocusNode,
     required this.activityController,
     required this.activityLimit,
+    required this.taggedUsers,
+    required this.onTagPeople,
     required this.onChanged,
   });
 
@@ -414,8 +448,11 @@ class _ComposerCard extends StatelessWidget {
   final String handle;
   final String? avatarUrl;
   final TextEditingController captionController;
+  final FocusNode captionFocusNode;
   final TextEditingController activityController;
   final int activityLimit;
+  final List<TaggedUser> taggedUsers;
+  final VoidCallback? onTagPeople;
   final VoidCallback onChanged;
 
   @override
@@ -471,6 +508,7 @@ class _ComposerCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           TextField(
             controller: captionController,
+            focusNode: captionFocusNode,
             minLines: 4,
             maxLines: 10,
             textCapitalization: TextCapitalization.sentences,
@@ -496,6 +534,16 @@ class _ComposerCard extends StatelessWidget {
             ),
             onChanged: (_) => onChanged(),
           ),
+          // Below the caption, where there is room to open: unlike the comment
+          // bar this field is not sitting on the keyboard.
+          MentionSuggestions(
+            controller: captionController,
+            focusNode: captionFocusNode,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Divider(color: palette.stroke, height: 1),
+          const SizedBox(height: AppSpacing.sm),
+          _TagPeopleRow(tagged: taggedUsers, onTap: onTagPeople),
           const SizedBox(height: AppSpacing.sm),
           Divider(color: palette.stroke, height: 1),
           const SizedBox(height: AppSpacing.sm),
@@ -556,6 +604,56 @@ class _ComposerCard extends StatelessWidget {
   }
 }
 
+/// "Tag people", and who has been tagged so far.
+///
+/// Sits in the composer card rather than in a separate panel because tagging
+/// is part of writing the post: the row reads as one more line of it, in the
+/// same register as the activity field below.
+class _TagPeopleRow extends StatelessWidget {
+  const _TagPeopleRow({required this.tagged, required this.onTap});
+
+  final List<TaggedUser> tagged;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: [
+          Icon(Icons.alternate_email_rounded,
+              size: 18, color: palette.brandText),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tagged.isEmpty ? 'Tag people' : _names(tagged),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: tagged.isEmpty ? palette.muted : palette.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, size: 20, color: palette.muted),
+        ],
+      ),
+    );
+  }
+
+  /// The handles, or a count once the list is too long to read at a glance.
+  static String _names(List<TaggedUser> tagged) {
+    if (tagged.length > 3) return '${tagged.length} people tagged';
+    return tagged
+        .map((it) => it.handle.isEmpty ? it.displayName : '@${it.handle}')
+        .join(', ');
+  }
+}
+
 /// Says where the post is going. Static for now — there is one audience — but
 /// it is the thing that makes the card read as a post rather than a form.
 class _AudienceChip extends StatelessWidget {
@@ -591,8 +689,9 @@ class _AudienceChip extends StatelessWidget {
   }
 }
 
-/// The action bar pinned under the list, lifted clear of the phone's own
-/// navigation by its [SafeArea].
+/// The action bar pinned under the list. Its host lifts it clear of the
+/// keyboard and the phone's own navigation — see [KeyboardSafeBottomBar] —
+/// so it must not pad for either itself.
 class _ShareBar extends StatelessWidget {
   const _ShareBar({
     required this.isSaving,
@@ -613,46 +712,43 @@ class _ShareBar extends StatelessWidget {
         color: palette.background,
         border: Border(top: BorderSide(color: palette.stroke)),
       ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.sm,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showProgress) ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.orangeBright,
-                      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.sm,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showProgress) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.orangeBright,
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Uploading your photo...',
-                      style: TextStyle(color: palette.muted, fontSize: 13),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-              PrimaryButton(
-                label: isSaving ? 'Sharing...' : 'Share Post',
-                icon: isSaving ? null : Icons.send_rounded,
-                onPressed: onPressed,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Uploading your photo...',
+                    style: TextStyle(color: palette.muted, fontSize: 13),
+                  ),
+                ],
               ),
+              const SizedBox(height: AppSpacing.sm),
             ],
-          ),
+            PrimaryButton(
+              label: isSaving ? 'Sharing...' : 'Share Post',
+              icon: isSaving ? null : Icons.send_rounded,
+              onPressed: onPressed,
+            ),
+          ],
         ),
       ),
     );

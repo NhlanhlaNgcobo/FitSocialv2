@@ -1,4 +1,6 @@
+import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
+import '../../main/domain/app_models.dart' show Comment;
 import '../domain/pulse_models.dart';
 
 /// Storage and retrieval for Pulses — FitSocial's 24-hour ephemeral posts.
@@ -42,4 +44,50 @@ abstract class PulseRepository {
 
   /// Who has watched [pulseId], most recent first. Readable by the author only.
   Stream<List<PulseViewerRecord>> watchViewers(String pulseId);
+
+  /// The signed-in user's own reaction to [pulseId], or null if they haven't
+  /// picked one.
+  ///
+  /// A single-document stream rather than a slice of [watchReactions]: the
+  /// reaction bar needs this on every frame of playback, and one document is
+  /// what it costs. The public counts ride on the Pulse document itself.
+  Stream<FitReaction?> watchMyReaction(String pulseId);
+
+  /// Sets, changes, or clears the signed-in user's reaction to [pulseId].
+  ///
+  /// A person holds at most one reaction per Pulse — this is Facebook's rule,
+  /// and it is what makes the counts mean something. Passing null takes the
+  /// reaction back. Repeating the reaction already held is a no-op, so a double
+  /// tap can't double-count.
+  ///
+  /// [profile] supplies the public name and photo shown in the reactor list,
+  /// following the same rule as everything else here: attribution comes from
+  /// the user's profile and never from their auth credentials.
+  Future<void> setReaction(
+    String pulseId,
+    FitReaction? reaction,
+    UserProfileDraft? profile,
+  );
+
+  /// Everyone who reacted to [pulseId] and what they picked, most recent
+  /// first. Streamed only when the breakdown is opened — the summary the bar
+  /// draws comes off the Pulse document instead.
+  Stream<List<FitReactionRecord>> watchReactions(String pulseId);
+
+  /// Comments on [pulseId], oldest first — the order they read in.
+  ///
+  /// Visible to the same people the Pulse is: a comment is part of the
+  /// conversation around it, not a private note to the author.
+  Stream<List<Comment>> watchComments(String pulseId);
+
+  /// Adds a comment to [pulseId] as the signed-in user.
+  Future<Comment> addComment(
+    String pulseId,
+    String text,
+    UserProfileDraft? profile,
+  );
+
+  /// Removes a comment. Allowed to the person who wrote it and to the author
+  /// of the Pulse it sits under, who is the one moderating their own thread.
+  Future<void> deleteComment(String pulseId, String commentId);
 }

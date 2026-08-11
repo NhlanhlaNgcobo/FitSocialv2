@@ -9,9 +9,14 @@ import 'package:video_player/video_player.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/reactions/fit_reaction.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/reaction_bar.dart';
+import '../../../shared/widgets/shared_post_card.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
+import 'pulse_comments_sheet.dart';
+import 'pulse_reactions_sheet.dart';
 import 'pulse_text.dart';
 import 'pulse_viewers_sheet.dart';
 
@@ -46,6 +51,15 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
   int _segmentIndex = 0;
   VideoPlayerController? _videoController;
   bool _paused = false;
+
+  /// Whether the finger is being held on the frame itself.
+  ///
+  /// Separate from [_paused] because the two mean different things to the
+  /// chrome: holding hides it so the picture can be looked at, while the other
+  /// reasons playback stops — a sheet, the reaction tray — need it left on
+  /// screen, since it is what the person is reaching for.
+  bool _held = false;
+
   bool _advancing = false;
   bool _closing = false;
 
@@ -242,8 +256,16 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
       _entryIndex = index;
       _segmentIndex = _entries[index].firstUnseenIndex;
       _paused = false;
+      _held = false;
     });
     _startSegment();
+  }
+
+  /// The frame is being held down: stop playback and get the chrome out of
+  /// the way.
+  void _setHeld(bool held) {
+    if (_held != held) setState(() => _held = held);
+    _setPaused(held);
   }
 
   void _setPaused(bool paused) {
@@ -261,6 +283,19 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
     } else {
       _frameProgress.forward();
     }
+  }
+
+  /// Leaves playback for the post a shared-post Pulse is standing in for.
+  ///
+  /// Paused for the same reason a sheet pauses it: the Pulse is still mounted
+  /// underneath, and a frame timer running behind the post would advance the
+  /// ring — or expire it and call [_close], which would pop the post the user
+  /// is reading rather than the viewer.
+  void _openSharedPost(String postId) {
+    _setPaused(true);
+    context.push('/post/$postId').whenComplete(() {
+      if (mounted) _setPaused(false);
+    });
   }
 
   void _close() {
@@ -326,12 +361,33 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
   }
 
   void _openViewers(PulseSegment segment) {
+    _openSheet((_) => PulseViewersSheet(pulseId: segment.id));
+  }
+
+  void _openReactions(PulseSegment segment) {
+    _openSheet((_) => FitReactionsSheet(pulseId: segment.id));
+  }
+
+  void _openComments(PulseSegment segment) {
+    _openSheet(
+      (_) => PulseCommentsSheet(
+        pulseId: segment.id,
+        pulseAuthorId: segment.authorId,
+      ),
+    );
+  }
+
+  /// Opens a sheet over the Pulse, holding playback for as long as it is up.
+  ///
+  /// Without the hold the Pulse would advance behind the sheet and the reader
+  /// would close it onto something else entirely.
+  void _openSheet(WidgetBuilder builder) {
     _setPaused(true);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => PulseViewersSheet(pulseId: segment.id),
+      builder: builder,
     ).whenComplete(() {
       if (mounted) _setPaused(false);
     });
@@ -355,9 +411,9 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTapUp: (details) => _handleTap(details, constraints),
-            onLongPressStart: (_) => _setPaused(true),
-            onLongPressEnd: (_) => _setPaused(false),
-            onLongPressCancel: () => _setPaused(false),
+            onLongPressStart: (_) => _setHeld(true),
+            onLongPressEnd: (_) => _setHeld(false),
+            onLongPressCancel: () => _setHeld(false),
             onVerticalDragEnd: (details) {
               if ((details.primaryVelocity ?? 0) > 220) _close();
             },
@@ -395,12 +451,16 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
         _PulseFrame(
           segment: segment,
           videoController: isActive ? _videoController : null,
+          // Only the page in view is tappable. The pages either side are on
+          // screen for the length of a swipe, and a card on one of them is
+          // something the thumb passes over rather than aims at.
+          onOpenSharedPost: isActive ? _openSharedPost : null,
         ),
         // Scrim: white type has to stay readable over whatever photo lands
         // underneath it.
         const _TopScrim(),
         AnimatedOpacity(
-          opacity: _paused && isActive ? 0 : 1,
+          opacity: _held && isActive ? 0 : 1,
           duration: const Duration(milliseconds: 180),
           child: _buildChrome(entry, segment, isActive, segmentIndex),
         ),
@@ -437,16 +497,71 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               child: PulseCaption(text: segment.text),
             ),
-          if (entry.isOwn) ...[
-            const SizedBox(height: AppSpacing.md),
-            _ViewCountButton(
-              count: segment.viewCount,
-              onPressed: () => _openViewers(segment),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
+          _buildFooter(entry, segment, isActive),
+          const SizedBox(height: AppSpacing.md),
         ],
       ),
+    );
+  }
+
+  /// Everything under the picture: how the room responded, and the two ways to
+  /// respond yourself.
+  ///
+  /// The counts are read live rather than from the snapshot this screen plays
+  /// from — see [pulseSegmentProvider] — so reacting moves the number under
+  /// your own thumb. Only the active page gets the controls: the pages either
+  /// side are on screen for the length of a swipe, and a reaction bar on each
+  /// of them would be three live subscriptions for one visible Pulse.
+  Widget _buildFooter(
+    PulseTrayEntry entry,
+    PulseSegment snapshot,
+    bool isActive,
+  ) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final segment =
+            ref.watch(pulseSegmentProvider(snapshot.id)) ?? snapshot;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!segment.reactions.isEmpty) ...[
+                ReactionSummaryRow(
+                  summary: segment.reactions,
+                  onTap: () => _openReactions(segment),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              if (isActive)
+                Row(
+                  children: [
+                    _ReactionControl(
+                      pulseId: segment.id,
+                      onTrayVisibilityChanged: _setPaused,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    _ChromeButton(
+                      icon: Icons.mode_comment_outlined,
+                      label: 'Comment',
+                      onPressed: () => _openComments(segment),
+                    ),
+                    const Spacer(),
+                    if (entry.isOwn)
+                      _ChromeButton(
+                        icon: Icons.visibility_outlined,
+                        label: '${segment.viewCount}',
+                        onPressed: () => _openViewers(segment),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -529,7 +644,7 @@ class _CubePage extends StatelessWidget {
           ..rotateY(-delta * math.pi / 2);
 
         return Transform(
-          // Each face hinges on the edge it shares with the page in view.
+          // Each reaction hinges on the edge it shares with the page in view.
           alignment:
               delta <= 0 ? Alignment.centerRight : Alignment.centerLeft,
           transform: transform,
@@ -537,7 +652,7 @@ class _CubePage extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               child,
-              // The turning face falls into shadow, which is what sells the
+              // The turning reaction falls into shadow, which is what sells the
               // shape as solid.
               IgnorePointer(
                 child: ColoredBox(
@@ -554,10 +669,18 @@ class _CubePage extends StatelessWidget {
 
 /// One Pulse, rendered full-bleed.
 class _PulseFrame extends StatelessWidget {
-  const _PulseFrame({required this.segment, this.videoController});
+  const _PulseFrame({
+    required this.segment,
+    this.videoController,
+    this.onOpenSharedPost,
+  });
 
   final PulseSegment segment;
   final VideoPlayerController? videoController;
+
+  /// Opens the post behind a [PulseMediaType.post] frame. Null on the pages
+  /// either side of the one in view, which makes their card inert.
+  final ValueChanged<String>? onOpenSharedPost;
 
   @override
   Widget build(BuildContext context) {
@@ -597,6 +720,43 @@ class _PulseFrame extends StatelessWidget {
                       progress == null ? child : const _FrameSpinner(),
                 )
               : const _FrameMessage(label: 'This Pulse is unavailable.'),
+        );
+
+      case PulseMediaType.post:
+        final post = segment.sharedPost;
+        if (post == null) {
+          // A `post` Pulse with no snapshot on it is a document this build
+          // cannot draw — a newer client's shape, or a truncated write.
+          return DecoratedBox(
+            decoration: BoxDecoration(gradient: segment.gradient.linear),
+            child: const _FrameMessage(label: 'This Pulse is unavailable.'),
+          );
+        }
+        return DecoratedBox(
+          decoration: BoxDecoration(gradient: segment.gradient.linear),
+          child: SafeArea(
+            child: Padding(
+              // Clears the header above and the reaction bar below, so the
+              // card centres in the frame rather than under the chrome.
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                96,
+                AppSpacing.lg,
+                168,
+              ),
+              child: Center(
+                child: SharedPostCard(
+                  post: post,
+                  // The card is the way through to the post it came from. Its
+                  // own gesture wins over the viewer's tap zones, so tapping
+                  // it opens the post instead of advancing the Pulse.
+                  onTap: onOpenSharedPost == null
+                      ? null
+                      : () => onOpenSharedPost!(post.postId),
+                ),
+              ),
+            ),
+          ),
         );
 
       case PulseMediaType.video:
@@ -738,21 +898,90 @@ class _PulseHeader extends StatelessWidget {
   }
 }
 
-class _ViewCountButton extends StatelessWidget {
-  const _ViewCountButton({required this.count, required this.onPressed});
+/// The reaction pill, bound to the signed-in user's own reaction.
+///
+/// A [ConsumerWidget] of its own rather than part of the screen's state so
+/// that the reaction stream rebuilds one pill, not the whole frame — the
+/// picture underneath must not blink because somebody tapped a reaction.
+class _ReactionControl extends ConsumerWidget {
+  const _ReactionControl({
+    required this.pulseId,
+    required this.onTrayVisibilityChanged,
+  });
 
-  final int count;
+  final String pulseId;
+  final ValueChanged<bool> onTrayVisibilityChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Treated as "no reaction yet" while it loads, so the bar is usable from
+    // the first frame instead of showing a spinner where a button should be.
+    final selected = ref.watch(myFitReactionProvider(pulseId)).valueOrNull;
+
+    return ReactionBar(
+      selected: selected,
+      onTrayVisibilityChanged: onTrayVisibilityChanged,
+      onChanged: (reaction) => _react(context, ref, reaction),
+    );
+  }
+
+  Future<void> _react(
+    BuildContext context,
+    WidgetRef ref,
+    FitReaction? reaction,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(pulseActionsProvider).react(pulseId, reaction);
+    } catch (_) {
+      // The pill reads from the stored document, so a failed write simply
+      // leaves it where it was — there is nothing to roll back, only to say.
+      messenger.showSnackBar(
+        const SnackBar(content: Text("That reaction didn't go through.")),
+      );
+    }
+  }
+}
+
+/// A flat control on the Pulse chrome — an icon and a word, over the picture.
+class _ChromeButton extends StatelessWidget {
+  const _ChromeButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(foregroundColor: AppColors.onMedia),
-      icon: const Icon(Icons.visibility_outlined, size: 18),
-      label: Text(
-        count == 1 ? '1 view' : '$count views',
-        style: const TextStyle(fontWeight: FontWeight.w600),
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: const Color(0x33FFFFFF),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0x40FFFFFF)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: AppColors.onMedia),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.onMedia,
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

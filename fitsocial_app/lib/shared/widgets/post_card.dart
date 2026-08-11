@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -11,11 +10,16 @@ import '../../features/auth/application/app_session.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
 import '../../features/main/domain/app_models.dart';
+import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
 import 'avatar.dart';
 import 'confirm_destructive_sheet.dart';
+import 'mention_text.dart';
+import 'profile_link.dart';
 import 'quick_toast.dart';
+import 'reaction_bar.dart';
 import 'run_route_map.dart';
+import 'share_sheet.dart';
 import 'workout_summary_card.dart';
 
 class PostCard extends StatelessWidget {
@@ -38,6 +42,7 @@ class PostCard extends StatelessWidget {
     this.routePoints = const [],
     this.authorAvatarUrl,
     this.imageAspectRatio,
+    this.taggedUsers = const [],
     super.key,
   });
 
@@ -76,8 +81,27 @@ class PostCard extends StatelessWidget {
   /// square rather than re-cropping the photo to a fixed shape.
   final double? imageAspectRatio;
 
+  /// People the author attached to the post, drawn as a "with @…" line under
+  /// the header. Empty on every post nobody was tagged in.
+  final List<TaggedUser> taggedUsers;
+
   /// A polyline needs at least two fixes; a single point is not a route.
   bool get _hasRoute => routePoints.length >= 2;
+
+  /// This post in the form the share flows want it — the sheet, the Pulse
+  /// card, and the link all read from one snapshot.
+  SharedPostRef get _shareRef => SharedPostRef.of(
+        postId: postId,
+        authorId: authorId,
+        authorName: userName,
+        authorAvatarUrl: authorAvatarUrl,
+        activity: activity,
+        caption: caption,
+        imageUrl: imageUrl,
+        aspectRatio: imageAspectRatio,
+        hasRoute: _hasRoute,
+        hasWorkout: workoutData != null || postType == PostType.workout,
+      );
 
   /// Whether there is anything to draw between the header and the actions.
   ///
@@ -114,9 +138,14 @@ class PostCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(palette),
-          if (_hasPayload) _buildPayload(palette) else _buildBodyText(),
+          if (taggedUsers.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 8),
+              child: TaggedUsersLine(tagged: taggedUsers),
+            ),
+          if (_hasPayload) _buildPayload(palette) else _buildBodyText(palette),
           PostInteractionRow(
-            postId: postId,
+            post: _shareRef,
             likes: likes,
             comments: comments,
             onCommentTapped: onCommentTapped,
@@ -134,16 +163,16 @@ class PostCard extends StatelessWidget {
   /// The words of a text-only post, set to Threads' body metrics: 15px on a
   /// 21px line box. Sits at the gutter, aligned with the caption and the
   /// username above it, so the left edge of every post's content lines up.
-  Widget _buildBodyText() {
+  Widget _buildBodyText(AppPalette palette) {
     if (caption.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 2),
-      // No colour: the card's Material passes down the theme's body colour.
-      child: Text(
-        caption,
-        style: const TextStyle(
+      child: MentionText(
+        text: caption,
+        style: TextStyle(
           fontSize: 15,
           height: 21 / 15,
+          color: palette.text,
         ),
       ),
     );
@@ -156,6 +185,10 @@ class PostCard extends StatelessWidget {
   static const double _cardRadius = 18;
 
   /// Name over activity subtitle on the left, overflow menu on the right.
+  ///
+  /// The avatar and the name are one tap target rather than two: they name the
+  /// same person, and a 14px line of text on its own is a thin thing to hit.
+  /// The overflow button stays outside it so the menu is still reachable.
   Widget _buildHeader(AppPalette palette) {
     final subtitle = activity.trim();
 
@@ -163,51 +196,57 @@ class PostCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(_gutter, 10, 4, 10),
       child: Row(
         children: [
-          Avatar(
-            initials: avatarInitials(userName),
-            size: 34,
-            imageUrl: authorAvatarUrl,
-          ),
-          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  userName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    height: 1.2,
+            child: ProfileLink(
+              userId: authorId,
+              child: Row(
+                children: [
+                  Avatar(
+                    initials: avatarInitials(userName),
+                    size: 34,
+                    imageUrl: authorAvatarUrl,
                   ),
-                ),
-                // Only rendered when the author wrote one — an absent subtitle
-                // leaves a single centred name rather than a blank second line.
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.2,
-                      color: palette.muted,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          userName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            height: 1.2,
+                          ),
+                        ),
+                        // Only rendered when the author wrote one — an absent
+                        // subtitle leaves a single centred name rather than a
+                        // blank second line.
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.2,
+                              color: palette.muted,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
-              ],
+              ),
             ),
           ),
           PostMenuButton(
-            postId: postId,
-            authorId: authorId,
-            userName: userName,
-            activity: subtitle,
-            caption: caption,
+            post: _shareRef,
             onDeleted: onDeleted,
           ),
         ],
@@ -253,23 +292,20 @@ class PostCard extends StatelessWidget {
     if (caption.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
-      // RichText, unlike Text, inherits nothing — the root span has to name
-      // the colour itself.
-      child: RichText(
-        text: TextSpan(
-          style: TextStyle(
-            fontSize: 14,
-            height: 1.35,
-            color: palette.text,
-          ),
-          children: [
-            TextSpan(
-              text: userName,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const TextSpan(text: '  '),
-            TextSpan(text: caption),
-          ],
+      child: MentionText(
+        text: caption,
+        leadingName: userName,
+        leadingUserId: authorId,
+        style: TextStyle(
+          fontSize: 14,
+          height: 1.35,
+          color: palette.text,
+        ),
+        leadingStyle: TextStyle(
+          fontSize: 14,
+          height: 1.35,
+          color: palette.text,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -463,7 +499,6 @@ class PostCard extends StatelessWidget {
           .toList(),
     );
   }
-
 }
 
 /// Like, comment and save for one post.
@@ -473,7 +508,7 @@ class PostCard extends StatelessWidget {
 /// is the whole point.
 class PostInteractionRow extends ConsumerWidget {
   const PostInteractionRow({
-    required this.postId,
+    required this.post,
     required this.likes,
     required this.comments,
     this.onCommentTapped,
@@ -482,10 +517,14 @@ class PostInteractionRow extends ConsumerWidget {
     super.key,
   });
 
-  final String postId;
+  /// The post being acted on. A snapshot rather than an id because the share
+  /// glyph needs the whole thing — see [showPostShareSheet].
+  final SharedPostRef post;
   final int likes;
   final int comments;
   final VoidCallback? onCommentTapped;
+
+  String get postId => post.postId;
 
   /// Inset of the row itself. The default lines the *glyphs* up with the card's
   /// gutter — the icons carry 10px of their own padding for the touch target.
@@ -497,32 +536,38 @@ class PostInteractionRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isLiked = ref.watch(postLikeStatusProvider(postId)).valueOrNull ?? false;
-    final isBookmarked = ref.watch(postBookmarkStatusProvider(postId)).valueOrNull ?? false;
+    // Treated as "not reacted yet" while it loads, so the row is usable from
+    // the first frame instead of showing a spinner where a control should be.
+    final reaction = ref.watch(postReactionProvider(postId)).valueOrNull;
+    final isBookmarked =
+        ref.watch(postBookmarkStatusProvider(postId)).valueOrNull ?? false;
     final palette = context.palette;
 
-    // Like and comment cluster on the left, save alone on the right. Counts sit
-    // inline with their icon rather than on a separate line, which keeps the
-    // card short and the layout identical for text and media posts.
+    // Like, comment and share cluster on the left, save alone on the right —
+    // Instagram's arrangement, and the one people already reach for without
+    // looking. Counts sit inline with their icon rather than on a separate
+    // line, which keeps the card short and the layout identical for text and
+    // media posts.
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Row(
         children: [
-          _ActionIcon(
-            icon:
-                isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            // Only the active like takes the brand colour; everything at rest
-            // is muted so the row stays quiet until the user acts.
-            color: isLiked ? AppColors.orangeBright : palette.muted,
+          // Tap gives 🧡, hold opens the seven. Only a reaction actually given
+          // takes colour; everything at rest is muted, so the row stays quiet
+          // until the user acts.
+          PostReactionIcon(
+            selected: reaction,
             count: likes,
             size: iconSize,
-            onTap: () async {
+            restingColor: palette.muted,
+            onChanged: (picked) async {
               final userId = FirebaseAuth.instance.currentUser?.uid;
               if (userId == null) return;
-              await ref.read(contentRepositoryProvider).toggleLike(
+              await ref.read(contentRepositoryProvider).setPostReaction(
                     postId,
                     userId,
-                    // Names the liker on the notification the post's author
+                    picked,
+                    // Names the reactor on the notification the post's author
                     // receives, from the profile the session already holds.
                     profile: ref.read(appSessionProvider).profile,
                   );
@@ -534,6 +579,15 @@ class PostInteractionRow extends ConsumerWidget {
             count: comments,
             size: iconSize,
             onTap: onCommentTapped,
+          ),
+          _ActionIcon(
+            // The paper plane, not the platform's share glyph: this opens
+            // FitSocial's own options first — Pulse among them — and only
+            // reaches the OS sheet if that is what the user picks.
+            icon: Icons.send_outlined,
+            color: palette.muted,
+            size: iconSize,
+            onTap: () => showPostShareSheet(context, post),
           ),
           const Spacer(),
           _ActionIcon(
@@ -561,43 +615,40 @@ enum _PostMenuAction { delete, share }
 
 /// The `⋯` overflow on a post.
 ///
-/// The author gets Delete; everyone else gets Share, so the control is present
-/// on every card and never opens onto an empty sheet.
+/// Share is offered on every post including your own — you share your own work
+/// more than anyone else's — and the author additionally gets Delete.
 ///
 /// Public so the detail page can hang the identical menu off its app bar
 /// instead of shipping a second delete flow.
 class PostMenuButton extends ConsumerWidget {
   const PostMenuButton({
-    required this.postId,
-    required this.authorId,
-    required this.userName,
-    required this.activity,
-    required this.caption,
+    required this.post,
     this.onDeleted,
     super.key,
   });
 
   final VoidCallback? onDeleted;
 
-  final String postId;
-  final String authorId;
-  final String userName;
-  final String activity;
-  final String caption;
+  /// The post this menu acts on, in the form the share flow needs it. Carries
+  /// the author id the delete check reads, so there is one snapshot here
+  /// rather than five loose strings.
+  final SharedPostRef post;
+
+  String get postId => post.postId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return IconButton(
       onPressed: () => _showMenu(context, ref),
       visualDensity: VisualDensity.compact,
-      icon: Icon(Icons.more_horiz_rounded,
-          color: context.palette.text, size: 22),
+      icon:
+          Icon(Icons.more_horiz_rounded, color: context.palette.text, size: 22),
     );
   }
 
   Future<void> _showMenu(BuildContext context, WidgetRef ref) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    final isAuthor = uid != null && uid == authorId;
+    final isAuthor = uid != null && uid == post.authorId;
     final palette = context.palette;
 
     final action = await showModalBottomSheet<_PostMenuAction>(
@@ -621,10 +672,22 @@ class PostMenuButton extends ConsumerWidget {
                 ),
               ),
             ),
+            ListTile(
+              leading: Icon(Icons.ios_share_rounded, color: palette.text),
+              title: Text(
+                'Share post',
+                style: TextStyle(
+                  color: palette.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_PostMenuAction.share),
+            ),
             if (isAuthor)
               ListTile(
-                leading: Icon(Icons.delete_outline_rounded,
-                    color: palette.danger),
+                leading:
+                    Icon(Icons.delete_outline_rounded, color: palette.danger),
                 title: Text(
                   'Delete post',
                   style: TextStyle(
@@ -634,19 +697,6 @@ class PostMenuButton extends ConsumerWidget {
                 ),
                 onTap: () =>
                     Navigator.of(sheetContext).pop(_PostMenuAction.delete),
-              )
-            else
-              ListTile(
-                leading: Icon(Icons.ios_share_rounded, color: palette.text),
-                title: Text(
-                  'Share post',
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                onTap: () =>
-                    Navigator.of(sheetContext).pop(_PostMenuAction.share),
               ),
             const SizedBox(height: AppSpacing.sm),
           ],
@@ -656,7 +706,7 @@ class PostMenuButton extends ConsumerWidget {
 
     if (action == null || !context.mounted) return;
     if (action == _PostMenuAction.share) {
-      await _sharePost(context);
+      await showPostShareSheet(context, post);
       return;
     }
 
@@ -715,24 +765,6 @@ class PostMenuButton extends ConsumerWidget {
     }
   }
 
-  /// Copies the post to the clipboard so it can be pasted anywhere.
-  ///
-  /// Deliberately not the OS share sheet: that needs a native plugin, and
-  /// posts have no public URL to hand out yet. Copying keeps the action honest
-  /// and dependency-free until both of those exist.
-  Future<void> _sharePost(BuildContext context) async {
-    final lines = [
-      userName,
-      if (activity.isNotEmpty) activity,
-      if (caption.isNotEmpty) caption,
-      'Shared from FitSocial',
-    ];
-
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
-    await Clipboard.setData(ClipboardData(text: lines.join('\n')));
-    if (overlay == null) return;
-    showQuickToastOn(overlay, 'Copied to clipboard', icon: Icons.link_rounded);
-  }
 }
 
 /// A feed action: a light outlined glyph with its count beside it.

@@ -308,6 +308,12 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
 
   Widget _buildCanvas(double keyboardInset) {
     switch (_mode) {
+      // Not reachable from here: sharing a post to Pulse starts from the post,
+      // not from this composer, and lands on SharePostToPulseScreen. Listed so
+      // adding a Pulse kind can't silently fall through this switch.
+      case PulseMediaType.post:
+        return const SizedBox.shrink();
+
       case PulseMediaType.text:
         return GestureDetector(
           // The whole canvas is the way in, not just the line of hint text —

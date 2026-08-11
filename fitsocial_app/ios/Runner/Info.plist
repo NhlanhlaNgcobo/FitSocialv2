@@ -64,6 +64,31 @@
 	<string>FitSocial uses your camera to take photos for your posts and meal logs.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>FitSocial needs access to your photos so you can attach them to posts.</string>
+	<!-- Shared links. Flutter hands the launch URL to GoRouter as the initial
+	     route; without this key the app opens on the feed instead.
+
+	     The custom scheme below is what the hosted landing page hands off to
+	     (fitsocial://app/post/{id}). Universal Links — opening
+	     https://fitsocialv2.web.app/post/{id} straight into the app — need the
+	     Associated Domains capability (`applinks:fitsocialv2.web.app`) added in
+	     Xcode against a real team ID, plus the matching
+	     hosting/.well-known/apple-app-site-association. Until that is set up
+	     the https link opens the web page, which offers the App Store. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.fitsocial.fitsocial_app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fitsocial</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

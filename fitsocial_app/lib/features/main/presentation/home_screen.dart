@@ -112,6 +112,7 @@ class HomeScreen extends ConsumerWidget {
           routePoints: post.routePoints,
           authorAvatarUrl: post.authorAvatarUrl,
           imageAspectRatio: post.imageAspectRatio,
+          taggedUsers: post.taggedUsers,
           onCommentTapped: () {
             showModalBottomSheet(
               context: ref.context,
@@ -299,7 +300,8 @@ class _NotificationBell extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(999),
                 // Separates the badge from the glyph underneath it, whichever
                 // way the theme has painted the bar.
-                border: Border.all(color: context.palette.background, width: 1.5),
+                border:
+                    Border.all(color: context.palette.background, width: 1.5),
               ),
               child: Text(
                 // Past nine the exact number stops being information; what
@@ -344,4 +346,3 @@ class _SectionPlaceholder extends StatelessWidget {
     );
   }
 }
-

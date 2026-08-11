@@ -7,6 +7,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../features/auth/application/app_session.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
+import 'mention_suggestions.dart';
 
 /// The "Add a comment…" well and its send button.
 ///
@@ -15,9 +16,10 @@ import '../../features/main/data/content_repository.dart';
 /// has to behave identically — and refresh the same providers — wherever the
 /// post is being read.
 ///
-/// The caller owns the inset below it: a sheet lifts it over the keyboard
-/// itself, while a [Scaffold] bottom bar is lifted by the Scaffold and only
-/// needs a [SafeArea].
+/// The caller owns the inset below it. Nothing lifts this clear of the
+/// keyboard on its own — a [Scaffold] pins `bottomNavigationBar` to the bottom
+/// of the screen regardless of `viewInsets` — so every host has to pad for
+/// whichever of the keyboard and the system nav bar is taller.
 class CommentComposer extends ConsumerStatefulWidget {
   const CommentComposer({
     required this.postId,
@@ -37,11 +39,20 @@ class CommentComposer extends ConsumerStatefulWidget {
 
 class _CommentComposerState extends ConsumerState<CommentComposer> {
   final _controller = TextEditingController();
+
+  /// Stands in when the host didn't supply one. The suggestion list needs to
+  /// know whether the field is being typed in, so there always has to be a
+  /// focus node even when nobody outside wanted to drive it.
+  final _ownFocus = FocusNode();
+
   bool _isSending = false;
+
+  FocusNode get _focusNode => widget.focusNode ?? _ownFocus;
 
   @override
   void dispose() {
     _controller.dispose();
+    _ownFocus.dispose();
     super.dispose();
   }
 
@@ -97,69 +108,84 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         AppSpacing.sm,
         AppSpacing.sm,
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: palette.surfaceHigh,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: TextField(
-                controller: _controller,
-                focusNode: widget.focusNode,
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 15,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Add a comment...',
-                  hintStyle: TextStyle(color: palette.muted),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                ),
-                maxLines: 3,
-                minLines: 1,
-                textCapitalization: TextCapitalization.sentences,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _submit(),
-              ),
-            ),
+          // Above the field, not below it: this bar already sits on the
+          // keyboard, so there is no room underneath to open into.
+          MentionSuggestions(
+            controller: _controller,
+            focusNode: _focusNode,
           ),
-          const SizedBox(width: AppSpacing.sm),
-          GestureDetector(
-            onTap: _submit,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFFA053), Color(0xFFFF6B2C)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: _isSending
-                  ? const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: CircularProgressIndicator(
-                        color: AppColors.onBrand,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : Icon(
-                      Icons.send_rounded,
-                      color: palette.text,
-                      size: 18,
-                    ),
-            ),
-          ),
+          _inputRow(palette),
         ],
       ),
+    );
+  }
+
+  Widget _inputRow(AppPalette palette) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: palette.surfaceHigh,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 15,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Add a comment...',
+                hintStyle: TextStyle(color: palette.muted),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+              ),
+              maxLines: 3,
+              minLines: 1,
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _submit(),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        GestureDetector(
+          onTap: _submit,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFA053), Color(0xFFFF6B2C)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: _isSending
+                ? const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: CircularProgressIndicator(
+                      color: AppColors.onBrand,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Icon(
+                    Icons.send_rounded,
+                    color: palette.text,
+                    size: 18,
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }
