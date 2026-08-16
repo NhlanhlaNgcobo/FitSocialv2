@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/avatar.dart';
@@ -142,7 +141,7 @@ class _TagPeopleSheetState extends ConsumerState<_TagPeopleSheet> {
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(_selected),
                     style: TextButton.styleFrom(
-                      foregroundColor: AppColors.orangeBright,
+                      foregroundColor: palette.brandText,
                     ),
                     child: const Text(
                       'Done',
@@ -203,14 +202,14 @@ class _TagPeopleSheetState extends ConsumerState<_TagPeopleSheet> {
 
     final resultsAsync = ref.watch(userSearchResultsProvider(_query));
     return resultsAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(AppSpacing.lg),
+      loading: () => Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
         child: Center(
           child: SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
-              color: AppColors.orangeBright,
+              color: context.palette.brand,
               strokeWidth: 2,
             ),
           ),
@@ -294,11 +293,9 @@ class _SelectedChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
       decoration: BoxDecoration(
-        color: AppColors.orangeBright.withValues(alpha: 0.12),
+        color: palette.brandSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: AppColors.orangeBright.withValues(alpha: 0.35),
-        ),
+        border: Border.all(color: palette.brandSoftStroke),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -398,7 +395,7 @@ class _ResultTile extends StatelessWidget {
                 selected
                     ? Icons.check_circle_rounded
                     : Icons.radio_button_unchecked_rounded,
-                color: selected ? AppColors.orangeBright : palette.stroke,
+                color: selected ? palette.brand : palette.stroke,
                 size: 22,
               ),
             ],

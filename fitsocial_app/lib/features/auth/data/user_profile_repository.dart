@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/bootstrap/bootstrap_status.dart';
 import '../domain/auth_models.dart';
+import '../domain/body_metrics.dart';
 import 'firebase_user_profile_repository.dart';
 import 'user_profile_repository_contract.dart';
 
@@ -23,6 +24,16 @@ class UnconfiguredUserProfileRepository implements UserProfileRepository {
     String pronouns = '',
     String links = '',
   }) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<BodyMetrics> loadBodyMetrics() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> saveBodyMetrics(BodyMetrics metrics) async {
     throw StateError(_firebaseSetupMessage);
   }
 }

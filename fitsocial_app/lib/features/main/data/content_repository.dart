@@ -5,6 +5,7 @@ import '../../../core/bootstrap/bootstrap_status.dart';
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
+import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 import 'content_repository_contract.dart';
 import 'firestore_content_repository.dart';
@@ -33,6 +34,24 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<List<ActivitySession>> getActivitySessions() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<LoggedMeal>> getLoggedMeals() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<MacroGoals> getMacroGoals() async => const MacroGoals();
+
+  @override
+  Future<void> setMacroGoals(MacroGoals goals) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> deleteLoggedMeal(String id) async {
     throw StateError(_firebaseSetupMessage);
   }
 

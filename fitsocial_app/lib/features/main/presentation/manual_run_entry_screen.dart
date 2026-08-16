@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
@@ -13,6 +12,7 @@ import '../../../shared/widgets/stepper_field.dart';
 import '../application/activity_actions.dart';
 import '../application/create_flow_controller.dart';
 import '../domain/app_models.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class ManualRunEntryScreen extends ConsumerStatefulWidget {
   const ManualRunEntryScreen({super.key});
@@ -153,7 +153,10 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
     var sectionIndex = 0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Log Run Manually')),
+      appBar: AppBar(
+        title: const Text('Log Run Manually'),
+        actions: const [MusicIslandAction()],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
@@ -306,11 +309,9 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
                       padding: const EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
-                        color: AppColors.orangeBright.withValues(alpha: 0.1),
+                        color: palette.brandSoft,
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: AppColors.orangeBright.withValues(alpha: 0.4),
-                        ),
+                        border: Border.all(color: palette.brandSoftStroke),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -321,8 +322,8 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                           ),
                           Text(
                             _paceLabel,
-                            style: const TextStyle(
-                              color: AppColors.orangeBright,
+                            style: TextStyle(
+                              color: palette.brandText,
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                             ),
@@ -360,7 +361,7 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
               ),
               child: Text(
                 _errorMessage!,
-                style: const TextStyle(color: AppColors.orangeBright),
+                style: TextStyle(color: palette.brandText),
               ),
             ),
             const SizedBox(height: AppSpacing.md),

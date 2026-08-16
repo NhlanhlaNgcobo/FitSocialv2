@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bottom_nav.dart';
@@ -13,6 +12,7 @@ import '../../music/presentation/music_player_card.dart';
 import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
 import 'progress_section.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class ActivityScreen extends ConsumerWidget {
   const ActivityScreen({super.key});
@@ -27,10 +27,27 @@ class ActivityScreen extends ConsumerWidget {
             ? 'Progress'
             : musicState.selectedSection.label),
         actions: [
-          IconButton(
-            onPressed: () => context.push('/achievements'),
-            icon: const Icon(Icons.local_fire_department_outlined),
-          ),
+          const MusicIslandAction(),
+          // All three belong to Progress rather than to Music, so they go when
+          // the other section is showing — a meal summary reached from a
+          // playlist screen is a button in the wrong place.
+          if (musicState.selectedSection == ActivitySection.progress) ...[
+            IconButton(
+              onPressed: () => context.push('/bmi'),
+              tooltip: 'BMI',
+              icon: const Icon(Icons.monitor_heart_outlined),
+            ),
+            IconButton(
+              onPressed: () => context.push('/meal-tracking'),
+              tooltip: 'Meal tracking',
+              icon: const Icon(Icons.restaurant_outlined),
+            ),
+            IconButton(
+              onPressed: () => context.push('/achievements'),
+              tooltip: 'Achievements',
+              icon: const Icon(Icons.local_fire_department_outlined),
+            ),
+          ],
         ],
       ),
       body: ListView(
@@ -111,7 +128,7 @@ class _ActivitySectionPicker extends StatelessWidget {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: selectedSection == section
-                          ? AppColors.orangeBright.withValues(alpha: 0.18)
+                          ? palette.brandSoft
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -119,7 +136,7 @@ class _ActivitySectionPicker extends StatelessWidget {
                       section.label,
                       style: TextStyle(
                         color: selectedSection == section
-                            ? AppColors.orangeBright
+                            ? palette.brandText
                             : palette.muted,
                         fontWeight: FontWeight.w700,
                       ),
@@ -219,22 +236,24 @@ class _MusicBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.orangeBright.withValues(alpha: 0.18),
+        color: palette.brandSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.orangeBright.withValues(alpha: 0.4)),
+        border: Border.all(color: palette.brandSoftStroke),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.headphones_rounded, size: 16, color: AppColors.orangeBright),
-          SizedBox(width: 6),
+          Icon(Icons.headphones_rounded, size: 16, color: palette.brand),
+          const SizedBox(width: 6),
           Text(
             'Music Preview',
             style: TextStyle(
-              color: AppColors.orangeBright,
+              color: palette.brandText,
               fontWeight: FontWeight.w700,
             ),
           ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/post_card.dart';
@@ -142,7 +141,9 @@ class _SheetHeader extends StatelessWidget {
             Navigator.of(context).pop();
             router.push('/user/${post.authorId}');
           },
-          style: TextButton.styleFrom(foregroundColor: AppColors.orangeBright),
+          style: TextButton.styleFrom(
+            foregroundColor: context.palette.brandText,
+          ),
           icon: const Icon(Icons.person_outline_rounded, size: 18),
           label: const Text('View profile'),
         ),

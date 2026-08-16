@@ -110,9 +110,10 @@ void main() {
       expect(find.text('Neo M.'), findsOneWidget);
     });
 
-    testWidgets('a photo post is still shown as its photo', (tester) async {
-      // A meal with a picture keeps the media treatment: author over the
-      // image, activity underneath, no stats card.
+    testWidgets('a photo post reads the same as one without a photo',
+        (tester) async {
+      // The picture becomes the backdrop; what the post measured is drawn over
+      // it in the same order the card uses.
       await tester.pumpWidget(harness([
         _post(
           activity: 'Oats',
@@ -124,12 +125,47 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(RouteSparkline), findsNothing);
+      expect(find.text('420 kcal'), findsOneWidget);
+      expect(find.text('30g protein'), findsOneWidget);
       expect(find.text('Neo M.'), findsOneWidget);
-      // The photo never loads under the test binding, so the tile is showing
-      // the neutral placeholder — which says nothing, leaving the caption band
-      // as the only place the activity appears.
-      expect(find.text('Oats'), findsOneWidget);
-      expect(find.text('420 kcal · 30g protein'), findsNothing);
+    });
+
+    testWidgets('a run photographed still draws its route over the photo',
+        (tester) async {
+      // The bug this fixes: the backdrop was the whole tile, so a run shared
+      // with a picture behind it lost its trace and its numbers entirely.
+      await tester.pumpWidget(harness([
+        _post(
+          activity: 'Run',
+          postType: PostType.run,
+          metricLabels: const ['5.24 km', '32:10', "6'08\"/km"],
+          routePoints: _route,
+          imageUrl: 'https://example.test/sunrise.jpg',
+        ),
+      ]));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RouteSparkline), findsOneWidget);
+      expect(find.text('5.24 km'), findsOneWidget);
+      expect(find.text("32:10 · 6'08\"/km"), findsOneWidget);
+    });
+
+    testWidgets('a workout photographed still shows what it measured',
+        (tester) async {
+      await tester.pumpWidget(harness([
+        _post(
+          activity: 'Leg Day',
+          postType: PostType.workout,
+          metricLabels: const ['45 min', '320 kcal', '6 moves'],
+          workoutData: const {'title': 'Leg Day'},
+          imageUrl: 'https://example.test/gym.jpg',
+        ),
+      ]));
+      await tester.pumpAndSettle();
+
+      expect(find.text('45 min'), findsOneWidget);
+      expect(find.text('320 kcal · 6 moves'), findsOneWidget);
+      expect(find.text('Neo M.'), findsOneWidget);
     });
   });
 }

@@ -22,6 +22,7 @@ class RouteSparkline extends StatelessWidget {
     required this.route,
     this.strokeWidth = 2.5,
     this.padding = 4,
+    this.onMedia = false,
     super.key,
   });
 
@@ -35,6 +36,15 @@ class RouteSparkline extends StatelessWidget {
   /// fills its bounds doesn't touch the tile's border.
   final double padding;
 
+  /// Whether the line is being drawn over a user's photo rather than over an
+  /// app surface.
+  ///
+  /// A photo is neither light nor dark — the same run can cross a white sky and
+  /// black tarmac in one stride — so the palette's answer is no answer at all
+  /// there. This lays a soft black pass under the line to carry it across the
+  /// bright parts and widens the glow to hold it against the dark ones.
+  final bool onMedia;
+
   static bool canDraw(List<RoutePoint> route) => route.length >= 2;
 
   @override
@@ -46,14 +56,23 @@ class RouteSparkline extends StatelessWidget {
       painter: _RouteSparklinePainter(
         route: route,
         // The orange is the constant the full map keeps too, so a route looks
-        // like the same route at both sizes.
-        line: AppColors.orangeBright,
+        // like the same route at both sizes — fixed on a photo, and following
+        // the theme's own weight on a card.
+        line: onMedia ? AppColors.orangeBright : palette.brand,
         // A wider, fainter pass under the line lifts it off the card without
         // needing a shadow. Light needs less of it — a wash on cream muddies
         // where it would glow on black.
-        halo: AppColors.orangeBright
-            .withValues(alpha: palette.isDark ? 0.22 : 0.14),
-        start: palette.success,
+        halo: (onMedia ? AppColors.orangeBright : palette.brand).withValues(
+          alpha: onMedia
+              ? 0.34
+              : palette.isDark
+                  ? 0.22
+                  : 0.14,
+        ),
+        // Fixed on a photo, for the same reason the halo is: a green tuned for
+        // the light theme is the wrong green on somebody's sunset.
+        start: onMedia ? const Color(0xFF31C46C) : palette.success,
+        shadow: onMedia ? const Color(0x59050505) : null,
         padding: padding,
         strokeWidth: strokeWidth,
       ),
@@ -67,6 +86,7 @@ class _RouteSparklinePainter extends CustomPainter {
     required this.line,
     required this.halo,
     required this.start,
+    required this.shadow,
     required this.padding,
     required this.strokeWidth,
   });
@@ -75,6 +95,10 @@ class _RouteSparklinePainter extends CustomPainter {
   final Color line;
   final Color halo;
   final Color start;
+
+  /// Laid under everything else when the line is over a photo. Null on an app
+  /// surface, where the halo alone is enough.
+  final Color? shadow;
   final double padding;
   final double strokeWidth;
 
@@ -94,6 +118,16 @@ class _RouteSparklinePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
+
+    final shadowColor = shadow;
+    if (shadowColor != null) {
+      stroke
+        ..color = shadowColor
+        ..strokeWidth = strokeWidth * 4
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, strokeWidth);
+      canvas.drawPath(path, stroke);
+      stroke.maskFilter = null;
+    }
 
     stroke
       ..color = halo
@@ -165,6 +199,7 @@ class _RouteSparklinePainter extends CustomPainter {
       old.line != line ||
       old.halo != halo ||
       old.start != start ||
+      old.shadow != shadow ||
       old.padding != padding ||
       old.strokeWidth != strokeWidth;
 }

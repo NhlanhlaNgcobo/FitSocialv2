@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../main/domain/shared_post.dart';
+import 'pulse_music.dart';
 
 /// Timing rules for Pulse playback and expiry.
 ///
@@ -34,7 +35,12 @@ enum PulseMediaType {
   /// Carries no media of its own: the card is drawn from the [PulseSegment]'s
   /// `sharedPost` snapshot over the chosen gradient, and tapping it opens the
   /// post it came from.
-  post;
+  post,
+
+  /// What the sharer was listening to — Instagram and Spotify's "share to
+  /// story". Carries no media of its own: the sticker is drawn from the
+  /// segment's `music` snapshot over the chosen gradient.
+  music;
 
   /// Stored form. Kept explicit rather than using `name` so a rename of the
   /// enum can never silently change what is already in Firestore.
@@ -48,6 +54,8 @@ enum PulseMediaType {
         return 'text';
       case PulseMediaType.post:
         return 'post';
+      case PulseMediaType.music:
+        return 'music';
     }
   }
 
@@ -59,14 +67,16 @@ enum PulseMediaType {
         return PulseMediaType.text;
       case 'post':
         return PulseMediaType.post;
+      case 'music':
+        return PulseMediaType.music;
       case 'photo':
       default:
         return PulseMediaType.photo;
     }
   }
 
-  /// Whether this kind uploads a file. Text and shared posts do not, which is
-  /// what lets both publish without touching Storage.
+  /// Whether this kind uploads a file. Text, shared posts and shared tracks
+  /// do not, which is what lets all three publish without touching Storage.
   bool get carriesMedia =>
       this == PulseMediaType.photo || this == PulseMediaType.video;
 }
@@ -142,6 +152,7 @@ class PulseSegment {
     this.videoDuration,
     this.aspectRatio,
     this.sharedPost,
+    this.music,
   });
 
   final String id;
@@ -199,6 +210,11 @@ class PulseSegment {
   /// null on every other kind. Snapshotted rather than looked up — see
   /// [SharedPostRef].
   final SharedPostRef? sharedPost;
+
+  /// What the author was listening to, on a [PulseMediaType.music] segment.
+  /// Null on every other kind, and on a music segment whose stored map could
+  /// not be read.
+  final PulseMusic? music;
 
   PulseGradient get gradient => PulseGradient.fromKey(gradientKey);
 
@@ -290,6 +306,7 @@ class PulseDraft {
     this.videoDuration,
     this.aspectRatio,
     this.sharedPost,
+    this.music,
   });
 
   final PulseMediaType type;
@@ -306,12 +323,17 @@ class PulseDraft {
   /// The post being shared, on a [PulseMediaType.post] draft.
   final SharedPostRef? sharedPost;
 
+  /// The track being shared, on a [PulseMediaType.music] draft.
+  final PulseMusic? music;
+
   bool get isPublishable {
     switch (type) {
       case PulseMediaType.text:
         return text.trim().isNotEmpty;
       case PulseMediaType.post:
         return sharedPost != null;
+      case PulseMediaType.music:
+        return music != null;
       case PulseMediaType.photo:
       case PulseMediaType.video:
         return (localFilePath ?? '').isNotEmpty;

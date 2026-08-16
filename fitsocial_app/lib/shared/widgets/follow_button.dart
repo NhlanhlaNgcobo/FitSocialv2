@@ -130,7 +130,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
         : FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor:
-                  _sitsOnOwnSurface ? AppColors.orangeBright : AppColors.orange,
+                  _sitsOnOwnSurface ? palette.brand : AppColors.orange,
               foregroundColor: AppColors.onBrand,
               padding: padding,
               minimumSize: minimumSize,

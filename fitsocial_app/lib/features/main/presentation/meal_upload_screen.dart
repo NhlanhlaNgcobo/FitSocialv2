@@ -16,6 +16,7 @@ import '../../../shared/widgets/fit_social_pulse_mark.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
+import '../../music/presentation/music_island_action.dart';
 
 /// Where a meal analysis has got to. Drives the overlay's caption, so what the
 /// user is told is what is actually happening rather than one blanket message.
@@ -200,6 +201,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
           appBar: AppBar(
             title: const Text('Upload Meal'),
             backgroundColor: Colors.transparent,
+            actions: const [MusicIslandAction()],
           ),
           body: hasPhoto ? _buildPhotoState(context) : _buildEmptyState(context),
           bottomNavigationBar: _buildActions(context, hasPhoto: hasPhoto),
@@ -222,16 +224,14 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
               width: 128,
               height: 128,
               decoration: BoxDecoration(
-                color: AppColors.orangeBright.withValues(alpha: 0.1),
+                color: palette.brandSoft,
                 borderRadius: BorderRadius.circular(36),
-                border: Border.all(
-                  color: AppColors.orangeBright.withValues(alpha: 0.28),
-                ),
+                border: Border.all(color: palette.brandSoftStroke),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.photo_camera_rounded,
                 size: 48,
-                color: AppColors.orangeBright,
+                color: palette.brand,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),

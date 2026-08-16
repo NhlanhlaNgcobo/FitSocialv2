@@ -1,4 +1,5 @@
 import '../domain/auth_models.dart';
+import '../domain/body_metrics.dart';
 
 abstract class UserProfileRepository {
   /// Writes the whole profile. Every field is passed on every save, so a
@@ -14,4 +15,11 @@ abstract class UserProfileRepository {
   });
 
   Future<UserProfileDraft?> loadCurrentProfile();
+
+  /// The signed-in user's height and weight, or an empty [BodyMetrics] when
+  /// they have never entered any. Never another user's — these live in the
+  /// owner-only part of the account.
+  Future<BodyMetrics> loadBodyMetrics();
+
+  Future<void> saveBodyMetrics(BodyMetrics metrics);
 }

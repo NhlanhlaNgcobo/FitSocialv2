@@ -130,6 +130,11 @@ class SpotifyAppRemoteService {
   Future<void> disconnect() async {
     if (!_connected) return;
     _connected = false;
+    // Drop the shared subscription with the bridge, so reconnecting opens a
+    // fresh one rather than fanning out a dead channel.
+    unawaited(_sdkStates?.cancel());
+    _sdkStates = null;
+    _lastSnapshot = null;
     try {
       await SpotifySdk.disconnect();
     } on PlatformException {
@@ -137,24 +142,64 @@ class SpotifyAppRemoteService {
     }
   }
 
+  /// Everyone watching player state, fed from one subscription to the SDK.
+  final StreamController<MusicPlayerSnapshot> _states =
+      StreamController<MusicPlayerSnapshot>.broadcast();
+
+  /// The single subscription to Spotify's own stream.
+  StreamSubscription<remote.PlayerState>? _sdkStates;
+
+  /// The most recent snapshot, replayed to anyone who subscribes later.
+  MusicPlayerSnapshot? _lastSnapshot;
+
   /// Live player state, mapped into the app's own model.
   ///
   /// Push-based: Spotify emits on every play/pause/skip/seek, so there is no
   /// polling and no API quota to burn. Errors on the stream are surfaced as
   /// [SpotifyRemoteException] rather than raw platform exceptions.
-  Stream<MusicPlayerSnapshot> playerStates() {
-    return SpotifySdk.subscribePlayerState()
-        .map(_toSnapshot)
-        .handleError((Object error) {
-      _connected = false;
-      if (error is PlatformException) {
-        throw SpotifyRemoteException(_classify(error), error.message);
-      }
-      throw SpotifyRemoteException(
-        SpotifyRemoteBlock.disconnected,
-        error.toString(),
-      );
-    });
+  ///
+  /// Fanned out from a *single* SDK subscription, and this matters. Calling
+  /// `SpotifySdk.subscribePlayerState()` again opens the platform event
+  /// channel a second time; with both the player card and the music island
+  /// watching, one of them ends up receiving nothing at all.
+  ///
+  /// The last snapshot is replayed to each new listener for the same reason.
+  /// Spotify only emits when something *changes*, so a widget that subscribes
+  /// while a track is already playing would otherwise sit empty until the user
+  /// happened to press pause — which is exactly how the island came to never
+  /// appear.
+  Stream<MusicPlayerSnapshot> playerStates() async* {
+    _ensureSubscribedToSdk();
+    final last = _lastSnapshot;
+    if (last != null) yield last;
+    yield* _states.stream;
+  }
+
+  void _ensureSubscribedToSdk() {
+    if (_sdkStates != null) return;
+    _sdkStates = SpotifySdk.subscribePlayerState().listen(
+      (state) {
+        final snapshot = _toSnapshot(state);
+        _lastSnapshot = snapshot;
+        _states.add(snapshot);
+      },
+      onError: (Object error) {
+        _connected = false;
+        // The bridge is gone, so the cached snapshot is no longer true and the
+        // subscription has to be rebuilt on the next reconnect.
+        _lastSnapshot = null;
+        _sdkStates?.cancel();
+        _sdkStates = null;
+        _states.addError(
+          error is PlatformException
+              ? SpotifyRemoteException(_classify(error), error.message)
+              : SpotifyRemoteException(
+                  SpotifyRemoteBlock.disconnected,
+                  error.toString(),
+                ),
+        );
+      },
+    );
   }
 
   /// True while the bridge is up, as reported by Spotify rather than by our
@@ -249,6 +294,7 @@ class SpotifyAppRemoteService {
       track: track == null
           ? null
           : NowPlayingTrack(
+              uri: track.uri,
               title: track.name,
               artist: _artistsOf(track),
               duration: Duration(milliseconds: track.duration),

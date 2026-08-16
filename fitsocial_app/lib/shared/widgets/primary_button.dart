@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -21,7 +22,7 @@ class PrimaryButton extends StatelessWidget {
       height: 56,
       child: FilledButton(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.orangeBright,
+          backgroundColor: context.palette.brand,
           // Sits on the orange fill, which is the same orange in both themes.
           foregroundColor: AppColors.onBrand,
           shape: RoundedRectangleBorder(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
@@ -13,12 +12,13 @@ import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/mention_text.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/post_gradient.dart';
-import '../../../shared/widgets/run_route_map.dart';
+import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/shared_post.dart';
 import 'comments_sheet.dart';
+import '../../music/presentation/music_island_action.dart';
 
 /// A single post on its own page.
 ///
@@ -43,9 +43,9 @@ class PostDetailScreen extends ConsumerWidget {
     if (post != null) return _PostPage(post: post);
 
     return ref.watch(postProvider(postId)).when(
-          loading: () => const _StatusScaffold(
+          loading: () => _StatusScaffold(
             child: Center(
-              child: CircularProgressIndicator(color: AppColors.orangeBright),
+              child: CircularProgressIndicator(color: context.palette.brand),
             ),
           ),
           error: (_, __) => _StatusScaffold(
@@ -118,12 +118,14 @@ class _PostPageState extends ConsumerState<_PostPage> {
     final palette = context.palette;
     final post = widget.post;
     final media = _MediaKind.of(post);
+    final strip = _strip(post, media);
 
     return Scaffold(
       backgroundColor: palette.background,
       appBar: AppBar(
         title: const Text('Post', style: TextStyle(fontSize: 18)),
         actions: [
+          const MusicIslandAction(),
           // The card's own overflow, moved to the bar: on a page the post has
           // no header of its own to hang a `⋯` off, and delete/share belong to
           // the whole screen anyway.
@@ -160,10 +162,11 @@ class _PostPageState extends ConsumerState<_PostPage> {
             _TextHero(post: post)
           else
             _MediaBlock(post: post, kind: media),
-          // A workout block already spells out its own duration and calories;
-          // repeating them as pills underneath is the same numbers twice.
-          if (post.metricLabels.isNotEmpty && media != _MediaKind.workout)
-            _MetricStrip(labels: post.metricLabels),
+          // Only the numbers the block above hasn't already shown — a workout
+          // spells out its own duration and calories, and a run card carries
+          // its distance and time, so a full strip underneath either is the
+          // same numbers twice. A run's pace survives it, which is the point.
+          if (strip.isNotEmpty) _MetricStrip(labels: strip),
           const SizedBox(height: AppSpacing.xs),
           PostInteractionRow(
             post: SharedPostRef.fromFeedPost(post),
@@ -186,25 +189,57 @@ class _PostPageState extends ConsumerState<_PostPage> {
   }
 }
 
+/// The metrics still worth a pill under the media block.
+///
+/// A block that already draws a number takes it off the strip rather than
+/// having it printed twice on one screen — what is left is whatever the block
+/// had no room for, which for a run is the pace.
+List<String> _strip(FeedPost post, _MediaKind media) {
+  switch (media) {
+    case _MediaKind.workout:
+      return const [];
+    case _MediaKind.run:
+      final shown = {
+        RunSummaryCard.distanceFrom(post.metricLabels),
+        RunSummaryCard.durationFrom(post.metricLabels),
+      };
+      return post.metricLabels
+          .where((label) => !shown.contains(label.trim()))
+          .toList(growable: false);
+    case _MediaKind.photo:
+    case _MediaKind.none:
+      return post.metricLabels;
+  }
+}
+
 /// What a post has to show between its header and its actions.
 enum _MediaKind {
   photo,
-  route,
+  run,
   workout,
 
   /// Words only — the caption becomes the hero instead.
   none;
 
   static _MediaKind of(FeedPost post) {
-    // A route outranks the type, exactly as the feed card decides it: a run is
-    // drawn as its map whether or not it was stamped PostType.run.
-    if (post.routePoints.length >= 2) return _MediaKind.route;
-    if (post.imageUrl != null && post.imageUrl!.isNotEmpty) {
-      return _MediaKind.photo;
+    final hasRoute = post.routePoints.length >= 2;
+    final hasPhoto = post.imageUrl != null && post.imageUrl!.isNotEmpty;
+
+    // A run outranks its photo, exactly as the feed card decides it: the photo
+    // is the backdrop the route and the numbers are drawn on, so sending it
+    // down the plain-photo branch would drop the run itself. A route also
+    // outranks the type — a run tracked before PostType.run existed was
+    // stamped `text` and is recognisable only by its trace.
+    if (hasRoute || (post.postType == PostType.run && hasPhoto)) {
+      return _MediaKind.run;
     }
+    // A workout outranks its photo for the same reason, and must be tested
+    // before it: a photo-first check would drop the duration, calories and
+    // exercises — the actual content of the post.
     if (post.workoutData != null || post.postType == PostType.workout) {
       return _MediaKind.workout;
     }
+    if (hasPhoto) return _MediaKind.photo;
     return _MediaKind.none;
   }
 }
@@ -285,11 +320,11 @@ class _AuthorRow extends ConsumerWidget {
   }
 }
 
-/// The photo, the run map or the workout block — whichever this post carries.
+/// The photo, the run card or the workout block — whichever this post carries.
 ///
-/// Photos and maps run to both edges of the screen. There is only one post
-/// here, so a margin around the media would frame it as a card in a list it
-/// isn't in.
+/// A photo runs to both edges of the screen. There is only one post here, so a
+/// margin around it would frame it as a card in a list it isn't in; the two
+/// summary cards keep their margin because they are already cards.
 class _MediaBlock extends StatelessWidget {
   const _MediaBlock({required this.post, required this.kind});
 
@@ -299,15 +334,18 @@ class _MediaBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     switch (kind) {
-      case _MediaKind.route:
-        return RunRouteMap(
-          route: post.routePoints
-              .map((point) => LatLng(point.latitude, point.longitude))
-              .toList(growable: false),
-          mode: RunRouteMapMode.completed,
-          // Taller than the feed's preview: on this page the route is the
-          // subject, not a thumbnail of one.
-          height: 280,
+      case _MediaKind.run:
+        return RunSummaryCard(
+          route: post.routePoints,
+          distanceLabel: RunSummaryCard.distanceFrom(post.metricLabels),
+          durationLabel: RunSummaryCard.durationFrom(post.metricLabels),
+          background: post.imageUrl == null || post.imageUrl!.isEmpty
+              ? null
+              : NetworkImage(post.imageUrl!),
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          // Squarer than the feed's card: on this page the run is the subject,
+          // not a thumbnail of one, so the shape gets more of the height.
+          aspectRatio: 1,
         );
       case _MediaKind.photo:
         return _Photo(post: post);
@@ -315,6 +353,7 @@ class _MediaBlock extends StatelessWidget {
         return WorkoutSummaryCard(
           workoutData: post.workoutData,
           activity: post.activity,
+          backgroundImageUrl: post.imageUrl,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         );
       case _MediaKind.none:
@@ -447,14 +486,26 @@ class _MetricStrip extends StatelessWidget {
         AppSpacing.md,
         0,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < labels.length; i++) ...[
-            if (i > 0) const SizedBox(width: AppSpacing.sm),
-            Expanded(child: _MetricPill(label: labels[i])),
+      // The pills line up along their bottoms only if they share a height, and
+      // a value with no unit is shorter than one with — hence the stretch.
+      //
+      // IntrinsicHeight is what makes that legal here. A Row's cross axis is
+      // vertical, and this strip lives in a ListView, so the incoming height is
+      // unbounded; stretching against infinity threw during layout and took the
+      // whole page's body down with it, leaving an app bar over an empty
+      // screen. Measuring the tallest pill first gives the Row the finite
+      // height stretch needs. Cheap at this size — a post carries three metrics
+      // at most.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < labels.length; i++) ...[
+              if (i > 0) const SizedBox(width: AppSpacing.sm),
+              Expanded(child: _MetricPill(label: labels[i])),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -630,14 +681,14 @@ class _CommentList extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           commentsAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.md),
+            loading: () => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: Center(
                 child: SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
-                    color: AppColors.orangeBright,
+                    color: context.palette.brand,
                     strokeWidth: 2,
                   ),
                 ),
@@ -685,7 +736,10 @@ class _StatusScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.palette.background,
-      appBar: AppBar(title: const Text('Post', style: TextStyle(fontSize: 18))),
+      appBar: AppBar(
+        title: const Text('Post', style: TextStyle(fontSize: 18)),
+        actions: const [MusicIslandAction()],
+      ),
       body: child,
     );
   }

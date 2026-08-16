@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/tracking_providers.dart';
 import '../data/ble_heart_rate_service.dart';
+import '../../music/presentation/music_island_action.dart';
 
 /// Health & Devices: today's metrics from Health Connect (which watches
 /// like Galaxy/Pixel/Fitbit sync into), the phone's live step counter,
@@ -93,6 +93,7 @@ class _HealthDashboardScreenState
       appBar: AppBar(
         title: const Text('Health & Devices'),
         actions: [
+          const MusicIslandAction(),
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh_rounded),
@@ -106,12 +107,12 @@ class _HealthDashboardScreenState
           const _SectionLabel('TODAY · FROM HEALTH CONNECT'),
           const SizedBox(height: 8),
           health.when(
-            loading: () => const DarkCard(
+            loading: () => DarkCard(
               child: Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(24),
                   child: CircularProgressIndicator(
-                    color: AppColors.orangeBright,
+                    color: context.palette.brand,
                   ),
                 ),
               ),
@@ -216,7 +217,7 @@ class _HealthDashboardScreenState
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 _bleMessage!,
-                style: const TextStyle(color: AppColors.orangeBright),
+                style: TextStyle(color: context.palette.brandText),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -224,9 +225,9 @@ class _HealthDashboardScreenState
             (d) => DarkCard(
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(
+                leading: Icon(
                   Icons.watch_rounded,
-                  color: AppColors.orangeBright,
+                  color: context.palette.brand,
                 ),
                 title: Text(
                   d.name,
@@ -298,7 +299,7 @@ class _HealthMetric extends StatelessWidget {
     return Column(
       children: [
         Icon(icon,
-            color: accent ? AppColors.orangeBright : palette.muted,
+            color: accent ? palette.brand : palette.muted,
             size: 28),
         const SizedBox(height: 8),
         Text(
@@ -306,7 +307,7 @@ class _HealthMetric extends StatelessWidget {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: accent ? AppColors.orangeBright : palette.text,
+            color: accent ? palette.brandText : palette.text,
           ),
         ),
         const SizedBox(height: 2),
@@ -333,7 +334,7 @@ class _InfoCard extends StatelessWidget {
       child: DarkCard(
         child: Row(
           children: [
-            Icon(icon, color: AppColors.orangeBright),
+            Icon(icon, color: context.palette.brand),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Text(

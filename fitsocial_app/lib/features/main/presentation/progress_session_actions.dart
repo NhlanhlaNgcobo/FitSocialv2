@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../application/content_providers.dart';
@@ -83,7 +82,7 @@ class _SessionLogSheet extends StatelessWidget {
                 session.kind == ActivityKind.run
                     ? Icons.directions_run_rounded
                     : Icons.fitness_center_rounded,
-                color: AppColors.orangeBright,
+                color: context.palette.brand,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(

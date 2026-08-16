@@ -4,6 +4,7 @@ import 'package:fitsocial_app/features/auth/application/app_session.dart';
 import 'package:fitsocial_app/features/auth/data/auth_repository_contract.dart';
 import 'package:fitsocial_app/features/auth/data/user_profile_repository_contract.dart';
 import 'package:fitsocial_app/features/auth/domain/auth_models.dart';
+import 'package:fitsocial_app/features/auth/domain/body_metrics.dart';
 
 /// One login field takes a username or an email, and the two go to genuinely
 /// different places — Firebase directly, or a Cloud Function that resolves the
@@ -189,4 +190,10 @@ class _FakeProfiles implements UserProfileRepository {
   }) async {
     throw UnimplementedError();
   }
+
+  @override
+  Future<BodyMetrics> loadBodyMetrics() async => const BodyMetrics();
+
+  @override
+  Future<void> saveBodyMetrics(BodyMetrics metrics) async {}
 }

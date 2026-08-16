@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 
@@ -30,12 +29,10 @@ class ShareToFeedToggle extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: value
-              ? AppColors.orangeBright.withValues(alpha: 0.12)
-              : palette.surface,
+          color: value ? palette.brandSoft : palette.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: value ? AppColors.orangeBright : palette.stroke,
+            color: value ? palette.brand : palette.stroke,
             width: value ? 1.4 : 1,
           ),
         ),
@@ -48,7 +45,7 @@ class ShareToFeedToggle extends StatelessWidget {
               height: 44,
               decoration: BoxDecoration(
                 color: value
-                    ? AppColors.orangeBright.withValues(alpha: 0.2)
+                    ? palette.accentFill(palette.brand)
                     : palette.surfaceHigh,
                 shape: BoxShape.circle,
               ),
@@ -59,7 +56,7 @@ class ShareToFeedToggle extends StatelessWidget {
                 child: Icon(
                   value ? Icons.public_rounded : Icons.lock_outline_rounded,
                   key: ValueKey(value),
-                  color: value ? AppColors.orangeBright : palette.muted,
+                  color: value ? palette.brand : palette.muted,
                 ),
               ),
             ),
@@ -82,7 +79,7 @@ class ShareToFeedToggle extends StatelessWidget {
             ),
             Switch(
               value: value,
-              activeThumbColor: AppColors.orangeBright,
+              activeThumbColor: palette.brand,
               onChanged: onChanged,
             ),
           ],

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/identity/profile_identity.dart';
@@ -115,11 +114,11 @@ class CommentsSheet extends ConsumerWidget {
                   },
                 );
               },
-              loading: () => const Center(
+              loading: () => Center(
                 child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.xl),
+                  padding: const EdgeInsets.all(AppSpacing.xl),
                   child: CircularProgressIndicator(
-                    color: AppColors.orangeBright,
+                    color: context.palette.brand,
                     strokeWidth: 2,
                   ),
                 ),

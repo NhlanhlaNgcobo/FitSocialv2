@@ -8,19 +8,6 @@ import '../application/music_providers.dart';
 import '../data/spotify_api_service.dart';
 import '../domain/music_brand.dart';
 
-/// Workout moods offered as one-tap searches.
-///
-/// Deliberately short: this is a shortcut for "put something on" during a
-/// session, not a catalogue browser. Anything more specific is a job for the
-/// Spotify app itself.
-const _workoutMoods = <String>[
-  'Running',
-  'HIIT',
-  'Lifting',
-  'Warm up',
-  'Cool down',
-];
-
 /// Pick something to play.
 ///
 /// This is the half of the music feature that turns the player card from a
@@ -43,9 +30,6 @@ class _MusicLibrarySheet extends ConsumerStatefulWidget {
 }
 
 class _MusicLibrarySheetState extends ConsumerState<_MusicLibrarySheet> {
-  /// Null shows the user's own library; a mood shows that search instead.
-  String? _mood;
-
   /// The playlist a tap is currently starting, so only that row spins.
   String? _startingId;
 
@@ -69,11 +53,11 @@ class _MusicLibrarySheetState extends ConsumerState<_MusicLibrarySheet> {
     final palette = context.palette;
     final accent = MusicBrand.spotify.accent;
     final player = ref.watch(musicPlayerControllerProvider);
-    final mood = _mood;
 
-    final playlists = mood == null
-        ? ref.watch(spotifyMyPlaylistsProvider)
-        : ref.watch(spotifyWorkoutPlaylistsProvider(mood));
+    // The user's own library, and only that. Mood searches used to sit above
+    // this list, but every playlist worth starting mid-session is already in
+    // the library — the search was a second way to reach a smaller set.
+    final playlists = ref.watch(spotifyMyPlaylistsProvider);
 
     return SafeArea(
       top: false,
@@ -113,11 +97,15 @@ class _MusicLibrarySheetState extends ConsumerState<_MusicLibrarySheet> {
               'Plays through the Spotify app on this phone.',
               style: TextStyle(color: palette.muted, height: 1.45),
             ),
-            const SizedBox(height: AppSpacing.md),
-            _MoodBar(
-              selected: mood,
-              accent: accent,
-              onSelect: (value) => setState(() => _mood = value),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Your library',
+              style: TextStyle(
+                color: palette.muted,
+                fontSize: 12,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             if (player.message != null) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -136,11 +124,9 @@ class _MusicLibrarySheetState extends ConsumerState<_MusicLibrarySheet> {
                 ),
                 data: (items) {
                   if (items.isEmpty) {
-                    return _Notice(
-                      message: mood == null
-                          ? 'No playlists in your Spotify library yet. Try one '
-                              'of the moods above.'
-                          : 'Nothing came back for "$mood".',
+                    return const _Notice(
+                      message: 'No playlists in your Spotify library yet. '
+                          'Make one in Spotify and it will show up here.',
                     );
                   }
                   return ListView.separated(
@@ -163,92 +149,6 @@ class _MusicLibrarySheetState extends ConsumerState<_MusicLibrarySheet> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// "Your library" plus the workout moods, as a single scrolling row of chips.
-class _MoodBar extends StatelessWidget {
-  const _MoodBar({
-    required this.selected,
-    required this.accent,
-    required this.onSelect,
-  });
-
-  final String? selected;
-  final Color accent;
-  final ValueChanged<String?> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          _MoodChip(
-            label: 'Your library',
-            isSelected: selected == null,
-            accent: accent,
-            onTap: () => onSelect(null),
-          ),
-          for (final mood in _workoutMoods)
-            _MoodChip(
-              label: mood,
-              isSelected: selected == mood,
-              accent: accent,
-              onTap: () => onSelect(mood),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MoodChip extends StatelessWidget {
-  const _MoodChip({
-    required this.label,
-    required this.isSelected,
-    required this.accent,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool isSelected;
-  final Color accent;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Material(
-        color: isSelected ? accent.withValues(alpha: 0.16) : palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: isSelected ? accent : palette.stroke,
-              ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? accent : palette.muted,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
         ),
       ),
     );

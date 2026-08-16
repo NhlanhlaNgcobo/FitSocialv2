@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 
 /// How an [Avatar] is edged.
@@ -90,7 +89,7 @@ class Avatar extends StatelessWidget {
       case AvatarBorder.hairline:
         return Border.all(color: palette.stroke);
       case AvatarBorder.brand:
-        return Border.all(color: AppColors.orangeBright, width: 2);
+        return Border.all(color: palette.brand, width: 2);
     }
   }
 

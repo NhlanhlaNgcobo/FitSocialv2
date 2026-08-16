@@ -14,6 +14,7 @@ import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
 import 'post_detail_sheet.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -62,7 +63,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     final isSearching = query.trim().isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Explore')),
+      appBar: AppBar(
+        title: const Text('Explore'),
+        actions: const [MusicIslandAction()],
+      ),
       body: Column(
         children: [
           Padding(
@@ -106,7 +110,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(18),
-                  borderSide: const BorderSide(color: AppColors.orangeBright),
+                  borderSide: BorderSide(color: palette.brand),
                 ),
               ),
             ),
@@ -134,8 +138,8 @@ class _SearchResults extends ConsumerWidget {
     final results = ref.watch(userSearchResultsProvider(query));
 
     return results.when(
-      loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.orangeBright),
+      loading: () => Center(
+        child: CircularProgressIndicator(color: context.palette.brand),
       ),
       error: (_, __) => _ExploreMessage(
         icon: Icons.cloud_off_rounded,
@@ -257,8 +261,8 @@ class _TrendingSection extends ConsumerWidget {
     final trending = ref.watch(trendingPostsProvider);
 
     return trending.when(
-      loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.orangeBright),
+      loading: () => Center(
+        child: CircularProgressIndicator(color: context.palette.brand),
       ),
       error: (_, __) => _ExploreMessage(
         icon: Icons.cloud_off_rounded,
@@ -344,10 +348,10 @@ class _FilterChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.orangeBright : palette.surface,
+          color: isSelected ? palette.brand : palette.surface,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: isSelected ? AppColors.orangeBright : palette.stroke,
+            color: isSelected ? palette.brand : palette.stroke,
           ),
         ),
         child: Row(
@@ -410,7 +414,7 @@ class _TrendingGrid extends ConsumerWidget {
     }
 
     return RefreshIndicator(
-      color: AppColors.orangeBright,
+      color: palette.brand,
       backgroundColor: palette.surface,
       onRefresh: () async => ref.invalidate(trendingPostsProvider),
       child: GridView.builder(
@@ -441,10 +445,10 @@ class _TrendingTile extends StatelessWidget {
 
   final FeedPost post;
 
-  /// A photo wins when there is one: whatever the author shot is more worth
-  /// looking at than a rendering of what they wrote or measured. Everything
-  /// else — a run, a workout, a meal logged without a picture, a written post
-  /// — is summarised on a card.
+  /// A photo wins the backdrop when there is one: whatever the author shot is
+  /// more worth looking at than a rendering of what they wrote or measured.
+  /// What the post *is* — the route, the numbers — is drawn over it either
+  /// way, so a run reads as a run with or without a picture behind it.
   bool get _hasPhoto => post.imageUrl != null && post.imageUrl!.isNotEmpty;
 
   @override
@@ -458,17 +462,10 @@ class _TrendingTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (!hasPhoto)
-              PostSummaryTile(post: post, showAuthor: true)
-            else ...[
-              _PostPhoto(url: post.imageUrl!),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _MediaCaption(post: post),
-              ),
-            ],
+            if (hasPhoto)
+              PostMediaTile(post: post, showAuthor: true)
+            else
+              PostSummaryTile(post: post, showAuthor: true),
             // Both counts, not just likes: comments are weighted double in the
             // ranking, so a post sitting high on the strength of its replies
             // would otherwise look mysteriously placed.
@@ -496,56 +493,6 @@ class _TrendingTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Author and activity burned over the bottom of a photo tile.
-class _MediaCaption extends StatelessWidget {
-  const _MediaCaption({required this.post});
-
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm + 2),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.transparent, Color(0xE6050505)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // The caption band is a dark scrim in both themes — it has to
-          // survive an arbitrary photo underneath it — so what sits on it is
-          // fixed rather than themed.
-          Text(
-            post.userName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.onMedia,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            post.activity,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.onMediaMuted,
-              fontSize: 12,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -602,31 +549,6 @@ class _CountPill extends StatelessWidget {
   }
 }
 
-// ── Shared post visuals ─────────────────────────────────────────────────────
-
-/// The post's photo, filling the tile.
-///
-/// The caption scrim and the count pills are drawn over this in their media
-/// register, so what stands in while the photo loads has to be dark-tolerant
-/// chrome rather than a card — swapping in a summary card here would put a
-/// black scrim across a cream tile for as long as the download took.
-class _PostPhoto extends StatelessWidget {
-  const _PostPhoto({required this.url});
-
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => const MediaPlaceholder(failed: true),
-      loadingBuilder: (_, child, progress) =>
-          progress == null ? child : const MediaPlaceholder(),
-    );
-  }
-}
-
 class _ExploreMessage extends StatelessWidget {
   const _ExploreMessage({
     required this.icon,
@@ -660,7 +582,7 @@ class _ExploreMessage extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: palette.surfaceHigh,
               ),
-              child: Icon(icon, size: 56, color: AppColors.orangeBright),
+              child: Icon(icon, size: 56, color: palette.brand),
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(

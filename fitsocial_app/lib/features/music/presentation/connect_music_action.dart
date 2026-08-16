@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
@@ -36,12 +35,12 @@ class ConnectMusicAction extends ConsumerWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: AppColors.orangeBright.withValues(alpha: 0.16),
+                  color: palette.brandSoft,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.library_music_rounded,
-                  color: AppColors.orangeBright,
+                  color: palette.brand,
                 ),
               ),
               const SizedBox(width: 12),

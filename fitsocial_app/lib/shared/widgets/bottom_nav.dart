@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
+import 'nav_icons.dart';
 
 /// Floating capsule navigation, modelled on the iOS 26 "Liquid Glass" tab bar
 /// that Threads uses.
@@ -93,32 +94,11 @@ class FitSocialBottomNav extends StatefulWidget {
       _barHeight + _bottomMargin + MediaQuery.paddingOf(context).bottom;
 
   static const List<_NavDestination> _destinations = [
-    _NavDestination(
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home_rounded,
-      label: 'Home',
-    ),
-    _NavDestination(
-      icon: Icons.search_rounded,
-      activeIcon: Icons.search_rounded,
-      label: 'Explore',
-    ),
-    _NavDestination(
-      icon: Icons.add_rounded,
-      activeIcon: Icons.add_rounded,
-      label: 'Create',
-      isPrimary: true,
-    ),
-    _NavDestination(
-      icon: Icons.check_circle_outline_rounded,
-      activeIcon: Icons.check_circle_rounded,
-      label: 'Activity',
-    ),
-    _NavDestination(
-      icon: Icons.person_outline_rounded,
-      activeIcon: Icons.person_rounded,
-      label: 'Profile',
-    ),
+    _NavDestination(glyph: NavGlyph.home, label: 'Home'),
+    _NavDestination(glyph: NavGlyph.explore, label: 'Explore'),
+    _NavDestination(glyph: NavGlyph.create, label: 'Create', isPrimary: true),
+    _NavDestination(glyph: NavGlyph.activity, label: 'Activity'),
+    _NavDestination(glyph: NavGlyph.profile, label: 'Profile'),
   ];
 
   @override
@@ -399,14 +379,14 @@ class _GlassRim extends CustomPainter {
 
 class _NavDestination {
   const _NavDestination({
-    required this.icon,
-    required this.activeIcon,
+    required this.glyph,
     required this.label,
     this.isPrimary = false,
   });
 
-  final IconData icon;
-  final IconData activeIcon;
+  /// Drawn, not a font icon — see [NavIcon] for why selection is a morph over
+  /// one path rather than a swap between an outlined and a filled glyph.
+  final NavGlyph glyph;
   final String label;
 
   /// Create keeps its solid brand disc rather than becoming another glyph —
@@ -486,16 +466,12 @@ class _NavButton extends StatelessWidget {
         child: Center(
           child: destination.isPrimary
               ? const _CreateDisc()
-              : AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: Icon(
-                    selected ? destination.activeIcon : destination.icon,
-                    key: ValueKey(selected),
-                    size: 25,
-                    color: selected
-                        ? context.palette.text
-                        : context.palette.muted,
-                  ),
+              : NavIcon(
+                  glyph: destination.glyph,
+                  selected: selected,
+                  size: 26,
+                  color: context.palette.muted,
+                  activeColor: context.palette.text,
                 ),
         ),
       ),
@@ -508,25 +484,38 @@ class _CreateDisc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brand = context.palette.brand;
+
     return Container(
       width: 38,
       height: 38,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFA053), AppColors.orangeBright],
+        gradient: LinearGradient(
+          // The lit top-left corner is derived from the brand rather than
+          // fixed, so the disc keeps its shape on paper instead of lightening
+          // into a peach coin the moment the fill under it deepens.
+          colors: [Color.lerp(brand, const Color(0xFFFFFFFF), 0.32)!, brand],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.orangeBright.withValues(alpha: 0.45),
+            color: brand.withValues(alpha: 0.45),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: const Icon(Icons.add_rounded, color: AppColors.onBrand, size: 23),
+      // Drawn from the same set as the other four so the plus carries their
+      // weight and cap rounding, which the font's `add_rounded` did not.
+      child: const NavIcon(
+        glyph: NavGlyph.create,
+        selected: true,
+        size: 22,
+        color: AppColors.onBrand,
+        activeColor: AppColors.onBrand,
+      ),
     );
   }
 }

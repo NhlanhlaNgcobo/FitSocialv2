@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -108,13 +109,19 @@ class LiveRunService {
   final _controller = StreamController<LiveRunState>.broadcast();
   StreamSubscription<Position>? _positionSub;
   Timer? _ticker;
+  _LifecycleWatcher? _lifecycleWatcher;
 
   final List<RunPoint> _points = [];
   double _distanceMeters = 0;
 
-  // Moving time is accumulated tick-by-tick only while actually moving, so
-  // it never counts time spent standing still (unlike a wall-clock diff).
-  Duration _activeElapsed = Duration.zero;
+  // Moving time is measured off the wall clock, not counted in ticks: the 1 Hz
+  // timer is only a UI heartbeat, and the OS is free to throttle or suspend it
+  // while the screen is locked. [_accruedElapsed] holds the time banked by
+  // finished moving stretches, and [_movingSince] marks the open one — so the
+  // clock stays correct across a lock/unlock no matter how many ticks were
+  // dropped in between.
+  Duration _accruedElapsed = Duration.zero;
+  DateTime? _movingSince;
   DateTime? _startedAt;
   DateTime? _lastMovementAt;
   bool _isTracking = false;

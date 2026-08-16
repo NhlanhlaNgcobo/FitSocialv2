@@ -917,4 +917,43 @@ void main() {
       expect(appRemote.calls, contains('disconnect'));
     });
   });
+
+  group('now playing', () {
+    // copyWith is called once a second to advance the position, and again when
+    // artwork resolves. Anything it forgets to carry is erased a beat after it
+    // arrives — which is exactly what would strand a shared Pulse with no way
+    // to play the track it names.
+    test('carries every field through a position update', () {
+      const track = NowPlayingTrack(
+        uri: 'spotify:track:6PQ88X9TkUIAUIZJHW2upE',
+        title: 'Bad Habits',
+        artist: 'Ed Sheeran',
+        duration: Duration(minutes: 3, seconds: 51),
+        position: Duration.zero,
+        albumArtUrl: 'https://i.scdn.co/image/abc',
+        albumArtUri: 'spotify:image:abc',
+      );
+
+      final advanced = track.copyWith(position: const Duration(seconds: 30));
+
+      expect(advanced.position, const Duration(seconds: 30));
+      expect(advanced.uri, track.uri);
+      expect(advanced.title, track.title);
+      expect(advanced.artist, track.artist);
+      expect(advanced.duration, track.duration);
+      expect(advanced.albumArtUrl, track.albumArtUrl);
+      expect(advanced.albumArtUri, track.albumArtUri);
+    });
+
+    test('reports no URI when the transport did not give one', () {
+      const track = NowPlayingTrack(
+        title: 'Bad Habits',
+        artist: 'Ed Sheeran',
+        duration: Duration(minutes: 3),
+        position: Duration.zero,
+      );
+      expect(track.uri, isNull);
+      expect(track.copyWith(position: const Duration(seconds: 5)).uri, isNull);
+    });
+  });
 }

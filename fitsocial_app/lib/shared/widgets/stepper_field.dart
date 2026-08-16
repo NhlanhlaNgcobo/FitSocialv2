@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 
 /// A tactile +/- numeric input with an animated value readout.
@@ -119,7 +118,7 @@ class _StepperButton extends StatelessWidget {
         child: Icon(
           icon,
           size: 18,
-          color: enabled ? AppColors.orangeBright : context.palette.muted,
+          color: enabled ? context.palette.brand : context.palette.muted,
         ),
       ),
     );

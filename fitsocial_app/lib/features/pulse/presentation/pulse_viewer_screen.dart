@@ -15,6 +15,7 @@ import '../../../shared/widgets/reaction_bar.dart';
 import '../../../shared/widgets/shared_post_card.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
+import 'pulse_music_card.dart';
 import 'pulse_comments_sheet.dart';
 import 'pulse_reactions_sheet.dart';
 import 'pulse_text.dart';
@@ -720,6 +721,33 @@ class _PulseFrame extends StatelessWidget {
                       progress == null ? child : const _FrameSpinner(),
                 )
               : const _FrameMessage(label: 'This Pulse is unavailable.'),
+        );
+
+      case PulseMediaType.music:
+        final music = segment.music;
+        if (music == null) {
+          // A music Pulse with no snapshot on it is a document this build
+          // cannot draw — a newer client's shape, or a truncated write.
+          return DecoratedBox(
+            decoration: BoxDecoration(gradient: segment.gradient.linear),
+            child: const _FrameMessage(label: 'This Pulse is unavailable.'),
+          );
+        }
+        return DecoratedBox(
+          decoration: BoxDecoration(gradient: segment.gradient.linear),
+          child: SafeArea(
+            child: Padding(
+              // Clears the header above and the reaction bar below, so the
+              // sticker centres in the frame rather than under the chrome.
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                96,
+                AppSpacing.lg,
+                168,
+              ),
+              child: Center(child: PulseMusicCard(music: music)),
+            ),
+          ),
         );
 
       case PulseMediaType.post:

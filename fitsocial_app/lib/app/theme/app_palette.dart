@@ -22,7 +22,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.muted,
     required this.success,
     required this.danger,
+    required this.brand,
     required this.brandText,
+    required this.brandSoft,
+    required this.brandSoftStroke,
     required this.overlay,
     required this.glassTop,
     required this.glassBottom,
@@ -59,11 +62,34 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color success;
   final Color danger;
 
+  /// The brand orange at the weight that suits a *fill on an app surface* —
+  /// a progress bar, a chart column, an active glyph, the Create disc.
+  ///
+  /// On dark this is the lit orange the app was built around. On light it is
+  /// pulled down: `AppColors.orangeBright` against white has nothing darker
+  /// beside it, so it stops reading as an accent and starts reading as a
+  /// highlighter. The deeper orange carries the same weight on paper that the
+  /// lit one carries on black.
+  ///
+  /// Fills that sit on a *photo* or on the orange itself keep using
+  /// `AppColors`: their backdrop is the same in both themes.
+  final Color brand;
+
   /// The brand orange at a weight that stays legible as *small text*.
   ///
-  /// `AppColors.orangeBright` is tuned for fills, icons and large numerals; at
-  /// 12–14px on cream it goes muddy, so accent labels use this instead.
+  /// [brand] is tuned for fills, icons and large numerals; at 12–14px on cream
+  /// it goes muddy, so accent labels use this instead.
   final Color brandText;
+
+  /// The tinted fill behind a selected chip, an active row, an icon well.
+  ///
+  /// A solid colour rather than the orange at low alpha. Alpha was the old way
+  /// and it only ever worked on dark: 16% orange over near-black settles into a
+  /// warm ember, while the same 16% over white turns into pale peach.
+  final Color brandSoft;
+
+  /// The border around [brandSoft].
+  final Color brandSoftStroke;
 
   /// The base for translucent fills — `overlay.withValues(alpha: 0.06)` and
   /// friends. White on dark, black on light, so a fill that lifts a surface in
@@ -100,7 +126,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
     muted: Color(0xFFAAAAAA),
     success: Color(0xFF31C46C),
     danger: Color(0xFFE85D5D),
+    brand: Color(0xFFFF6B1A),
     brandText: Color(0xFFFF6B1A),
+    // The old `orangeBright @ 18%` over `surface`, resolved to the solid it
+    // always painted. Dark must not drift.
+    brandSoft: Color(0xFF3C2113),
+    brandSoftStroke: Color(0xFF703515),
     overlay: Color(0xFFFFFFFF),
     glassTop: Color(0x9E1A1A1A),
     glassBottom: Color(0xB8050505),
@@ -110,30 +141,85 @@ class AppPalette extends ThemeExtension<AppPalette> {
     navShadow: Color(0x8C000000),
   );
 
-  /// The warm cream of the FitSocial landing page: paper-coloured page, white
-  /// cards, near-black text, the same orange.
+  /// Warm paper: a soft page, white cards, near-black text, the same orange
+  /// carried at a weight that suits daylight.
   ///
-  /// Deliberately not pure white. The brand's orange sits on cream everywhere
-  /// else it appears, and a #FFFFFF page under it reads as a different product.
+  /// Deliberately not pure white. The brand's orange sits on a warm ground
+  /// everywhere else it appears, and a #FFFFFF page under it reads as a
+  /// different product.
+  ///
+  /// Two things this palette is tuned against, both of which made the first
+  /// light theme read as washed-out:
+  ///
+  /// The ramp needs *steps*. Page, card, well and hairline all sat within a few
+  /// points of each other, so nothing had an edge and every screen turned to
+  /// one flat sheet of cream. Each rung here is far enough from its neighbour
+  /// to be seen without any of them turning grey.
+  ///
+  /// And the page needs less yellow. The old cream ran eleven points from red
+  /// to blue, which is enough of a cast to look like ageing paper rather than a
+  /// chosen colour. This one keeps the warmth at roughly half that spread.
   static const AppPalette light = AppPalette(
     isDark: false,
-    background: Color(0xFFF5F1EA),
+    background: Color(0xFFF3F1EC),
     surface: Color(0xFFFFFFFF),
-    surfaceHigh: Color(0xFFEFE9DF),
-    stroke: Color(0xFFE4DED2),
-    text: Color(0xFF14100C),
-    muted: Color(0xFF6F6A62),
-    success: Color(0xFF1E9E52),
-    danger: Color(0xFFC0392B),
-    brandText: Color(0xFFC2521A),
+    surfaceHigh: Color(0xFFEAE6DE),
+    stroke: Color(0xFFDCD7CD),
+    text: Color(0xFF17130F),
+    muted: Color(0xFF6B665E),
+    // Both pulled down from the dark theme's values. A hue that reads as
+    // "confident" against near-black reads as "neon" against white, because on
+    // white it is the darkest thing in view and the eye has nothing to measure
+    // it against.
+    success: Color(0xFF1B8A4B),
+    danger: Color(0xFFB3382A),
+    brand: Color(0xFFDC5A11),
+    brandText: Color(0xFFB44A12),
+    brandSoft: Color(0xFFF7E7DA),
+    brandSoftStroke: Color(0xFFE8C6AC),
     overlay: Color(0xFF000000),
-    glassTop: Color(0xB8FFFFFF),
-    glassBottom: Color(0xC7EDE7DD),
-    glassSheen: Color(0x73FFFFFF),
-    glassRimHigh: Color(0x24000000),
-    glassRimSoft: Color(0x0D000000),
-    navShadow: Color(0x1F000000),
+    glassTop: Color(0xC7FFFFFF),
+    glassBottom: Color(0xD1EFECE5),
+    glassSheen: Color(0x8CFFFFFF),
+    glassRimHigh: Color(0x1F000000),
+    glassRimSoft: Color(0x0A000000),
+    navShadow: Color(0x1A000000),
   );
+
+  /// An identifying hue, adjusted for the surface it is about to be drawn on.
+  ///
+  /// The app's non-brand accents — the four Create actions, the progress
+  /// metrics, the macro bars, the reactions — were each picked against a
+  /// near-black page, where a lit hue reads as confident. The same hue on white
+  /// turns to candy: nothing around it is darker, so it stops identifying a
+  /// thing and starts looking like a highlighter.
+  ///
+  /// So on light every hue is deepened toward the palette's own warm ink, which
+  /// both restores the weight it had on black and keeps the whole set sitting
+  /// in one family instead of drifting apart into unrelated pastels. Dark hands
+  /// the hue back untouched.
+  ///
+  /// Pass the hue the design names — `_kRunAccent`, `AppColors.orangeBright` —
+  /// and let this decide what to paint. Colours that sit on a *photo* skip it:
+  /// media looks the same in both themes.
+  Color accent(Color hue) =>
+      isDark ? hue : Color.lerp(hue, const Color(0xFF1A120B), 0.34)!;
+
+  /// The tinted fill that sits behind [accent] — an icon well, a selected chip.
+  ///
+  /// Built from the *adjusted* hue rather than the raw one, which is what keeps
+  /// a light-mode well quiet: tinting with the lit hue is how the Create page
+  /// ended up with a row of pastel sweets.
+  Color accentFill(Color hue) => Color.alphaBlend(
+        accent(hue).withValues(alpha: isDark ? 0.18 : 0.10),
+        surface,
+      );
+
+  /// The border around [accentFill].
+  Color accentStroke(Color hue) => Color.alphaBlend(
+        accent(hue).withValues(alpha: isDark ? 0.38 : 0.24),
+        surface,
+      );
 
   @override
   AppPalette copyWith({
@@ -146,7 +232,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? muted,
     Color? success,
     Color? danger,
+    Color? brand,
     Color? brandText,
+    Color? brandSoft,
+    Color? brandSoftStroke,
     Color? overlay,
     Color? glassTop,
     Color? glassBottom,
@@ -165,7 +254,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
       muted: muted ?? this.muted,
       success: success ?? this.success,
       danger: danger ?? this.danger,
+      brand: brand ?? this.brand,
       brandText: brandText ?? this.brandText,
+      brandSoft: brandSoft ?? this.brandSoft,
+      brandSoftStroke: brandSoftStroke ?? this.brandSoftStroke,
       overlay: overlay ?? this.overlay,
       glassTop: glassTop ?? this.glassTop,
       glassBottom: glassBottom ?? this.glassBottom,
@@ -192,7 +284,11 @@ class AppPalette extends ThemeExtension<AppPalette> {
       muted: Color.lerp(muted, other.muted, t)!,
       success: Color.lerp(success, other.success, t)!,
       danger: Color.lerp(danger, other.danger, t)!,
+      brand: Color.lerp(brand, other.brand, t)!,
       brandText: Color.lerp(brandText, other.brandText, t)!,
+      brandSoft: Color.lerp(brandSoft, other.brandSoft, t)!,
+      brandSoftStroke:
+          Color.lerp(brandSoftStroke, other.brandSoftStroke, t)!,
       overlay: Color.lerp(overlay, other.overlay, t)!,
       glassTop: Color.lerp(glassTop, other.glassTop, t)!,
       glassBottom: Color.lerp(glassBottom, other.glassBottom, t)!,

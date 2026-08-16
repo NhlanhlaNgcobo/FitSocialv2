@@ -57,7 +57,10 @@ class ActivityActions {
       // Likewise the training log every Progress view is derived from —
       // without this the square for today keeps the value it was first built
       // with and a run logged mid-session never lights up.
-      ..invalidate(activitySessionsProvider);
+      ..invalidate(activitySessionsProvider)
+      // And the meal history, so a meal logged from the tracking page appears
+      // in today's totals rather than after a restart.
+      ..invalidate(loggedMealsProvider);
     return result;
   }
 }

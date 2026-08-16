@@ -14,6 +14,7 @@ import '../../notifications/data/firestore_notification_repository.dart';
 import '../../notifications/domain/notification_models.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
+import '../domain/meal_tracking.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
 import 'activity_session_parsing.dart';
@@ -643,6 +644,96 @@ class FirestoreContentRepository implements ContentRepository {
     );
   }
 
+  @override
+  Future<List<LoggedMeal>> getLoggedMeals() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const [];
+
+    // Same shape as the activity logs: an `authorId` equality filter runs on
+    // the single-field index Firestore maintains for free, and the ordering is
+    // done in Dart. One user's own meal history is small.
+    final docs = await _activityLogs(mealsCollection, user.uid);
+
+    final meals = _mapDocs(docs, _toLoggedMeal);
+    // Newest first, matching every other history the app hands back. The
+    // tracking page re-sorts the window it shows into the order the meals
+    // happened.
+    meals.sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+    return meals;
+  }
+
+  /// One `meals` document as a [LoggedMeal], or null when it has no usable
+  /// date.
+  ///
+  /// `loggedAt` is the client stamp written since meal tracking existed;
+  /// `createdAt` is the server timestamp every meal has carried from the
+  /// start. Older meals have only the latter, and a meal still in flight has
+  /// only the former — so both are consulted before giving up.
+  static LoggedMeal? _toLoggedMeal(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final loggedAt = (data['loggedAt'] as Timestamp?)?.toDate() ??
+        (data['createdAt'] as Timestamp?)?.toDate();
+    // No date, no place in a day's totals.
+    if (loggedAt == null) return null;
+
+    return LoggedMeal(
+      id: doc.id,
+      name: (data['name'] as String?) ?? '',
+      loggedAt: loggedAt,
+      // intFromStoredValue rather than a cast: the macro fields have been
+      // written as numbers throughout, but the same defensive read the
+      // sessions use costs nothing and cannot throw on a stray string.
+      calories: intFromStoredValue(data['calories']),
+      protein: intFromStoredValue(data['protein']),
+      carbs: intFromStoredValue(data['carbs']),
+      fat: intFromStoredValue(data['fat']),
+      imageUrl: data['imageUrl'] as String?,
+      itemCount: intFromStoredValue(data['itemCount']),
+      sharedToFeed: boolFromStoredValue(data['sharedToFeed']),
+      postId: data['postId'] as String?,
+    );
+  }
+
+  /// Macro goals live beside the body metrics, in the owner-only part of the
+  /// account: what someone is aiming to eat is nobody else's business, and the
+  /// profile document is readable by every signed-in user.
+  DocumentReference<Map<String, dynamic>> _nutritionRef(String userId) =>
+      usersCollection.doc(userId).collection('private').doc('nutrition');
+
+  @override
+  Future<MacroGoals> getMacroGoals() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const MacroGoals();
+
+    try {
+      final snapshot = await _nutritionRef(user.uid).get();
+      return MacroGoals.fromMap(snapshot.data());
+    } catch (error) {
+      // The defaults are a usable page; an error here is not worth one.
+      debugPrint('Meal tracking: goals unreadable ($error) — using defaults.');
+      return const MacroGoals();
+    }
+  }
+
+  @override
+  Future<void> setMacroGoals(MacroGoals goals) async {
+    final user = _requireCurrentUser();
+    await _settleWrite(
+      _nutritionRef(user.uid).set(
+        {...goals.toMap(), 'updatedAt': FieldValue.serverTimestamp()},
+        SetOptions(merge: true),
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteLoggedMeal(String id) async {
+    _requireCurrentUser();
+    await _settleWrite(mealsCollection.doc(id).delete());
+  }
+
   /// The user's runs and workouts as recorded on their posts.
   ///
   /// Recognition goes through [ExploreFilterX], which already knows every form
@@ -822,21 +913,26 @@ class FirestoreContentRepository implements ContentRepository {
   /// schema this app has ever written, and one that does not parse must cost
   /// its own row and nothing else. Mapping the list as a whole is what let a
   /// single stale document fail the entire Progress tab.
-  static List<ActivitySession> _mapDocs(
+  /// Maps documents one at a time, dropping any that cannot be read.
+  ///
+  /// Generic over what it produces so meals go through the same isolation the
+  /// sessions do. The isolation is the point: a single malformed document
+  /// costs its own row rather than failing the whole read, which is what used
+  /// to take the grid, the streak and the Progress tab down together.
+  static List<T> _mapDocs<T extends Object>(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    ActivitySession? Function(QueryDocumentSnapshot<Map<String, dynamic>>)
-        toSession,
+    T? Function(QueryDocumentSnapshot<Map<String, dynamic>>) toItem,
   ) {
-    final sessions = <ActivitySession>[];
+    final items = <T>[];
     for (final doc in docs) {
       try {
-        final session = toSession(doc);
-        if (session != null) sessions.add(session);
+        final item = toItem(doc);
+        if (item != null) items.add(item);
       } catch (error) {
         debugPrint('Progress: skipping ${doc.reference.path} — $error');
       }
     }
-    return sessions;
+    return items;
   }
 
   /// A trimmed string field, or null when it is absent or blank.
@@ -949,10 +1045,18 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     WorkoutLogDraft draft,
   ) async {
+    // Uploaded before anything is written, so both the log and the post can
+    // carry the same URL. A failed upload costs the backdrop and nothing else —
+    // the workout still saves, and the card falls back to its gradient.
+    final backgroundUrl = await _tryUploadBackground(draft.backgroundImagePath);
+
     // Written whether or not the workout is shared, mirroring saveRun: the log
     // is the canonical record, and the Progress tab reads from it. Sharing
     // only decides whether a post is created alongside it.
-    final logRef = await _tryWriteLog('workout', () => _writeWorkoutLog(draft));
+    final logRef = await _tryWriteLog(
+      'workout',
+      () => _writeWorkoutLog(draft, backgroundUrl),
+    );
 
     if (!draft.shareToFeed) {
       await _incrementUser(workoutsDelta: 1);
@@ -961,7 +1065,7 @@ class FirestoreContentRepository implements ContentRepository {
 
     // Create the post first, then increment. Incrementing up front means a
     // failed post write still inflates the user's workout count.
-    final post = await _createPost(
+    final result = await _createPost(
       profile: profile,
       activity: draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
       caption: draft.notes.trim().isEmpty
@@ -974,6 +1078,7 @@ class FirestoreContentRepository implements ContentRepository {
       ],
       themeKey: 'burn',
       postType: 'workout',
+      imageUrl: backgroundUrl,
       workoutData: {
         'title': draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
         'duration': draft.durationLabel,
@@ -981,10 +1086,57 @@ class FirestoreContentRepository implements ContentRepository {
         'exercises': draft.exercises.map((e) => e.toMap()).toList(),
       },
     );
-    await _linkLogToPost(logRef, post.id);
+    await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(workoutsDelta: 1);
     return ActivitySaveResult(
-        message: 'Workout saved and shared.', createdPost: post);
+      message: _sharedMessage('Workout', synced: result.synced),
+      createdPost: result.post,
+    );
+  }
+
+  /// What to tell the user after a share.
+  ///
+  /// A post that has not reached the server yet is still saved — it is in the
+  /// local cache and the SDK will send it. Saying "shared" outright would be a
+  /// small lie to anyone who logged a session out of signal and then wondered
+  /// why nobody saw it.
+  static String _sharedMessage(String noun, {required bool synced}) {
+    return synced
+        ? '$noun saved and shared.'
+        : "$noun saved. It'll share once you're back online.";
+  }
+
+  /// How long to wait for a write to be acknowledged by the server before
+  /// carrying on without it.
+  ///
+  /// Long enough that a slow-but-working connection is simply waited out, short
+  /// enough that a user with no signal is not left staring at a spinner.
+  static const Duration _writeSettleTimeout = Duration(seconds: 6);
+
+  /// Awaits [write] up to [_writeSettleTimeout], reporting whether it landed.
+  ///
+  /// Firestore write futures complete on *server* acknowledgement, not on the
+  /// local one — offline they never complete at all. That is the whole reason
+  /// this exists: every save in here awaited its write, so logging a workout
+  /// out of signal spun forever and the session appeared to be lost.
+  ///
+  /// Giving up on the wait does not give up on the write. The document is
+  /// already in the local cache, reads see it immediately, and the SDK sends it
+  /// when the connection returns. A false return means "not yet", not "failed"
+  /// — which is why the caller changes its wording rather than its behaviour.
+  ///
+  /// Real failures still throw: only the waiting is bounded, never the error.
+  Future<bool> _settleWrite(Future<void> write) async {
+    try {
+      await write.timeout(_writeSettleTimeout);
+      return true;
+    } on TimeoutException {
+      // Nothing is awaiting the original future any more, so an error arriving
+      // on it later would surface as an unhandled async error and crash debug
+      // builds. Observe and drop it — there is no longer anyone to tell.
+      unawaited(write.catchError((Object _) {}));
+      return false;
+    }
   }
 
   /// Runs [write], returning null rather than throwing if it fails.
@@ -1036,17 +1188,24 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     RunLogDraft draft,
   ) async {
+    // Uploaded before anything is written, so both the log and the post can
+    // carry the same URL — same order, and the same reasoning, as saveWorkout.
+    final backgroundUrl = await _tryUploadBackground(draft.backgroundImagePath);
+
     // The run log is the canonical record and is written whether or not the
     // run is shared, so an unshared GPS run still keeps its route.
     final route = _serializeRoute(draft.routePoints);
-    final logRef = await _tryWriteLog('run', () => _writeRunLog(draft, route));
+    final logRef = await _tryWriteLog(
+      'run',
+      () => _writeRunLog(draft, route, backgroundUrl),
+    );
 
     if (!draft.shareToFeed) {
       await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
       return const ActivitySaveResult(message: 'Run saved.');
     }
 
-    final post = await _createPost(
+    final result = await _createPost(
       profile: profile,
       activity: 'Run',
       caption: 'Finished a ${draft.distanceKm.toStringAsFixed(2)} km run.',
@@ -1060,14 +1219,20 @@ class FirestoreContentRepository implements ContentRepository {
       // manually entered run carries no route, which is why the route alone
       // was never enough to tell one apart.
       postType: 'run',
+      // The backdrop the run card draws its line and its numbers on. Like a
+      // workout's, it is decoration on the session rather than a photo post —
+      // the renderers decide that from the post type, not from this field.
+      imageUrl: backgroundUrl,
       // Denormalised onto the post so the feed renders the route from the
       // documents it already streams, with no extra read per card.
       routePoints: route,
     );
-    await _linkLogToPost(logRef, post.id);
+    await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
     return ActivitySaveResult(
-        message: 'Run saved and shared.', createdPost: post);
+      message: _sharedMessage('Run', synced: result.synced),
+      createdPost: result.post,
+    );
   }
 
   /// Persists the workout to `workouts/{id}` — what was done and when.
@@ -1078,13 +1243,32 @@ class FirestoreContentRepository implements ContentRepository {
   /// Duration and calories are written as numbers. They are also written as
   /// the labels the feed shows, because the post carries those strings and the
   /// two should not be re-derived differently in two places.
+  /// Uploads a session's chosen backdrop, or returns null if there isn't one
+  /// or it didn't make it.
+  ///
+  /// Swallowing the error is deliberate, and matches [_tryWriteLog]: the user
+  /// asked for a session to be saved. Losing the whole thing because a photo
+  /// upload timed out on bad signal is the wrong trade — the session is the
+  /// thing, the picture is decoration.
+  Future<String?> _tryUploadBackground(String? path) async {
+    if (path == null) return null;
+
+    try {
+      return await uploadPostImage(path);
+    } catch (error, stackTrace) {
+      debugPrint('Background upload failed: $error\n$stackTrace');
+      return null;
+    }
+  }
+
   Future<DocumentReference<Map<String, dynamic>>> _writeWorkoutLog(
     WorkoutLogDraft draft,
+    String? backgroundUrl,
   ) async {
     final user = _requireCurrentUser();
     final title = draft.title.trim();
     final ref = workoutsCollection.doc();
-    await ref.set({
+    await _settleWrite(ref.set({
       'authorId': user.uid,
       'title': title.isEmpty ? 'Workout' : title,
       'durationMinutes': draft.durationMinutes,
@@ -1093,9 +1277,10 @@ class FirestoreContentRepository implements ContentRepository {
       'caloriesLabel': draft.caloriesLabel,
       'exerciseCount': draft.exercises.length,
       'sharedToFeed': draft.shareToFeed,
+      if (backgroundUrl != null) 'imageUrl': backgroundUrl,
       'loggedAt': Timestamp.now(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }));
     return ref;
   }
 
@@ -1107,10 +1292,11 @@ class FirestoreContentRepository implements ContentRepository {
   Future<DocumentReference<Map<String, dynamic>>> _writeRunLog(
     RunLogDraft draft,
     List<Map<String, double>> route,
+    String? backgroundUrl,
   ) async {
     final user = _requireCurrentUser();
     final ref = runsCollection.doc();
-    await ref.set({
+    await _settleWrite(ref.set({
       'authorId': user.uid,
       'distanceKm': draft.distanceKm,
       'durationSeconds': draft.elapsed.inSeconds,
@@ -1118,10 +1304,11 @@ class FirestoreContentRepository implements ContentRepository {
       'routePoints': route,
       'pointCount': route.length,
       'sharedToFeed': draft.shareToFeed,
+      if (backgroundUrl != null) 'imageUrl': backgroundUrl,
       if (draft.startedAt != null)
         'startedAt': Timestamp.fromDate(draft.startedAt!),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }));
     return ref;
   }
 
@@ -1130,14 +1317,18 @@ class FirestoreContentRepository implements ContentRepository {
     UserProfileDraft? profile,
     MealLogDraft draft,
   ) async {
-    await _tryWriteLog('meal', () => _writeMealLog(draft));
+    // The ref is kept now, where runs and workouts always kept theirs. Meals
+    // were the one log type whose post was never linked back, so a shared meal
+    // had no way to reach the post it created — which the tracking list needs
+    // to make its rows openable.
+    final logRef = await _tryWriteLog('meal', () => _writeMealLog(draft));
 
     if (!draft.shareToFeed) {
       await _incrementUser(mealsDelta: 1);
       return const ActivitySaveResult(message: 'Meal saved.');
     }
 
-    final post = await _createPost(
+    final result = await _createPost(
       profile: profile,
       activity: draft.name.trim().isEmpty ? 'Meal' : draft.name.trim(),
       caption: draft.notes.trim().isEmpty ? 'Meal logged.' : draft.notes.trim(),
@@ -1152,9 +1343,12 @@ class FirestoreContentRepository implements ContentRepository {
       postType: 'meal',
       imageUrl: draft.imageUrl,
     );
+    await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(mealsDelta: 1);
     return ActivitySaveResult(
-        message: 'Meal saved and shared.', createdPost: post);
+      message: _sharedMessage('Meal', synced: result.synced),
+      createdPost: result.post,
+    );
   }
 
   @override
@@ -1163,7 +1357,7 @@ class FirestoreContentRepository implements ContentRepository {
     PostDraft draft,
   ) async {
     final caption = draft.caption.trim();
-    final post = await _createPost(
+    final result = await _createPost(
       profile: profile,
       // The author's own subtitle when they wrote one. Empty is kept empty —
       // the header renders as a single line rather than showing a label the
@@ -1180,7 +1374,12 @@ class FirestoreContentRepository implements ContentRepository {
       imageAspectRatio: draft.imageAspectRatio,
       taggedUsers: draft.taggedUsers,
     );
-    return ActivitySaveResult(message: 'Post shared.', createdPost: post);
+    return ActivitySaveResult(
+      message: result.synced
+          ? 'Post shared.'
+          : "Post saved. It'll share once you're back online.",
+      createdPost: result.post,
+    );
   }
 
   Future<FirestoreUserRecord> _loadUserRecord() async {
@@ -1249,7 +1448,13 @@ class FirestoreContentRepository implements ContentRepository {
     }
   }
 
-  Future<FeedPost> _createPost({
+  /// Creates the post document and returns it, along with whether the write
+  /// reached the server before [_settleWrite] stopped waiting.
+  ///
+  /// `synced: false` is not a failure — the post is in the local cache, shows
+  /// in the feed, and uploads itself when the connection returns. It only
+  /// changes what the user is told.
+  Future<({FeedPost post, bool synced})> _createPost({
     required UserProfileDraft? profile,
     required String activity,
     required String caption,
@@ -1306,7 +1511,7 @@ class FirestoreContentRepository implements ContentRepository {
         .where((uid) => !taggedIds.contains(uid))
         .toList(growable: false);
 
-    await document.set({
+    final synced = await _settleWrite(document.set({
       'authorId': record.authorId,
       'authorName': record.authorName,
       'activity': record.activity,
@@ -1334,7 +1539,7 @@ class FirestoreContentRepository implements ContentRepository {
       if (taggedIds.isNotEmpty) 'taggedUserIds': taggedIds,
       if (mentioned.isNotEmpty) 'mentionedUserIds': mentioned,
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }));
     await _incrementUser(postsDelta: 1);
     await _notifyPostAudience(
       postId: document.id,
@@ -1347,7 +1552,7 @@ class FirestoreContentRepository implements ContentRepository {
       mentionedIds: mentioned,
     );
 
-    return FirestoreMapper.toFeedPost(record);
+    return (post: FirestoreMapper.toFeedPost(record), synced: synced);
   }
 
   /// [tags] with the author and any repeats removed.
@@ -1417,10 +1622,30 @@ class FirestoreContentRepository implements ContentRepository {
     }
   }
 
+  /// Works out the streak that follows [data]'s stored one.
+  ///
+  /// Same-day logs don't extend the streak; a gap of more than one day resets
+  /// it to today's single day.
+  static int _nextStreak(Map<String, dynamic> data, DateTime now) {
+    final today = _dayStamp(now);
+    final yesterday = _dayStamp(now.subtract(const Duration(days: 1)));
+    final lastActivityDay = data['lastActivityDay'] as String?;
+    final storedStreak = (data['currentStreak'] as num?)?.toInt() ?? 0;
+
+    if (lastActivityDay == today) return storedStreak < 1 ? 1 : storedStreak;
+    if (lastActivityDay == yesterday) return storedStreak + 1;
+    return 1;
+  }
+
   /// Applies activity counters and advances the daily streak.
   ///
   /// Runs inside a transaction because the streak has to be read before it can
   /// be extended, and a blind write would clobber a concurrent log.
+  ///
+  /// Transactions need the server, so this is the one part of a save that
+  /// cannot work offline at all — it fails rather than queueing. When that
+  /// happens the work falls through to [_incrementUserFromCache], which keeps
+  /// the counters correct and settles for a locally-computed streak.
   Future<void> _incrementUser({
     int postsDelta = 0,
     int workoutsDelta = 0,
@@ -1431,26 +1656,43 @@ class FirestoreContentRepository implements ContentRepository {
     final user = _requireCurrentUser();
     final documentRef = usersCollection.doc(user.uid);
 
+    try {
+      await _incrementUserInTransaction(
+        documentRef,
+        postsDelta: postsDelta,
+        workoutsDelta: workoutsDelta,
+        mealsDelta: mealsDelta,
+        runsDelta: runsDelta,
+        runDistanceKm: runDistanceKm,
+      ).timeout(_writeSettleTimeout);
+    } catch (error) {
+      debugPrint('Counter transaction unavailable ($error); writing locally.');
+      await _incrementUserFromCache(
+        documentRef,
+        postsDelta: postsDelta,
+        workoutsDelta: workoutsDelta,
+        mealsDelta: mealsDelta,
+        runsDelta: runsDelta,
+        runDistanceKm: runDistanceKm,
+      );
+    }
+  }
+
+  Future<void> _incrementUserInTransaction(
+    DocumentReference<Map<String, dynamic>> documentRef, {
+    required int postsDelta,
+    required int workoutsDelta,
+    required int mealsDelta,
+    required int runsDelta,
+    required double? runDistanceKm,
+  }) async {
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(documentRef);
       final data = snapshot.data() ?? const <String, dynamic>{};
 
       final now = DateTime.now();
       final today = _dayStamp(now);
-      final yesterday = _dayStamp(now.subtract(const Duration(days: 1)));
-      final lastActivityDay = data['lastActivityDay'] as String?;
-      final storedStreak = (data['currentStreak'] as num?)?.toInt() ?? 0;
-
-      // Same-day logs don't extend the streak; a gap of more than one day
-      // resets it to today's single day.
-      final int streak;
-      if (lastActivityDay == today) {
-        streak = storedStreak < 1 ? 1 : storedStreak;
-      } else if (lastActivityDay == yesterday) {
-        streak = storedStreak + 1;
-      } else {
-        streak = 1;
-      }
+      final streak = _nextStreak(data, now);
 
       final storedMaxRunKm =
           (data['maxRunDistanceKm'] as num?)?.toDouble() ?? 0;
@@ -1471,6 +1713,60 @@ class FirestoreContentRepository implements ContentRepository {
           },
           SetOptions(merge: true));
     });
+  }
+
+  /// The offline path for [_incrementUser]: a plain merge write off the cached
+  /// profile.
+  ///
+  /// The counters stay exactly as correct as the transactional path, because
+  /// [FieldValue.increment] is applied by the server against whatever the
+  /// document holds when the write finally lands — not against the value read
+  /// here. Two sessions logged on a flight both count.
+  ///
+  /// The streak is the part that gives ground: it is derived from the cached
+  /// document, which may be stale, and it is a plain value rather than an
+  /// atomic op. Worst case it is a day out until the next log made online
+  /// recomputes it from the server's copy. A streak that self-corrects beats a
+  /// session that was never recorded.
+  Future<void> _incrementUserFromCache(
+    DocumentReference<Map<String, dynamic>> documentRef, {
+    required int postsDelta,
+    required int workoutsDelta,
+    required int mealsDelta,
+    required int runsDelta,
+    required double? runDistanceKm,
+  }) async {
+    Map<String, dynamic> cached;
+    try {
+      final snapshot =
+          await documentRef.get(const GetOptions(source: Source.cache));
+      cached = snapshot.data() ?? const <String, dynamic>{};
+    } catch (_) {
+      // Nothing cached — a first run on a fresh install, offline. Treat it as
+      // an empty profile, which starts the streak at one.
+      cached = const <String, dynamic>{};
+    }
+
+    final now = DateTime.now();
+    final storedMaxRunKm = (cached['maxRunDistanceKm'] as num?)?.toDouble() ?? 0;
+
+    await _settleWrite(
+      documentRef.set(
+        {
+          if (postsDelta != 0) 'postsCount': FieldValue.increment(postsDelta),
+          if (workoutsDelta != 0)
+            'workoutsCount': FieldValue.increment(workoutsDelta),
+          if (mealsDelta != 0) 'mealsCount': FieldValue.increment(mealsDelta),
+          if (runsDelta != 0) 'runsCount': FieldValue.increment(runsDelta),
+          if (runDistanceKm != null && runDistanceKm > storedMaxRunKm)
+            'maxRunDistanceKm': runDistanceKm,
+          'currentStreak': _nextStreak(cached, now),
+          'lastActivityDay': _dayStamp(now),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      ),
+    );
   }
 
   @override
@@ -1958,7 +2254,7 @@ class FirestoreContentRepository implements ContentRepository {
         0;
 
     final ref = mealsCollection.doc();
-    await ref.set({
+    await _settleWrite(ref.set({
       'authorId': user.uid,
       'name': draft.name.trim(),
       'calories': macro(draft.calories),
@@ -1970,8 +2266,14 @@ class FirestoreContentRepository implements ContentRepository {
       'itemCount': draft.items.length,
       'sharedToFeed': draft.shareToFeed,
       if (draft.imageUrl != null) 'imageUrl': draft.imageUrl,
+      // Stamped client-side, as workouts already are, so the meal lands in the
+      // right day the moment it is written. `createdAt` is a server timestamp
+      // and reads back as null until the write reaches the server — offline
+      // that is never, which would leave the meal out of today's totals on the
+      // very screen the user just logged it from.
+      'loggedAt': Timestamp.now(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    }));
     return ref;
   }
 }

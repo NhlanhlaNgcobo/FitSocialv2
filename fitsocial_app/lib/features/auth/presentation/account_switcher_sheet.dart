@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/identity/profile_identity.dart';
@@ -79,9 +78,9 @@ class _AccountSwitcherSheet extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: palette.muted),
               ),
-              trailing: const Icon(
+              trailing: Icon(
                 Icons.check_circle_rounded,
-                color: AppColors.orangeBright,
+                color: palette.brand,
               ),
             ),
             Divider(color: palette.stroke, height: 1),
@@ -97,9 +96,9 @@ class _AccountSwitcherSheet extends ConsumerWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: palette.stroke),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.add_rounded,
-                  color: AppColors.orangeBright,
+                  color: palette.brand,
                 ),
               ),
               title: Text(

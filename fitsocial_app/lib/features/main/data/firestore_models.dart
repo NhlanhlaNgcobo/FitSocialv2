@@ -8,6 +8,8 @@ class FirestoreUserRecord {
       handle: (data['handle'] as String?) ?? '@fitsocial',
       bio: (data['bio'] as String?) ?? '',
       location: (data['location'] as String?) ?? '',
+      pronouns: (data['pronouns'] as String?) ?? '',
+      links: (data['links'] as String?) ?? '',
       avatarUrl: data['avatarUrl'] as String?,
       followersCount: (data['followersCount'] as num?)?.toInt() ?? 0,
       followingCount: (data['followingCount'] as num?)?.toInt() ?? 0,
@@ -25,6 +27,8 @@ class FirestoreUserRecord {
     required this.handle,
     required this.bio,
     required this.location,
+    this.pronouns = '',
+    this.links = '',
     required this.avatarUrl,
     required this.followersCount,
     required this.followingCount,
@@ -47,6 +51,12 @@ class FirestoreUserRecord {
   final String handle;
   final String bio;
   final String location;
+
+  /// How the user asks to be referred to, and the link they put on their
+  /// profile. Both are optional and both are shown on the profile page.
+  final String pronouns;
+  final String links;
+
   final String? avatarUrl;
   final int followersCount;
   final int followingCount;

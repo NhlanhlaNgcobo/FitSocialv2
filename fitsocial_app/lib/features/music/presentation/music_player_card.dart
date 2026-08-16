@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
+import '../../pulse/domain/pulse_music.dart';
 import '../application/music_player_controller.dart';
 import '../application/music_providers.dart';
 import '../domain/music_brand.dart';
@@ -138,6 +140,15 @@ class MusicPlayerCard extends ConsumerWidget {
               onTap: () => showMusicLibrarySheet(context),
             ),
           ],
+          // Only with something actually loaded: "share what you're listening
+          // to" has nothing to say when nothing is playing.
+          if (player.hasTrack) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ShareToPulseButton(
+              accent: brand.accent,
+              onTap: () => _shareTrackToPulse(context, player),
+            ),
+          ],
           if (player.message != null) ...[
             const SizedBox(height: 4),
             Text(
@@ -150,6 +161,79 @@ class MusicPlayerCard extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Sends whatever is playing to the Pulse composer.
+///
+/// Snapshotted here rather than read again on the other screen: by the time
+/// the composer builds, the track may have changed, and what the user pressed
+/// the button on is what they meant to share.
+void _shareTrackToPulse(BuildContext context, MusicPlayerState player) {
+  final track = player.snapshot?.track;
+  final service = player.service;
+  if (track == null || service == null) return;
+
+  context.push(
+    '/share-music-to-pulse',
+    extra: PulseMusic(
+      provider: service,
+      title: track.title,
+      artist: track.artist,
+      trackUri: track.uri,
+      // Only the https form travels: the `spotify:image:` reference and the
+      // decoded bytes App Remote hands back are both local to this phone. The
+      // controller resolves this URL from the track while it plays, and the
+      // share screen looks it up itself if it is still missing here.
+      albumArtUrl: track.albumArtUrl,
+    ),
+  );
+}
+
+/// Puts the current track on your Pulse.
+///
+/// Sits under the browse row and is styled to match it: this is a secondary
+/// action on a card whose job is playback, not a call to action competing with
+/// the transport above it.
+class _ShareToPulseButton extends StatelessWidget {
+  const _ShareToPulseButton({required this.accent, required this.onTap});
+
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Material(
+      color: palette.surfaceHigh,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.bolt_rounded, size: 18, color: accent),
+              const SizedBox(width: 8),
+              Text(
+                'Share to Pulse',
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

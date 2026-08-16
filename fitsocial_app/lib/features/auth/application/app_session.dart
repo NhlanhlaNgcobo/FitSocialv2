@@ -33,6 +33,10 @@ class AppSession extends ChangeNotifier {
   UserProfileDraft? _profile;
   String? _errorMessage;
 
+  /// Guards [reloadProfile] against overlapping reads — the profile page can
+  /// ask more than once before the first answer lands.
+  bool _isReloadingProfile = false;
+
   AuthStage get stage => _stage;
   bool get isLoading => _isLoading;
   String? get email => _email;
@@ -220,6 +224,33 @@ class AppSession extends ChangeNotifier {
     } finally {
       _setLoading(false, shouldNotify: false);
       notifyListeners();
+    }
+  }
+
+  /// Re-reads the profile document into the session.
+  ///
+  /// [_bootstrap] deliberately keeps a user signed in when the profile read
+  /// fails — offline, or a permission blip — which leaves the session
+  /// authenticated with no profile at all. The profile page then shows a
+  /// placeholder name and no bio, and nothing would ever ask again for the rest
+  /// of the launch. Screens that render the profile call this to close that gap.
+  ///
+  /// Failure is silent on purpose: this is a background repair, and the page it
+  /// runs under is already showing something.
+  Future<void> reloadProfile() async {
+    if (_stage != AuthStage.authenticated || _isReloadingProfile) return;
+    _isReloadingProfile = true;
+    try {
+      final loaded = await userProfileRepository.loadCurrentProfile();
+      // A null here means the document is genuinely gone, not that the read
+      // failed. Dropping what the session already holds would be a downgrade.
+      if (loaded == null) return;
+      _profile = loaded;
+      notifyListeners();
+    } catch (_) {
+      // Still unreachable. The next visit to the profile asks again.
+    } finally {
+      _isReloadingProfile = false;
     }
   }
 

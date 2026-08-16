@@ -49,6 +49,7 @@ class NowPlayingTrack {
     required this.artist,
     required this.duration,
     required this.position,
+    this.uri,
     this.albumArtUrl,
     this.albumArtUri,
     this.albumArtBytes,
@@ -56,10 +57,23 @@ class NowPlayingTrack {
 
   final String title;
   final String artist;
+
+  /// The track's own `spotify:track:…` URI.
+  ///
+  /// The only stable way to name this piece of music — title and artist are
+  /// what a person reads, but two songs can share both. Null on a snapshot
+  /// from a source that did not report one, which is why anything built from
+  /// it has to cope with its absence.
+  final String? uri;
   final Duration duration;
   final Duration position;
 
-  /// An ordinary https cover-art URL. This is what the Web API returns.
+  /// An ordinary https cover-art URL.
+  ///
+  /// What the Web API returns directly. On the App Remote path it is looked up
+  /// afterwards from the track's URI, because this is the only form of the
+  /// artwork that can leave this device — a Pulse, or a friend's presence row,
+  /// needs a URL their phone can fetch, not bytes sitting in our memory.
   final String? albumArtUrl;
 
   /// A `spotify:image:…` reference, which is what App Remote returns instead.
@@ -84,13 +98,19 @@ class NowPlayingTrack {
   NowPlayingTrack copyWith({
     Duration? position,
     Uint8List? albumArtBytes,
+    String? albumArtUrl,
   }) {
     return NowPlayingTrack(
+      // Carried through explicitly, like every other field here: this is
+      // called once a second to advance the position and again when artwork
+      // resolves, so anything left out would be erased a beat after it
+      // arrived.
+      uri: uri,
       title: title,
       artist: artist,
       duration: duration,
       position: position ?? this.position,
-      albumArtUrl: albumArtUrl,
+      albumArtUrl: albumArtUrl ?? this.albumArtUrl,
       albumArtUri: albumArtUri,
       albumArtBytes: albumArtBytes ?? this.albumArtBytes,
     );

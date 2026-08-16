@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/activity_grid.dart';
 import '../../../shared/widgets/dark_card.dart';
+import '../../weather/presentation/weather_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/progress_models.dart';
@@ -43,6 +43,11 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
 
     return Column(
       children: [
+        // Conditions lead the tab: what the weather is doing decides whether
+        // today's session happens outside, and that decision comes before
+        // looking back at the week.
+        const WeatherCard(),
+        const SizedBox(height: AppSpacing.md),
         _PeriodPicker(selected: _period, onSelected: _selectPeriod),
         const SizedBox(height: AppSpacing.md),
         _DateNavigator(
@@ -97,7 +102,7 @@ class _PeriodPicker extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: period == selected
-                        ? AppColors.orangeBright.withValues(alpha: 0.18)
+                        ? palette.brandSoft
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -252,7 +257,7 @@ class _OverviewCard extends ConsumerWidget {
               Expanded(
                 child: _MetricTile(
                   icon: Icons.local_fire_department_rounded,
-                  iconColor: AppColors.orangeBright,
+                  iconColor: palette.brand,
                   value: '${data.sessionCount}',
                   label: data.sessionCount == 1 ? 'Workout' : 'Workouts',
                   delta: _deltaLabel(
@@ -335,7 +340,9 @@ class _MetricTile extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 18, color: iconColor),
+        // Resolved here rather than at each call site so all four glyphs are
+        // adjusted for the page together.
+        Icon(icon, size: 18, color: palette.accent(iconColor)),
         const SizedBox(height: 8),
         // Scaled down rather than wrapped or clipped: four tiles across a
         // phone leaves no room for "5h 32m" to find a second line.
@@ -526,7 +533,7 @@ class _SessionRow extends ConsumerWidget {
                     ),
                     _SessionStat(
                       icon: Icons.local_fire_department_rounded,
-                      iconColor: AppColors.orangeBright,
+                      iconColor: palette.brand,
                       label: '${formatThousands(session.calories)} kcal',
                       // Runs have no recorded calories, so theirs are worked
                       // out from distance — said plainly rather than shown as
@@ -598,18 +605,20 @@ class _SessionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return Container(
       width: 42,
       height: 42,
       decoration: BoxDecoration(
-        color: AppColors.orangeBright.withValues(alpha: 0.16),
+        color: palette.brandSoft,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(
         kind == ActivityKind.run
             ? Icons.directions_run_rounded
             : Icons.fitness_center_rounded,
-        color: AppColors.orangeBright,
+        color: palette.brand,
         size: 22,
       ),
     );

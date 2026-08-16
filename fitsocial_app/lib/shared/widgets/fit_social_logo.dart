@@ -141,6 +141,9 @@ class _FitSocialLogoState extends State<FitSocialLogo>
               // through "it" for the split to land on the right word.
               TextSpan(
                 children: [
+                  // Fixed in both themes, unlike the orange on the app's own
+                  // surfaces. This is the wordmark: a logo that changes colour
+                  // with the theme is a different logo.
                   const TextSpan(
                     text: 'it',
                     style: TextStyle(color: AppColors.orangeBright),

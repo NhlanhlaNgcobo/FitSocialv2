@@ -1,17 +1,23 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
-import '../../../shared/widgets/bouncy_chip.dart';
+import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/widgets/background_picker.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../../../shared/widgets/stepper_field.dart';
 import '../application/activity_actions.dart';
 import '../domain/app_models.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class WorkoutLogScreen extends ConsumerStatefulWidget {
   const WorkoutLogScreen({super.key});
@@ -22,16 +28,7 @@ class WorkoutLogScreen extends ConsumerStatefulWidget {
 
 class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
     with SingleTickerProviderStateMixin {
-  static const int _sectionCount = 6;
-
-  /// Quick-fill labels for the title field. Deliberately generic splits rather
-  /// than named programmes — they read as a starting point, not a prescription.
-  static const List<String> _titleSuggestions = [
-    'Push Day',
-    'Pull Day',
-    'Leg Day',
-    'Full Body',
-  ];
+  static const int _sectionCount = 7;
 
   late final AnimationController _entranceController;
   late final TextEditingController _titleController;
@@ -44,6 +41,10 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
   bool _shareToFeed = true;
   bool _isSaving = false;
   String? _errorMessage;
+
+  /// The chosen backdrop, as a local path. Uploaded on save, not on pick — a
+  /// user who backs out of the form should not have left a file behind.
+  String? _backgroundPath;
 
   @override
   void initState() {
@@ -77,26 +78,17 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
 
   bool get _hasSummary => _durationMinutes > 0 || _totalReps > 0;
 
-  void _setTitle(String value) {
-    _titleController.text = value;
-    _titleController.selection =
-        TextSelection.collapsed(offset: value.length);
-    setState(() {});
-  }
-
-  void _bumpDuration(int minutes) {
-    _bump(_durationController, _durationMinutes + minutes, max: 600);
-  }
-
-  void _bumpCalories(int kcal) {
-    _bump(_caloriesController, _calories + kcal, max: 5000);
-  }
-
-  void _bump(TextEditingController controller, int next, {required int max}) {
-    controller.text = next.clamp(0, max).toString();
-    controller.selection =
-        TextSelection.collapsed(offset: controller.text.length);
-    setState(() {});
+  /// Picks and crops a backdrop. The cropper downscales and re-encodes, so what
+  /// comes back is already feed-spec — the same path a post photo takes.
+  Future<void> _pickBackground(ImageSource source) async {
+    final path = await InstagramPhotoPicker.pickAndCrop(
+      context: context,
+      source: source,
+    );
+    // Null means they backed out of the picker or the cropper. Leave whatever
+    // was already chosen rather than clearing it.
+    if (path == null || !mounted) return;
+    setState(() => _backgroundPath = path);
   }
 
   Future<void> _saveWorkout() async {
@@ -129,6 +121,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
               exercises: exercises,
               notes: _notesController.text.trim(),
               shareToFeed: _shareToFeed,
+              backgroundImagePath: _backgroundPath,
             ),
           );
       if (!mounted) return;
@@ -155,7 +148,10 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
     var sectionIndex = 0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Log Workout')),
+      appBar: AppBar(
+        title: const Text('Log Workout'),
+        actions: const [MusicIslandAction()],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -170,8 +166,6 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
             itemCount: _sectionCount,
             child: _TitleSection(
               controller: _titleController,
-              suggestions: _titleSuggestions,
-              onSuggestionTap: _setTitle,
               onChanged: () => setState(() {}),
             ),
           ),
@@ -185,9 +179,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
               label: 'Duration',
               unit: 'min',
               controller: _durationController,
-              bumpValues: const [5, 10, 15, 30],
               onChanged: () => setState(() {}),
-              onBump: _bumpDuration,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -201,9 +193,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
               hint: 'Optional',
               unit: 'kcal',
               controller: _caloriesController,
-              bumpValues: const [50, 100, 200],
               onChanged: () => setState(() {}),
-              onBump: _bumpCalories,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -259,6 +249,19 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
             controller: _entranceController,
             index: sectionIndex++,
             itemCount: _sectionCount,
+            child: _BackgroundSection(
+              imagePath: _backgroundPath,
+              onPick: _isSaving ? null : _pickBackground,
+              onRemove: _isSaving
+                  ? null
+                  : () => setState(() => _backgroundPath = null),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
             child: _NotesSection(controller: _notesController),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -292,6 +295,136 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
   }
 }
 
+/// Picks the photo that sits behind the workout card.
+///
+/// Shows the chosen image under the same darkening scrim the feed card applies,
+/// so what the user approves here is what the post ends up looking like — a
+/// bright photo that reads fine on its own can swallow the white metrics once
+/// the card draws them on top.
+class _BackgroundSection extends StatelessWidget {
+  const _BackgroundSection({
+    required this.imagePath,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  final String? imagePath;
+  final ValueChanged<ImageSource>? onPick;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(
+          icon: Icons.image_outlined,
+          label: 'Background',
+          hint: 'Optional',
+        ),
+        if (imagePath == null)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: palette.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: palette.stroke),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  'Add a photo behind this workout, or leave it for the '
+                  'default gradient.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                BackgroundPickerRow(onPick: onPick, onRemove: onRemove),
+              ],
+            ),
+          )
+        else
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 4 / 3,
+                  child: _BackgroundPreview(path: imagePath!),
+                ),
+                // The scrim the card will draw over this photo.
+                const Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0x22050505), Color(0xC8050505)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: AppSpacing.sm,
+                  right: AppSpacing.sm,
+                  child: Material(
+                    color: const Color(0x99050505),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      tooltip: 'Remove background',
+                      onPressed: onRemove,
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.onMedia,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: AppSpacing.md,
+                  bottom: AppSpacing.md,
+                  child: Text(
+                    'This is how your card will look',
+                    style: TextStyle(
+                      color: AppColors.onMedia.withValues(alpha: 0.85),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The picked file, drawn from disk.
+///
+/// On web `image_picker` hands back a `blob:` URL rather than a real path, so
+/// `File` cannot open it — [Image.network] is what reads a blob.
+class _BackgroundPreview extends StatelessWidget {
+  const _BackgroundPreview({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return Image.network(path, fit: BoxFit.cover);
+    }
+    return Image.file(File(path), fit: BoxFit.cover);
+  }
+}
+
 /// Icon disc + label that opens each block of the form.
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
@@ -316,10 +449,10 @@ class _SectionHeader extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: AppColors.orangeBright.withValues(alpha: 0.12),
+              color: palette.brandSoft,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 16, color: AppColors.orangeBright),
+            child: Icon(icon, size: 16, color: palette.brand),
           ),
           const SizedBox(width: 10),
           Text(
@@ -356,14 +489,10 @@ BoxDecoration _wellDecoration(BuildContext context) {
 class _TitleSection extends StatelessWidget {
   const _TitleSection({
     required this.controller,
-    required this.suggestions,
-    required this.onSuggestionTap,
     required this.onChanged,
   });
 
   final TextEditingController controller;
-  final List<String> suggestions;
-  final ValueChanged<String> onSuggestionTap;
   final VoidCallback onChanged;
 
   @override
@@ -402,25 +531,12 @@ class _TitleSection extends StatelessWidget {
             onChanged: (_) => onChanged(),
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: suggestions
-              .map(
-                (suggestion) => BouncyChip(
-                  label: suggestion,
-                  onTap: () => onSuggestionTap(suggestion),
-                ),
-              )
-              .toList(),
-        ),
       ],
     );
   }
 }
 
-/// A big centred number with a unit and quick-add chips.
+/// A big centred number with a unit.
 ///
 /// Duration and calories are the same control with different words, so they
 /// share one — the alternative was two near-identical seventy-line widgets
@@ -431,9 +547,7 @@ class _NumberWellSection extends StatelessWidget {
     required this.label,
     required this.unit,
     required this.controller,
-    required this.bumpValues,
     required this.onChanged,
-    required this.onBump,
     this.hint,
   });
 
@@ -442,11 +556,7 @@ class _NumberWellSection extends StatelessWidget {
   final String unit;
   final TextEditingController controller;
 
-  /// Amounts offered as one-tap additions under the field.
-  final List<int> bumpValues;
-
   final VoidCallback onChanged;
-  final ValueChanged<int> onBump;
 
   /// Shown beside the label, e.g. "Optional".
   final String? hint;
@@ -498,19 +608,6 @@ class _NumberWellSection extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: bumpValues
-              .map(
-                (amount) => BouncyChip(
-                  label: '+$amount $unit',
-                  onTap: () => onBump(amount),
-                ),
-              )
-              .toList(),
         ),
       ],
     );
@@ -574,6 +671,8 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return AnimatedSize(
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOut,
@@ -590,11 +689,9 @@ class _SummaryCard extends StatelessWidget {
                   vertical: 14,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.orangeBright.withValues(alpha: 0.1),
+                  color: palette.brandSoft,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: AppColors.orangeBright.withValues(alpha: 0.4),
-                  ),
+                  border: Border.all(color: palette.brandSoftStroke),
                 ),
                 child: Row(
                   children: [
@@ -641,8 +738,8 @@ class _SummaryStat extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.orangeBright,
+            style: TextStyle(
+              color: context.palette.brandText,
               fontWeight: FontWeight.w800,
               fontSize: 16,
             ),
@@ -661,7 +758,7 @@ class _SummaryDivider extends StatelessWidget {
     return Container(
       width: 1,
       height: 28,
-      color: AppColors.orangeBright.withValues(alpha: 0.25),
+      color: context.palette.brandSoftStroke,
     );
   }
 }

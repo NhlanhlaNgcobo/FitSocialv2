@@ -10,6 +10,7 @@ import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../main/domain/app_models.dart' show Comment, PublicAuthorName;
 import '../../main/domain/shared_post.dart';
+import '../domain/pulse_music.dart';
 import '../domain/pulse_models.dart';
 import 'pulse_repository_contract.dart';
 
@@ -177,6 +178,9 @@ class FirestorePulseRepository implements PulseRepository {
       // this Pulse may not be allowed to read that post, and the card is drawn
       // on every frame of playback. See [SharedPostRef].
       if (draft.sharedPost != null) 'sharedPost': draft.sharedPost!.toMap(),
+      // Likewise a snapshot: what was playing is a fact about the moment this
+      // Pulse was made, and does not change when the author skips a track.
+      if (draft.music != null) 'music': draft.music!.toMap(),
       if (draft.text.trim().isNotEmpty) 'text': draft.text.trim(),
       'gradientKey': draft.gradientKey,
       if (draft.aspectRatio != null) 'aspectRatio': draft.aspectRatio,
@@ -205,6 +209,7 @@ class FirestorePulseRepository implements PulseRepository {
       videoDuration: draft.videoDuration,
       aspectRatio: draft.aspectRatio,
       sharedPost: draft.sharedPost,
+      music: draft.music,
     );
   }
 
@@ -581,6 +586,7 @@ class FirestorePulseRepository implements PulseRepository {
           : Duration(milliseconds: videoDurationMs),
       aspectRatio: (data['aspectRatio'] as num?)?.toDouble(),
       sharedPost: SharedPostRef.fromMap(data['sharedPost']),
+      music: PulseMusic.fromMap(data['music']),
     );
   }
 

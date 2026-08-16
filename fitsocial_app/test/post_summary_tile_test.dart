@@ -12,6 +12,7 @@ FeedPost _post({
   List<String> metricLabels = const [],
   List<RoutePoint> routePoints = const [],
   Map<String, dynamic>? workoutData,
+  String? imageUrl,
 }) {
   return FeedPost(
     id: 'p1',
@@ -26,6 +27,7 @@ FeedPost _post({
     backgroundColors: const [],
     likedBy: const [],
     postType: postType,
+    imageUrl: imageUrl,
     workoutData: workoutData,
     routePoints: routePoints,
   );
@@ -170,6 +172,93 @@ void main() {
       expect(find.byType(RouteSparkline), findsNothing);
       expect(find.text('5.20 km'), findsOneWidget);
       expect(find.text('Run'), findsOneWidget);
+    });
+  });
+
+  group('a photo is the backdrop, not the whole tile', () {
+    testWidgets('a run keeps its route and its distance over the picture',
+        (tester) async {
+      await tester.pumpWidget(harness(
+        PostMediaTile(
+          post: _post(
+            activity: 'Run',
+            postType: PostType.run,
+            metricLabels: const ['5.24 km', '32:10'],
+            routePoints: _route,
+            imageUrl: 'https://example.test/sunrise.jpg',
+          ),
+          compact: true,
+        ),
+      ));
+
+      expect(find.byType(RouteSparkline), findsOneWidget);
+      expect(find.text('5.24 km'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a workout keeps its headline over the picture',
+        (tester) async {
+      await tester.pumpWidget(harness(
+        PostMediaTile(
+          post: _post(
+            activity: 'Leg Day',
+            postType: PostType.workout,
+            metricLabels: const ['45 min', '320 kcal'],
+            workoutData: const {'title': 'Leg Day'},
+            imageUrl: 'https://example.test/gym.jpg',
+          ),
+          compact: true,
+        ),
+      ));
+
+      expect(find.text('45 min'), findsOneWidget);
+      // Three across leaves room for one line, so the rest of the read-out is
+      // dropped here exactly as it is on the card.
+      expect(find.text('320 kcal'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a photograph on its own stays a bare photograph',
+        (tester) async {
+      // A written post's picture *is* the post. Nothing is being summarised
+      // over it, so a profile grid draws it the way it always has.
+      await tester.pumpWidget(harness(
+        PostMediaTile(
+          post: _post(
+            activity: 'Saturday',
+            caption: 'Trail with the club.',
+            imageUrl: 'https://example.test/trail.jpg',
+          ),
+          compact: true,
+        ),
+      ));
+
+      expect(find.text('Saturday'), findsNothing);
+      expect(find.text('Trail with the club.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a post whose picture never arrives still shows the run',
+        (tester) async {
+      // The placeholder stands in for the photo; the trace and the numbers are
+      // drawn over it either way, so a failed download costs the backdrop and
+      // nothing else.
+      await tester.pumpWidget(harness(
+        PostMediaTile(
+          post: _post(
+            activity: 'Run',
+            postType: PostType.run,
+            metricLabels: const ['5.24 km'],
+            routePoints: _route,
+            imageUrl: 'https://example.test/missing.jpg',
+          ),
+          compact: true,
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.byType(RouteSparkline), findsOneWidget);
+      expect(find.text('5.24 km'), findsOneWidget);
     });
   });
 

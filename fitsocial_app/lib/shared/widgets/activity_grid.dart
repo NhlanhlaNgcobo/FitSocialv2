@@ -241,20 +241,20 @@ class _ActivityGridState extends State<ActivityGrid> {
 
 /// A day with nothing logged.
 Color _emptyCellColor(AppPalette p) =>
-    p.isDark ? const Color(0xFF1B1B1B) : const Color(0xFFEBE5DA);
+    p.isDark ? const Color(0xFF1B1B1B) : const Color(0xFFE8E4DB);
 
 /// Outline on empty squares, so a quiet stretch still reads as a grid.
 Color _emptyCellBorder(AppPalette p) =>
-    p.isDark ? const Color(0xFF272727) : const Color(0xFFDCD5C7);
+    p.isDark ? const Color(0xFF272727) : const Color(0xFFD7D2C8);
 
 /// A day still to come. Quieter than an empty past day so an untrained
 /// Wednesday is not mistaken for a Saturday that has not arrived — which means
 /// *darker* on the dark theme and *lighter* on the light one.
 Color _futureCellColor(AppPalette p) =>
-    p.isDark ? const Color(0xFF141414) : const Color(0xFFF6F2EB);
+    p.isDark ? const Color(0xFF141414) : const Color(0xFFF5F3EE);
 
 Color _futureCellBorder(AppPalette p) =>
-    p.isDark ? const Color(0xFF1F1F1F) : const Color(0xFFEAE4D8);
+    p.isDark ? const Color(0xFF1F1F1F) : const Color(0xFFE7E3DA);
 
 
 /// Corner radius for a square of [size].
@@ -356,7 +356,7 @@ class _RangePicker extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: range == selected
-                        ? AppColors.orangeBright.withValues(alpha: 0.18)
+                        ? palette.brandSoft
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -539,7 +539,7 @@ class _DayCell extends StatelessWidget {
     final palette = context.palette;
     final description = _describeDay(day, isFuture: isFuture);
     final color = day.isActive
-        ? AppColors.orangeBright
+        ? palette.brand
         : isFuture
             ? _futureCellColor(palette)
             : _emptyCellColor(palette);
@@ -789,7 +789,7 @@ class _Legend extends StatelessWidget {
             borderColor: _emptyCellBorder(palette),
           ),
           const SizedBox(height: 6),
-          const _LegendRow(label: 'Logged in', color: AppColors.orangeBright),
+          _LegendRow(label: 'Logged in', color: palette.brand),
         ],
       ),
     );

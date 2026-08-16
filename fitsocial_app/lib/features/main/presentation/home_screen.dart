@@ -15,6 +15,7 @@ import '../../../shared/widgets/post_card.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -27,6 +28,7 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const FitSocialLogo(size: 24, animated: false),
         actions: [
+          const MusicIslandAction(),
           IconButton(
             onPressed: () => context.push('/health'),
             icon: const Icon(Icons.monitor_heart_outlined),
@@ -160,10 +162,10 @@ class _SuggestedHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.explore_outlined,
                 size: 18,
-                color: AppColors.orangeBright,
+                color: palette.brand,
               ),
               const SizedBox(width: 8),
               Text(
@@ -226,12 +228,12 @@ class _NothingPostedYet extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: AppColors.orangeBright.withValues(alpha: 0.12),
+              color: palette.brandSoft,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.bolt_rounded,
-              color: AppColors.orangeBright,
+              color: palette.brand,
               size: 30,
             ),
           ),
@@ -253,8 +255,8 @@ class _NothingPostedYet extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           OutlinedButton(
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.orangeBright,
-              side: const BorderSide(color: AppColors.orangeBright),
+              foregroundColor: palette.brandText,
+              side: BorderSide(color: palette.brand),
               padding: const EdgeInsets.symmetric(
                 horizontal: 24,
                 vertical: 12,
@@ -296,7 +298,7 @@ class _NotificationBell extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               constraints: const BoxConstraints(minWidth: 16),
               decoration: BoxDecoration(
-                color: AppColors.orangeBright,
+                color: context.palette.brand,
                 borderRadius: BorderRadius.circular(999),
                 // Separates the badge from the glyph underneath it, whichever
                 // way the theme has painted the bar.

@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/run_background_section.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/activity_actions.dart';
 import '../domain/app_models.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class RunLogScreen extends ConsumerStatefulWidget {
   const RunLogScreen({super.key});
@@ -21,7 +25,7 @@ class RunLogScreen extends ConsumerStatefulWidget {
 
 class _RunLogScreenState extends ConsumerState<RunLogScreen>
     with SingleTickerProviderStateMixin {
-  static const int _sectionCount = 5;
+  static const int _sectionCount = 6;
 
   late final AnimationController _entranceController;
   late final TextEditingController _distanceController;
@@ -31,6 +35,10 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   int _durationMinutes = 0;
   bool _shareToFeed = true;
   bool _isSaving = false;
+
+  /// The chosen backdrop, as a local path. Uploaded on save, not on pick — a
+  /// user who backs out of the form should not have left a file behind.
+  String? _backgroundPath;
   // Set the first time Save is pressed with a blank field, so the wells only
   // turn red after the user has actually tried to submit.
   bool _showFieldErrors = false;
@@ -76,6 +84,17 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
     return mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
   }
 
+  /// The elapsed time as the *post* will carry it — a clock, not a phrase.
+  ///
+  /// Deliberately not [_durationLabel]: the card below is a preview of what
+  /// gets shared, and a preview that reads "45 min" where the post will read
+  /// "45:00" is a preview of something else.
+  String get _clockLabel {
+    final hours = _durationMinutes ~/ 60;
+    final mins = (_durationMinutes % 60).toString().padLeft(2, '0');
+    return hours == 0 ? '$mins:00' : '$hours:$mins:00';
+  }
+
   static String _formatDistance(double value) {
     var text = value.toStringAsFixed(2);
     if (text.contains('.')) {
@@ -107,6 +126,19 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
     });
   }
 
+  /// Picks and crops a backdrop. The cropper downscales and re-encodes, so what
+  /// comes back is already feed-spec — the same path a post photo takes.
+  Future<void> _pickBackground(ImageSource source) async {
+    final path = await InstagramPhotoPicker.pickAndCrop(
+      context: context,
+      source: source,
+    );
+    // Null means they backed out of the picker or the cropper. Leave whatever
+    // was already chosen rather than clearing it.
+    if (path == null || !mounted) return;
+    setState(() => _backgroundPath = path);
+  }
+
   Future<void> _saveRun() async {
     if (!_isComplete) {
       setState(() {
@@ -129,6 +161,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
               elapsed: Duration(minutes: _durationMinutes),
               averagePace: _paceLabel,
               shareToFeed: _shareToFeed,
+              backgroundImagePath: _backgroundPath,
             ),
           );
       if (!mounted) return;
@@ -156,7 +189,10 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
     var sectionIndex = 0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Log Run')),
+      appBar: AppBar(
+        title: const Text('Log Run'),
+        actions: const [MusicIslandAction()],
+      ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -266,6 +302,22 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             controller: _entranceController,
             index: sectionIndex++,
             itemCount: _sectionCount,
+            child: RunBackgroundSection(
+              imagePath: _backgroundPath,
+              distanceLabel:
+                  _hasDistance ? '${_formatDistance(_distanceKm)} km' : null,
+              durationLabel: _hasDuration ? _clockLabel : null,
+              onPick: _isSaving ? null : _pickBackground,
+              onRemove: _isSaving
+                  ? null
+                  : () => setState(() => _backgroundPath = null),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
             child: ShareToFeedToggle(
               value: _shareToFeed,
               subtitle: 'Post this run to your profile activity',
@@ -308,12 +360,14 @@ class _GpsHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: AppColors.orangeBright.withValues(alpha: 0.28),
+            color: palette.brand.withValues(alpha: 0.28),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -326,10 +380,10 @@ class _GpsHeroCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [AppColors.orangeBright, AppColors.orange],
+              colors: [palette.brand, AppColors.orange],
             ),
           ),
           child: InkWell(
@@ -497,7 +551,7 @@ class _MetricField extends StatelessWidget {
                       ? const TextInputType.numberWithOptions(decimal: true)
                       : TextInputType.number,
                   textAlign: TextAlign.center,
-                  cursorColor: AppColors.orangeBright,
+                  cursorColor: palette.brand,
                   style: TextStyle(
                     color: palette.text,
                     fontSize: 32,
@@ -561,11 +615,9 @@ class _RunSummary extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.orangeBright.withValues(alpha: 0.1),
+        color: palette.brandSoft,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.orangeBright.withValues(alpha: 0.4),
-        ),
+        border: Border.all(color: palette.brandSoftStroke),
       ),
       child: Row(
         children: [

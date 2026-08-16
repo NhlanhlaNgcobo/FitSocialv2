@@ -194,15 +194,57 @@ class SpotifyApiService {
 
   Future<SpotifyProfile> fetchProfile() async {
     final json = await _get('/me');
-    final images = json['images'] as List<dynamic>?;
     return SpotifyProfile(
       displayName: (json['display_name'] as String?) ?? 'Spotify user',
       email: json['email'] as String?,
       isPremium: (json['product'] as String?) == 'premium',
-      imageUrl: (images != null && images.isNotEmpty)
-          ? (images.first as Map<String, dynamic>)['url'] as String?
-          : null,
+      imageUrl: _imageUrl(json['images']),
     );
+  }
+
+  /// The album cover for a single track, as an https URL.
+  ///
+  /// The only way to get *shareable* artwork for something App Remote started:
+  /// the bridge reports covers as `spotify:image:…` plus raw bytes, and neither
+  /// travels — a `spotify:image:` reference means nothing to another person's
+  /// device, and bytes would mean re-hosting label artwork on our own Storage.
+  /// Spotify's own image CDN is already public, so its URL is the thing to put
+  /// on a Pulse.
+  ///
+  /// Null when [trackUri] is not a track (a podcast episode or a local file
+  /// has no id to look up) or when the track carries no artwork at all.
+  Future<String?> fetchTrackArtworkUrl(String trackUri) async {
+    final id = trackIdOf(trackUri);
+    if (id == null) return null;
+
+    final json = await _get('/tracks/$id');
+    final album = json['album'] as Map<String, dynamic>?;
+    return _imageUrl(album?['images']);
+  }
+
+  /// The bare id in `spotify:track:<id>`, or in an open.spotify.com track link.
+  ///
+  /// Null for anything else — episode URIs, `spotify:local:…` files, and empty
+  /// strings all reach here from the player and none of them can be looked up.
+  static String? trackIdOf(String uri) {
+    final trimmed = uri.trim();
+    if (trimmed.isEmpty) return null;
+
+    final match = RegExp(
+      r'^(?:spotify:track:|https?://open\.spotify\.com/track/)([A-Za-z0-9]+)',
+    ).firstMatch(trimmed);
+    return match?.group(1);
+  }
+
+  /// Spotify orders every image list widest-first, so the head of the list is
+  /// the full-size cover — the one worth keeping, since a sticker may be drawn
+  /// at any size on any density of screen.
+  static String? _imageUrl(Object? images) {
+    if (images is! List || images.isEmpty) return null;
+    final first = images.first;
+    if (first is! Map) return null;
+    final url = (first['url'] as String?)?.trim();
+    return (url == null || url.isEmpty) ? null : url;
   }
 
   /// The user's own playlists.
@@ -329,7 +371,6 @@ class SpotifyApiService {
 
   NowPlayingTrack _parseTrack(Map<String, dynamic> item, Object? progressMs) {
     final album = item['album'] as Map<String, dynamic>?;
-    final images = album?['images'] as List<dynamic>?;
     final artists = (item['artists'] as List<dynamic>?)
             ?.whereType<Map<String, dynamic>>()
             .map((a) => (a['name'] as String?) ?? '')
@@ -338,15 +379,14 @@ class SpotifyApiService {
         const <String>[];
 
     return NowPlayingTrack(
+      uri: item['uri'] as String?,
       title: (item['name'] as String?) ?? 'Unknown track',
       artist: artists.isEmpty ? 'Unknown artist' : artists.join(', '),
       duration: Duration(
         milliseconds: (item['duration_ms'] as num?)?.toInt() ?? 0,
       ),
       position: Duration(milliseconds: (progressMs as num?)?.toInt() ?? 0),
-      albumArtUrl: (images != null && images.isNotEmpty)
-          ? (images.first as Map<String, dynamic>)['url'] as String?
-          : null,
+      albumArtUrl: _imageUrl(album?['images']),
     );
   }
 
@@ -355,7 +395,6 @@ class SpotifyApiService {
     return items
         .whereType<Map<String, dynamic>>()
         .map((item) {
-          final images = item['images'] as List<dynamic>?;
           final tracks = item['tracks'] as Map<String, dynamic>?;
           final owner = item['owner'] as Map<String, dynamic>?;
           return SpotifyPlaylist(
@@ -363,9 +402,7 @@ class SpotifyApiService {
             name: (item['name'] as String?) ?? 'Untitled',
             trackCount: (tracks?['total'] as num?)?.toInt() ?? 0,
             owner: (owner?['display_name'] as String?) ?? 'Spotify',
-            imageUrl: (images != null && images.isNotEmpty)
-                ? (images.first as Map<String, dynamic>)['url'] as String?
-                : null,
+            imageUrl: _imageUrl(item['images']),
           );
         })
         .where((p) => p.id.isNotEmpty)

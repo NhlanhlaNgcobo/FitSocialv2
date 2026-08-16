@@ -11,6 +11,36 @@ import 'route_sparkline.dart';
 /// leads with — nothing else.
 enum _PostKind { run, workout, meal, text }
 
+/// [ExploreFilterX] owns the kind checks because it already has to recognise
+/// the posts written before the types existed. Order matters: a workout writes
+/// a '0 kcal' metric of its own, so it has to be claimed before anything asks
+/// whether this is a meal.
+_PostKind _kindOf(FeedPost post) {
+  if (ExploreFilterX.isWorkout(post)) return _PostKind.workout;
+  if (ExploreFilterX.isRun(post)) return _PostKind.run;
+  if (ExploreFilterX.isMeal(post)) return _PostKind.meal;
+  return _PostKind.text;
+}
+
+IconData _iconFor(_PostKind kind) => switch (kind) {
+      _PostKind.run => Icons.directions_run_rounded,
+      _PostKind.workout => Icons.fitness_center_rounded,
+      _PostKind.meal => Icons.restaurant_rounded,
+      _PostKind.text => Icons.format_quote_rounded,
+    };
+
+/// A post's measurements, cleaned of the blanks the older logs wrote.
+List<String> _metricsOf(FeedPost post) => post.metricLabels
+    .map((label) => label.trim())
+    .where((label) => label.isNotEmpty)
+    .toList(growable: false);
+
+/// Carries text across the one photo that is bright exactly where it sits.
+/// The scrim handles the rest.
+const List<Shadow> _mediaTextShadows = [
+  Shadow(color: Color(0x73050505), blurRadius: 10, offset: Offset(0, 2)),
+];
+
 /// The tile a post gets in a grid when there is no photo to show.
 ///
 /// Every grid in the app used to fall back to the post's stored gradient here:
@@ -48,32 +78,11 @@ class PostSummaryTile extends StatelessWidget {
 
   final double borderRadius;
 
-  /// [ExploreFilterX] owns the kind checks because it already has to recognise
-  /// the posts written before the types existed. Order matters: a workout
-  /// writes a '0 kcal' metric of its own, so it has to be claimed before
-  /// anything asks whether this is a meal.
-  static _PostKind _kindOf(FeedPost post) {
-    if (ExploreFilterX.isWorkout(post)) return _PostKind.workout;
-    if (ExploreFilterX.isRun(post)) return _PostKind.run;
-    if (ExploreFilterX.isMeal(post)) return _PostKind.meal;
-    return _PostKind.text;
-  }
-
-  static IconData _iconFor(_PostKind kind) => switch (kind) {
-        _PostKind.run => Icons.directions_run_rounded,
-        _PostKind.workout => Icons.fitness_center_rounded,
-        _PostKind.meal => Icons.restaurant_rounded,
-        _PostKind.text => Icons.format_quote_rounded,
-      };
-
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final kind = _kindOf(post);
-    final metrics = post.metricLabels
-        .map((label) => label.trim())
-        .where((label) => label.isNotEmpty)
-        .toList(growable: false);
+    final metrics = _metricsOf(post);
 
     // A run with a trace shows the trace. Everything else leads with what it
     // has: the headline number for a workout, a meal or a hand-typed run, and
@@ -169,6 +178,205 @@ class PostSummaryTile extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// The tile a post gets in a grid when it *does* have a photo.
+///
+/// The picture on a run or a workout is a backdrop its author chose to put
+/// behind the session — the session is still what was shared. A grid that drew
+/// the picture alone threw all of that away: the trace, the numbers, and the
+/// fact that the tile was a run at all. This keeps the photo as the backdrop it
+/// was meant to be and draws the same things [PostSummaryTile] draws on its
+/// card over the top of it, in the same order, so the two tiles read as one
+/// family whether or not the author brought a photo.
+///
+/// Everything drawn here is fixed rather than themed, for the reason the run
+/// and workout cards are: a photo looks the same in both themes, so a colour
+/// that followed the palette would be legible in only one of them.
+class PostMediaTile extends StatelessWidget {
+  const PostMediaTile({
+    required this.post,
+    this.showAuthor = false,
+    this.compact = false,
+    this.borderRadius = 18,
+    super.key,
+  });
+
+  final FeedPost post;
+
+  /// Whether to name the author — Explore does, a profile grid doesn't.
+  final bool showAuthor;
+
+  /// The three-across treatment: a thinner line, smaller type, and only the
+  /// headline measurement. At that size a full read-out is unreadable anyway.
+  final bool compact;
+
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = post.imageUrl;
+    if (url == null || url.isEmpty) {
+      // Not reachable from the grids, which check first — but a tile that
+      // renders nothing at all is the one outcome worth ruling out.
+      return PostSummaryTile(
+        post: post,
+        showAuthor: showAuthor,
+        compact: compact,
+        borderRadius: borderRadius,
+      );
+    }
+
+    final kind = _kindOf(post);
+    final metrics = _metricsOf(post);
+    final hasRoute =
+        kind == _PostKind.run && RouteSparkline.canDraw(post.routePoints);
+
+    // A written post's photo *is* the post: nothing is being summarised over
+    // it, so it keeps the plain caption band it has always had — and in a
+    // profile grid, which names nobody, it keeps the bare photo. The activity
+    // kinds get the glyph, the trace and the numbers.
+    final summarised = kind != _PostKind.text;
+    final headline = metrics.isEmpty ? null : metrics.first;
+    final detail = compact ? '' : metrics.skip(1).join(' · ');
+    final caption =
+        headline ?? (summarised || !compact ? post.activity.trim() : '');
+    final scrim = _scrimFor(
+      summarised: summarised,
+      hasFooter: caption.isNotEmpty || detail.isNotEmpty || showAuthor,
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _PostPhoto(url: url, borderRadius: borderRadius),
+          if (scrim != null)
+            DecoratedBox(decoration: BoxDecoration(gradient: scrim)),
+          Padding(
+            padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.sm + 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (summarised) ...[
+                  _KindGlyph(icon: _iconFor(kind), size: compact ? 22 : 28),
+                  SizedBox(height: compact ? 6 : AppSpacing.sm),
+                ],
+                // The trace sits in the same box the summary card's body does,
+                // between the glyph and the numbers, so it never runs under
+                // either of them.
+                Expanded(
+                  child: hasRoute
+                      ? RouteSparkline(
+                          route: post.routePoints,
+                          strokeWidth: compact ? 2 : 2.5,
+                          onMedia: true,
+                        )
+                      : const SizedBox.expand(),
+                ),
+                SizedBox(height: compact ? 4 : AppSpacing.sm),
+                if (caption.isNotEmpty)
+                  Text(
+                    caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.onMedia,
+                      fontSize: compact ? 11.5 : 14,
+                      fontWeight: FontWeight.w800,
+                      shadows: _mediaTextShadows,
+                    ),
+                  ),
+                if (detail.isNotEmpty) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.onMediaMuted,
+                      fontSize: 11.5,
+                      shadows: _mediaTextShadows,
+                    ),
+                  ),
+                ],
+                if (showAuthor) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    post.userName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.onMediaMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      shadows: _mediaTextShadows,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The wash that holds the overlay against an arbitrary photo.
+  ///
+  /// A summarised tile carries something at the top as well as the bottom, so
+  /// it darkens at both ends and stays lightest across the middle where the
+  /// trace is — the line brings its own contrast, and a flat scrim over the
+  /// whole photo would only mute it. A plain photo has text along the bottom
+  /// and nothing else, so it keeps the single band it always had, and none at
+  /// all when there is nothing over it to hold up.
+  static LinearGradient? _scrimFor({
+    required bool summarised,
+    required bool hasFooter,
+  }) {
+    if (!summarised) {
+      if (!hasFooter) return null;
+      return const LinearGradient(
+        colors: [Colors.transparent, Color(0xE6050505)],
+        stops: [0.55, 1],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      );
+    }
+
+    return const LinearGradient(
+      colors: [Color(0x73050505), Color(0x1A050505), Color(0x59050505), Color(0xD9050505)],
+      stops: [0, 0.32, 0.66, 1],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+    );
+  }
+}
+
+/// The post's photo, filling the tile.
+///
+/// What stands in while it loads has to be dark-tolerant chrome rather than a
+/// card: the scrim and the overlay are drawn over this in their media register,
+/// and swapping in a summary card here would put a black scrim across a cream
+/// tile for as long as the download took.
+class _PostPhoto extends StatelessWidget {
+  const _PostPhoto({required this.url, required this.borderRadius});
+
+  final String url;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) =>
+          MediaPlaceholder(borderRadius: borderRadius, failed: true),
+      loadingBuilder: (_, child, progress) =>
+          progress == null ? child : MediaPlaceholder(borderRadius: borderRadius),
     );
   }
 }

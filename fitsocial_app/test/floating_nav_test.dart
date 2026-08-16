@@ -3,6 +3,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fitsocial_app/shared/widgets/bottom_nav.dart';
+import 'package:fitsocial_app/shared/widgets/nav_icons.dart';
+
+/// Finds a destination by the mark it draws. The glyphs are painted paths
+/// rather than font icons, so there is no `find.byIcon` for them.
+Finder glyph(NavGlyph glyph) => find.byWidgetPredicate(
+      (widget) => widget is NavIcon && widget.glyph == glyph,
+    );
 
 /// Hosts the bar the way AppShell does, over scrollable content.
 Widget host({
@@ -99,7 +106,7 @@ void main() {
       host(currentIndex: 0, onTap: tapped.add),
     );
 
-    await tester.tap(find.byIcon(Icons.person_outline_rounded));
+    await tester.tap(glyph(NavGlyph.profile));
     await tester.pump();
 
     expect(tapped, [4]);
@@ -108,13 +115,33 @@ void main() {
   testWidgets('the selected destination takes the filled glyph',
       (tester) async {
     await tester.pumpWidget(host(currentIndex: 0, onTap: (_) {}));
-    expect(find.byIcon(Icons.home_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.home_outlined), findsNothing);
+    expect(tester.widget<NavIcon>(glyph(NavGlyph.home)).selected, isTrue);
+    expect(tester.widget<NavIcon>(glyph(NavGlyph.activity)).selected, isFalse);
 
     await tester.pumpWidget(host(currentIndex: 3, onTap: (_) {}));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.home_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+    expect(tester.widget<NavIcon>(glyph(NavGlyph.home)).selected, isFalse);
+    expect(tester.widget<NavIcon>(glyph(NavGlyph.activity)).selected, isTrue);
+  });
+
+  // The marks are drawn, so the outline and the solid are one path under a
+  // morph — nothing swaps, which is what lets the shape thicken into place
+  // rather than dissolve through a second glyph.
+  testWidgets('selecting morphs the mark rather than swapping glyphs',
+      (tester) async {
+    await tester.pumpWidget(host(currentIndex: 0, onTap: (_) {}));
+    await tester.pumpAndSettle();
+    final resting = tester.renderObject<RenderBox>(glyph(NavGlyph.home)).size;
+
+    await tester.pumpWidget(host(currentIndex: 3, onTap: (_) {}));
+    // Mid-morph both marks are still mounted, each at a single instance.
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(glyph(NavGlyph.home), findsOneWidget);
+    expect(glyph(NavGlyph.activity), findsOneWidget);
+
+    // And the layout box never moves; only paint changes.
+    await tester.pumpAndSettle();
+    expect(tester.renderObject<RenderBox>(glyph(NavGlyph.home)).size, resting);
   });
 
   testWidgets('hiding drops the capsule clear of the bottom edge',

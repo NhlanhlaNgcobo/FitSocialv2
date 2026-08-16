@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import 'dark_card.dart';
 
@@ -20,6 +19,8 @@ class StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
+
     return DarkCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,7 +46,7 @@ class StatTile extends StatelessWidget {
           Text(
             delta,
             style: TextStyle(
-              color: context.palette.success,
+              color: palette.success,
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),
@@ -67,10 +68,20 @@ class StatTile extends StatelessWidget {
                             child: Container(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(99),
-                                gradient: const LinearGradient(
+                                // Fades toward the card rather than toward
+                                // transparency. The old fade was the orange at
+                                // 40% alpha, which sinks into black on dark but
+                                // blooms into a pale glow on white — the columns
+                                // stopped reading as bars and started reading as
+                                // smudges.
+                                gradient: LinearGradient(
                                   colors: [
-                                    AppColors.orangeBright,
-                                    Color(0x66FF6B1A),
+                                    palette.brand,
+                                    Color.lerp(
+                                      palette.brand,
+                                      palette.surface,
+                                      0.55,
+                                    )!,
                                   ],
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,

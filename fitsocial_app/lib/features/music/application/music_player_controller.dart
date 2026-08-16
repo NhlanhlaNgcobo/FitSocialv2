@@ -113,6 +113,11 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   /// does not re-request its cover on every state push.
   String? _artUriInFlight;
 
+  /// The track URI the last shareable-artwork lookup was issued for. Separate
+  /// from [_artUriInFlight] because the two are keyed differently: bytes belong
+  /// to an image reference, the URL belongs to the track.
+  String? _artUrlInFlight;
+
   /// Spotify takes a moment to acknowledge a seek or a volume change, so an
   /// update arriving straight after one still reports the *old* value.
   /// Honouring it would snap the slider back under the user's finger. These
@@ -192,6 +197,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
           clearMessage: true,
         );
         unawaited(_loadArtwork(snapshot.track));
+        unawaited(_loadShareableArtwork(snapshot.track));
       },
       onError: (Object error) {
         if (!mounted) return;
@@ -265,6 +271,42 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     );
   }
 
+  /// Looks up an https cover-art URL for a track App Remote reported.
+  ///
+  /// The bytes [_loadArtwork] resolves can only ever be drawn here. Anything
+  /// that leaves this phone — a music Pulse, a presence row a friend sees —
+  /// needs a URL their device can fetch, and the Web API is where that comes
+  /// from. Without this, everything shared from the App Remote path names the
+  /// song but carries no cover.
+  Future<void> _loadShareableArtwork(NowPlayingTrack? track) async {
+    // The Web API path already reports a URL with the track itself.
+    if (track == null || track.albumArtUrl != null) return;
+
+    final uri = track.uri;
+    if (uri == null || uri.isEmpty || uri == _artUrlInFlight) return;
+    _artUrlInFlight = uri;
+
+    final String? url;
+    try {
+      url = await _spotify.fetchTrackArtworkUrl(uri);
+    } catch (_) {
+      // Artwork is decoration on a card whose job is playback: an expired
+      // token or a dropped connection here is not worth a message, and the
+      // next track change tries again.
+      return;
+    }
+    if (!mounted || url == null) return;
+
+    // The track may have moved on while the lookup was in flight.
+    final current = state.snapshot;
+    if (current?.track?.uri != uri) return;
+    state = state.copyWith(
+      snapshot: current!.copyWith(
+        track: current.track!.copyWith(albumArtUrl: url),
+      ),
+    );
+  }
+
   /// Pulls Web API player state. No-op on the App Remote path, which pushes.
   Future<void> refresh() async {
     if (state.service != MusicProviderService.spotify) return;
@@ -325,6 +367,21 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
         carried.albumArtUri == localTrack?.albumArtUri) {
       result = result.copyWith(
         track: carried.copyWith(albumArtBytes: resolvedArt),
+      );
+    }
+
+    // Same for the looked-up cover URL, keyed on the track rather than on the
+    // image reference — dropping it would send the sticker back to its
+    // placeholder on the next push and re-issue the lookup on the one after.
+    final resolvedArtUrl = localTrack?.albumArtUrl;
+    final carriedTrack = result.track;
+    if (resolvedArtUrl != null &&
+        carriedTrack != null &&
+        carriedTrack.albumArtUrl == null &&
+        carriedTrack.uri != null &&
+        carriedTrack.uri == localTrack?.uri) {
+      result = result.copyWith(
+        track: carriedTrack.copyWith(albumArtUrl: resolvedArtUrl),
       );
     }
 

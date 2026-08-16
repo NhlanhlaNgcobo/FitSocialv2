@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -16,6 +15,8 @@ import '../../music/presentation/connect_music_action.dart';
 import '../../music/presentation/music_mini_player.dart';
 import '../application/tracking_providers.dart';
 import '../data/live_run_service.dart';
+import 'finish_run_sheet.dart';
+import '../../music/presentation/music_island_action.dart';
 
 /// Live GPS run tracking: start/pause/stop with real-time distance,
 /// duration, and pace from the phone's location sensors, plus live BPM
@@ -74,6 +75,22 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       return;
     }
 
+    final distanceKm = double.parse(result.distanceKm.toStringAsFixed(2));
+    final route = result.points
+        .map((p) => RoutePoint(latitude: p.latitude, longitude: p.longitude))
+        .toList(growable: false);
+
+    // The run is over and the numbers are final; this only asks what it should
+    // look like on the way out. Every exit from the sheet saves, so nothing
+    // here can lose the run that just finished.
+    final choice = await showFinishRunSheet(
+      context: context,
+      route: route,
+      distanceLabel: '${distanceKm.toStringAsFixed(2)} km',
+      durationLabel: _formatElapsed(result.elapsed),
+    );
+    if (!mounted) return;
+
     setState(() {
       _isSaving = true;
       _errorMessage = null;
@@ -81,15 +98,13 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     try {
       final saved = await ref.read(activityActionsProvider).saveRun(
             RunLogDraft(
-              distanceKm: double.parse(result.distanceKm.toStringAsFixed(2)),
+              distanceKm: distanceKm,
               elapsed: result.elapsed,
               averagePace: result.formattedAveragePace,
-              shareToFeed: true,
+              shareToFeed: choice.shareToFeed,
               startedAt: result.startedAt,
-              routePoints: result.points
-                  .map((p) =>
-                      RoutePoint(latitude: p.latitude, longitude: p.longitude))
-                  .toList(growable: false),
+              routePoints: route,
+              backgroundImagePath: choice.backgroundImagePath,
             ),
           );
       if (!mounted) return;
@@ -133,6 +148,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       appBar: AppBar(
         title: const Text('Live Run'),
         actions: [
+          const MusicIslandAction(),
           _HeartRateAction(
             bpm: liveBpm,
             onPressed: () => context.push('/health'),
@@ -281,7 +297,8 @@ class _AmbientGlow extends StatelessWidget {
               center: const Alignment(0, -0.85),
               radius: 1.1,
               colors: [
-                AppColors.orangeBright.withValues(alpha: active ? 0.16 : 0.05),
+                context.palette.brand
+                    .withValues(alpha: active ? 0.16 : 0.05),
                 Colors.transparent,
               ],
             ),
@@ -344,12 +361,12 @@ class _RoutePlaceholder extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: AppColors.orangeBright.withValues(alpha: 0.12),
+              color: context.palette.brandSoft,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
+            child: Icon(
               Icons.route_rounded,
-              color: AppColors.orangeBright,
+              color: context.palette.brand,
               size: 26,
             ),
           ),
@@ -409,13 +426,13 @@ class _RunHeroCard extends StatelessWidget {
         ),
         border: Border.all(
           color: isRunning
-              ? AppColors.orangeBright.withValues(alpha: 0.35)
+              ? palette.brand.withValues(alpha: 0.35)
               : palette.stroke,
         ),
         boxShadow: [
           BoxShadow(
             color: isRunning
-                ? AppColors.orangeBright.withValues(alpha: 0.18)
+                ? palette.brand.withValues(alpha: 0.18)
                 : palette.navShadow,
             blurRadius: 26,
             offset: const Offset(0, 10),
@@ -507,8 +524,8 @@ class _StatusPill extends StatelessWidget {
     final palette = context.palette;
 
     final (String label, Color color) = switch (state) {
-      _ when isRunning => ('LIVE', AppColors.orangeBright),
-      _ when state.isAutoPaused => ('AUTO-PAUSED', AppColors.orangeBright),
+      _ when isRunning => ('LIVE', palette.brandText),
+      _ when state.isAutoPaused => ('AUTO-PAUSED', palette.brandText),
       _ when state.isPaused => ('PAUSED', palette.muted),
       // Also the state a stopped-but-unsaved run lands in, which reads
       // correctly: the screen is ready to start another one.
@@ -638,7 +655,7 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final valueColor = accent ? AppColors.orangeBright : palette.text;
+    final valueColor = accent ? palette.brandText : palette.text;
 
     return Column(
       children: [
@@ -743,7 +760,7 @@ class _GlowButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: AppColors.orangeBright
+            color: context.palette.brand
                 .withValues(alpha: onPressed == null ? 0 : 0.32),
             blurRadius: 24,
             offset: const Offset(0, 10),
@@ -812,7 +829,7 @@ class _Banner extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final color = switch (tone) {
-      _BannerTone.brand => AppColors.orangeBright,
+      _BannerTone.brand => palette.brandText,
       _BannerTone.danger => palette.danger,
     };
 
@@ -862,9 +879,7 @@ class _HeartRateAction extends StatelessWidget {
     return Tooltip(
       message: isLive ? 'Heart-rate device' : 'Connect heart-rate device',
       child: Material(
-        color: isLive
-            ? AppColors.orangeBright.withValues(alpha: 0.14)
-            : Colors.transparent,
+        color: isLive ? palette.brandSoft : Colors.transparent,
         borderRadius: BorderRadius.circular(99),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -874,7 +889,7 @@ class _HeartRateAction extends StatelessWidget {
             child: Icon(
               isLive ? Icons.favorite_rounded : Icons.monitor_heart_outlined,
               size: 20,
-              color: isLive ? AppColors.orangeBright : palette.text,
+              color: isLive ? palette.brand : palette.text,
             ),
           ),
         ),

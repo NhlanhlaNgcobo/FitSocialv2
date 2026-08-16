@@ -357,14 +357,6 @@ final spotifyMyPlaylistsProvider =
   return ref.watch(spotifyApiServiceProvider).fetchMyPlaylists();
 });
 
-/// Workout-appropriate playlists surfaced via Spotify search.
-final spotifyWorkoutPlaylistsProvider =
-    FutureProvider.family<List<SpotifyPlaylist>, String>((ref, query) async {
-  final connections = ref.watch(musicConnectionsProvider);
-  if (!connections.isConnected(MusicProviderService.spotify)) return const [];
-  return ref.watch(spotifyApiServiceProvider).searchPlaylists(query);
-});
-
 /// The connected user's YouTube Music playlists.
 final youTubeMusicPlaylistsProvider =
     FutureProvider<List<YouTubeMusicPlaylist>>((ref) async {

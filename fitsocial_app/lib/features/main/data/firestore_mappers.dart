@@ -116,6 +116,9 @@ class FirestoreMapper {
       postsCount: user.postsCount,
       avatarUrl: user.avatarUrl,
       bio: user.bio,
+      location: user.location,
+      pronouns: user.pronouns,
+      links: user.links,
     );
   }
 

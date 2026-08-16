@@ -15,8 +15,11 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/app_session.dart';
 import '../application/username_availability_checker.dart';
+import '../data/user_profile_repository.dart';
 import '../data/username_repository.dart';
+import '../domain/body_metrics.dart';
 import '../domain/username.dart';
+import 'body_metrics_fields.dart';
 import 'username_availability_hint.dart';
 
 /// The first screen with the user's own name on it, so it is built as a
@@ -31,7 +34,12 @@ class ProfileSetupScreen extends ConsumerStatefulWidget {
 
 class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
     with SingleTickerProviderStateMixin {
-  static const int _sectionCount = 4;
+  static const int _sectionCount = 5;
+
+  /// Height and weight as they currently stand in the body section. Saved
+  /// separately from the profile — these go to the owner-only part of the
+  /// account, not the public profile document.
+  BodyMetrics _body = const BodyMetrics();
   static const int _bioLimit = 160;
 
   /// The pieces the progress meter counts. Only the first three are required
@@ -199,6 +207,22 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
       // Re-run now that there is a verdict — this is what catches a handle
       // whose owner was only discovered after the press.
       if (!(_formKey.currentState?.validate() ?? false)) return;
+    }
+
+    // Body metrics go first, and only when there is something to write. They
+    // live outside the profile document, so this is a separate write either
+    // way — and doing it before the profile keeps it from racing the
+    // navigation that follows a successful completion.
+    if (!_body.isEmpty) {
+      try {
+        await ref.read(userProfileRepositoryProvider).saveBodyMetrics(_body);
+      } catch (error) {
+        // Height and weight are optional here. Losing them must not cost the
+        // user their account setup — they can enter them again from the
+        // profile, and the alternative is being stuck on this screen.
+        debugPrint('Profile setup: body metrics not saved: $error');
+      }
+      if (!mounted) return;
     }
 
     // Routing happens off the session's auth stage, which only advances on
@@ -432,6 +456,27 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
                           controller: _entranceController,
                           index: sectionIndex++,
                           itemCount: _sectionCount,
+                          child: _SectionCard(
+                            icon: Icons.monitor_heart_outlined,
+                            title: 'Your body',
+                            subtitle: 'Private to you. Powers your BMI.',
+                            children: [
+                              BodyMetricsFields(
+                                initial: _body,
+                                // The scale and the healthy-weight line belong
+                                // on the calculator. Here it is one more
+                                // section in a form, so it gets one line.
+                                showReadout: false,
+                                onChanged: (metrics) => _body = metrics,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        StaggeredFadeIn(
+                          controller: _entranceController,
+                          index: sectionIndex++,
+                          itemCount: _sectionCount,
                           child: Row(
                             children: [
                               Icon(
@@ -442,8 +487,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Everything here is public on your profile. '
-                                  'You can change it any time.',
+                                  'Your name, bio and location are public on '
+                                  'your profile. Your height and weight are '
+                                  'not. You can change any of it any time.',
                                   style: TextStyle(
                                     color: palette.muted,
                                     fontSize: 12.5,

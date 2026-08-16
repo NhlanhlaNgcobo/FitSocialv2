@@ -119,6 +119,63 @@ void main() {
     expect(ExploreFilter.meals.matches(meal), isTrue);
   });
 
+  group('isPhotoPost — what the profile photo grid keeps', () {
+    test('a workout backdrop stays with its workout', () {
+      // Picking a background for a workout card is not sharing a photo. The
+      // grid used to show it as a bare tile, so the same session appeared
+      // twice: once as a picture and once under Workouts.
+      final post = _post(
+        activity: 'Leg Day',
+        postType: PostType.workout,
+        imageUrl: 'https://x/backdrop.jpg',
+        workoutData: const {'title': 'Leg Day'},
+      );
+
+      expect(ExploreFilterX.isPhotoPost(post), isFalse);
+      expect(ExploreFilter.workouts.matches(post), isTrue);
+    });
+
+    test('a run carrying a picture stays with its run', () {
+      final post = _post(
+        activity: 'Run',
+        postType: PostType.run,
+        imageUrl: 'https://x/backdrop.jpg',
+      );
+
+      expect(ExploreFilterX.isPhotoPost(post), isFalse);
+      expect(ExploreFilter.runs.matches(post), isTrue);
+    });
+
+    test('a photographed meal stays with its meal', () {
+      final post = _post(postType: PostType.meal, imageUrl: 'https://x/y.jpg');
+
+      expect(ExploreFilterX.isPhotoPost(post), isFalse);
+    });
+
+    test('a plain photo post is kept', () {
+      final post = _post(postType: PostType.image, imageUrl: 'https://x/y.jpg');
+
+      expect(ExploreFilterX.isPhotoPost(post), isTrue);
+    });
+
+    test('a post with no picture is not a photo post', () {
+      expect(ExploreFilterX.isPhotoPost(_post()), isFalse);
+      expect(ExploreFilterX.isPhotoPost(_post(imageUrl: '')), isFalse);
+    });
+
+    test('the Photos chip still catches what the grid drops', () {
+      // Explore's chip means "show me pictures", wherever they are. Only the
+      // tabbed profile grid needs the stricter rule.
+      final post = _post(
+        postType: PostType.workout,
+        imageUrl: 'https://x/backdrop.jpg',
+      );
+
+      expect(ExploreFilter.photos.matches(post), isTrue);
+      expect(ExploreFilterX.isPhotoPost(post), isFalse);
+    });
+  });
+
   test('applyExploreFilter keeps order and leaves "all" untouched', () {
     final posts = [
       _post(postType: PostType.workout),

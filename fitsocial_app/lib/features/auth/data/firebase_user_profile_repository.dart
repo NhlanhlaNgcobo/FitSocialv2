@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../domain/auth_models.dart';
+import '../domain/body_metrics.dart';
 import '../domain/username.dart';
 import 'firebase_username_repository.dart';
 import 'user_profile_repository_contract.dart';
@@ -214,6 +215,39 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
     });
 
     return saved;
+  }
+
+  /// Body metrics live at `users/{uid}/private/body`, alongside the email, and
+  /// for the same reason: the profile document above is world-readable to
+  /// signed-in users, so anything written there is published to everyone.
+  DocumentReference<Map<String, dynamic>> _bodyRef(String userId) =>
+      _firestore.collection('users').doc(userId).collection('private').doc('body');
+
+  @override
+  Future<BodyMetrics> loadBodyMetrics() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const BodyMetrics();
+
+    final snapshot = await _bodyRef(user.uid).get();
+    return BodyMetrics.fromMap(snapshot.data());
+  }
+
+  @override
+  Future<void> saveBodyMetrics(BodyMetrics metrics) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      throw StateError('No authenticated Firebase user found for body save.');
+    }
+
+    // Merged, so clearing one field leaves the other standing — the calculator
+    // lets a user set a height now and a weight later.
+    await _bodyRef(user.uid).set(
+      {
+        ...metrics.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
   }
 
   Future<String> _uploadAvatar(String userId, String localFilePath) async {

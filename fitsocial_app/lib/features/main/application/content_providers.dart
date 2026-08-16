@@ -8,6 +8,7 @@ import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
+import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 
 // ---------------------------------------------------------------------------
@@ -264,6 +265,39 @@ final windowSessionsProvider = FutureProvider.autoDispose
   return sessions
       .where((session) => window.contains(session.startedAt))
       .toList(growable: false);
+});
+
+// ---------------------------------------------------------------------------
+// Meal tracking — the logged meals, the targets, and a window's totals
+// ---------------------------------------------------------------------------
+
+/// Every meal the user has logged, newest first.
+///
+/// The single read behind the whole tracking page: the macro summary and the
+/// meal list are both views onto it, and switching between Day, Week and Month
+/// is a filter rather than another query.
+///
+/// autoDispose for the same reason as [activitySessionsProvider] — everything
+/// derived from it is anchored to "today", and a cached list would still be
+/// reporting yesterday's totals after midnight.
+final loggedMealsProvider =
+    FutureProvider.autoDispose<List<LoggedMeal>>((ref) {
+  return ref.watch(contentRepositoryProvider).getLoggedMeals();
+});
+
+/// The user's daily macro targets. Not autoDispose: these change rarely, and
+/// they are the denominator on every bar on the page.
+final macroGoalsProvider = FutureProvider<MacroGoals>((ref) {
+  ref.watch(appSessionProvider);
+  return ref.watch(contentRepositoryProvider).getMacroGoals();
+});
+
+/// Everything the tracking page reports for one window.
+final mealWindowSummaryProvider = FutureProvider.autoDispose
+    .family<MealWindowSummary, ProgressWindow>((ref, window) async {
+  final meals = await ref.watch(loggedMealsProvider.future);
+  final goals = await ref.watch(macroGoalsProvider.future);
+  return MealWindowSummary.from(meals: meals, window: window, goals: goals);
 });
 
 /// Following / Followers / Likes for one profile. Keyed by user id so the

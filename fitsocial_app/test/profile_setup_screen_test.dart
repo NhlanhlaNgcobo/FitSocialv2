@@ -8,6 +8,7 @@ import 'package:fitsocial_app/features/auth/data/auth_repository_contract.dart';
 import 'package:fitsocial_app/features/auth/data/user_profile_repository.dart';
 import 'package:fitsocial_app/features/auth/data/user_profile_repository_contract.dart';
 import 'package:fitsocial_app/features/auth/domain/auth_models.dart';
+import 'package:fitsocial_app/features/auth/domain/body_metrics.dart';
 import 'package:fitsocial_app/features/auth/presentation/profile_setup_screen.dart';
 
 /// The setup screen is the only place a handle is ever chosen, so the rules it
@@ -83,7 +84,68 @@ void main() {
     expect(profiles.savedHandle, 'bearrsa');
     expect(profiles.savedBio, 'Chasing a sub-4 marathon.');
   });
+
+  group('body metrics on setup', () {
+    testWidgets('offers height and weight, and works out the BMI live',
+        (tester) async {
+      await _pumpScreen(tester);
+
+      await tester.enterText(_suffixField('cm'), '175');
+      await tester.enterText(_suffixField('kg'), '70');
+      await tester.pump();
+
+      expect(find.text('BMI 22.9'), findsOneWidget);
+      expect(find.text('Healthy'), findsOneWidget);
+    });
+
+    testWidgets('stores them in metric alongside the profile', (tester) async {
+      final profiles = _FakeProfiles();
+      await _pumpScreen(tester, profiles: profiles);
+
+      await tester.enterText(_field('e.g. Bear Mdlalose'), 'Bear Mdlalose');
+      await tester.enterText(_field('yourhandle'), 'bearrsa');
+      await tester.enterText(_suffixField('cm'), '175');
+      await tester.enterText(_suffixField('kg'), '70');
+      await tester.pump();
+
+      await tester.tap(find.text('Complete Setup'));
+      await tester.pumpAndSettle();
+
+      expect(profiles.saveCount, 1);
+      expect(profiles.savedBody!.heightCm, 175);
+      expect(profiles.savedBody!.weightKg, 70);
+    });
+
+    // Height and weight are optional here. Someone who skips them must still
+    // get an account.
+    testWidgets('writes nothing when they are left blank', (tester) async {
+      final profiles = _FakeProfiles();
+      await _pumpScreen(tester, profiles: profiles);
+
+      await tester.enterText(_field('e.g. Bear Mdlalose'), 'Bear Mdlalose');
+      await tester.enterText(_field('yourhandle'), 'bearrsa');
+      await tester.pump();
+
+      await tester.tap(find.text('Complete Setup'));
+      await tester.pumpAndSettle();
+
+      expect(profiles.saveCount, 1);
+      expect(profiles.savedBody, isNull);
+    });
+
+    testWidgets('does not claim the private figures are public',
+        (tester) async {
+      await _pumpScreen(tester);
+
+      expect(
+        find.textContaining('Your height and weight are not'),
+        findsOneWidget,
+      );
+    });
+  });
 }
+
+Finder _suffixField(String suffix) => find.widgetWithText(TextField, suffix);
 
 Finder _field(String hint) => find.widgetWithText(TextFormField, hint);
 
@@ -151,6 +213,7 @@ class _FakeProfiles implements UserProfileRepository {
   String? savedDisplayName;
   String? savedHandle;
   String? savedBio;
+  BodyMetrics? savedBody;
 
   @override
   Future<UserProfileDraft?> loadCurrentProfile() async => null;
@@ -176,4 +239,11 @@ class _FakeProfiles implements UserProfileRepository {
       location: location,
     );
   }
+
+  @override
+  Future<BodyMetrics> loadBodyMetrics() async => const BodyMetrics();
+
+  @override
+  Future<void> saveBodyMetrics(BodyMetrics metrics) async =>
+      savedBody = metrics;
 }

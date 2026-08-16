@@ -109,6 +109,21 @@ extension ExploreFilterX on ExploreFilter {
     return post.metricLabels
         .any((label) => label.toLowerCase().contains('kcal'));
   }
+
+  /// Whether the picture on [post] *is* the post, rather than a backdrop
+  /// chosen to sit behind an activity card.
+  ///
+  /// A workout can carry a photo picked as its background, and that photo is
+  /// decoration on a session — the session is what was shared. So a post like
+  /// that belongs on the tab for its own kind and nowhere else, which is why
+  /// this is stricter than [ExploreFilter.photos]: that chip is a request to
+  /// see pictures wherever they are, and this is the question a tabbed profile
+  /// grid asks — "is there anything here the other tabs don't already hold?"
+  static bool isPhotoPost(FeedPost post) {
+    final url = post.imageUrl;
+    if (url == null || url.isEmpty) return false;
+    return !isWorkout(post) && !isRun(post) && !isMeal(post);
+  }
 }
 
 /// [posts] filtered to [filter], preserving the ranked order.

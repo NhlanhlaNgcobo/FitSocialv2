@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../application/pulse_providers.dart';
 import '../data/pulse_media_picker.dart';
 import '../domain/pulse_models.dart';
@@ -188,7 +189,6 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   Future<void> _share() async {
     if (!_canShare) return;
     FocusScope.of(context).unfocus();
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
 
     final draft = PulseDraft(
@@ -207,9 +207,19 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
     try {
       await ref.read(pulseActionsProvider).publish(draft);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Pulse is live for 24 hours.')),
-      );
+      // The same acknowledgement a deleted post gets: a floating pill on the
+      // root overlay rather than a snackbar. This route is about to pop, so the
+      // overlay is grabbed first — it outlives the screen that triggered it,
+      // and a snackbar anchored to this Scaffold would leave with it.
+      final overlay = Overlay.maybeOf(context, rootOverlay: true);
+      if (overlay != null) {
+        showQuickToastOn(
+          overlay,
+          'Pulse is live for 24 hours',
+          icon: Icons.bolt_rounded,
+          tone: ToastTone.success,
+        );
+      }
       context.pop();
     } catch (error) {
       if (!mounted) return;
@@ -308,10 +318,12 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
 
   Widget _buildCanvas(double keyboardInset) {
     switch (_mode) {
-      // Not reachable from here: sharing a post to Pulse starts from the post,
-      // not from this composer, and lands on SharePostToPulseScreen. Listed so
-      // adding a Pulse kind can't silently fall through this switch.
+      // Neither is reachable from here: sharing a post starts from the post
+      // and sharing a track starts from the player, and both land on their own
+      // screen. Listed so adding a Pulse kind can't silently fall through this
+      // switch.
       case PulseMediaType.post:
+      case PulseMediaType.music:
         return const SizedBox.shrink();
 
       case PulseMediaType.text:
@@ -330,7 +342,9 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
                   left: AppSpacing.lg,
                   right: AppSpacing.lg,
                   top: 72,
-                  bottom: keyboardInset > 0 ? 72 : 160,
+                  // Clears the whole control stack — palette, Share, mode
+                  // switch — so the last line typed is never behind a button.
+                  bottom: keyboardInset > 0 ? 72 : 184,
                 ),
                 child: Center(
                   child: SingleChildScrollView(
@@ -446,35 +460,18 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
           // While the keyboard is up, the mode switch and Share step out of
           // the way — reaching them means finishing the sentence first.
           if (!isTyping) ...[
-            const SizedBox(height: AppSpacing.md),
-            _ModeSelector(mode: _mode, onSelected: _switchMode),
+            // Share sits with the writing it belongs to, and the mode switch
+            // holds the bottom edge where a tab bar belongs: the kind of Pulse
+            // is picked once on the way in, but Share is read on the way out.
+            //
             // Nothing to share yet on an empty camera screen, and a dead grey
             // button under the shutter is just noise. It arrives with the shot.
             if (_mode == PulseMediaType.text || _hasMedia) ...[
               const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _canShare ? _share : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.orangeBright,
-                    disabledBackgroundColor: const Color(0x66111111),
-                    foregroundColor: AppColors.onMedia,
-                    disabledForegroundColor: AppColors.onMediaMuted,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  icon: const Icon(Icons.bolt_rounded),
-                  label: const Text(
-                    'Share Pulse',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ),
+              _ShareButton(onPressed: _canShare ? _share : null),
             ],
+            const SizedBox(height: AppSpacing.md),
+            _ModeSelector(mode: _mode, onSelected: _switchMode),
           ],
         ],
       ),
@@ -844,6 +841,11 @@ class _CaptionField extends StatelessWidget {
   }
 }
 
+/// The backdrop a written Pulse gets set on.
+///
+/// The chosen swatch wears a ring with a gap inside it rather than a thicker
+/// border — a heavier edge on a small circle eats the colour it is meant to be
+/// showing off.
 class _GradientPicker extends StatelessWidget {
   const _GradientPicker({required this.selectedKey, required this.onSelected});
 
@@ -863,21 +865,133 @@ class _GradientPicker extends StatelessWidget {
           final selected = gradient.key == selectedKey;
           return GestureDetector(
             onTap: () => onSelected(gradient.key),
-            child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: gradient.linear,
-                border: Border.all(
-                  color: selected ? AppColors.onMedia : const Color(0x66FFFFFF),
-                  width: selected ? 3 : 1,
+            child: Semantics(
+              button: true,
+              selected: selected,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                width: 40,
+                height: 40,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+                padding: EdgeInsets.all(selected ? 3 : 0),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.onMedia
+                        : const Color(0x00FFFFFF),
+                    width: 2,
+                  ),
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: gradient.linear,
+                    border: Border.all(
+                      color: const Color(0x59FFFFFF),
+                    ),
+                  ),
                 ),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// The one thing this screen exists to do.
+///
+/// Lit orange with a glow under it while it is live, and smoked glass while
+/// there is nothing to send — the difference has to be readable at a glance
+/// over any photo, which a greyed-out fill alone is not.
+class _ShareButton extends StatefulWidget {
+  const _ShareButton({required this.onPressed});
+
+  /// Null while the Pulse is not ready to go out.
+  final VoidCallback? onPressed;
+
+  @override
+  State<_ShareButton> createState() => _ShareButtonState();
+}
+
+class _ShareButtonState extends State<_ShareButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onPressed != null;
+    final foreground =
+        enabled ? AppColors.onMedia : AppColors.onMediaMuted;
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: 'Share Pulse',
+      child: GestureDetector(
+        onTap: widget.onPressed,
+        onTapDown: enabled ? (_) => _setPressed(true) : null,
+        onTapCancel: () => _setPressed(false),
+        onTapUp: (_) => _setPressed(false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            height: 54,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              gradient: enabled
+                  ? const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [AppColors.orangeBright, AppColors.orange],
+                    )
+                  : null,
+              color: enabled ? null : const Color(0x8A000000),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: enabled
+                    ? const Color(0x3DFFFFFF)
+                    : const Color(0x1FFFFFFF),
+              ),
+              boxShadow: enabled
+                  ? [
+                      BoxShadow(
+                        color: AppColors.orangeBright.withValues(alpha: 0.38),
+                        blurRadius: 22,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bolt_rounded, size: 20, color: foreground),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  'Share Pulse',
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -891,51 +1005,143 @@ class _ModeSelector extends StatelessWidget {
 
   // Photo leads: it is where the composer opens, and the selected tab reads
   // wrong sitting in the middle of the row on arrival.
-  static const _labels = {
-    PulseMediaType.photo: 'Photo',
-    PulseMediaType.video: 'Video',
-    PulseMediaType.text: 'Text',
-  };
+  static const _options = <(PulseMediaType, IconData, String)>[
+    (PulseMediaType.photo, Icons.photo_camera_rounded, 'Photo'),
+    (PulseMediaType.video, Icons.videocam_rounded, 'Video'),
+    (PulseMediaType.text, Icons.format_quote_rounded, 'Text'),
+  ];
+
+  static const _duration = Duration(milliseconds: 220);
 
   @override
   Widget build(BuildContext context) {
+    final selectedIndex = _options.indexWhere((option) => option.$1 == mode);
+
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
         color: const Color(0x99000000),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x33FFFFFF)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0x2EFFFFFF)),
       ),
-      child: Row(
-        children: [
-          for (final entry in _labels.entries)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onSelected(entry.key),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: entry.key == mode
-                        ? AppColors.orangeBright
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    entry.value,
-                    style: TextStyle(
-                      color: entry.key == mode
-                          ? AppColors.onMedia
-                          : const Color(0xCCFFFFFF),
-                      fontWeight: FontWeight.w700,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tabWidth = constraints.maxWidth / _options.length;
+          return SizedBox(
+            height: 44,
+            child: Stack(
+              children: [
+                // One pill that slides between the tabs rather than three that
+                // blink on and off: the travel is what says these are three
+                // positions of one control, not three separate buttons.
+                AnimatedPositioned(
+                  duration: _duration,
+                  curve: Curves.easeOutCubic,
+                  left: tabWidth * selectedIndex,
+                  width: tabWidth,
+                  top: 0,
+                  bottom: 0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [AppColors.orangeBright, AppColors.orange],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              AppColors.orangeBright.withValues(alpha: 0.28),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
+                // Expanded, and stretched across the cross axis, so each tab's
+                // tap target is the whole height of the bar. Left to size
+                // itself, the row collapses to the height of the label inside
+                // it and everything below the text stops responding.
+                SizedBox.expand(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final (type, icon, label) in _options)
+                        Expanded(
+                          child: _ModeTab(
+                            icon: icon,
+                            label: label,
+                            selected: type == mode,
+                            onTap: () => onSelected(type),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-        ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ModeTab extends StatelessWidget {
+  const _ModeTab({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        // Icon and label brighten on the same curve the pill travels on, so
+        // the label is lit by the time the pill arrives under it.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: selected ? 1 : 0),
+          duration: _ModeSelector._duration,
+          curve: Curves.easeOutCubic,
+          builder: (context, t, _) {
+            final color = Color.lerp(
+              const Color(0xB3FFFFFF),
+              AppColors.onMedia,
+              t,
+            )!;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 17, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13.5,
+                    fontWeight:
+                        FontWeight.lerp(FontWeight.w600, FontWeight.w800, t),
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

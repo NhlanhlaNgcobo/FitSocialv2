@@ -1,6 +1,7 @@
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
+import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 
 abstract class ContentRepository {
@@ -20,6 +21,22 @@ abstract class ContentRepository {
   /// period's deltas, and the session list — and one user's own training
   /// history is small enough that fetching it once beats a query per view.
   Future<List<ActivitySession>> getActivitySessions();
+
+  /// Every meal the signed-in user has logged.
+  ///
+  /// Unwindowed for the same reason as [getActivitySessions]: the meal
+  /// tracking page reads one history through a day, a week and a month picker,
+  /// and paging between them should not cost a query each time.
+  Future<List<LoggedMeal>> getLoggedMeals();
+
+  /// The user's daily macro targets, or the defaults when they have set none.
+  Future<MacroGoals> getMacroGoals();
+
+  Future<void> setMacroGoals(MacroGoals goals);
+
+  /// Removes a logged meal. The log only — a shared meal keeps its post, the
+  /// same way [deleteActivitySession] leaves a session's post alone.
+  Future<void> deleteLoggedMeal(String id);
 
   /// Days a week the user is aiming to train — the consistency denominator.
   /// Falls back to the default when they have never set one.

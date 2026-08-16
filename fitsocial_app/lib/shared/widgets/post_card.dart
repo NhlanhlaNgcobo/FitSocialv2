@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
@@ -18,7 +17,7 @@ import 'mention_text.dart';
 import 'profile_link.dart';
 import 'quick_toast.dart';
 import 'reaction_bar.dart';
-import 'run_route_map.dart';
+import 'run_summary_card.dart';
 import 'share_sheet.dart';
 import 'workout_summary_card.dart';
 
@@ -87,6 +86,15 @@ class PostCard extends StatelessWidget {
 
   /// A polyline needs at least two fixes; a single point is not a route.
   bool get _hasRoute => routePoints.length >= 2;
+
+  /// Whether this post is a run. A route outranks the type, the way it does
+  /// everywhere else: a run tracked before [PostType.run] existed was stamped
+  /// `text` and is recognisable only by its trace.
+  bool get _isRun => postType == PostType.run || _hasRoute;
+
+  /// Whether there is a run card to draw — a shape to show, a photo to show it
+  /// on, or both. A run with neither is words, and renders as words.
+  bool get _hasRunCard => _isRun && (_hasRoute || imageUrl != null);
 
   /// This post in the form the share flows want it — the sheet, the Pulse
   /// card, and the link all read from one snapshot.
@@ -313,9 +321,9 @@ class PostCard extends StatelessWidget {
 
   /// Selects the correct visual payload based on [postType].
   Widget _buildPayload(AppPalette palette) {
-    // A route outranks the type: a run is drawn as its map whether it was
-    // stamped PostType.run or written as text before that existed.
-    if (_hasRoute) return _buildRoutePayload();
+    // A run outranks the type and outranks its photo: the photo is a backdrop
+    // for the run's shape and its numbers, not a photo post.
+    if (_hasRunCard) return _buildRunPayload();
 
     switch (postType) {
       // A meal is a photo of food, so it renders as one.
@@ -332,15 +340,15 @@ class PostCard extends StatelessWidget {
     }
   }
 
-  // ── ROUTE payload (completed run map preview) ─────────────────────────────
+  // ── RUN payload (the route as a line, on the runner's own photo) ──────────
 
-  Widget _buildRoutePayload() {
-    return RunRouteMap(
-      route: routePoints
-          .map((point) => LatLng(point.latitude, point.longitude))
-          .toList(growable: false),
-      mode: RunRouteMapMode.completed,
-      height: 200,
+  Widget _buildRunPayload() {
+    return RunSummaryCard(
+      route: routePoints,
+      distanceLabel: RunSummaryCard.distanceFrom(metricLabels),
+      durationLabel: RunSummaryCard.durationFrom(metricLabels),
+      background: imageUrl == null ? null : NetworkImage(imageUrl!),
+      margin: const EdgeInsets.symmetric(horizontal: _gutter),
     );
   }
 
@@ -446,6 +454,9 @@ class PostCard extends StatelessWidget {
     return WorkoutSummaryCard(
       workoutData: workoutData,
       activity: activity,
+      // A workout's photo is a backdrop for its numbers, not a photo post — so
+      // it goes behind the summary rather than replacing it.
+      backgroundImageUrl: imageUrl,
       margin: const EdgeInsets.symmetric(horizontal: _gutter),
     );
   }
@@ -594,7 +605,7 @@ class PostInteractionRow extends ConsumerWidget {
             icon: isBookmarked
                 ? Icons.bookmark_rounded
                 : Icons.bookmark_border_rounded,
-            color: isBookmarked ? AppColors.orangeBright : palette.muted,
+            color: isBookmarked ? palette.brand : palette.muted,
             size: iconSize,
             onTap: () async {
               final userId = FirebaseAuth.instance.currentUser?.uid;

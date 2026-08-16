@@ -21,6 +21,7 @@ import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../domain/app_models.dart';
 import 'tag_people_sheet.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class PostComposeScreen extends ConsumerStatefulWidget {
   const PostComposeScreen({super.key});
@@ -184,7 +185,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
     return Scaffold(
       backgroundColor: palette.background,
-      appBar: AppBar(title: const Text('Share Post')),
+      appBar: AppBar(
+        title: const Text('Share Post'),
+        actions: const [MusicIslandAction()],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -273,15 +277,13 @@ class _MediaPicker extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: AppColors.orangeBright.withValues(alpha: 0.1),
+              color: palette.brandSoft,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: AppColors.orangeBright.withValues(alpha: 0.28),
-              ),
+              border: Border.all(color: palette.brandSoftStroke),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.add_photo_alternate_rounded,
-              color: AppColors.orangeBright,
+              color: palette.brand,
               size: 32,
             ),
           ),
@@ -512,7 +514,7 @@ class _ComposerCard extends StatelessWidget {
             minLines: 4,
             maxLines: 10,
             textCapitalization: TextCapitalization.sentences,
-            cursorColor: AppColors.orangeBright,
+            cursorColor: palette.brand,
             style: TextStyle(
               color: palette.text,
               fontSize: 16,
@@ -560,7 +562,7 @@ class _ComposerCard extends StatelessWidget {
                   controller: activityController,
                   textCapitalization: TextCapitalization.sentences,
                   maxLength: activityLimit,
-                  cursorColor: AppColors.orangeBright,
+                  cursorColor: palette.brand,
                   style: TextStyle(
                     color: palette.text,
                     fontSize: 14,
@@ -726,12 +728,12 @@ class _ShareBar extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(
+                  SizedBox(
                     width: 14,
                     height: 14,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.orangeBright,
+                      color: palette.brand,
                     ),
                   ),
                   const SizedBox(width: 10),

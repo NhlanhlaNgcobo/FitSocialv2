@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/theme_mode_controller.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -20,7 +20,10 @@ class SettingsScreen extends ConsumerWidget {
     final displayName = profile?.displayName ?? 'FitSocial User';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        actions: const [MusicIslandAction()],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -203,9 +206,7 @@ class _ThemeModeSegment extends StatelessWidget {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected
-                ? AppColors.orangeBright.withValues(alpha: 0.16)
-                : Colors.transparent,
+            color: isSelected ? palette.brandSoft : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -214,7 +215,7 @@ class _ThemeModeSegment extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: isSelected ? AppColors.orangeBright : palette.muted,
+                color: isSelected ? palette.brand : palette.muted,
               ),
               const SizedBox(height: 6),
               Text(

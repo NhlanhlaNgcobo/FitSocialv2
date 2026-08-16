@@ -3,6 +3,7 @@ import 'package:fitsocial_app/features/auth/application/app_session.dart';
 import 'package:fitsocial_app/features/auth/data/auth_repository_contract.dart';
 import 'package:fitsocial_app/features/auth/data/user_profile_repository_contract.dart';
 import 'package:fitsocial_app/features/auth/domain/auth_models.dart';
+import 'package:fitsocial_app/features/auth/domain/body_metrics.dart';
 
 /// Cold-start behaviour, which is what decides the first screen anyone sees.
 /// The case that matters most: credentials cached on the device outlive the
@@ -70,27 +71,92 @@ void main() {
       expect(session.stage, AuthStage.unauthenticated);
     });
   });
+
+  /// The profile page is where a bootstrap that failed above becomes visible:
+  /// a placeholder name and no bio, for the rest of the launch, because nothing
+  /// asked again. These cover the second ask.
+  group('AppSession.reloadProfile', () {
+    test('picks up the profile a failed bootstrap never loaded', () async {
+      final profiles = _FakeProfiles(profile: _profile, loadThrows: true);
+      final session = await _bootstrapped(
+        _FakeAuth(email: 'athlete@example.com'),
+        profiles: profiles,
+      );
+      expect(session.profile, isNull);
+
+      profiles.loadThrows = false;
+      await session.reloadProfile();
+
+      expect(session.profile?.bio, 'Chasing a sub-4 marathon.');
+      expect(session.profile?.links, 'bear.run');
+    });
+
+    test('a still-failing read leaves the session as it was', () async {
+      final profiles = _FakeProfiles(profile: _profile, loadThrows: true);
+      final session = await _bootstrapped(
+        _FakeAuth(email: 'athlete@example.com'),
+        profiles: profiles,
+      );
+
+      await session.reloadProfile();
+
+      expect(session.stage, AuthStage.authenticated);
+      expect(session.profile, isNull);
+    });
+
+    test('keeps the loaded profile when the document reads back empty',
+        () async {
+      // Null is "no document", which a signed-in session should not act on by
+      // discarding what it already has.
+      final profiles = _FakeProfiles(profile: _profile);
+      final session = await _bootstrapped(
+        _FakeAuth(email: 'athlete@example.com'),
+        profiles: profiles,
+      );
+
+      profiles.profile = null;
+      await session.reloadProfile();
+
+      expect(session.profile?.bio, 'Chasing a sub-4 marathon.');
+    });
+
+    test('does not read anything while signed out', () async {
+      final profiles = _FakeProfiles();
+      final session = await _bootstrapped(
+        _FakeAuth(email: null),
+        profiles: profiles,
+      );
+
+      await session.reloadProfile();
+
+      expect(profiles.loadCount, 0);
+    });
+  });
 }
 
 const _profile = UserProfileDraft(
   displayName: 'Athlete',
   handle: '@athlete',
-  bio: '',
-  location: '',
+  bio: 'Chasing a sub-4 marathon.',
+  location: 'Cape Town',
+  pronouns: 'they/them',
+  links: 'bear.run',
 );
 
 /// Builds a session and waits for the constructor's async bootstrap to settle.
+///
+/// [profiles] is for the tests that need to change what the repository answers
+/// after the bootstrap has run; the rest just describe the first answer.
 Future<AppSession> _bootstrapped(
   _FakeAuth auth, {
   UserProfileDraft? profile,
   bool loadThrows = false,
+  _FakeProfiles? profiles,
 }) async {
   final session = AppSession(
     authRepository: auth,
-    userProfileRepository: _FakeProfiles(
-      profile: profile,
-      loadThrows: loadThrows,
-    ),
+    userProfileRepository: profiles ??
+        _FakeProfiles(profile: profile, loadThrows: loadThrows),
   );
   await Future<void>.delayed(Duration.zero);
   return session;
@@ -151,11 +217,13 @@ class _FakeAuth implements AuthRepository {
 class _FakeProfiles implements UserProfileRepository {
   _FakeProfiles({this.profile, this.loadThrows = false});
 
-  final UserProfileDraft? profile;
-  final bool loadThrows;
+  UserProfileDraft? profile;
+  bool loadThrows;
+  int loadCount = 0;
 
   @override
   Future<UserProfileDraft?> loadCurrentProfile() async {
+    loadCount++;
     if (loadThrows) throw StateError('permission denied');
     return profile;
   }
@@ -171,4 +239,12 @@ class _FakeProfiles implements UserProfileRepository {
     String links = '',
   }) async =>
       _profile;
+
+  // Body metrics are loaded by the BMI card, not by the session bootstrap
+  // these tests cover.
+  @override
+  Future<BodyMetrics> loadBodyMetrics() async => const BodyMetrics();
+
+  @override
+  Future<void> saveBodyMetrics(BodyMetrics metrics) async {}
 }

@@ -15,6 +15,7 @@ import '../application/activity_actions.dart';
 import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../domain/app_models.dart';
+import '../../music/presentation/music_island_action.dart';
 
 /// The three macros, each with a colour it keeps everywhere on this screen —
 /// the split bar, the field tiles and the per-item readouts all agree, so a
@@ -262,7 +263,10 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
 
     return Scaffold(
       backgroundColor: palette.background,
-      appBar: AppBar(title: const Text('Meal Review')),
+      appBar: AppBar(
+        title: const Text('Meal Review'),
+        actions: const [MusicIslandAction()],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -832,13 +836,13 @@ class _BreakdownCard extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppColors.orangeBright.withValues(alpha: 0.14),
+                  color: palette.brandSoft,
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.auto_awesome_rounded,
                   size: 17,
-                  color: AppColors.orangeBright,
+                  color: palette.brand,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1510,12 +1514,12 @@ class _SourceBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: fromDatabase
-            ? AppColors.orangeBright.withValues(alpha: 0.12)
+            ? palette.brandSoft
             : palette.overlay.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
           color: fromDatabase
-              ? AppColors.orangeBright.withValues(alpha: 0.45)
+              ? palette.brandSoftStroke
               : palette.stroke,
         ),
       ),

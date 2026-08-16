@@ -354,6 +354,7 @@ class WorkoutLogDraft {
     required this.exercises,
     required this.notes,
     required this.shareToFeed,
+    this.backgroundImagePath,
   });
 
   final String title;
@@ -369,6 +370,11 @@ class WorkoutLogDraft {
   final List<ExerciseEntry> exercises;
   final String notes;
   final bool shareToFeed;
+
+  /// A photo to sit behind the workout card, as a *local* file path — it has
+  /// not been uploaded yet. Null falls back to the generated gradient, which is
+  /// what every workout looked like before this existed.
+  final String? backgroundImagePath;
 
   Duration get duration => Duration(minutes: durationMinutes);
 
@@ -422,6 +428,7 @@ class RunLogDraft {
     required this.shareToFeed,
     this.routePoints = const [],
     this.startedAt,
+    this.backgroundImagePath,
   });
 
   final double distanceKm;
@@ -435,6 +442,12 @@ class RunLogDraft {
 
   /// When the run began, when known (GPS-tracked runs only).
   final DateTime? startedAt;
+
+  /// A photo to sit behind the run card, as a *local* file path — it has not
+  /// been uploaded yet. Null falls back to the themed gradient, which is what
+  /// every run looked like before this existed. Same contract as
+  /// [WorkoutLogDraft.backgroundImagePath].
+  final String? backgroundImagePath;
 }
 
 /// Where a food item's macros came from.
@@ -1082,6 +1095,9 @@ class UserSearchResult {
     required this.postsCount,
     this.avatarUrl,
     this.bio = '',
+    this.location = '',
+    this.pronouns = '',
+    this.links = '',
   });
 
   final String id;
@@ -1090,7 +1106,14 @@ class UserSearchResult {
   final String initials;
   final int postsCount;
   final String? avatarUrl;
+
+  /// The written part of the profile. Carried here as well as on the search
+  /// result proper because the other-user profile screen is built from this
+  /// record — anything missing from it cannot be shown there at all.
   final String bio;
+  final String location;
+  final String pronouns;
+  final String links;
 }
 
 /// XP awarded per logged activity, and how much XP a level spans.
