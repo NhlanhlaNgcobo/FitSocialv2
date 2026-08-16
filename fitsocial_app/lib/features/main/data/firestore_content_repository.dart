@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/config/functions_region.dart';
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../auth/domain/username.dart';
@@ -2200,7 +2201,7 @@ class FirestoreContentRepository implements ContentRepository {
 
   @override
   Future<Map<String, dynamic>> analyzeMealImage(String imageUrl) async {
-    final callable = FirebaseFunctions.instance.httpsCallable(
+    final callable = appFunctions.httpsCallable(
       'analyzeMeal',
       options: HttpsCallableOptions(
         timeout: const Duration(seconds: 60),
@@ -2220,7 +2221,7 @@ class FirestoreContentRepository implements ContentRepository {
     final trimmed = query.trim();
     if (trimmed.length < 2) return const [];
 
-    final callable = FirebaseFunctions.instance.httpsCallable(
+    final callable = appFunctions.httpsCallable(
       'searchFoods',
       options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
     );

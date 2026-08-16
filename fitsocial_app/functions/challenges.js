@@ -1015,6 +1015,20 @@ exports.onPulseComment = onDocumentCreated(
 exports.finaliseChallengeDays = onSchedule(
   {
     schedule: "every 60 minutes",
+    // Overrides the africa-south1 default set in index.js, and cannot be
+    // changed to match it: Cloud Scheduler has no presence in Johannesburg.
+    //
+    //   Location 'africa-south1' is not a valid location.
+    //
+    // So the two scheduled jobs are the one part of this backend that has to
+    // sit away from the database. They read across regions as a result, which
+    // is a cost worth paying rather than the alternatives — there is no way to
+    // schedule work in africa-south1 at all. Nothing user-facing waits on
+    // these, so the distance costs time nobody is watching.
+    //
+    // Pinned explicitly rather than left to the global default so a deploy does
+    // not fail every time somebody touches this file.
+    region: "us-central1",
     timeoutSeconds: 540,
     memory: "512MiB",
     retryCount: 3,
@@ -1030,7 +1044,9 @@ exports.finaliseChallengeDays = onSchedule(
  * detail screen costs one document read instead of a count query per open.
  */
 exports.aggregateChallengeStats = onSchedule(
-  { schedule: "every 60 minutes", timeoutSeconds: 120 },
+  // us-central1 for the same reason as finaliseChallengeDays above: Cloud
+  // Scheduler is not available in africa-south1.
+  { schedule: "every 60 minutes", region: "us-central1", timeoutSeconds: 120 },
   async () => {
     const running = await db()
       .collection("challengeEnrollments")

@@ -1,8 +1,36 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { OpenAI } = require("openai");
 const admin = require("firebase-admin");
 const nutrition = require("./nutrition_db");
+
+// Everything runs in Johannesburg, beside the database.
+//
+// This is not a preference. Second-generation Firestore triggers must run in
+// the same region as the database they listen to, and this project's Firestore
+// lives in africa-south1 — so the eight challenge triggers were always going to
+// be here. What was left behind was the rest: callables and scheduled jobs
+// default to us-central1 when nothing says otherwise, and nothing did.
+//
+// That split cost two things. Every callable made a round trip to Iowa, about a
+// quarter-second of pure travel on operations that otherwise answer instantly —
+// food search most visibly. And the nightly finalisation swept a Johannesburg
+// database from Iowa, reading across a continent to close days.
+//
+// It also put South African users' health data — meals, weight, workouts —
+// through a region they do not live in, which for an app handling this kind of
+// data is worth avoiding on its own.
+//
+// This must be called before any function is defined below, and before
+// ./challenges is required at the foot of this file: the v2 API reads the
+// global options at definition time, so a function declared earlier would keep
+// the old default.
+//
+// Moving a callable's region changes the URL clients call. See
+// `functionsForRegion` in lib/features/auth/data/firebase_auth_repository.dart
+// — the Dart side must point at the same region or every call 404s.
+setGlobalOptions({ region: "africa-south1" });
 
 // The Firebase Web API key, used to verify a password against Identity
 // Toolkit. Not a secret — it ships inside every copy of the client app, and is
