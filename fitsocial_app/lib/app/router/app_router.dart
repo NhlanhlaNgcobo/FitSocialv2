@@ -40,6 +40,7 @@ import '../../features/pulse/presentation/share_music_to_pulse_screen.dart';
 import '../../features/pulse/presentation/share_post_to_pulse_screen.dart';
 import '../../features/tracking/presentation/health_dashboard_screen.dart';
 import '../../features/tracking/presentation/live_run_screen.dart';
+import '../../features/tracking/presentation/treadmill_run_screen.dart';
 import '../../shared/layout/app_shell.dart';
 import '../../shared/layout/branch_transition.dart';
 import 'pending_deep_link.dart';
@@ -240,6 +241,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/live-run',
         builder: (context, state) => const LiveRunScreen(),
+      ),
+      GoRoute(
+        path: '/treadmill-run',
+        builder: (context, state) => const TreadmillRunScreen(),
       ),
       GoRoute(
         path: '/health',

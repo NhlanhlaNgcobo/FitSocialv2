@@ -8,6 +8,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <!-- Foreground service location type: required on Android 14+ (API 34) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <!-- Wake lock: the live-run foreground service holds a partial wake lock so
+         GPS fixes keep arriving once per second with the screen off, instead of
+         being buffered and delivered in a burst when the phone next wakes. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Notifications: Android 13+ needs this to display the ongoing "run in
+         progress" notification. Tracking still works if it is refused — only
+         the lock-screen readout is lost. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Activity recognition: needed to use the hardware step counter sensor (Android 10+) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <!-- Body sensors: heart-rate via device/wearable sensors -->

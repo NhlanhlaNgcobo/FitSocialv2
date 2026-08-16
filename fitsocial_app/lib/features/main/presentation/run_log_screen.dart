@@ -25,7 +25,7 @@ class RunLogScreen extends ConsumerStatefulWidget {
 
 class _RunLogScreenState extends ConsumerState<RunLogScreen>
     with SingleTickerProviderStateMixin {
-  static const int _sectionCount = 6;
+  static const int _sectionCount = 7;
 
   late final AnimationController _entranceController;
   late final TextEditingController _distanceController;
@@ -208,6 +208,15 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             index: sectionIndex++,
             itemCount: _sectionCount,
             child: _GpsHeroCard(onTap: () => context.push('/live-run')),
+          ),
+          const SizedBox(height: AppSpacing.sm + 4),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: _TreadmillCard(
+              onTap: () => context.push('/treadmill-run'),
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           StaggeredFadeIn(
@@ -441,6 +450,86 @@ class _GpsHeroCard extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The indoor way in, sitting directly under the GPS card.
+///
+/// Deliberately the quieter of the two: it is the same live tracking, minus the
+/// one signal a treadmill can't give — so it reads as the alternative to the
+/// orange card above rather than a second recommendation competing with it.
+class _TreadmillCard extends StatelessWidget {
+  const _TreadmillCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Material(
+      color: palette.surface,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: palette.stroke),
+          ),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: palette.brandSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.timer_outlined,
+                  color: palette.brand,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Treadmill run',
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Press start and the timer runs — no GPS needed',
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 12.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: palette.muted,
+                size: 18,
+              ),
+            ],
           ),
         ),
       ),

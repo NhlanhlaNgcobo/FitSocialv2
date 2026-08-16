@@ -6,6 +6,7 @@ import '../data/ble_heart_rate_service.dart';
 import '../data/health_service.dart';
 import '../data/live_run_service.dart';
 import '../data/step_tracker_service.dart';
+import '../data/treadmill_run_service.dart';
 
 final stepTrackerServiceProvider = Provider<StepTrackerService>((ref) {
   return StepTrackerService();
@@ -19,6 +20,21 @@ final liveRunServiceProvider = Provider<LiveRunService>((ref) {
 
 final liveRunStateProvider = StreamProvider<LiveRunState>((ref) {
   return ref.watch(liveRunServiceProvider).stream;
+});
+
+final treadmillRunServiceProvider = Provider<TreadmillRunService>((ref) {
+  final service = TreadmillRunService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// Opens with [TreadmillRunService.current] so a screen that subscribes
+/// part-way through a run — on the way back from another page, say — paints the
+/// run in progress rather than sitting on a zeroed clock until the next tick.
+final treadmillRunStateProvider = StreamProvider<TreadmillRunState>((ref) async* {
+  final service = ref.watch(treadmillRunServiceProvider);
+  yield service.current;
+  yield* service.stream;
 });
 
 final healthServiceProvider = Provider<HealthService>((ref) {
