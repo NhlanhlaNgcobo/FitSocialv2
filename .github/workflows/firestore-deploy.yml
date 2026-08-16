@@ -1,0 +1,112 @@
+# Keeps the live Firestore configuration in step with this repository.
+#
+# This workflow exists because of a real outage. On 7 August the project's
+# database was recreated, which reset its security rules to the deny-everything
+# default. The repository still held the correct rules, but rules only reach the
+# server when a human remembers to run a deploy, and nobody did. Firestore's
+# offline cache kept serving already-cached documents, so the app looked healthy
+# on every phone that had run it before — and went completely dark on the first
+# device to install a fresh build with an empty cache. That gap lasted nine days.
+#
+# The fix is to stop treating deployment as something a person remembers.
+# Merging a rules change deploys it, and a nightly run reconciles the server
+# back to this repository even when nobody has merged anything, so a change made
+# in the console — or another wipe — is corrected within a day instead of
+# surviving until someone notices the app is broken.
+
+name: Deploy Firestore rules and indexes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - fitsocial_app/firestore.rules
+      - fitsocial_app/firestore.indexes.json
+      - fitsocial_app/firebase.json
+      - .github/workflows/firestore-deploy.yml
+  pull_request:
+    paths:
+      - fitsocial_app/firestore.rules
+      - fitsocial_app/firestore.indexes.json
+      - fitsocial_app/firebase.json
+  # Reconciles the server to this repository even with no merges. This is what
+  # would have caught the August outage on its own.
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two deploys racing would leave the live ruleset decided by whichever finished
+# last rather than by whichever was merged last.
+concurrency:
+  group: firestore-deploy
+  cancel-in-progress: false
+
+env:
+  FIREBASE_PROJECT: fitsocialv2
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@15
+
+      # Fails loudly rather than skipping. A workflow that quietly does nothing
+      # when its credential is missing is how the repository and the server
+      # drift apart in the first place — which is the whole problem this file
+      # was written to solve.
+      - name: Check credentials are present
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret is not set. Firestore" \
+                 "rules cannot be deployed, so the live project will drift from" \
+                 "this repository. See .github/workflows/firestore-deploy.yml."
+            exit 1
+          fi
+
+      - name: Write service account key
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+
+      # Pull requests validate and stop. Rules that do not compile must never
+      # reach the server: a failed deploy can leave the project on the previous
+      # ruleset while the repository has moved on, which is drift again.
+      - name: Validate (pull requests)
+        if: github.event_name == 'pull_request'
+        working-directory: fitsocial_app
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: |
+          firebase deploy --only firestore \
+            --project "$FIREBASE_PROJECT" \
+            --non-interactive \
+            --dry-run
+
+      - name: Deploy
+        if: github.event_name != 'pull_request'
+        working-directory: fitsocial_app
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: |
+          firebase deploy --only firestore \
+            --project "$FIREBASE_PROJECT" \
+            --non-interactive
+
+      # The key is short-lived on a hosted runner, but a workspace can be
+      # cached or uploaded, and a credential left on disk is a credential
+      # somebody else can read.
+      - name: Remove service account key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/service-account.json"
