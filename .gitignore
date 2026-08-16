@@ -40,3 +40,7 @@ fitsocial_app/dist/
 *serviceAccount*.json
 *service-account*.json
 application_default_credentials.json
+
+# Local editor/agent workspace settings. Per-machine tool configuration that
+# carries no project meaning and differs for every collaborator.
+.claude/

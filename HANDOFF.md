@@ -1,6 +1,6 @@
 # FitSocial — Collaborator Handoff
 **Date:** 2026-07-01  
-**Prepared by:** Nhlanh (via Claude)  
+**Prepared by:** Nhlanh  
 **Repo:** https://github.com/NhlanhlaNgcobo/FitSocialv2  
 **Branch:** `main`
 

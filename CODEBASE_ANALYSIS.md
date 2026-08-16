@@ -1,6 +1,5 @@
 # FitSocial — Codebase Analysis
 **Generated:** 2026-07-01  
-**Analyzer:** Claude (claude-sonnet-4-6)  
 **Project path:** `fitsocial_app/`  
 **Flutter SDK:** 3.x · Dart SDK ≥ 3.3.0  
 
