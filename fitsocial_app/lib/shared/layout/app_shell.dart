@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_palette.dart';
+import '../../features/challenges/application/daily_steps_sync.dart';
 import '../widgets/bottom_nav.dart';
+import '../widgets/offline_banner.dart';
 import 'nav_visibility.dart';
 
 class AppShell extends StatefulWidget {
@@ -69,7 +71,10 @@ class _AppShellState extends State<AppShell> {
               systemNavigationBarColor: palette.background,
               systemNavigationBarIconBrightness: Brightness.dark,
             ),
-      child: _buildScaffold(),
+      // Wrapped around the whole shell rather than around one tab: the step
+      // record has to keep up whichever screen the user is sitting on, and this
+      // is the one widget alive for all five.
+      child: DailyStepsSync(child: _buildScaffold()),
     );
   }
 
@@ -81,9 +86,19 @@ class _AppShellState extends State<AppShell> {
       extendBody: true,
       // Catches scrolls from any list under the shell, whichever branch is
       // showing, so no screen has to wire itself up to the nav.
-      body: NotificationListener<ScrollNotification>(
-        onNotification: _visibility.handle,
-        child: widget.navigationShell,
+      //
+      // The offline strip is a Column rather than an overlay: it must push the
+      // page down, not sit on top of a screen's own header.
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _visibility.handle,
+              child: widget.navigationShell,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: ValueListenableBuilder<bool>(
         valueListenable: _visibility.hidden,

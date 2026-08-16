@@ -10,13 +10,20 @@ import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_setup_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/auth/presentation/welcome_screen.dart';
+import '../../features/challenges/domain/challenge_models.dart';
+import '../../features/challenges/presentation/challenge_detail_screen.dart';
+import '../../features/challenges/presentation/challenge_hub_screen.dart';
+import '../../features/challenges/presentation/challenge_outcome_screen.dart';
+import '../../features/challenges/presentation/challenge_tracker_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
 import '../../features/main/presentation/achievements_screen.dart';
+import '../../features/main/presentation/bmi_screen.dart';
 import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/home_screen.dart';
 import '../../features/main/presentation/manual_run_entry_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
+import '../../features/main/presentation/meal_tracking_screen.dart';
 import '../../features/main/presentation/meal_upload_screen.dart';
 import '../../features/main/presentation/post_compose_screen.dart';
 import '../../features/main/presentation/post_detail_screen.dart';
@@ -26,8 +33,10 @@ import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/pulse/domain/pulse_music.dart';
 import '../../features/pulse/presentation/pulse_composer_screen.dart';
 import '../../features/pulse/presentation/pulse_viewer_screen.dart';
+import '../../features/pulse/presentation/share_music_to_pulse_screen.dart';
 import '../../features/pulse/presentation/share_post_to_pulse_screen.dart';
 import '../../features/tracking/presentation/health_dashboard_screen.dart';
 import '../../features/tracking/presentation/live_run_screen.dart';
@@ -160,6 +169,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/achievements',
         builder: (context, state) => const AchievementsScreen(),
       ),
+      GoRoute(
+        path: '/bmi',
+        builder: (context, state) => const BmiScreen(),
+      ),
+      GoRoute(
+        path: '/meal-tracking',
+        builder: (context, state) => const MealTrackingScreen(),
+      ),
       // One post, opened from a profile grid. The tapped post rides along as
       // `extra` so the screen draws immediately; arriving without it (a deep
       // link, or a restart) falls back to fetching by id.
@@ -188,6 +205,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           userId: state.pathParameters['userId']!,
         ),
       ),
+      // Challenges. Outside the shell, like the log flows: these are
+      // destinations you come back from, not one of the five tabs.
+      GoRoute(
+        path: '/challenges',
+        builder: (context, state) => const ChallengeHubScreen(),
+      ),
+      // An unknown challenge key goes to the hub rather than rendering an
+      // empty screen — a stale share link should land somewhere useful.
+      GoRoute(
+        path: '/challenge/track/:enrollmentId',
+        builder: (context, state) => ChallengeTrackerScreen(
+          enrollmentId: state.pathParameters['enrollmentId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/challenge/outcome/:enrollmentId',
+        builder: (context, state) => ChallengeOutcomeScreen(
+          enrollmentId: state.pathParameters['enrollmentId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/challenge/:challengeKey',
+        redirect: (context, state) =>
+            ChallengeKey.byKey(state.pathParameters['challengeKey'] ?? '') ==
+                    null
+                ? '/challenges'
+                : null,
+        builder: (context, state) => ChallengeDetailScreen(
+          challengeKey:
+              ChallengeKey.byKey(state.pathParameters['challengeKey']!)!,
+        ),
+      ),
       GoRoute(
         path: '/live-run',
         builder: (context, state) => const LiveRunScreen(),
@@ -210,6 +259,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             state.extra is SharedPostRef ? null : '/home',
         builder: (context, state) => SharePostToPulseScreen(
           post: state.extra! as SharedPostRef,
+        ),
+      ),
+      // The track rides along as `extra` for the same reason a post does: it is
+      // a snapshot of what was playing when the button was pressed, not
+      // something to be re-read on arrival.
+      GoRoute(
+        path: '/share-music-to-pulse',
+        redirect: (context, state) =>
+            state.extra is PulseMusic ? null : '/home',
+        builder: (context, state) => ShareMusicToPulseScreen(
+          music: state.extra! as PulseMusic,
         ),
       ),
       // Playback opens on one author's ring and can then be swiped across the

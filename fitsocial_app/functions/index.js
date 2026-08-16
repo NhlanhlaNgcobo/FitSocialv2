@@ -549,3 +549,16 @@ exports.searchFoods = onCall(
     };
   }
 );
+
+// --- Challenges -------------------------------------------------------------
+//
+// The challenge engine lives in its own module: it is a self-contained set of
+// Firestore triggers and scheduled jobs with nothing in common with the meal
+// analyser above, and keeping it here would have made this file the place where
+// two unrelated systems are read at once.
+// `_internals` is skipped deliberately: it is the module's test seam, and the
+// Functions runtime treats every export of this file as something to deploy.
+for (const [name, handler] of Object.entries(require("./challenges"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}

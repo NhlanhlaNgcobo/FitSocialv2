@@ -8,6 +8,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../application/create_flow_controller.dart';
+import '../../music/presentation/music_island_action.dart';
 
 class CreateScreen extends ConsumerWidget {
   const CreateScreen({super.key});
@@ -62,10 +63,24 @@ class CreateScreen extends ConsumerWidget {
           context.push(CreateCanvasDestination.post.route);
         },
       ),
+      // Last, and with no create-flow destination: entering a challenge is not
+      // logging something, so it starts no draft and joins no resume state. It
+      // sits here because this is where a user comes when they have decided to
+      // do something rather than to read.
+      _CreateAction(
+        title: 'Enter a Challenge',
+        subtitle: 'Seven tasks. Every day. 75 days.',
+        icon: Icons.whatshot_rounded,
+        accent: _kChallengeAccent,
+        onTap: () => context.push('/challenges'),
+      ),
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('What are you up to?')),
+      appBar: AppBar(
+        title: const Text('What are you up to?'),
+        actions: const [MusicIslandAction()],
+      ),
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -123,6 +138,11 @@ const Color _kRunAccent = Color(0xFF2ECBFF);
 const Color _kMealAccent = Color(0xFF31C46C);
 const Color _kPostAccent = Color(0xFFB06BFF);
 
+/// Challenges take the brand orange rather than a fifth hue. They are not a
+/// category of thing to log — they are FitSocial asking something of you — and
+/// the orange is how the app says so.
+const Color _kChallengeAccent = AppColors.orangeBright;
+
 /// YouTube red. Not an app accent — it identifies someone else's brand.
 const Color _kYouTubeAccent = Color(0xFFFF0033);
 
@@ -148,7 +168,9 @@ class _ActionTileState extends State<_ActionTile> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final action = widget.action;
-    final accent = action.accent;
+    // The hue the design names, resolved for the page it lands on. Painted raw,
+    // these four turn into pastel sweets on white.
+    final accent = palette.accent(action.accent);
 
     return GestureDetector(
       onTapDown: (_) => _setPressed(true),
@@ -178,7 +200,7 @@ class _ActionTileState extends State<_ActionTile> {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.18),
+                  color: palette.accentFill(action.accent),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(action.icon, color: accent, size: 24),
@@ -256,7 +278,10 @@ class _YouTubeTile extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: _kYouTubeAccent.withValues(alpha: 0.18),
+                // Only the well is adjusted. The glyph keeps the exact YouTube
+                // red: it is their mark, not our accent, and deepening it for
+                // our page would misreport someone else's brand.
+                color: palette.accentFill(_kYouTubeAccent),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(
@@ -337,12 +362,12 @@ class _DraftResumeCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: AppColors.orangeBright.withValues(alpha: 0.18),
+              color: palette.brandSoft,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.history_rounded,
-              color: AppColors.orangeBright,
+              color: palette.brand,
             ),
           ),
           const SizedBox(width: AppSpacing.md),
@@ -369,7 +394,7 @@ class _DraftResumeCard extends StatelessWidget {
           IconButton(
             onPressed: onResume,
             icon: const Icon(Icons.arrow_forward_rounded),
-            color: AppColors.orangeBright,
+            color: palette.brand,
           ),
         ],
       ),
@@ -383,14 +408,18 @@ class _CreateAction {
     required this.subtitle,
     required this.icon,
     required this.accent,
-    required this.destination,
     required this.onTap,
+    this.destination,
   });
 
   final String title;
   final String subtitle;
   final IconData icon;
   final Color accent;
+
+  /// The create-flow slot this tile drives, and null for a tile that starts no
+  /// draft at all. Nullable rather than required so an action like entering a
+  /// challenge can live in this list without pretending to be a log type.
   final CreateCanvasDestination? destination;
   final VoidCallback onTap;
 }

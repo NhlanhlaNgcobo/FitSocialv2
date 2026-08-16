@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/post_summary_tile.dart';
@@ -10,6 +9,8 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/follow_button.dart';
 import '../../../shared/widgets/profile_bio.dart';
 import '../../../shared/widgets/profile_stats_bar.dart';
+import '../../challenges/application/challenge_providers.dart';
+import '../../challenges/presentation/badge_shelf.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 
@@ -36,9 +37,9 @@ class UserProfileScreen extends ConsumerWidget {
             _TopActionBar(userId: userId),
             Expanded(
               child: profile.when(
-                loading: () => const Center(
+                loading: () => Center(
                   child: CircularProgressIndicator(
-                    color: AppColors.orangeBright,
+                    color: context.palette.brand,
                   ),
                 ),
                 error: (_, __) => _Message(
@@ -92,7 +93,7 @@ class _TopActionBar extends ConsumerWidget {
           IconButton(
             onPressed: () => _toggle(context, ref, isOn),
             tooltip: isOn ? 'Turn off notifications' : 'Notify me about posts',
-            color: isOn ? AppColors.orangeBright : palette.text,
+            color: isOn ? palette.brand : palette.text,
             icon: Icon(
               isOn
                   ? Icons.notifications_active_rounded
@@ -129,7 +130,12 @@ class _ProfileBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final posts = ref.watch(userMediaPostsProvider(user.id));
-    final bio = user.bio.trim();
+    final bio = ProfileBio(
+      bio: user.bio,
+      pronouns: user.pronouns,
+      location: user.location,
+      links: user.links,
+    );
 
     return CustomScrollView(
       slivers: [
@@ -179,22 +185,27 @@ class _ProfileBody extends ConsumerWidget {
                 targetUserId: user.id,
                 shape: FollowButtonShape.pill,
               ),
-              if (bio.isNotEmpty) ...[
+              if (!bio.isEmpty) ...[
                 const SizedBox(height: AppSpacing.lg),
-                ProfileBio(bio: bio),
+                bio,
               ],
+              // The same shelf as your own profile, read-only. Badges are
+              // public on purpose: being able to see what somebody else has
+              // done is most of the reason to earn one.
+              const SizedBox(height: AppSpacing.lg),
+              _UserBadgeShelf(userId: user.id),
               const SizedBox(height: AppSpacing.lg),
             ],
           ),
         ),
         ...posts.when(
-          loading: () => const [
+          loading: () => [
             SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
+                padding: const EdgeInsets.all(AppSpacing.xl),
                 child: Center(
                   child: CircularProgressIndicator(
-                    color: AppColors.orangeBright,
+                    color: context.palette.brand,
                   ),
                 ),
               ),
@@ -258,27 +269,15 @@ class _PostTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(16);
     final url = post.imageUrl;
     final hasImage = url != null && url.isNotEmpty;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => context.push('/post/${post.id}', extra: post),
+      // Same treatment as the owner's own grid.
       child: hasImage
-          ? ClipRRect(
-              borderRadius: radius,
-              child: Image.network(
-                url,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    const MediaPlaceholder(borderRadius: 16, failed: true),
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : const MediaPlaceholder(borderRadius: 16),
-              ),
-            )
-          // Same treatment as the owner's own grid.
+          ? PostMediaTile(post: post, compact: true, borderRadius: 16)
           : PostSummaryTile(post: post, compact: true, borderRadius: 16),
     );
   }
@@ -348,4 +347,23 @@ class _Message extends StatelessWidget {
 String _formatHandle(String handle) {
   final trimmed = handle.trim().replaceAll(RegExp(r'^@+'), '');
   return trimmed.isEmpty ? '@fitsocial' : '@$trimmed';
+}
+
+/// Somebody else's badge case. Collapses when they hold none, so a profile is
+/// never given an empty shelf as a comment on the person.
+class _UserBadgeShelf extends ConsumerWidget {
+  const _UserBadgeShelf({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final badges = ref.watch(badgesProvider(userId)).valueOrNull ?? const [];
+    if (badges.isEmpty) return const SizedBox.shrink();
+
+    return BadgeShelf(
+      badges: badges,
+      onTap: (badge) => showBadgeSheet(context, badge),
+    );
+  }
 }

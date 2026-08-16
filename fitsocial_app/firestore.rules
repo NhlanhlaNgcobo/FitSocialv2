@@ -313,6 +313,16 @@ service cloud.firestore {
     // must be one they hold in /usernames, and changing it is rate-limited.
     // Without that check the reservation collection would be decorative — a
     // client could simply write any username straight onto its profile.
+    // Who a challenge run belongs to. One document read, used by every rule
+    // under an enrollment — the day records and the manual task entries both
+    // hang off an id whose owner is only written on the parent.
+    //
+    // The path is one unbroken literal on purpose: the rules parser will not
+    // accept a path split across lines, however long that makes it.
+    function enrollmentOwner(enrollmentId) {
+      return get(/databases/$(database)/documents/challengeEnrollments/$(enrollmentId)).data.userId;
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
@@ -372,6 +382,17 @@ service cloud.firestore {
       match /notifyFor/{targetId} {
         allow read, write: if request.auth != null
                            && request.auth.uid == userId;
+      }
+
+      // Badges earned from challenges.
+      //
+      // Publicly readable — a badge shelf that only its owner can see is not a
+      // badge shelf. Closed to every client write, including the owner's: a
+      // badge the holder could mint is worth nothing, and these are awarded by
+      // the finalisation function alone.
+      match /badges/{badgeKey} {
+        allow read: if request.auth != null;
+        allow write: if false;
       }
 
       // This user's inbox: who followed them, who liked their posts.
@@ -708,6 +729,146 @@ service cloud.firestore {
     match /progress/{metricId} {
       allow read: if request.auth != null;
       allow write: if false; // server-only writes for now
+    }
+
+    // --- Challenges -------------------------------------------------------
+    //
+    // One rule governs this whole section: the client is a display layer. Every
+    // value that decides whether a day counted, whether a streak survived,
+    // whether somebody was eliminated, what they scored and what they earned is
+    // written by a Cloud Function and is closed to clients here — not by
+    // convention, and not only in the app code, but at the database.
+    //
+    // The client writes exactly two things: the running step count, and the two
+    // tasks that have no sensor behind them. Both are quarantined into their own
+    // documents so that no client write ever lands on a document the engine
+    // owns.
+
+    // A user's run at a challenge. Publicly readable, because the leaderboard,
+    // the profile chip and a friend's tracker all read it — which is also why
+    // nothing private is allowed on this document.
+    match /challengeEnrollments/{enrollmentId} {
+      allow read: if request.auth != null;
+
+      // Starting a run is the one thing a client may create, and only from a
+      // standing start: a create that arrived pre-loaded with completed days or
+      // a finished status would be a run somebody awarded themselves.
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.userId
+                    && request.resource.data.status == 'active'
+                    && request.resource.data.daysCompleted == 0
+                    && request.resource.data.currentStreak == 0
+                    && request.resource.data.longestStreak == 0
+                    && request.resource.data.consecutiveMissedDays == 0
+                    && request.resource.data.pointsEarned == 0;
+
+      // Quitting, and re-stamping the clock. Nothing else.
+      //
+      // The offset is client-owned by necessity — only the device knows what
+      // zone it is in — and it is harmless on its own: it decides which day a
+      // write falls on, never whether that day counted. It is capped to a real
+      // offset so it cannot be used to manufacture extra days.
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.userId
+                    && (
+                      (request.resource.data.diff(resource.data)
+                          .affectedKeys().hasOnly(['status', 'updatedAt'])
+                       && request.resource.data.status == 'abandoned'
+                       && resource.data.status in ['active', 'at_risk', 'danger'])
+                      ||
+                      (request.resource.data.diff(resource.data)
+                          .affectedKeys()
+                          .hasOnly(['utcOffsetMinutes', 'updatedAt'])
+                       && request.resource.data.utcOffsetMinutes is int
+                       && request.resource.data.utcOffsetMinutes >= -720
+                       && request.resource.data.utcOffsetMinutes <= 840)
+                    );
+
+      // A run is history once it has started. Nothing is deleted, so a failed
+      // attempt survives and a second attempt can be told apart from it.
+      allow delete: if false;
+
+      // The finalised record of one day: which tasks were met, whether it
+      // counted, what it paid. Written by the engine, read by its owner.
+      match /days/{dayKey} {
+        allow read: if request.auth != null
+                    && request.auth.uid == enrollmentOwner(enrollmentId);
+        allow write: if false;
+      }
+
+      // Water and reading — the two tasks with no sensor behind them.
+      //
+      // Quarantined here rather than allowed as fields on the day document,
+      // which is what keeps the engine's record untouchable: a client can move
+      // these two numbers and nothing else, and the server decides what they
+      // mean. Capped well above their targets so an honest over-count is
+      // possible while a nonsense figure is not.
+      match /manual/{dayKey} {
+        function manualEntryIsValid(entry) {
+          return entry.keys().hasOnly(['water', 'reading', 'dayKey', 'updatedAt'])
+                 && entry.water is int && entry.water >= 0 && entry.water <= 30
+                 && entry.reading is int && entry.reading >= 0
+                 && entry.reading <= 500
+                 && entry.dayKey == dayKey;
+        }
+
+        allow read: if request.auth != null
+                    && request.auth.uid == enrollmentOwner(enrollmentId);
+        allow create, update: if request.auth != null
+                              && request.auth.uid ==
+                                   enrollmentOwner(enrollmentId)
+                              && manualEntryIsValid(request.resource.data);
+        allow delete: if false;
+      }
+    }
+
+    // How many people are running each challenge. Aggregated on a schedule so
+    // the detail screen costs one read instead of a count query.
+    match /challengeStats/{challengeKey} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // The durable daily step record.
+    //
+    // Steps have to be persisted rather than read live, for a plain reason: the
+    // job that closes a day runs at 2 AM and cannot ask a sleeping phone how far
+    // it walked. The client writes its running total through the day and the
+    // highest value for a day key wins.
+    //
+    // Client-writable, and that is a real concession — steps are the one
+    // automatic task whose number passes through the device. It is bounded
+    // instead: a figure above 200,000 is not a person walking, and the write is
+    // refused rather than flagged.
+    match /dailySteps/{docId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+      allow create, update: if request.auth != null
+                            && request.auth.uid == request.resource.data.userId
+                            && docId == request.auth.uid + '_' +
+                                 request.resource.data.dayKey
+                            && request.resource.data.steps is int
+                            && request.resource.data.steps >= 0
+                            && request.resource.data.steps <= 200000;
+      allow delete: if false;
+    }
+
+    // The points ledger — every award, as a row.
+    //
+    // Append-only and server-written. A ledger rather than a running total is
+    // what makes a reversal possible when an activity turns out to be invalid,
+    // and closing it to clients is what makes the totals mean anything.
+    match /pointsLedger/{entryId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+      allow write: if false;
+    }
+
+    // Early Worm streaks. Public: the streak is the social object, and a
+    // 40-morning run nobody can see is not much of a challenge.
+    match /earlyWorm/{userId} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }

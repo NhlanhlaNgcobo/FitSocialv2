@@ -7,6 +7,8 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
+import '../../challenges/application/challenge_providers.dart';
+import '../../challenges/presentation/badge_shelf.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
@@ -15,17 +17,38 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/profile_bio.dart';
 import '../../../shared/widgets/profile_stats_bar.dart';
+import '../../music/presentation/music_island_action.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // A profile read that failed during launch leaves the session signed in
+    // with nothing to render — a placeholder name and no bio. Opening this
+    // page is the moment to ask again; a session that already has its profile
+    // is left alone rather than re-read on every visit to the tab.
+    final session = ref.read(appSessionProvider);
+    if (session.profile == null) session.reloadProfile();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profile = ref.watch(appSessionProvider).profile;
     final userId = ref.watch(currentUserIdProvider);
     final displayName = profile?.displayName ?? 'FitSocial User';
-    final bio = profile?.bio.trim() ?? '';
-    final location = profile?.location.trim() ?? '';
+    final bio = ProfileBio(
+      bio: profile?.bio ?? '',
+      pronouns: profile?.pronouns ?? '',
+      location: profile?.location ?? '',
+      links: profile?.links ?? '',
+    );
 
     return DefaultTabController(
       length: 4,
@@ -48,9 +71,18 @@ class ProfileScreen extends ConsumerWidget {
               // Nothing to count before the uid resolves; the bar shows its
               // placeholder dashes rather than disappearing and reflowing.
               ProfileStatsBar(userId: userId ?? ''),
-              if (bio.isNotEmpty || location.isNotEmpty) ...[
+              // The widget knows whether it has anything to say; asking it is
+              // what keeps this from having to test four fields itself.
+              if (!bio.isEmpty) ...[
                 const SizedBox(height: AppSpacing.lg),
-                ProfileBio(bio: bio, location: location),
+                bio,
+              ],
+              // The badge case, above the grid. It draws nothing at all until
+              // there is something in it, so a new account is not given an
+              // empty trophy shelf to feel bad about.
+              if (userId != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                _ProfileBadgeShelf(userId: userId),
               ],
               const SizedBox(height: AppSpacing.lg),
               const _SectionIndicator(),
@@ -75,7 +107,33 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-/// Add-people on the left, settings on the right.
+/// The badges a user holds, between their bio and their grid.
+///
+/// A thin wrapper rather than the shelf used directly, so the provider is
+/// watched here and the profile's own build is not rebuilt every time a badge
+/// lands.
+class _ProfileBadgeShelf extends ConsumerWidget {
+  const _ProfileBadgeShelf({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final badges = ref.watch(badgesProvider(userId)).valueOrNull ?? const [];
+    if (badges.isEmpty) return const SizedBox.shrink();
+
+    return BadgeShelf(
+      badges: badges,
+      onTap: (badge) => showBadgeSheet(context, badge),
+    );
+  }
+}
+
+/// Add-people on the left, the music island and settings on the right.
+///
+/// This screen has no AppBar of its own, so the island cannot ride in an
+/// `actions` list the way it does everywhere else — it goes in this row
+/// instead, in the same place: first of the right-hand cluster.
 class _TopActionBar extends StatelessWidget {
   const _TopActionBar();
 
@@ -95,6 +153,7 @@ class _TopActionBar extends StatelessWidget {
             icon: const Icon(Icons.person_add_alt),
           ),
           const Spacer(),
+          const MusicIslandAction(),
           IconButton(
             onPressed: () => context.push('/settings'),
             tooltip: 'Settings',
@@ -189,7 +248,7 @@ class _EditPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.orangeBright,
+        backgroundColor: context.palette.brand,
         foregroundColor: AppColors.onBrand,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         minimumSize: Size.zero,
@@ -243,7 +302,7 @@ class _PulseAvatar extends StatelessWidget {
                   width: _badgeSize,
                   height: _badgeSize,
                   decoration: BoxDecoration(
-                    color: AppColors.orangeBright,
+                    color: palette.brand,
                     shape: BoxShape.circle,
                     // Separates the badge from whatever it overlaps.
                     border: Border.all(color: palette.background, width: 2.5),
@@ -353,8 +412,8 @@ class _MediaGrid extends ConsumerWidget {
     );
 
     return posts.when(
-      loading: () => const Center(
-        child: CircularProgressIndicator(color: AppColors.orangeBright),
+      loading: () => Center(
+        child: CircularProgressIndicator(color: palette.brand),
       ),
       error: (_, __) => _ErrorGrid(
         onRetry: () => ref.invalidate(
@@ -363,13 +422,13 @@ class _MediaGrid extends ConsumerWidget {
       ),
       data: (all) {
         final activeFilter = filter;
-        // Meals have a tab of their own, so the photo grid leaves them out —
-        // a logged plate belongs under Meals, not spread across both sections.
+        // Workouts, runs and meals each have a tab of their own, so the photo
+        // grid leaves them out — a logged plate belongs under Meals, and the
+        // backdrop behind a workout card belongs under Workouts with the
+        // session it decorates, not repeated here as a bare picture.
         final visible = activeFilter != null
             ? applyExploreFilter(all, activeFilter)
-            : all
-                .where((post) => !ExploreFilterX.isMeal(post))
-                .toList(growable: false);
+            : all.where(ExploreFilterX.isPhotoPost).toList(growable: false);
 
         if (visible.isEmpty) {
           return _EmptyGrid(
@@ -382,7 +441,7 @@ class _MediaGrid extends ConsumerWidget {
         }
 
         return RefreshIndicator(
-          color: AppColors.orangeBright,
+          color: palette.brand,
           backgroundColor: palette.surface,
           onRefresh: () async => ref.invalidate(
             mediaOnly
@@ -454,9 +513,9 @@ class _ErrorGrid extends StatelessWidget {
   }
 }
 
-/// A single post tile — the uploaded photo when there is one, otherwise the
-/// post summarised on a card: a run's route, a workout's numbers, or what the
-/// author wrote.
+/// A single post tile — a run's route, a workout's numbers, or what the author
+/// wrote, drawn over their photo when they picked one and on a card when they
+/// didn't.
 class _PostTile extends StatelessWidget {
   const _PostTile({required this.post});
 
@@ -464,7 +523,6 @@ class _PostTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(16);
     final hasImage = post.imageUrl != null && post.imageUrl!.isNotEmpty;
 
     return GestureDetector(
@@ -473,21 +531,10 @@ class _PostTile extends StatelessWidget {
       // grid already loaded.
       behavior: HitTestBehavior.opaque,
       onTap: () => context.push('/post/${post.id}', extra: post),
+      // Three across is tight, hence compact; and a profile grid is one
+      // person's work throughout, so nothing needs naming them.
       child: hasImage
-          ? ClipRRect(
-              borderRadius: radius,
-              child: Image.network(
-                post.imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    const MediaPlaceholder(borderRadius: 16, failed: true),
-                loadingBuilder: (context, child, progress) => progress == null
-                    ? child
-                    : const MediaPlaceholder(borderRadius: 16),
-              ),
-            )
-          // Three across is tight, hence compact; and a profile grid is one
-          // person's work throughout, so nothing needs naming them.
+          ? PostMediaTile(post: post, compact: true, borderRadius: 16)
           : PostSummaryTile(post: post, compact: true, borderRadius: 16),
     );
   }
@@ -513,9 +560,9 @@ class _EmptyGrid extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: palette.surfaceHigh,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.camera_alt_outlined,
-                color: AppColors.orangeBright,
+                color: palette.brand,
                 size: 48,
               ),
             ),
