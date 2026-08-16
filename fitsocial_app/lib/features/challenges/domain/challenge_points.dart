@@ -65,11 +65,19 @@ double streakMultiplier(int streak) {
 int dayCompleteBonus(int streak) =>
     (dayCompleteBaseBonus * streakMultiplier(streak)).round();
 
+/// What the seven tasks pay between them, before any bonus. 70.
+///
+/// Exported rather than kept as an implementation detail of [perfectDayTotal]
+/// because the detail screen lists all seven task values in a column and then
+/// states what a perfect day is worth. A reader who adds that column gets 70,
+/// so the screen has to be able to name the 70 and say where the rest came
+/// from — otherwise the larger number reads as an error.
+int get taskPointsTotal =>
+    taskPoints.values.fold(0, (sum, value) => sum + value);
+
 /// Everything a perfect day is worth at [streak] — the seven tasks plus the
 /// bonus. 100 at the start, 145 in the last stretch.
-int perfectDayTotal(int streak) =>
-    taskPoints.values.fold(0, (sum, value) => sum + value) +
-    dayCompleteBonus(streak);
+int perfectDayTotal(int streak) => taskPointsTotal + dayCompleteBonus(streak);
 
 /// What the ledger calls each kind of award.
 ///

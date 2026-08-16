@@ -161,8 +161,11 @@ class _ChallengeDetailScreenState
             _InfoBlock(
               icon: Icons.stars_rounded,
               title: 'A perfect day is ${perfectDayTotal(1)} points',
-              body: 'Every task pays on its own, so a 5/7 day is still worth '
-                  'something. Only 7/7 moves the streak.',
+              body: 'The seven above pay $taskPointsTotal between them, and '
+                  'clearing all seven adds ${dayCompleteBonus(1)} on top. '
+                  'Every task also pays on its own, so a 5/7 day is still '
+                  'worth something — but only 7/7 earns the bonus and moves '
+                  'the streak.',
             ),
           ],
         ],

@@ -288,6 +288,23 @@ void main() {
       expect(perfectDayTotal(1), 100);
     });
 
+    test('the seven task values account for every point but the bonus', () {
+      // The detail screen prints these seven down a column and then names the
+      // day total. Anybody who adds the column must land on a number the copy
+      // explains, so the three figures it shows have to reconcile exactly.
+      expect(
+        taskPoints.values.fold(0, (sum, value) => sum + value),
+        taskPointsTotal,
+      );
+      for (final streak in [1, 7, 21, 50]) {
+        expect(
+          taskPointsTotal + dayCompleteBonus(streak),
+          perfectDayTotal(streak),
+          reason: 'the copy would show an unexplained gap at streak $streak',
+        );
+      }
+    });
+
     test('the multiplier scales the bonus and never the tasks', () {
       expect(streakMultiplier(1), 1.0);
       expect(streakMultiplier(6), 1.0);
