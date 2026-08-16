@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:fitsocial_app/app/theme/app_theme.dart';
 import 'package:fitsocial_app/features/pulse/presentation/pulse_composer_screen.dart';
 
 /// Brings up the composer and lets it settle.
