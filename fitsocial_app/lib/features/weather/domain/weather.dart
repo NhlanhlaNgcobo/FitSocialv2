@@ -67,6 +67,72 @@ enum TrainingOutlook {
       };
 }
 
+/// One whole day ahead, as the forecast describes it.
+///
+/// Days are summaries, not readings: there is no single temperature for a
+/// Thursday, so a day carries its range and the harshest wind in it. The
+/// verdict is judged on the extremes for that reason — a day that peaks at 36°
+/// is a hard day even if its average is pleasant.
+class DailyForecast {
+  const DailyForecast({
+    required this.date,
+    required this.condition,
+    required this.highC,
+    required this.lowC,
+    required this.windKph,
+    required this.precipitationChance,
+    this.feelsHighC,
+    this.feelsLowC,
+  });
+
+  /// The calendar day this describes, at local midnight.
+  final DateTime date;
+
+  final WeatherCondition condition;
+  final double highC;
+  final double lowC;
+
+  /// The day's strongest wind, not its average.
+  final double windKph;
+
+  /// Chance of precipitation across the day, 0–100.
+  final int? precipitationChance;
+
+  /// Felt extremes. Null falls back to the measured ones.
+  final double? feelsHighC;
+  final double? feelsLowC;
+
+  double get _feelsHigh => feelsHighC ?? highC;
+  double get _feelsLow => feelsLowC ?? lowC;
+
+  int get highRounded => highC.round();
+  int get lowRounded => lowC.round();
+
+  /// A verdict on training outside on this day.
+  ///
+  /// Same thresholds as [WeatherSnapshot.outlook], applied to the two ends of
+  /// the day: heat is judged on the peak, cold on the trough. Anything else
+  /// would call a day that swings from 2° to 31° a mild one.
+  TrainingOutlook get outlook {
+    if (condition == WeatherCondition.thunderstorm) return TrainingOutlook.poor;
+    if (_feelsHigh >= 35 || _feelsLow <= 0) return TrainingOutlook.poor;
+    if (windKph >= 45) return TrainingOutlook.poor;
+
+    if (condition.isWet) return TrainingOutlook.fair;
+    if (_feelsHigh >= 30 || _feelsLow <= 6) return TrainingOutlook.fair;
+    if (windKph >= 25) return TrainingOutlook.fair;
+    if ((precipitationChance ?? 0) >= 60) return TrainingOutlook.fair;
+
+    return TrainingOutlook.good;
+  }
+
+  /// Whether [date] is the same calendar day as [reference].
+  bool isSameDayAs(DateTime reference) =>
+      date.year == reference.year &&
+      date.month == reference.month &&
+      date.day == reference.day;
+}
+
 /// Current conditions at one place, plus the day's range.
 class WeatherSnapshot {
   const WeatherSnapshot({
@@ -80,6 +146,7 @@ class WeatherSnapshot {
     this.highC,
     this.lowC,
     this.locationLabel,
+    this.days = const [],
   });
 
   final double temperatureC;
@@ -102,6 +169,10 @@ class WeatherSnapshot {
 
   /// Where this reading is from, when it is known. Null just drops the line.
   final String? locationLabel;
+
+  /// The days ahead, today first. Empty when only the current reading came
+  /// back — the card still works, the forecast page says it has nothing.
+  final List<DailyForecast> days;
 
   int get temperatureRounded => temperatureC.round();
   int get feelsLikeRounded => feelsLikeC.round();

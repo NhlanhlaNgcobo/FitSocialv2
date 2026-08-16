@@ -4,6 +4,7 @@ import '../../app/theme/app_colors.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
 import 'avatar.dart';
+import 'route_sparkline.dart';
 
 /// A post as it appears once it has been put on somebody's Pulse.
 ///
@@ -163,10 +164,12 @@ class _Header extends StatelessWidget {
 
 /// The picture, or what stands in for one.
 ///
-/// A photo post draws its photo. Everything else draws a tinted tile with the
-/// glyph for what it was, because a run map and a workout block are both too
-/// much detail at this size — the card is an invitation to open the post, not
-/// a copy of it.
+/// A photo post draws its photo and a run draws the line it was: the shape of
+/// somebody's route is the one thing on a run post worth recognising across a
+/// room, and it comes off the snapshot with no map, no tiles and no network.
+/// Everything else draws a tinted tile with the glyph for what it was, because
+/// a workout block is too much detail at this size — the card is an invitation
+/// to open the post, not a copy of it.
 class _Body extends StatelessWidget {
   const _Body({required this.post});
 
@@ -195,9 +198,27 @@ class _Body extends StatelessWidget {
 
     switch (post.kind) {
       case SharedPostKind.route:
-        return const _Placeholder(
-          icon: Icons.route_rounded,
-          label: 'Run route',
+        // A share written before the snapshot carried the trace has the kind
+        // but not the shape, and still gets the label.
+        if (!post.hasRoute) {
+          return const _Placeholder(
+            icon: Icons.route_rounded,
+            label: 'Run route',
+          );
+        }
+        return _Tile(
+          child: Padding(
+            // Generous, because the line is scaled to whatever box it is given
+            // — crowding the edges here would only make it bigger, not better.
+            padding: const EdgeInsets.all(20),
+            child: RouteSparkline(
+              route: post.route,
+              strokeWidth: 3,
+              // The card is fixed to the on-media register whatever the app
+              // theme is doing, and so is the line drawn on it.
+              onMedia: true,
+            ),
+          ),
         );
       case SharedPostKind.workout:
         return const _Placeholder(
@@ -214,11 +235,12 @@ class _Body extends StatelessWidget {
   }
 }
 
-class _Placeholder extends StatelessWidget {
-  const _Placeholder({required this.icon, required this.label});
+/// The band where the picture goes: one shape and one wash, whatever ends up
+/// drawn on it, so a run and a workout are the same object seen twice.
+class _Tile extends StatelessWidget {
+  const _Tile({required this.child});
 
-  final IconData icon;
-  final String label;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -232,25 +254,39 @@ class _Placeholder extends StatelessWidget {
             colors: [Color(0xFF2A1A0F), Color(0xFF101010)],
           ),
         ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: AppColors.onMediaMuted, size: 28),
-              if (label.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(
-                  label.toUpperCase(),
-                  style: const TextStyle(
-                    color: AppColors.onMediaMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _Placeholder extends StatelessWidget {
+  const _Placeholder({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Tile(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.onMediaMuted, size: 28),
+            if (label.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                label.toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.onMediaMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
                 ),
-              ],
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );

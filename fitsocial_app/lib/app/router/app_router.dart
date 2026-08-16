@@ -41,6 +41,7 @@ import '../../features/pulse/presentation/share_post_to_pulse_screen.dart';
 import '../../features/tracking/presentation/health_dashboard_screen.dart';
 import '../../features/tracking/presentation/live_run_screen.dart';
 import '../../features/tracking/presentation/treadmill_run_screen.dart';
+import '../../features/weather/presentation/weather_forecast_screen.dart';
 import '../../shared/layout/app_shell.dart';
 import '../../shared/layout/branch_transition.dart';
 import 'pending_deep_link.dart';
@@ -177,6 +178,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/meal-tracking',
         builder: (context, state) => const MealTrackingScreen(),
+      ),
+      GoRoute(
+        path: '/weather',
+        builder: (context, state) => const WeatherForecastScreen(),
       ),
       // One post, opened from a profile grid. The tapped post rides along as
       // `extra` so the screen draws immediately; arriving without it (a deep

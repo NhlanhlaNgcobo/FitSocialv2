@@ -52,11 +52,7 @@ abstract class ContentRepository {
   /// about it, and the post has its own delete.
   Future<void> deleteActivitySession(String id, ActivityKind kind);
 
-  /// Uploads / Followers / Following for [userId].
-  ///
-  /// "Uploads" is how much of the app the user has actually used: every run
-  /// and workout they have logged, shared or not, plus every photo they have
-  /// posted. Meals are excluded on purpose.
+  /// Followers / Following for [userId].
   Future<List<ProfileStat>> getProfileStats(String userId);
 
   /// A single public profile, or null when no such user exists.

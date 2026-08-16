@@ -6,17 +6,21 @@ import '../../app/theme/app_spacing.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/domain/app_models.dart';
 
-/// Uploads / Followers / Following for one profile, evenly across the width.
+/// Followers / Following for one profile, centred as a pair.
 ///
-/// The three columns are laid out from fixed labels rather than from whatever
-/// the repository returns, so the row keeps its shape while the counts are
-/// still loading or if the read fails.
+/// The columns are laid out from fixed labels rather than from whatever the
+/// repository returns, so the row keeps its shape while the counts are still
+/// loading or if the read fails. Each column gets the same fixed width, which
+/// keeps the divider on the centre line however wide the numbers grow.
 class ProfileStatsBar extends ConsumerWidget {
   const ProfileStatsBar({required this.userId, super.key});
 
   final String userId;
 
-  static const _labels = ['Uploads', 'Followers', 'Following'];
+  static const _labels = ['Followers', 'Following'];
+
+  /// Fixed per-column width, so the pair stays symmetric about the divider.
+  static const double _columnWidth = 110;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,10 +29,12 @@ class ProfileStatsBar extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           for (var i = 0; i < _labels.length; i++) ...[
             if (i > 0) const _StatDivider(),
-            Expanded(
+            SizedBox(
+              width: _columnWidth,
               child: _StatColumn(
                 label: _labels[i],
                 value: _value(stats, _labels[i]),

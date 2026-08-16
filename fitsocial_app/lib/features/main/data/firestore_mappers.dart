@@ -3,10 +3,55 @@ import 'package:flutter/material.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/reactions/fit_reaction.dart';
 import '../domain/app_models.dart';
+import 'author_identity_cache.dart';
 import 'firestore_models.dart';
 
 class FirestoreMapper {
   const FirestoreMapper._();
+
+  /// [post] with the author's current name and photo laid over the copy frozen
+  /// onto the document when it was written.
+  ///
+  /// A null [identity] is the author we could not resolve, and leaves the post
+  /// exactly as stored — see [AuthorIdentityCache].
+  static FeedPost withLiveAuthor(FeedPost post, AuthorIdentity? identity) {
+    if (identity == null) return post;
+    return post.withAuthor(
+      userName: _liveName(identity.displayName, post.userName),
+      authorAvatarUrl: _liveAvatar(identity.avatarUrl),
+    );
+  }
+
+  /// [comment] with the author's current name and photo, on the same terms as
+  /// [withLiveAuthor].
+  static Comment commentWithLiveAuthor(
+    Comment comment,
+    AuthorIdentity? identity,
+  ) {
+    if (identity == null) return comment;
+    return comment.withAuthor(
+      authorName: _liveName(identity.displayName, comment.authorName),
+      authorAvatarUrl: _liveAvatar(identity.avatarUrl),
+    );
+  }
+
+  /// The live name, or [stored] when the profile has nothing better to offer.
+  ///
+  /// A profile whose displayName is empty or an address would sanitise to the
+  /// placeholder, and replacing a real stored name with "FitSocial Member"
+  /// would be a downgrade — the whole point of the overlay is to be more
+  /// current, never less informative.
+  static String _liveName(String? live, String stored) {
+    final safe = PublicAuthorName.firstSafe([live]);
+    return safe == PublicAuthorName.fallback ? stored : safe;
+  }
+
+  /// The live avatar, with an empty string read as "no photo" rather than as a
+  /// URL. Null clears the stored one, which is what a removed photo should do.
+  static String? _liveAvatar(String? live) {
+    final trimmed = (live ?? '').trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 
   static FeedPost toFeedPost(FirestorePostRecord post) {
     return FeedPost(

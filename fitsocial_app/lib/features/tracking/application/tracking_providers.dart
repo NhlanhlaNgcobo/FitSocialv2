@@ -42,10 +42,15 @@ final healthServiceProvider = Provider<HealthService>((ref) {
 });
 
 /// Today's Health Connect summary; refresh with `ref.invalidate`.
+///
+/// Asks for access only when the grant is missing or undetermined, so the
+/// refresh button is a plain read once the user has said yes.
 final healthSummaryProvider = FutureProvider<HealthSummary>((ref) async {
   final service = ref.watch(healthServiceProvider);
-  final granted = await service.requestPermissions();
-  if (!granted) return HealthSummary.unavailable;
+  if (await service.hasPermissions() != true) {
+    final granted = await service.requestPermissions();
+    if (!granted) return HealthSummary.unavailable;
+  }
   return service.readTodaySummary();
 });
 
@@ -65,13 +70,26 @@ final liveHeartRateProvider = StreamProvider<int>((ref) {
 /// Devices without a step sensor (e.g. emulators) emit 0.
 final sessionStepsProvider = StreamProvider<int>((ref) {
   final service = ref.watch(stepTrackerServiceProvider);
+  // The sensor counts from boot, so a counter reset underneath us drops the
+  // reading below the baseline. Bank what was already counted and re-anchor,
+  // rather than letting the session total go negative.
   int? baseline;
+  int carried = 0;
+  int sinceAnchor = 0;
+  int emitted = 0;
   return service.stepCountStream.map((cumulative) {
-    baseline ??= cumulative;
-    return cumulative - baseline!;
+    if (baseline == null || cumulative < baseline!) {
+      carried += sinceAnchor;
+      baseline = cumulative;
+    }
+    sinceAnchor = cumulative - baseline!;
+    return emitted = carried + sinceAnchor;
   }).transform(
     StreamTransformer.fromHandlers(
-      handleError: (error, stack, sink) => sink.add(0),
+      // Hold the last good count. A sensor that errors part-way through has not
+      // un-walked the session, and a device with no step sensor errors before
+      // anything is emitted, so this still opens at 0.
+      handleError: (error, stack, sink) => sink.add(emitted),
     ),
   );
 });

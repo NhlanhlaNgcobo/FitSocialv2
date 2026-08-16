@@ -441,35 +441,48 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
+    // The icon disc keeps its place at the leading edge and the hint at the
+    // trailing one; the label is stacked over both so it centres on the field
+    // below rather than on whatever space is left between them.
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: palette.brandSoft,
-              borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: double.infinity,
+        height: 30,
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: palette.brandSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 16, color: palette.brand),
+              ),
             ),
-            child: Icon(icon, size: 16, color: palette.brand),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: TextStyle(
-              color: palette.text,
-              fontWeight: FontWeight.w700,
+            Align(
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: palette.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          ),
-          if (hint != null) ...[
-            const Spacer(),
-            Text(
-              hint!,
-              style: TextStyle(color: palette.muted, fontSize: 12),
-            ),
+            if (hint != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  hint!,
+                  style: TextStyle(color: palette.muted, fontSize: 12),
+                ),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }

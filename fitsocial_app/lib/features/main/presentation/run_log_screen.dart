@@ -7,7 +7,6 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
-import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/run_background_section.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
@@ -102,28 +101,6 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
       text = text.replaceFirst(RegExp(r'\.$'), '');
     }
     return text;
-  }
-
-  void _bumpDistance(double amount) {
-    final next = double.parse((_distanceKm + amount).toStringAsFixed(2));
-    setState(() {
-      _distanceKm = next;
-      _distanceController.text = next > 0 ? _formatDistance(next) : '';
-      _distanceController.selection = TextSelection.collapsed(
-        offset: _distanceController.text.length,
-      );
-    });
-  }
-
-  void _bumpDuration(int amount) {
-    final next = _durationMinutes + amount;
-    setState(() {
-      _durationMinutes = next;
-      _durationController.text = next > 0 ? '$next' : '';
-      _durationController.selection = TextSelection.collapsed(
-        offset: _durationController.text.length,
-      );
-    });
   }
 
   /// Picks and crops a backdrop. The cropper downscales and re-encodes, so what
@@ -253,13 +230,6 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                         _distanceKm = double.tryParse(value.trim()) ?? 0;
                       });
                     },
-                    quickAdds: [
-                      for (final amount in const [0.5, 1.0, 5.0])
-                        BouncyChip(
-                          label: '+${_formatDistance(amount)} km',
-                          onTap: () => _bumpDistance(amount),
-                        ),
-                    ],
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   _MetricField(
@@ -275,13 +245,6 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                         _durationMinutes = int.tryParse(value.trim()) ?? 0;
                       });
                     },
-                    quickAdds: [
-                      for (final amount in const [5, 10, 30])
-                        BouncyChip(
-                          label: '+$amount min',
-                          onTap: () => _bumpDuration(amount),
-                        ),
-                    ],
                   ),
                 ],
               ),
@@ -568,8 +531,7 @@ class _LabelledDivider extends StatelessWidget {
   }
 }
 
-/// A big centred numeric well with its unit pinned to the right and a row of
-/// quick-add chips underneath.
+/// A big centred numeric well with its unit pinned to the right.
 class _MetricField extends StatelessWidget {
   const _MetricField({
     required this.icon,
@@ -580,7 +542,6 @@ class _MetricField extends StatelessWidget {
     required this.decimal,
     required this.invalid,
     required this.onChanged,
-    required this.quickAdds,
   });
 
   final IconData icon;
@@ -591,7 +552,6 @@ class _MetricField extends StatelessWidget {
   final bool decimal;
   final bool invalid;
   final ValueChanged<String> onChanged;
-  final List<Widget> quickAdds;
 
   @override
   Widget build(BuildContext context) {
@@ -674,8 +634,6 @@ class _MetricField extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(spacing: 8, runSpacing: 8, children: quickAdds),
       ],
     );
   }

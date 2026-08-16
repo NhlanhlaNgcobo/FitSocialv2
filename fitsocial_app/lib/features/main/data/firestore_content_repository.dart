@@ -19,6 +19,7 @@ import '../domain/meal_tracking.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
 import 'activity_session_parsing.dart';
+import 'author_identity_cache.dart';
 import 'content_repository_contract.dart';
 import 'firestore_mappers.dart';
 import 'firestore_models.dart';
@@ -37,8 +38,98 @@ class FirestoreContentRepository implements ContentRepository {
   /// [NotificationWrites].
   late final NotificationWrites _notifications = NotificationWrites(_firestore);
 
+  /// Current author names and photos, for laying over the copies frozen onto
+  /// posts and comments. Lives on the repository so a session's lookups
+  /// accumulate across the feed, profiles and post details.
+  late final AuthorIdentityCache _authorIdentities =
+      AuthorIdentityCache(_readAuthorIdentities);
+
+  /// Reads profile documents by uid, [_authorChunkSize] at a time — Firestore
+  /// caps a `whereIn` at that many values, and the feed's own author queries
+  /// are already chunked the same way.
+  ///
+  /// Absent documents are simply left out of the result, which is what tells
+  /// the cache to keep whatever the post stored.
+  Future<Map<String, AuthorIdentity>> _readAuthorIdentities(
+    List<String> userIds,
+  ) async {
+    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (var i = 0; i < userIds.length; i += _authorChunkSize) {
+      futures.add(
+        usersCollection
+            .where(
+              FieldPath.documentId,
+              whereIn: userIds.skip(i).take(_authorChunkSize).toList(),
+            )
+            .get(),
+      );
+    }
+
+    final snapshots = await Future.wait(futures);
+    return {
+      for (final snapshot in snapshots)
+        for (final doc in snapshot.docs)
+          doc.id: AuthorIdentity(
+            displayName: doc.data()['displayName'] as String?,
+            avatarUrl: doc.data()['avatarUrl'] as String?,
+          ),
+    };
+  }
+
+  /// [posts] with every author's current name and photo overlaid.
+  ///
+  /// One extra query per 30 distinct authors on the page, and none at all once
+  /// they are cached — which is what makes this affordable where resolving a
+  /// profile per card was not.
+  Future<List<FeedPost>> _withLiveAuthors(List<FeedPost> posts) async {
+    if (posts.isEmpty) return posts;
+    final identities =
+        await _authorIdentities.resolve(posts.map((post) => post.authorId));
+    if (identities.isEmpty) return posts;
+    return [
+      for (final post in posts)
+        FirestoreMapper.withLiveAuthor(post, identities[post.authorId]),
+    ];
+  }
+
+  /// [comments] with every author's current name and photo overlaid.
+  Future<List<Comment>> _withLiveCommentAuthors(List<Comment> comments) async {
+    if (comments.isEmpty) return comments;
+    final identities = await _authorIdentities
+        .resolve(comments.map((comment) => comment.authorId));
+    if (identities.isEmpty) return comments;
+    return [
+      for (final comment in comments)
+        FirestoreMapper.commentWithLiveAuthor(
+          comment,
+          identities[comment.authorId],
+        ),
+    ];
+  }
+
+  /// Puts the signed-in user's own profile into the cache without a read.
+  ///
+  /// Their rename is already in hand here, and their own old posts are where a
+  /// stale name is most visible. Without this they would wait out the cache's
+  /// TTL to see the change they just made.
+  void _seedOwnIdentity(UserProfileDraft? profile) {
+    final userId = _firebaseAuth.currentUser?.uid;
+    if (userId == null || profile == null) return;
+    _authorIdentities.seed(
+      userId,
+      AuthorIdentity(
+        displayName: PublicAuthorName.firstSafe([
+          profile.displayName,
+          profile.handle,
+        ]),
+        avatarUrl: profile.avatarUrl,
+      ),
+    );
+  }
+
   @override
   Future<HomeFeed> getFeedPosts(UserProfileDraft? profile) async {
+    _seedOwnIdentity(profile);
     final userId = _firebaseAuth.currentUser?.uid;
     // Signed out there is no follow graph to read, so the community's best
     // stands in rather than an empty page.
@@ -116,9 +207,11 @@ class FirestoreContentRepository implements ContentRepository {
           FirestorePostRecord.fromMap(doc.id, doc.data()),
     ];
 
-    return newestFirst(records, limit: _feedLimit)
-        .map(FirestoreMapper.toFeedPost)
-        .toList(growable: false);
+    return _withLiveAuthors(
+      newestFirst(records, limit: _feedLimit)
+          .map(FirestoreMapper.toFeedPost)
+          .toList(growable: false),
+    );
   }
 
   /// The [limit] newest of [records].
@@ -155,9 +248,10 @@ class FirestoreContentRepository implements ContentRepository {
   Future<FeedPost?> fetchPost(String postId) async {
     final snapshot = await postsCollection.doc(postId).get();
     if (!snapshot.exists) return null;
-    return FirestoreMapper.toFeedPost(
+    final post = FirestoreMapper.toFeedPost(
       FirestorePostRecord.fromMap(snapshot.id, snapshot.data() ?? const {}),
     );
+    return (await _withLiveAuthors([post])).single;
   }
 
   @override
@@ -168,10 +262,12 @@ class FirestoreContentRepository implements ContentRepository {
         .limit(120)
         .get();
 
-    return snapshot.docs
-        .map((doc) => FirestorePostRecord.fromMap(doc.id, doc.data()))
-        .map(FirestoreMapper.toFeedPost)
-        .toList();
+    return _withLiveAuthors(
+      snapshot.docs
+          .map((doc) => FirestorePostRecord.fromMap(doc.id, doc.data()))
+          .map(FirestoreMapper.toFeedPost)
+          .toList(),
+    );
   }
 
   @override
@@ -215,10 +311,12 @@ class FirestoreContentRepository implements ContentRepository {
         .toList()
       ..sort((a, b) => b.score.compareTo(a.score));
 
-    return scored
-        .take(_trendingLimit)
-        .map((entry) => FirestoreMapper.toFeedPost(entry.record))
-        .toList(growable: false);
+    return _withLiveAuthors(
+      scored
+          .take(_trendingLimit)
+          .map((entry) => FirestoreMapper.toFeedPost(entry.record))
+          .toList(growable: false),
+    );
   }
 
   /// How many recent posts are scored to fill the grid. Ranking happens on
@@ -557,48 +655,17 @@ class FirestoreContentRepository implements ContentRepository {
 
   @override
   Future<List<ProfileStat>> getProfileStats(String userId) async {
-    // Both reads are started before either is awaited, so they overlap.
-    final profileRead = usersCollection.doc(userId).get();
-    final photosRead = _countPhotoPosts(userId);
-
-    final snapshot = await profileRead;
+    final snapshot = await usersCollection.doc(userId).get();
     final record =
         FirestoreUserRecord.fromMap(userId, snapshot.data() ?? const {});
 
     return [
-      FirestoreMapper.toProfileStat(
-        label: 'Uploads',
-        value: await photosRead + record.runsCount + record.workoutsCount,
-      ),
       FirestoreMapper.toProfileStat(
           label: 'Followers', value: record.followersCount),
       FirestoreMapper.toProfileStat(
           label: 'Following', value: record.followingCount),
     ];
   }
-
-  /// How many photo posts [userId] has shared.
-  ///
-  /// Counted by query rather than read off the profile, because no counter
-  /// tracks plain photo shares — [_incrementUser] only moves the per-activity
-  /// totals. Keys off `postType` so meal shares are left out: a meal carries
-  /// an image but is written as a text post, which is what separates the two.
-  /// Deliberately unordered, so two equality filters can be served from the
-  /// single-field indexes without a composite one.
-  Future<int> _countPhotoPosts(String userId) async {
-    final snapshot = await postsCollection
-        .where('authorId', isEqualTo: userId)
-        .where('postType', isEqualTo: 'image')
-        .limit(_uploadCountPostLimit)
-        .get();
-
-    return snapshot.docs.length;
-  }
-
-  /// Ceiling on how many photo posts the upload total counts. Past this the
-  /// number under-reports rather than turning one profile view into unbounded
-  /// reads.
-  static const int _uploadCountPostLimit = 300;
 
   @override
   Future<UserSearchResult?> fetchUserProfile(String userId) async {
@@ -1972,10 +2039,12 @@ class FirestoreContentRepository implements ContentRepository {
         .orderBy('createdAt', descending: false)
         .get();
 
-    return snapshot.docs
-        .map((doc) => FirestoreCommentRecord.fromMap(doc.id, doc.data()))
-        .map(FirestoreMapper.toComment)
-        .toList();
+    return _withLiveCommentAuthors(
+      snapshot.docs
+          .map((doc) => FirestoreCommentRecord.fromMap(doc.id, doc.data()))
+          .map(FirestoreMapper.toComment)
+          .toList(),
+    );
   }
 
   @override
@@ -2145,10 +2214,17 @@ class FirestoreContentRepository implements ContentRepository {
         .collection('comments')
         .orderBy('createdAt', descending: false)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => FirestoreCommentRecord.fromMap(doc.id, doc.data()))
-            .map(FirestoreMapper.toComment)
-            .toList());
+        // asyncMap rather than map: the overlay needs the identity cache,
+        // which may have to read. Already-cached authors resolve without
+        // awaiting anything, so the common case still emits immediately.
+        .asyncMap((snapshot) => _withLiveCommentAuthors(
+              snapshot.docs
+                  .map(
+                    (doc) => FirestoreCommentRecord.fromMap(doc.id, doc.data()),
+                  )
+                  .map(FirestoreMapper.toComment)
+                  .toList(),
+            ));
   }
 
   @override

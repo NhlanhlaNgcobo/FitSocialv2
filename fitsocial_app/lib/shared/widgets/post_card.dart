@@ -107,7 +107,7 @@ class PostCard extends StatelessWidget {
         caption: caption,
         imageUrl: imageUrl,
         aspectRatio: imageAspectRatio,
-        hasRoute: _hasRoute,
+        route: routePoints,
         hasWorkout: workoutData != null || postType == PostType.workout,
       );
 

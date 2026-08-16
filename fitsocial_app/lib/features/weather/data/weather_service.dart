@@ -18,6 +18,10 @@ class WeatherService {
   static const String _host = 'api.open-meteo.com';
   static const String _path = '/v1/forecast';
 
+  /// Today plus six. The forecast page promises a week, and Open-Meteo's daily
+  /// numbers stay meaningful across that span.
+  static const int forecastDays = 7;
+
   /// Long enough to survive a slow mobile connection, short enough that a card
   /// on a screen does not sit spinning.
   static const Duration _timeout = Duration(seconds: 10);
@@ -32,12 +36,15 @@ class WeatherService {
       'longitude': '$longitude',
       'current': 'temperature_2m,apparent_temperature,weather_code,'
           'wind_speed_10m,is_day',
-      'daily': 'temperature_2m_max,temperature_2m_min,'
-          'precipitation_probability_max',
+      'daily': 'weather_code,temperature_2m_max,temperature_2m_min,'
+          'apparent_temperature_max,apparent_temperature_min,'
+          'wind_speed_10m_max,precipitation_probability_max',
       // Resolved from the coordinates, so "today" means the user's today
       // rather than UTC's.
       'timezone': 'auto',
-      'forecast_days': '1',
+      // A week, in one request. The card reads only the first day off this, so
+      // opening the forecast page costs no second call.
+      'forecast_days': '$forecastDays',
     });
 
     final response = await _client.get(uri).timeout(_timeout);
@@ -101,13 +108,56 @@ WeatherSnapshot parseForecast(
     precipitationChance:
         _firstNumber(dailyMap?['precipitation_probability_max'])?.round(),
     locationLabel: locationLabel,
+    days: _parseDays(dailyMap),
   );
 }
 
-/// Daily fields arrive as one-element arrays because `forecast_days` is 1.
-double? _firstNumber(Object? value) {
-  if (value is! List || value.isEmpty) return null;
-  return (value.first as num?)?.toDouble();
+/// Reads the daily block into one entry per day.
+///
+/// Open-Meteo sends daily data as parallel arrays keyed off `time`, so `time`
+/// is what decides how many days there are; a day missing a high or a low is
+/// dropped rather than shown as a blank row, since a range is the whole point
+/// of a day in the list.
+List<DailyForecast> _parseDays(Map<String, dynamic>? daily) {
+  final times = daily?['time'];
+  if (times is! List) return const [];
+
+  final highs = daily?['temperature_2m_max'];
+  final lows = daily?['temperature_2m_min'];
+
+  final days = <DailyForecast>[];
+  for (var i = 0; i < times.length; i++) {
+    final date = DateTime.tryParse(times[i] as String? ?? '');
+    final high = _numberAt(highs, i);
+    final low = _numberAt(lows, i);
+    if (date == null || high == null || low == null) continue;
+
+    days.add(
+      DailyForecast(
+        date: date,
+        condition: WeatherCondition.fromWmoCode(
+          _numberAt(daily?['weather_code'], i)?.toInt(),
+        ),
+        highC: high,
+        lowC: low,
+        feelsHighC: _numberAt(daily?['apparent_temperature_max'], i),
+        feelsLowC: _numberAt(daily?['apparent_temperature_min'], i),
+        windKph: _numberAt(daily?['wind_speed_10m_max'], i) ?? 0,
+        precipitationChance:
+            _numberAt(daily?['precipitation_probability_max'], i)?.round(),
+      ),
+    );
+  }
+
+  return days;
+}
+
+/// The first entry of a daily array — today, since the forecast starts there.
+double? _firstNumber(Object? value) => _numberAt(value, 0);
+
+double? _numberAt(Object? value, int index) {
+  if (value is! List || index >= value.length) return null;
+  return (value[index] as num?)?.toDouble();
 }
 
 class WeatherUnavailableException implements Exception {

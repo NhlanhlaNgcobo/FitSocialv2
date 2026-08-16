@@ -69,6 +69,7 @@ class SharedPostRef {
     this.caption = '',
     this.imageUrl,
     this.aspectRatio,
+    this.route = const [],
   });
 
   /// Builds a reference from the pieces a card already holds, for the callers
@@ -76,7 +77,7 @@ class SharedPostRef {
   /// built that way, and reassembling a [FeedPost] there just to take it apart
   /// again would be ceremony.
   ///
-  /// The precedence between [hasRoute], [imageUrl] and [hasWorkout] is the one
+  /// The precedence between [route], [imageUrl] and [hasWorkout] is the one
   /// the feed card and the detail page already use: a real route outranks the
   /// stored type, and a run with no fixes falls back to being words.
   factory SharedPostRef.of({
@@ -88,12 +89,13 @@ class SharedPostRef {
     String caption = '',
     String? imageUrl,
     double? aspectRatio,
-    bool hasRoute = false,
+    List<RoutePoint> route = const [],
     bool hasWorkout = false,
   }) {
     final image = (imageUrl ?? '').trim();
+    final trace = _thin(route);
     final SharedPostKind kind;
-    if (hasRoute) {
+    if (trace.length >= 2) {
       kind = SharedPostKind.route;
     } else if (image.isNotEmpty) {
       kind = SharedPostKind.photo;
@@ -113,6 +115,9 @@ class SharedPostRef {
       caption: _truncate(caption.trim()),
       imageUrl: image.isEmpty ? null : image,
       aspectRatio: aspectRatio,
+      // Only a run carries its shape. On any other kind the trace would be
+      // weight on the Pulse document that nothing draws.
+      route: kind == SharedPostKind.route ? trace : const [],
     );
   }
 
@@ -140,12 +145,30 @@ class SharedPostRef {
   /// cropped to instead of squaring it.
   final double? aspectRatio;
 
+  /// The run's GPS trace, thinned to [maxRoutePoints], so the card can draw the
+  /// shape that was actually run instead of a glyph standing in for it.
+  ///
+  /// Carried on the snapshot for the same reason the author's name is: the
+  /// people playing the Pulse may not be allowed to read the post it came from.
+  /// Empty on everything that isn't a run, and on shares written before the
+  /// card knew how to draw one — those still get the placeholder.
+  final List<RoutePoint> route;
+
   /// Longest caption carried onto the card. Two lines at the size it is set
   /// in, which is as much as fits under the picture before the card starts
   /// competing with the Pulse around it.
   static const int maxCaptionLength = 140;
 
+  /// Fixes kept on the snapshot. The post itself stores up to 1500, which is
+  /// the resolution a full-screen map needs; a thumbnail a third of a phone
+  /// wide cannot show the difference, and every one of these is copied onto a
+  /// Pulse document that is read on every frame of playback.
+  static const int maxRoutePoints = 80;
+
   bool get hasImage => (imageUrl ?? '').isNotEmpty;
+
+  /// A polyline needs at least two fixes; a single point is not a route.
+  bool get hasRoute => route.length >= 2;
 
   static SharedPostRef fromFeedPost(FeedPost post) {
     return SharedPostRef.of(
@@ -157,7 +180,7 @@ class SharedPostRef {
       caption: post.caption,
       imageUrl: post.imageUrl,
       aspectRatio: post.imageAspectRatio,
-      hasRoute: post.routePoints.length >= 2,
+      route: post.routePoints,
       hasWorkout: post.workoutData != null || post.postType == PostType.workout,
     );
   }
@@ -165,6 +188,19 @@ class SharedPostRef {
   static String _truncate(String value) {
     if (value.length <= maxCaptionLength) return value;
     return '${value.substring(0, maxCaptionLength - 1).trimRight()}…';
+  }
+
+  /// Evenly samples [route] down to [maxRoutePoints], always keeping the last
+  /// fix — the finish is a landmark on the shape, and dropping it would leave
+  /// a loop looking like it stopped short.
+  static List<RoutePoint> _thin(List<RoutePoint> route) {
+    if (route.length <= maxRoutePoints) return List.unmodifiable(route);
+
+    final step = route.length / (maxRoutePoints - 1);
+    return List.unmodifiable([
+      for (var i = 0; i < maxRoutePoints - 1; i++) route[(i * step).floor()],
+      route.last,
+    ]);
   }
 
   Map<String, dynamic> toMap() => {
@@ -177,6 +213,8 @@ class SharedPostRef {
         if (caption.isNotEmpty) 'caption': caption,
         if (imageUrl != null) 'imageUrl': imageUrl,
         if (aspectRatio != null) 'aspectRatio': aspectRatio,
+        if (route.isNotEmpty)
+          'route': [for (final point in route) point.toMap()],
       };
 
   /// Null for anything missing the post id, which is the one field the card
@@ -204,6 +242,9 @@ class SharedPostRef {
       caption: _truncate(caption),
       imageUrl: image.isEmpty ? null : image,
       aspectRatio: (value['aspectRatio'] as num?)?.toDouble(),
+      // Thinned again on the way back in: the length is capped on write, but
+      // the document was written by a client and this is drawn on every frame.
+      route: _thin(RoutePoint.listFromFirestore(value['route'])),
     );
   }
 }

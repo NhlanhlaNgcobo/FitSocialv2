@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -12,6 +13,10 @@ import '../domain/weather.dart';
 /// Everything here fails soft. Weather is a nicety on a training screen — a
 /// dead network, a refused permission or an API outage costs the card and
 /// nothing else, so each of those renders as a quiet row rather than an error.
+///
+/// Tapping a loaded card opens the week. The failed states stay inert: there
+/// is nothing behind them to open, and the one with an Allow button needs that
+/// tap for itself.
 class WeatherCard extends ConsumerWidget {
   const WeatherCard({super.key});
 
@@ -22,7 +27,10 @@ class WeatherCard extends ConsumerWidget {
     return weather.when(
       loading: () => const _WeatherSkeleton(),
       error: (error, _) => _WeatherUnavailable(error: error),
-      data: (snapshot) => _WeatherContent(snapshot: snapshot),
+      data: (snapshot) => _WeatherContent(
+        snapshot: snapshot,
+        onTap: () => context.push('/weather'),
+      ),
     );
   }
 }
@@ -53,9 +61,10 @@ Color outlookColor(TrainingOutlook outlook, AppPalette palette) {
 }
 
 class _WeatherContent extends StatelessWidget {
-  const _WeatherContent({required this.snapshot});
+  const _WeatherContent({required this.snapshot, this.onTap});
 
   final WeatherSnapshot snapshot;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +73,8 @@ class _WeatherContent extends StatelessWidget {
     final color = outlookColor(outlook, palette);
 
     return DarkCard(
+      onTap: onTap,
+      semanticLabel: 'Open the weather forecast',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -144,9 +155,33 @@ class _WeatherContent extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            snapshot.advice,
-            style: TextStyle(color: palette.muted, height: 1.4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  snapshot.advice,
+                  style: TextStyle(color: palette.muted, height: 1.4),
+                ),
+              ),
+              // Says what the tap does. Without it the card looks like a
+              // read-only readout, which is what it was until now.
+              if (onTap != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '7 days',
+                  style: TextStyle(
+                    color: palette.brandText,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12.5,
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: palette.brandText,
+                  size: 18,
+                ),
+              ],
+            ],
           ),
         ],
       ),

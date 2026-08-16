@@ -147,6 +147,39 @@ class FeedPost {
     return likedBy.contains(userId) ? FitReaction.defaultReaction : null;
   }
 
+  /// The same post with its author's name and photo replaced.
+  ///
+  /// Separate from [copyWith] because this one has to be able to write null:
+  /// an author who has removed their profile photo should lose it from their
+  /// old posts too, and `copyWith` reads a null argument as "leave it alone".
+  FeedPost withAuthor({
+    required String userName,
+    required String? authorAvatarUrl,
+  }) {
+    return FeedPost(
+      id: id,
+      authorId: authorId,
+      userName: userName,
+      activity: activity,
+      caption: caption,
+      metricLabels: metricLabels,
+      timestamp: timestamp,
+      likes: likes,
+      comments: comments,
+      backgroundColors: backgroundColors,
+      likedBy: likedBy,
+      reactions: reactions,
+      reactionsBy: reactionsBy,
+      postType: postType,
+      imageUrl: imageUrl,
+      workoutData: workoutData,
+      routePoints: routePoints,
+      authorAvatarUrl: authorAvatarUrl,
+      imageAspectRatio: imageAspectRatio,
+      taggedUsers: taggedUsers,
+    );
+  }
+
   FeedPost copyWith({
     String? id,
     String? authorId,
@@ -309,6 +342,23 @@ class Comment {
   /// Author's profile photo at the time of commenting, denormalised the same
   /// way [authorName] is. Null on comments written before it was recorded.
   final String? authorAvatarUrl;
+
+  /// The same comment with its author's name and photo replaced — the
+  /// counterpart to [FeedPost.withAuthor], and null-writing for the same
+  /// reason.
+  Comment withAuthor({
+    required String authorName,
+    required String? authorAvatarUrl,
+  }) {
+    return Comment(
+      id: id,
+      authorId: authorId,
+      authorName: authorName,
+      text: text,
+      createdAt: createdAt,
+      authorAvatarUrl: authorAvatarUrl,
+    );
+  }
 }
 
 class ActivitySaveResult {

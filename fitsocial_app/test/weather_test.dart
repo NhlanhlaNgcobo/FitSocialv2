@@ -24,11 +24,63 @@ Map<String, dynamic> forecast({
       'is_day': isDay,
     },
     'daily': {
+      'time': ['2026-08-13'],
+      'weather_code': [code],
       'temperature_2m_max': [high],
       'temperature_2m_min': [low],
       'precipitation_probability_max': [rainChance],
+      'wind_speed_10m_max': [wind],
     },
   };
+}
+
+/// A week of daily arrays, the shape Open-Meteo sends for `forecast_days=7`.
+Map<String, dynamic> weekForecast({int days = 7}) {
+  return {
+    'current': {
+      'time': '2026-08-13T09:00',
+      'temperature_2m': 21.0,
+      'apparent_temperature': 21.0,
+      'weather_code': 0,
+      'wind_speed_10m': 8.0,
+      'is_day': 1,
+    },
+    'daily': {
+      'time': [
+        for (var i = 0; i < days; i++)
+          DateTime(2026, 8, 13 + i).toIso8601String().substring(0, 10),
+      ],
+      'weather_code': [for (var i = 0; i < days; i++) i],
+      'temperature_2m_max': [for (var i = 0; i < days; i++) 24.0 + i],
+      'temperature_2m_min': [for (var i = 0; i < days; i++) 12.0 + i],
+      'apparent_temperature_max': [for (var i = 0; i < days; i++) 25.0 + i],
+      'apparent_temperature_min': [for (var i = 0; i < days; i++) 11.0 + i],
+      'wind_speed_10m_max': [for (var i = 0; i < days; i++) 10.0],
+      'precipitation_probability_max': [for (var i = 0; i < days; i++) 5.0],
+    },
+  };
+}
+
+DailyForecast day({
+  DateTime? date,
+  WeatherCondition condition = WeatherCondition.clear,
+  double high = 24,
+  double low = 14,
+  double? feelsHigh,
+  double? feelsLow,
+  double wind = 10,
+  int? rainChance = 10,
+}) {
+  return DailyForecast(
+    date: date ?? DateTime(2026, 8, 13),
+    condition: condition,
+    highC: high,
+    lowC: low,
+    feelsHighC: feelsHigh,
+    feelsLowC: feelsLow,
+    windKph: wind,
+    precipitationChance: rainChance,
+  );
 }
 
 WeatherSnapshot snapshot({
@@ -116,6 +168,50 @@ void main() {
       expect(result.precipitationChance, isNull);
     });
 
+    test('reads the whole week, today first', () {
+      final result = parseForecast(weekForecast());
+
+      expect(result.days, hasLength(7));
+      expect(result.days.first.date, DateTime(2026, 8, 13));
+      expect(result.days.last.date, DateTime(2026, 8, 19));
+      expect(result.days.first.highC, 24);
+      expect(result.days.first.lowC, 12);
+      expect(result.days.first.windKph, 10);
+      expect(result.days.first.precipitationChance, 5);
+      // Each day takes its own code, rather than every row inheriting today's.
+      expect(result.days[0].condition, WeatherCondition.clear);
+      expect(result.days[2].condition, WeatherCondition.partlyCloudy);
+      expect(result.days[3].condition, WeatherCondition.cloudy);
+    });
+
+    // The card reads today off the same body the week comes from, so the two
+    // must never disagree about today.
+    test('the card numbers match the first day of the week', () {
+      final result = parseForecast(weekForecast());
+
+      expect(result.highC, result.days.first.highC);
+      expect(result.lowC, result.days.first.lowC);
+      expect(result.precipitationChance, result.days.first.precipitationChance);
+    });
+
+    // Parallel arrays are only safe while they stay parallel. A short one has
+    // to drop days rather than pair a Tuesday high with a Wednesday low.
+    test('drops days whose high or low is missing', () {
+      final body = weekForecast();
+      (body['daily'] as Map)['temperature_2m_max'] = [24.0, 25.0];
+
+      final days = parseForecast(body).days;
+      expect(days, hasLength(2));
+      expect(days.last.date, DateTime(2026, 8, 14));
+    });
+
+    test('has no week when the daily block carries no times', () {
+      final body = weekForecast();
+      (body['daily'] as Map).remove('time');
+
+      expect(parseForecast(body).days, isEmpty);
+    });
+
     test('refuses a response with no reading at all', () {
       expect(
         () => parseForecast(const {}),
@@ -173,6 +269,56 @@ void main() {
     test('a high chance of rain downgrades a clear reading', () {
       expect(snapshot(rainChance: 80).outlook, TrainingOutlook.fair);
       expect(snapshot(rainChance: null).outlook, TrainingOutlook.good);
+    });
+  });
+
+  group('daily outlook', () {
+    test('a mild day is good', () {
+      expect(day().outlook, TrainingOutlook.good);
+    });
+
+    // A day is not one temperature. Judging its middle would call a day that
+    // peaks at 36° and bottoms out at 1° a pleasant one.
+    test('judges heat on the peak and cold on the trough', () {
+      expect(day(high: 36, low: 20).outlook, TrainingOutlook.poor);
+      expect(day(high: 20, low: -1).outlook, TrainingOutlook.poor);
+    });
+
+    test('prefers the felt extremes over the measured ones', () {
+      expect(
+        day(high: 26, low: 14, feelsHigh: 36).outlook,
+        TrainingOutlook.poor,
+      );
+      expect(
+        day(high: 34, low: 14, feelsHigh: 28, feelsLow: 15).outlook,
+        TrainingOutlook.good,
+      );
+    });
+
+    test('storms and gales rule a day out', () {
+      expect(
+        day(condition: WeatherCondition.thunderstorm).outlook,
+        TrainingOutlook.poor,
+      );
+      expect(day(wind: 50).outlook, TrainingOutlook.poor);
+    });
+
+    test('rain makes a day doable, not a write-off', () {
+      expect(
+        day(condition: WeatherCondition.rain).outlook,
+        TrainingOutlook.fair,
+      );
+      expect(day(rainChance: 80).outlook, TrainingOutlook.fair);
+    });
+  });
+
+  group('today in the week', () {
+    test('is matched on the calendar day, not the timestamp', () {
+      final today = day(date: DateTime(2026, 8, 13));
+
+      expect(today.isSameDayAs(DateTime(2026, 8, 13, 23, 59)), isTrue);
+      expect(today.isSameDayAs(DateTime(2026, 8, 14)), isFalse);
+      expect(today.isSameDayAs(DateTime(2025, 8, 13)), isFalse);
     });
   });
 

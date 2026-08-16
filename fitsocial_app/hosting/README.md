@@ -37,9 +37,16 @@ shared links stop resolving.
 
 ## Before links open the app on Android
 
-`.well-known/assetlinks.json` still carries placeholder fingerprints. Until
-they are replaced, the https link opens this page instead of the app — which
-works, but costs a tap.
+`.well-known/assetlinks.json` currently carries **only the local debug
+keystore's** fingerprint (`~/.android/debug.keystore`, alias
+`androiddebugkey`). Debug builds installed from this machine verify; anything
+signed with another key opens this page instead of the app — which works, but
+costs a tap.
+
+Before a Play release, *append* the release fingerprints to the same array —
+one entry per key, all of them in the one `sha256_cert_fingerprints` list.
+Leave no placeholder strings behind: Android rejects the whole file if an
+entry is malformed, which takes the working debug fingerprint down with it.
 
 1. Get the SHA-256 of the signing key. For a Play-signed app, take it from
    Play Console → Release → Setup → App signing (list **both** the app signing

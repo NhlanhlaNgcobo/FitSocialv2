@@ -46,7 +46,24 @@ class HealthService {
     HealthDataType.DISTANCE_DELTA,
   ];
 
+  static final _readAccess =
+      _types.map((_) => HealthDataAccess.READ).toList(growable: false);
+
   Future<void> configure() => _health.configure();
+
+  /// Whether read access is already granted, without prompting.
+  ///
+  /// Null means undetermined — HealthKit will not disclose read grants on iOS,
+  /// and it is also what a missing Health Connect install looks like. Callers
+  /// should treat anything but true as "ask".
+  Future<bool?> hasPermissions() async {
+    try {
+      await _health.configure();
+      return await _health.hasPermissions(_types, permissions: _readAccess);
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Requests read access to the health data types we use.
   /// Returns false when the platform store is missing or the user declines.
@@ -55,8 +72,7 @@ class HealthService {
       await _health.configure();
       final granted = await _health.requestAuthorization(
         _types,
-        permissions:
-            _types.map((_) => HealthDataAccess.READ).toList(growable: false),
+        permissions: _readAccess,
       );
       return granted;
     } catch (_) {

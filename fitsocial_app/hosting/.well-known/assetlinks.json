@@ -5,8 +5,7 @@
       "namespace": "android_app",
       "package_name": "com.fitsocial.fitsocial_app",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_RELEASE_SHA256_FINGERPRINT",
-        "REPLACE_WITH_UPLOAD_OR_DEBUG_SHA256_FINGERPRINT"
+        "68:87:8F:07:70:2B:12:BF:D0:B0:91:0F:D7:7A:FD:7C:99:77:BA:24:EB:74:93:5D:59:B3:B4:21:77:FB:46:47"
       ]
     }
   }

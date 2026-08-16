@@ -5,6 +5,7 @@ import 'package:fitsocial_app/app/theme/app_palette.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/main/domain/shared_post.dart';
 import 'package:fitsocial_app/features/pulse/domain/pulse_models.dart';
+import 'package:fitsocial_app/shared/widgets/route_sparkline.dart';
 import 'package:fitsocial_app/shared/widgets/shared_post_card.dart';
 
 FeedPost _post({
@@ -63,6 +64,53 @@ void main() {
       expect(ref.kind, SharedPostKind.text);
     });
 
+    test('carries the trace, thinned, so the card can draw the run', () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(
+          postType: PostType.run,
+          routePoints: [
+            for (var i = 0; i < 900; i++)
+              RoutePoint(latitude: i / 1000, longitude: i / 1000),
+          ],
+        ),
+      );
+
+      expect(ref.hasRoute, isTrue);
+      expect(ref.route.length, SharedPostRef.maxRoutePoints);
+      expect(ref.route.first.latitude, 0);
+      // The finish survives the thinning — it is where the shape closes.
+      expect(ref.route.last.latitude, 899 / 1000);
+    });
+
+    test('a short route is carried whole', () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(
+          postType: PostType.run,
+          routePoints: const [
+            RoutePoint(latitude: 1, longitude: 1),
+            RoutePoint(latitude: 2, longitude: 2),
+          ],
+        ),
+      );
+
+      expect(ref.route.length, 2);
+    });
+
+    test('only a run carries a trace', () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(
+          postType: PostType.run,
+          routePoints: const [RoutePoint(latitude: 1, longitude: 1)],
+        ),
+      );
+
+      // One fix is not a route, so this is a text share — and a text share has
+      // no shape to put on the Pulse document.
+      expect(ref.kind, SharedPostKind.text);
+      expect(ref.route, isEmpty);
+      expect(ref.hasRoute, isFalse);
+    });
+
     test('a meal is a photo, and keeps the shape it was cropped to', () {
       final ref = SharedPostRef.fromFeedPost(
         _post(postType: PostType.meal, imageUrl: 'https://example.com/a.jpg'),
@@ -104,6 +152,39 @@ void main() {
       expect(restored.kind, ref.kind);
       expect(restored.imageUrl, ref.imageUrl);
       expect(restored.aspectRatio, ref.aspectRatio);
+    });
+
+    test('a run keeps its shape through a Pulse document', () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(
+          postType: PostType.run,
+          routePoints: const [
+            RoutePoint(latitude: -26.2, longitude: 28.04),
+            RoutePoint(latitude: -26.21, longitude: 28.05),
+            RoutePoint(latitude: -26.22, longitude: 28.04),
+          ],
+        ),
+      );
+
+      final restored = SharedPostRef.fromMap(ref.toMap())!;
+
+      expect(restored.kind, SharedPostKind.route);
+      expect(restored.route.length, 3);
+      expect(restored.route.last.latitude, -26.22);
+    });
+
+    test('a trace longer than the cap is thinned on the way back in', () {
+      // The length is capped on write, but the document was written by a
+      // client and the card redraws it on every frame of playback.
+      final restored = SharedPostRef.fromMap({
+        'postId': 'p1',
+        'kind': 'route',
+        'route': [
+          for (var i = 0; i < 5000; i++) {'lat': i / 10000, 'lng': i / 10000},
+        ],
+      })!;
+
+      expect(restored.route.length, SharedPostRef.maxRoutePoints);
     });
 
     test('a stored snapshot with no post id is not a share', () {
@@ -216,7 +297,7 @@ void main() {
       expect(opened, 1);
     });
 
-    testWidgets('a run share draws its label rather than a broken picture',
+    testWidgets('a run share draws the line it was, not a glyph for it',
         (tester) async {
       await tester.pumpWidget(
         host(
@@ -234,8 +315,27 @@ void main() {
         ),
       );
 
-      expect(find.text('RUN ROUTE'), findsOneWidget);
+      expect(find.byType(RouteSparkline), findsOneWidget);
+      expect(find.text('RUN ROUTE'), findsNothing);
+      // Nothing is fetched to draw it — the trace rides on the snapshot.
       expect(find.byType(Image), findsNothing);
+    });
+
+    testWidgets('a share written before the trace was carried keeps the label',
+        (tester) async {
+      await tester.pumpWidget(
+        host(
+          SharedPostCard(
+            post: SharedPostRef.fromMap(const {
+              'postId': 'p1',
+              'kind': 'route',
+            })!,
+          ),
+        ),
+      );
+
+      expect(find.text('RUN ROUTE'), findsOneWidget);
+      expect(find.byType(RouteSparkline), findsNothing);
     });
   });
 }
