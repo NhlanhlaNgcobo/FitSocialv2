@@ -425,6 +425,16 @@ async function badgeFactsFor(userId, enrollment) {
  * workout carries `loggedAt`, and everything carries the server's `createdAt`.
  * Querying only the preferred field would silently drop the older shape;
  * querying only `createdAt` would file a backdated entry on the wrong day.
+ *
+ * EVERY field named here needs its own `(authorId, <field>)` composite index in
+ * firestore.indexes.json — an equality plus a range on a second field is not
+ * served by the automatic single-field indexes. Adding a field to a `fields`
+ * list without adding the index is not a slow query, it is a thrown
+ * FAILED_PRECONDITION, and because this function sits under a `Promise.all`
+ * that every trigger in the file funnels into, one missing index stops the day
+ * document being written at all and leaves all seven tasks reading zero. That
+ * is exactly how `workouts` and `meals` shipped missing their `createdAt`
+ * pairs, and 75 Pulse recorded nothing for anybody until they were added.
  */
 async function activityInDay(collection, userId, fields, start, end) {
   const found = new Map();

@@ -86,6 +86,15 @@ class ChallengeCopy {
   static const String challengeProgress = 'CHALLENGE PROGRESS';
   static const String pointsThisChallenge = 'POINTS THIS CHALLENGE';
   static const String manualTaskNote = 'You track this one yourself.';
+
+  /// Shown when a tap on water or reading did not reach the server.
+  ///
+  /// Said out loud rather than swallowed. These two counters are the only ones
+  /// the user moves by hand, so a tap that quietly goes nowhere reads as the
+  /// tracker being broken — which is exactly how it read to the tester who
+  /// found the rule that was refusing every one of these writes.
+  static const String manualTaskFailed =
+      "Couldn't save that. Check your connection and tap again.";
   static const String automaticTaskNote =
       'Read from your logs. It cannot be ticked by hand.';
 

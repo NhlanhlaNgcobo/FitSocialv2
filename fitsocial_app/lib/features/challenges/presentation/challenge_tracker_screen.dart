@@ -67,14 +67,26 @@ class _ChallengeTrackerScreenState
     DailyProgress day,
     ChallengeTask task,
     int delta,
-  ) {
-    return ref.read(challengeActionsProvider).adjustManualTask(
-          enrollmentId: enrollment.id,
-          dayKey: day.dayKey,
-          task: task,
-          current: day.valueOf(task),
-          delta: delta,
-        );
+  ) async {
+    try {
+      await ref.read(challengeActionsProvider).adjustManualTask(
+            enrollmentId: enrollment.id,
+            dayKey: day.dayKey,
+            task: task,
+            current: day.valueOf(task),
+            delta: delta,
+          );
+    } catch (error) {
+      // A rejected write used to land nowhere at all: the row simply did not
+      // move and the user was left to guess whether the tap had registered.
+      // The counter is the one thing on this screen they control, so a failure
+      // to record it has to be said.
+      debugPrint('Manual task ${task.key} failed: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(ChallengeCopy.manualTaskFailed)),
+      );
+    }
   }
 
   @override

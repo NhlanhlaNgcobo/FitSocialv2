@@ -804,12 +804,21 @@ service cloud.firestore {
       // mean. Capped well above their targets so an honest over-count is
       // possible while a nonsense figure is not.
       match /manual/{dayKey} {
+        // Each counter is checked only if the write carries it. The client sets
+        // one task at a time and merges, so the first tap on water creates a
+        // document with no `reading` field at all — demanding both here refused
+        // that create, and since the document could then never come into
+        // existence, every later tap was refused too. A missing key is a task
+        // the user has not touched yet, not an invalid entry.
         function manualEntryIsValid(entry) {
           return entry.keys().hasOnly(['water', 'reading', 'dayKey', 'updatedAt'])
-                 && entry.water is int && entry.water >= 0 && entry.water <= 30
-                 && entry.reading is int && entry.reading >= 0
-                 && entry.reading <= 500
-                 && entry.dayKey == dayKey;
+                 && entry.dayKey == dayKey
+                 && (!('water' in entry)
+                     || (entry.water is int
+                         && entry.water >= 0 && entry.water <= 30))
+                 && (!('reading' in entry)
+                     || (entry.reading is int
+                         && entry.reading >= 0 && entry.reading <= 500));
         }
 
         allow read: if request.auth != null
