@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
@@ -9,7 +10,9 @@ import '../../../app/theme/theme_mode_controller.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
+import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
+import 'delete_account_sheet.dart';
 
 /// One accent per row, following the Create screen's rule: a hue identifies
 /// *what the row is about*, so it stays the same in both themes and is resolved
@@ -94,6 +97,21 @@ class SettingsScreen extends ConsumerWidget {
             text: 'Notifications are set per person. Open someone\'s profile '
                 'and tap the bell to hear about what they post.',
           ),
+          const SizedBox(height: AppSpacing.lg),
+          const _SectionLabel('About'),
+          _SettingsGroup(
+            children: [
+              // No accent, so it takes the brand hue. The accent list at the
+              // top of this file is deliberately short, and a legal page is
+              // not the row that should earn a fifth colour.
+              _SettingsTile(
+                icon: Icons.privacy_tip_outlined,
+                label: 'Privacy policy',
+                subtitle: 'What we collect, and how to get rid of it',
+                onTap: () => _openPrivacyPolicy(context),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.xl),
           _SettingsGroup(
             children: [
@@ -105,10 +123,53 @@ class SettingsScreen extends ConsumerWidget {
                 showChevron: false,
                 onTap: () => _confirmSignOut(context, ref),
               ),
+              // Below sign-out, and last on the page. Both are red, and the
+              // one that is merely inconvenient should not sit under the one
+              // that is irreversible.
+              _SettingsTile(
+                icon: Icons.delete_forever_rounded,
+                label: 'Delete account',
+                subtitle: 'Permanently erase your account and everything in it',
+                isDanger: true,
+                showChevron: false,
+                onTap: () => showDeleteAccountSheet(context),
+              ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  /// Opens the hosted privacy policy in a browser.
+  ///
+  /// Deliberately external rather than a screen inside the app. The policy has
+  /// to stay reachable by somebody who has signed out or deleted the app, the
+  /// Play listing needs the same URL, and two copies of a legal document is one
+  /// copy too many — the hosted page is the only version there is.
+  ///
+  /// Note this only lands in a browser because the App Link intent filter in
+  /// AndroidManifest.xml is scoped to /post/ and /user/. A host-wide claim
+  /// would send this straight back into the app, which has no route for it.
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final url = FitSocialLinks.privacyPolicy;
+    // Resolved before the await: the context may be gone by the time a failing
+    // launch comes back, and the messenger cannot be looked up from a dead one.
+    final messenger = ScaffoldMessenger.of(context);
+
+    var opened = false;
+    try {
+      opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      // A device with no browser at all. Handled the same as a refusal below.
+    }
+
+    if (opened) return;
+    // The address is in the message on purpose: a user who cannot open it here
+    // can still read the policy by typing it somewhere else, which is the
+    // whole point of hosting it publicly.
+    messenger.showSnackBar(
+      SnackBar(content: Text('Could not open a browser. Visit $url')),
     );
   }
 

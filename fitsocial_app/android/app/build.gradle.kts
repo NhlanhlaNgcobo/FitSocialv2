@@ -3,6 +3,7 @@ plugins {
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
     // END: FlutterFire Configuration
+    id("com.google.firebase.crashlytics")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
@@ -102,6 +103,32 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+
+            // R8 rewrites every class and method name in this build, so a
+            // crash arrives at Crashlytics as `a.b.c(Unknown Source)` unless
+            // the mapping file goes up with it. Uploading it is the whole
+            // difference between a report you can act on and a report you
+            // cannot — and it only matters here, which is why minification and
+            // this setting are configured on the same build type.
+            //
+            // A copy is still archived to dist/ by the release script, for
+            // reading a stack trace by hand if it ever comes to that.
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                mappingFileUploadEnabled = true
+            }
+        }
+
+        debug {
+            // Nothing from a developer's own laptop belongs in the dashboard
+            // we watch during testing. Symbol upload is the slow part of the
+            // plugin, and a debug build has nothing to symbolicate anyway.
+            //
+            // This does not by itself stop debug crashes being *sent* — that
+            // is decided at runtime in crash_reporter.dart, which is where the
+            // kDebugMode switch lives.
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                mappingFileUploadEnabled = false
+            }
         }
     }
 }

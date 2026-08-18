@@ -3,6 +3,15 @@ abstract class AuthRepository {
   /// when no session is restored. Used to rehydrate the app on cold start.
   String? currentUserEmail();
 
+  /// The uid of the currently signed-in user, or null when there is no
+  /// session.
+  ///
+  /// Distinct from [currentUserEmail], which falls back to the uid for accounts
+  /// with no address and so cannot be told apart from a real email by its
+  /// caller. Anything that needs to identify the account rather than display it
+  /// — crash reports, most of all — wants this.
+  String? currentUserId();
+
   /// Re-checks the restored session against the auth server.
   ///
   /// [currentUserEmail] only reads the credentials cached on the device, so it
@@ -43,4 +52,17 @@ abstract class AuthRepository {
   Future<void> sendPasswordResetEmail(String email);
 
   Future<void> signOut();
+
+  /// Permanently deletes the signed-in account and everything attached to it.
+  ///
+  /// The work happens server-side: a user's data reaches into documents the
+  /// security rules will not let a client touch — reactions under other
+  /// people's posts, their name in other people's follower lists — so this
+  /// calls the `deleteAccount` Cloud Function and lets it sweep with admin
+  /// credentials. See functions/account_deletion.js.
+  ///
+  /// Returns once the account is gone. Throws if it is not: a caller must never
+  /// tell someone their data was deleted on the strength of this returning
+  /// early.
+  Future<void> deleteAccount();
 }

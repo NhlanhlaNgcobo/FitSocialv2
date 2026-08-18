@@ -23,6 +23,10 @@ plugins {
     // START: FlutterFire Configuration
     id("com.google.gms.google-services") version("4.3.15") apply false
     // END: FlutterFire Configuration
+    // Crashlytics. Not part of the FlutterFire block above because
+    // `flutterfire configure` does not add it — it is applied in
+    // app/build.gradle.kts, where the mapping upload is also configured.
+    id("com.google.firebase.crashlytics") version("3.0.2") apply false
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
 }
 

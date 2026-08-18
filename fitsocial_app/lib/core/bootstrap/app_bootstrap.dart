@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
 
 import '../config/app_config.dart';
+import '../observability/crash_reporter.dart';
 import 'bootstrap_status.dart';
 import 'firebase_options_adapter.dart';
 
@@ -21,6 +22,11 @@ Future<BootstrapStatus> bootstrapApp() async {
   // FirebaseInitProvider is disabled in AndroidManifest.xml so the native
   // Google Services plugin does not auto-initialize before this call.
   await Firebase.initializeApp(options: resolveFirebaseOptions());
+
+  // Immediately after Firebase is up and before anything else runs: an error
+  // thrown during the rest of this function is exactly the kind that leaves a
+  // tester with an app that will not start, and it has to be caught too.
+  await installCrashHandlers();
 
   // Set before the first Firestore call — settings applied after the instance
   // has been used are ignored, so this belongs here and nowhere else.

@@ -26,6 +26,9 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  String? currentUserId() => _firebaseAuth.currentUser?.uid;
+
+  @override
   Future<bool> hasValidSession() async {
     final user = _firebaseAuth.currentUser;
     if (user == null) return false;
@@ -149,5 +152,24 @@ class FirebaseAuthRepository implements AuthRepository {
   @override
   Future<void> signOut() {
     return _firebaseAuth.signOut();
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    final callable = appFunctions.httpsCallable(
+      'deleteAccount',
+      // Generous, and deliberately so. The sweep walks every collection in the
+      // database on the user's behalf; a busy account is minutes of work, and a
+      // client that gave up early would leave someone believing their deletion
+      // failed while it was still running.
+      options: HttpsCallableOptions(timeout: const Duration(minutes: 9)),
+    );
+
+    await callable.call<Map<String, dynamic>>();
+
+    // Only once the server has confirmed. Signing out first would drop the
+    // credential the call is authorised by, and a failed deletion would look
+    // to the user exactly like a successful one.
+    await _firebaseAuth.signOut();
   }
 }

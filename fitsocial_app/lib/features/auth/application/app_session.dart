@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/observability/crash_reporter.dart';
 import '../data/auth_repository_contract.dart';
 import '../data/auth_repository.dart';
 import '../data/user_profile_repository_contract.dart';
@@ -21,12 +22,17 @@ class AppSession extends ChangeNotifier {
   AppSession({
     required this.authRepository,
     required this.userProfileRepository,
+    this.crashReporter = const NoopCrashReporter(),
   }) {
     _bootstrap();
   }
 
   final AuthRepository authRepository;
   final UserProfileRepository userProfileRepository;
+
+  /// Where crashes go. Defaults to a no-op so a test can build a session
+  /// without a Firebase app behind it.
+  final CrashReporter crashReporter;
   AuthStage _stage = AuthStage.initializing;
   bool _isLoading = false;
   String? _email;
@@ -62,6 +68,7 @@ class AppSession extends ChangeNotifier {
     }
 
     _email = restoredEmail;
+    _identifyForCrashReports();
     try {
       _profile = await userProfileRepository.loadCurrentProfile();
     } catch (_) {
@@ -99,6 +106,7 @@ class AppSession extends ChangeNotifier {
   }
 
   void _finishBootstrapUnauthenticated() {
+    crashReporter.setUserId(null);
     _email = null;
     _profile = null;
     _stage = AuthStage.unauthenticated;
@@ -170,6 +178,7 @@ class AppSession extends ChangeNotifier {
     _errorMessage = null;
     try {
       _email = await signIn();
+      _identifyForCrashReports();
       _profile = await userProfileRepository.loadCurrentProfile();
       // No profile means the account exists but was never finished, so setup
       // is where they land rather than the feed.
@@ -258,6 +267,7 @@ class AppSession extends ChangeNotifier {
     _errorMessage = null;
     try {
       await authRepository.signOut();
+      crashReporter.setUserId(null);
       _email = null;
       _profile = null;
       _stage = AuthStage.unauthenticated;
@@ -267,6 +277,39 @@ class AppSession extends ChangeNotifier {
     } finally {
       notifyListeners();
     }
+  }
+
+  /// Permanently deletes the account and drops the session.
+  ///
+  /// Returns true only when the server confirmed the deletion. A false return
+  /// leaves the user signed in with [errorMessage] set, which is the honest
+  /// outcome: their data is still there and they may want to try again.
+  ///
+  /// There is no undo, and nothing here is optimistic — the session is not
+  /// cleared until the call has come back.
+  Future<bool> deleteAccount() async {
+    _setLoading(true);
+    _errorMessage = null;
+    try {
+      await authRepository.deleteAccount();
+      crashReporter.setUserId(null);
+      _email = null;
+      _profile = null;
+      _stage = AuthStage.unauthenticated;
+      return true;
+    } catch (error) {
+      _errorMessage = describeAuthError(error);
+      return false;
+    } finally {
+      _setLoading(false, shouldNotify: false);
+      notifyListeners();
+    }
+  }
+
+  /// Tags crash reports with the uid, so a report from a tester can be matched
+  /// to the account that hit it. Never the email — see [CrashReporter.setUserId].
+  void _identifyForCrashReports() {
+    crashReporter.setUserId(authRepository.currentUserId());
   }
 
   void clearError() {
@@ -288,5 +331,6 @@ final appSessionProvider = ChangeNotifierProvider<AppSession>((ref) {
   return AppSession(
     authRepository: ref.watch(authRepositoryProvider),
     userProfileRepository: ref.watch(userProfileRepositoryProvider),
+    crashReporter: ref.watch(crashReporterProvider),
   );
 });

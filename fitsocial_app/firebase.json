@@ -44,6 +44,10 @@
     ],
     "rewrites": [
       {
+        "source": "/privacy",
+        "destination": "/privacy.html"
+      },
+      {
         "source": "/post/**",
         "destination": "/open.html"
       },

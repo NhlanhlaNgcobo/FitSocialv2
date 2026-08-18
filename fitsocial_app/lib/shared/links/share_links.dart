@@ -40,6 +40,20 @@ abstract final class FitSocialLinks {
   /// which is the only thing that opens a store.
   static const String androidPackage = 'com.fitsocial.fitsocial_app';
 
+  /// The privacy policy, hosted alongside the share landing page.
+  ///
+  /// Deliberately not a route inside the app. A policy has to be readable by
+  /// someone who has deleted the app, been signed out, or never installed it —
+  /// and the Play Store listing needs a URL it can reach on its own. Note the
+  /// Android intent filter is scoped to /post/ and /user/ precisely so this
+  /// link opens a browser rather than re-entering the app.
+  static Uri get privacyPolicy => Uri.https(webHost, '/privacy');
+
+  /// The section of the policy explaining account deletion. Play asks for a
+  /// deletion URL separately from the policy URL; this is that one.
+  static Uri get accountDeletion =>
+      Uri.https(webHost, '/privacy').replace(fragment: 'delete');
+
   /// Path prefixes that name a piece of shareable content.
   ///
   /// Anything outside this set is not a link we published, so it is neither

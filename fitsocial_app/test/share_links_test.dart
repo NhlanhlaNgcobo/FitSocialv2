@@ -5,6 +5,30 @@ import 'package:fitsocial_app/shared/links/share_links.dart';
 
 void main() {
   group('FitSocialLinks', () {
+    test('the privacy policy is a plain web page on the same host', () {
+      expect(
+        FitSocialLinks.privacyPolicy.toString(),
+        'https://fitsocialv2.web.app/privacy',
+      );
+    });
+
+    test('the account-deletion link points into the policy', () {
+      // Play asks for a deletion URL separately from the policy URL. It is an
+      // anchor rather than a second page so the two cannot drift apart.
+      expect(
+        FitSocialLinks.accountDeletion.toString(),
+        'https://fitsocialv2.web.app/privacy#delete',
+      );
+    });
+
+    test('neither is treated as a destination inside the app', () {
+      // If routeFor ever accepted these, opening the policy from Settings
+      // would re-enter the app instead of reaching a browser.
+      expect(FitSocialLinks.routeFor(FitSocialLinks.privacyPolicy), isNull);
+      expect(FitSocialLinks.routeFor(FitSocialLinks.accountDeletion), isNull);
+      expect(FitSocialLinks.isShareableRoute('/privacy'), isFalse);
+    });
+
     test('a shared post is a link to the app, not the post text', () {
       final link = FitSocialLinks.post('abc123');
 

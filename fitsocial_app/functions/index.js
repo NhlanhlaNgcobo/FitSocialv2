@@ -578,6 +578,16 @@ exports.searchFoods = onCall(
   }
 );
 
+// --- Account deletion -------------------------------------------------------
+//
+// Its own module for the same reason the challenge engine is: it is a
+// self-contained sweep over every collection in the database, and the one
+// thing it must never become is a function somebody edits without reading.
+for (const [name, handler] of Object.entries(require("./account_deletion"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+
 // --- Challenges -------------------------------------------------------------
 //
 // The challenge engine lives in its own module: it is a self-contained set of

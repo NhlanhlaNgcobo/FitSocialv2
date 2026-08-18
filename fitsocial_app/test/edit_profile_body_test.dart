@@ -21,6 +21,12 @@ const _profile = UserProfileDraft(
 
 class _FakeAuth implements AuthRepository {
   @override
+  String? currentUserId() => 'uid_test';
+
+  @override
+  Future<void> deleteAccount() async {}
+
+  @override
   String? currentUserEmail() => 'bear@example.com';
 
   @override

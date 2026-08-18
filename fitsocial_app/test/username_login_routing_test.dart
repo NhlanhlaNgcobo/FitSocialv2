@@ -127,6 +127,12 @@ class _RecordingAuth implements AuthRepository {
   final List<String> usernameSignIns = [];
 
   @override
+  String? currentUserId() => 'uid_test';
+
+  @override
+  Future<void> deleteAccount() async {}
+
+  @override
   String? currentUserEmail() => null;
 
   @override

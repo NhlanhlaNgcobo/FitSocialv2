@@ -12,6 +12,9 @@ class UnconfiguredAuthRepository implements AuthRepository {
   String? currentUserEmail() => null;
 
   @override
+  String? currentUserId() => null;
+
+  @override
   Future<bool> hasValidSession() async => false;
 
   @override
@@ -50,6 +53,11 @@ class UnconfiguredAuthRepository implements AuthRepository {
 
   @override
   Future<void> signOut() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> deleteAccount() async {
     throw StateError(_firebaseSetupMessage);
   }
 }

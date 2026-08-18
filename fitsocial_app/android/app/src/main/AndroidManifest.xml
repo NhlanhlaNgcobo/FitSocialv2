@@ -89,7 +89,18 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="https" android:host="fitsocialv2.web.app"/>
+                <!-- Scoped to the two path prefixes that name shareable
+                     content, and NOT left as a bare host. A host-wide claim
+                     makes the app the handler for every URL on its own
+                     domain, including the privacy policy — so opening the
+                     policy from Settings would bounce straight back into the
+                     app, which has no route for it and would show nothing.
+                     These prefixes mirror FitSocialLinks.routeFor: if one
+                     gains a path, the other has to. -->
+                <data android:scheme="https" android:host="fitsocialv2.web.app"
+                      android:pathPrefix="/post/"/>
+                <data android:scheme="https" android:host="fitsocialv2.web.app"
+                      android:pathPrefix="/user/"/>
             </intent-filter>
             <!-- fitsocial://app/post/{id} — the hand-off the hosted page uses
                  when the App Link above was not verified for this install

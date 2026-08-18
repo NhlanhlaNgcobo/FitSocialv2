@@ -175,6 +175,12 @@ class _FakeAuth implements AuthRepository {
   int signOutCount = 0;
 
   @override
+  String? currentUserId() => 'uid_test';
+
+  @override
+  Future<void> deleteAccount() async {}
+
+  @override
   String? currentUserEmail() => email;
 
   @override

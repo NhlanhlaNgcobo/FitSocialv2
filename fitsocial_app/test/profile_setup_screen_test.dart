@@ -172,6 +172,12 @@ Future<void> _pumpScreen(
 
 class _FakeAuth implements AuthRepository {
   @override
+  String? currentUserId() => 'uid_test';
+
+  @override
+  Future<void> deleteAccount() async {}
+
+  @override
   String? currentUserEmail() => null;
 
   @override

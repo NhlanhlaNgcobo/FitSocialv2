@@ -6,6 +6,7 @@
   },
   "main": "index.js",
   "scripts": {
+    "test": "node --test",
     "seed:nutrition": "node scripts/seed_nutrition_db.js",
     "check:nutrition": "node scripts/check_nutrition_matching.js",
     "backfill:usernames": "node scripts/backfill_usernames.js"
