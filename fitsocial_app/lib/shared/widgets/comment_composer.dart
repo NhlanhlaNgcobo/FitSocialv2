@@ -8,6 +8,7 @@ import '../../features/auth/application/app_session.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
 import 'mention_suggestions.dart';
+import 'quick_toast.dart';
 
 /// The "Add a comment…" well and its send button.
 ///
@@ -77,11 +78,12 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       ref.invalidate(commentsProvider(widget.postId));
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to post comment: $e'),
-            backgroundColor: context.palette.danger,
-          ),
+        debugPrint('Posting a comment failed: $e');
+        showQuickToast(
+          context,
+          "Couldn't post that comment. Try again.",
+          icon: Icons.error_outline_rounded,
+          tone: ToastTone.danger,
         );
       }
     } finally {

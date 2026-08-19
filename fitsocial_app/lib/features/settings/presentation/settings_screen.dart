@@ -8,6 +8,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/theme_mode_controller.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
 import '../../../shared/links/share_links.dart';
@@ -154,8 +155,8 @@ class SettingsScreen extends ConsumerWidget {
   Future<void> _openPrivacyPolicy(BuildContext context) async {
     final url = FitSocialLinks.privacyPolicy;
     // Resolved before the await: the context may be gone by the time a failing
-    // launch comes back, and the messenger cannot be looked up from a dead one.
-    final messenger = ScaffoldMessenger.of(context);
+    // launch comes back, and the overlay cannot be looked up from a dead one.
+    final overlay = Overlay.of(context, rootOverlay: true);
 
     var opened = false;
     try {
@@ -168,8 +169,12 @@ class SettingsScreen extends ConsumerWidget {
     // The address is in the message on purpose: a user who cannot open it here
     // can still read the policy by typing it somewhere else, which is the
     // whole point of hosting it publicly.
-    messenger.showSnackBar(
-      SnackBar(content: Text('Could not open a browser. Visit $url')),
+    showQuickToastOn(
+      overlay,
+      'Could not open a browser. Visit $url',
+      icon: Icons.error_outline_rounded,
+      tone: ToastTone.danger,
+      visibleFor: const Duration(milliseconds: 4000),
     );
   }
 

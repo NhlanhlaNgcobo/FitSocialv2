@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_route_map.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../../main/application/activity_actions.dart';
@@ -108,9 +109,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
             ),
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(saved.message)),
-      );
+      showQuickToast(context, saved.message, tone: ToastTone.success);
       context.go('/home');
     } catch (e) {
       if (!mounted) return;

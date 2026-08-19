@@ -9,6 +9,7 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/follow_button.dart';
 import '../../../shared/widgets/profile_bio.dart';
 import '../../../shared/widgets/profile_stats_bar.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../challenges/application/challenge_providers.dart';
 import '../../challenges/presentation/badge_shelf.dart';
 import '../application/content_providers.dart';
@@ -110,12 +111,16 @@ class _TopActionBar extends ConsumerWidget {
     WidgetRef ref,
     bool isOn,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     try {
       await ref.read(userNotificationActionsProvider)(userId, enabled: !isOn);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(content: Text("Couldn't change notifications: $error")),
+      debugPrint('Toggling notifications failed: $error');
+      showQuickToastOn(
+        overlay,
+        "Couldn't change notifications. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     }
   }

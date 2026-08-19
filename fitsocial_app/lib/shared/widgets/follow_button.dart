@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../features/main/application/content_providers.dart';
+import 'quick_toast.dart';
 
 /// How a [FollowButton] is shaped.
 enum FollowButtonShape {
@@ -46,14 +47,14 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
           .toggle(widget.targetUserId, isFollowing: isFollowing);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isFollowing
-                ? "Couldn't unfollow: $error"
-                : "Couldn't follow: $error",
-          ),
-        ),
+      debugPrint('Follow toggle failed: $error');
+      showQuickToast(
+        context,
+        isFollowing
+            ? "Couldn't unfollow. Try again."
+            : "Couldn't follow. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     } finally {
       if (mounted) setState(() => _isPending = false);

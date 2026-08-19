@@ -57,7 +57,9 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
   Future<void> _share() async {
     if (_busy) return;
     FocusScope.of(context).unfocus();
-    final messenger = ScaffoldMessenger.of(context);
+    // Read off the root overlay before anything awaits: this route pops on
+    // success, and a message anchored to its Scaffold would go with it.
+    final overlay = Overlay.of(context, rootOverlay: true);
     setState(() => _busy = true);
 
     try {
@@ -65,23 +67,23 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
             widget.buildDraft(_captionController.text, _gradientKey),
           );
       if (!mounted) return;
-      // Same floating pill a deleted post gets, and read off the root overlay
-      // for the same reason: this route is about to pop, and a snackbar
-      // anchored to its Scaffold would go with it.
-      final overlay = Overlay.maybeOf(context, rootOverlay: true);
-      if (overlay != null) {
-        showQuickToastOn(
-          overlay,
-          'Pulse is live for 24 hours',
-          icon: Icons.bolt_rounded,
-          tone: ToastTone.success,
-        );
-      }
+      showQuickToastOn(
+        overlay,
+        'Pulse is live for 24 hours',
+        icon: Icons.bolt_rounded,
+        tone: ToastTone.success,
+      );
       context.pop();
     } catch (error) {
       if (!mounted) return;
       setState(() => _busy = false);
-      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+      debugPrint('Publishing a Pulse failed: $error');
+      showQuickToastOn(
+        overlay,
+        "Couldn't share that. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
+      );
     }
   }
 

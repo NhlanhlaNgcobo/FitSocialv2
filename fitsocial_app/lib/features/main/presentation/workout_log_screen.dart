@@ -1,3 +1,4 @@
+import '../../../shared/widgets/quick_toast.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -125,9 +126,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
             ),
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
     } catch (error) {
       if (!mounted) return;

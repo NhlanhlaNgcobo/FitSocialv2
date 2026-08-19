@@ -10,6 +10,7 @@ import '../../main/application/content_providers.dart'
     show currentUserIdProvider;
 import '../../main/domain/app_models.dart' show Comment;
 import '../../main/presentation/comments_sheet.dart' show CommentTile;
+import '../../../shared/widgets/quick_toast.dart';
 import '../application/pulse_providers.dart';
 
 /// The conversation under a Pulse.
@@ -184,12 +185,15 @@ class _PulseCommentRow extends ConsumerWidget {
     );
     if (confirmed != true || !context.mounted) return;
 
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     try {
       await ref.read(pulseActionsProvider).deleteComment(pulseId, comment.id);
     } catch (_) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text("Couldn't delete that comment.")),
+      showQuickToastOn(
+        overlay,
+        "Couldn't delete that comment.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     }
   }
@@ -231,8 +235,7 @@ class _PulseCommentComposerState extends ConsumerState<_PulseCommentComposer> {
     setState(() => _isSending = true);
     // Both resolved before the await: the send can outlive this widget, and
     // reaching for the context afterwards is what makes that a crash.
-    final messenger = ScaffoldMessenger.of(context);
-    final danger = context.palette.danger;
+    final overlay = Overlay.of(context, rootOverlay: true);
 
     try {
       await ref.read(pulseActionsProvider).comment(widget.pulseId, text);
@@ -240,11 +243,12 @@ class _PulseCommentComposerState extends ConsumerState<_PulseCommentComposer> {
       // to try again with rather than losing them.
       _controller.clear();
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to post comment: $error'),
-          backgroundColor: danger,
-        ),
+      debugPrint('Posting a Pulse comment failed: $error');
+      showQuickToastOn(
+        overlay,
+        "Couldn't post that comment. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     } finally {
       if (mounted) setState(() => _isSending = false);

@@ -78,6 +78,21 @@ class HomeScreen extends ConsumerWidget {
   Widget _buildFeed(HomeFeed feed, WidgetRef ref) {
     if (feed.isEmpty) return const _NothingPostedYet();
 
+    // Blended: the people they follow first, then a line, then the top-up.
+    // The line is not decoration — without it a stranger's post reads as
+    // somebody they followed and forgot about.
+    if (feed.source == FeedSource.blended) {
+      return Column(
+        children: [
+          ..._buildPosts(feed.followedPosts, ref),
+          const SizedBox(height: AppSpacing.sm),
+          const _SuggestedHeader(isTopUp: true),
+          const SizedBox(height: AppSpacing.sm),
+          ..._buildPosts(feed.suggestedPosts, ref),
+        ],
+      );
+    }
+
     return Column(
       children: [
         // Said out loud when these are not the people you follow, so a quiet
@@ -143,7 +158,16 @@ class HomeScreen extends ConsumerWidget {
 /// Says that what follows is the community rather than the people you follow,
 /// and offers the one action that changes that.
 class _SuggestedHeader extends StatelessWidget {
-  const _SuggestedHeader();
+  const _SuggestedHeader({this.isTopUp = false});
+
+  /// Whether this introduces a top-up below a real feed, rather than standing
+  /// in for one.
+  ///
+  /// The two need different words. Above an empty feed the message is "you
+  /// haven't followed anyone"; above a short one it is "you have, and here is
+  /// more" — telling somebody who follows three people that they follow nobody
+  /// is how a prompt starts getting ignored.
+  final bool isTopUp;
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +193,7 @@ class _SuggestedHeader extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Suggested for you',
+                isTopUp ? 'More from FitSocial' : 'Suggested for you',
                 style: TextStyle(
                   color: palette.text,
                   fontWeight: FontWeight.w800,
@@ -180,7 +204,10 @@ class _SuggestedHeader extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Follow people and their posts land here first.',
+            isTopUp
+                ? "That's everything from the people you follow. Follow a few "
+                    'more and this section shrinks.'
+                : 'Follow people and their posts land here first.',
             style: TextStyle(color: palette.muted, fontSize: 13.5, height: 1.4),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -194,7 +221,7 @@ class _SuggestedHeader extends StatelessWidget {
             ),
             onPressed: () => context.go('/explore'),
             icon: const Icon(Icons.person_search_outlined, size: 18),
-            label: const Text('Find people'),
+            label: Text(isTopUp ? 'Find more people' : 'Find people'),
           ),
         ],
       ),

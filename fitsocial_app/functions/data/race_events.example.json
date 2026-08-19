@@ -1,0 +1,53 @@
+[
+  {
+    "_comment": "PLACEHOLDER DATA. Every row below is an illustration of the format, not a real race — the names, dates, venues and fees are invented. Copy this file to data/race_events.json, delete these rows, and fill it from the provincial ASA fixture lists (AGN, CGA, WPA, KZNA...) and the entry platforms. See scripts/seed_races.js for the sources.",
+    "name": "Example Road Race — Full Format",
+    "date": "2026-10-03",
+    "startTime": "06:30",
+    "province": "GP",
+    "city": "Midrand",
+    "venueName": "Example Sports Club",
+    "addressLine": "1 Example Road, Midrand",
+    "lat": -25.9892,
+    "lng": 28.1263,
+    "organiser": "Example Athletic Club",
+    "description": "Every field the ingest accepts, filled in. Only name, date, province, city and distances are required — everything else is optional.",
+    "distances": [
+      { "km": 5, "label": "5 km Fun Run", "priceCents": 5000 },
+      { "km": 10, "label": "10 km", "priceCents": 9000 },
+      { "km": 21.1, "label": "Half Marathon", "priceCents": 15000, "startTime": "06:00" }
+    ],
+    "tags": ["road", "comrades-qualifier"],
+    "entryUrl": "https://www.entryninja.com/events",
+    "entryPlatform": "entryninja",
+    "status": "scheduled",
+    "source": "curated",
+    "verified": "2026-08-19"
+  },
+  {
+    "_comment": "PLACEHOLDER DATA — the minimum a row can be. Distances with no label get one derived from the kilometres; a missing startTime defaults to 06:00; status defaults to scheduled and source to curated.",
+    "name": "Example Club League Race — Minimal Format",
+    "date": "2026-10-17",
+    "province": "WC",
+    "city": "Stellenbosch",
+    "distances": [{ "km": 8 }, { "km": 15 }]
+  },
+  {
+    "_comment": "PLACEHOLDER DATA — a multi-day trail event, showing endDate and the trail/stage tags.",
+    "name": "Example Trail Stage Race",
+    "date": "2026-11-13",
+    "endDate": "2026-11-15",
+    "startTime": "07:00",
+    "province": "KZN",
+    "city": "Underberg",
+    "organiser": "Example Trail Series",
+    "distances": [
+      { "km": 28, "label": "Day 1", "priceCents": 320000 },
+      { "km": 34, "label": "Day 2" },
+      { "km": 22, "label": "Day 3" }
+    ],
+    "tags": ["trail", "stage"],
+    "entryUrl": "https://www.entryninja.com/events/trail-running",
+    "status": "scheduled"
+  }
+]

@@ -5,6 +5,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../application/app_session.dart';
 
 /// The account list behind the chevron next to the profile name.
@@ -110,15 +111,13 @@ class _AccountSwitcherSheet extends ConsumerWidget {
               ),
               onTap: () {
                 // Resolved before the pop: afterwards this context is gone
-                // and the messenger can no longer be looked up from it.
-                final messenger = ScaffoldMessenger.of(context);
+                // and the overlay can no longer be looked up from it.
+                final overlay = Overlay.of(context, rootOverlay: true);
                 Navigator.of(context).pop();
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Signing in with a second account is coming soon.',
-                    ),
-                  ),
+                showQuickToastOn(
+                  overlay,
+                  'A second account is coming soon.',
+                  icon: Icons.schedule_rounded,
                 );
               },
             ),

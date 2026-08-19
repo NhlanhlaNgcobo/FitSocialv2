@@ -32,6 +32,10 @@ import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/races/presentation/race_detail_screen.dart';
+import '../../features/races/presentation/races_screen.dart';
+import '../../features/races/presentation/saved_races_screen.dart';
+import '../../features/races/presentation/submit_race_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/pulse/domain/pulse_music.dart';
 import '../../features/pulse/presentation/pulse_composer_screen.dart';
@@ -241,6 +245,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => ChallengeDetailScreen(
           challengeKey:
               ChallengeKey.byKey(state.pathParameters['challengeKey']!)!,
+        ),
+      ),
+      // The running calendar. Outside the shell like the challenge screens:
+      // you come back from a race listing, you do not live in it.
+      //
+      // /races/saved and /races/submit are declared before /race/:eventId so a
+      // path never has to be disambiguated by ordering luck — the two literal
+      // sub-paths sit under /races and the parameterised one under /race, which
+      // cannot collide with either.
+      GoRoute(
+        path: '/races',
+        builder: (context, state) => const RacesScreen(),
+      ),
+      GoRoute(
+        path: '/races/saved',
+        builder: (context, state) => const SavedRacesScreen(),
+      ),
+      GoRoute(
+        path: '/races/submit',
+        builder: (context, state) => const SubmitRaceScreen(),
+      ),
+      GoRoute(
+        path: '/race/:eventId',
+        builder: (context, state) => RaceDetailScreen(
+          eventId: state.pathParameters['eventId']!,
         ),
       ),
       GoRoute(

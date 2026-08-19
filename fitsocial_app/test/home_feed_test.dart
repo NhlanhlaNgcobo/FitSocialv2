@@ -212,6 +212,74 @@ void main() {
     });
   });
 
+  group('the blended feed', () {
+    // A feed of two followed posts topped up with two suggestions, which is
+    // exactly the shape that used to be a cliff: before following anyone the
+    // user saw a full suggested feed, and following one person replaced all of
+    // it with that person's single post.
+    HomeFeed blended() => HomeFeed(
+          posts: [post('f1'), post('f2'), post('s1'), post('s2')],
+          source: FeedSource.blended,
+          followedIds: const {'f1', 'f2'},
+        );
+
+    test('splits into the people you follow and the top-up', () {
+      final feed = blended();
+
+      expect(feed.followedPosts.map((p) => p.id), ['f1', 'f2']);
+      expect(feed.suggestedPosts.map((p) => p.id), ['s1', 's2']);
+    });
+
+    test('a following feed is all followed, with no top-up', () {
+      final feed = HomeFeed(
+        posts: [post('a'), post('b')],
+        source: FeedSource.following,
+      );
+
+      expect(feed.followedPosts.map((p) => p.id), ['a', 'b']);
+      expect(feed.suggestedPosts, isEmpty);
+    });
+
+    test('a suggested feed offers nothing as followed', () {
+      final feed = HomeFeed(
+        posts: [post('a')],
+        source: FeedSource.suggested,
+      );
+
+      // Everything on screen is a suggestion, and the screen says so with a
+      // header rather than a mid-list divider — so this getter returns the
+      // posts and the caller does not draw a boundary at all.
+      expect(feed.followedPosts.map((p) => p.id), ['a']);
+    });
+
+    test('deleting a followed post does not promote a suggestion', () async {
+      // The reason the boundary is a set of ids and not an index. Removing a
+      // post shifts the list; an index would keep pointing at position 2 and
+      // start rendering s1 above the divider, as if the user followed its
+      // author.
+      final notifier = await loadedNotifier(blended());
+      addTearDown(notifier.dispose);
+
+      notifier.removePost('f1');
+      final feed = notifier.state.valueOrNull!;
+
+      expect(feed.followedPosts.map((p) => p.id), ['f2']);
+      expect(feed.suggestedPosts.map((p) => p.id), ['s1', 's2']);
+      expect(feed.source, FeedSource.blended);
+    });
+
+    test('reacting to a suggested post leaves it a suggestion', () async {
+      final notifier = await loadedNotifier(blended());
+      addTearDown(notifier.dispose);
+
+      await notifier.setReaction('s1', 'me', FitReaction.fire);
+      final feed = notifier.state.valueOrNull!;
+
+      expect(feed.followedPosts.map((p) => p.id), ['f1', 'f2']);
+      expect(feed.suggestedPosts.map((p) => p.id), ['s1', 's2']);
+    });
+  });
+
   group('HomeFeed', () {
     test('reports an empty feed as empty', () {
       expect(const HomeFeed.empty().isEmpty, isTrue);

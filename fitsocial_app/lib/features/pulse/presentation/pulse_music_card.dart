@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../main/domain/app_models.dart';
 import '../../music/application/music_player_controller.dart';
 import '../../music/application/music_providers.dart';
@@ -113,8 +114,12 @@ class _ListenActionState extends ConsumerState<_ListenAction> {
       await ref.read(musicPlayerControllerProvider.notifier).playContext(uri);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Couldn't start that track: $error")),
+      debugPrint('Starting a track failed: $error');
+      showQuickToast(
+        context,
+        "Couldn't start that track.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     } finally {
       if (mounted) setState(() => _isStarting = false);

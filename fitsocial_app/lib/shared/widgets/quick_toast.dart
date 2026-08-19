@@ -18,14 +18,23 @@ enum ToastTone { neutral, success, danger }
 /// it floats over everything including open sheets, never touches layout, and
 /// a new toast replaces the one on screen instead of queueing behind it.
 ///
-/// The default [visibleFor] is short on purpose. This is an acknowledgement of
-/// something the user just did, not a notification they need to read.
+/// The default time on screen is short on purpose: this is an acknowledgement
+/// of something the user just did, not a notification they need to read. The
+/// two cases that *are* read — a failure, and a toast carrying an [actionLabel]
+/// the user has to reach for — get longer on their own, so no call site has to
+/// remember to ask.
+///
+/// [actionLabel] and [onAction] add one inline button ("Undo"). Without them
+/// the pill ignores pointers entirely, so it can never swallow a tap meant for
+/// the screen underneath.
 void showQuickToast(
   BuildContext context,
   String message, {
   IconData icon = Icons.check_rounded,
   ToastTone tone = ToastTone.neutral,
-  Duration visibleFor = const Duration(milliseconds: 1150),
+  Duration? visibleFor,
+  String? actionLabel,
+  VoidCallback? onAction,
 }) {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
@@ -35,6 +44,8 @@ void showQuickToast(
     icon: icon,
     tone: tone,
     visibleFor: visibleFor,
+    actionLabel: actionLabel,
+    onAction: onAction,
   );
 }
 
@@ -48,7 +59,9 @@ void showQuickToastOn(
   String message, {
   IconData icon = Icons.check_rounded,
   ToastTone tone = ToastTone.neutral,
-  Duration visibleFor = const Duration(milliseconds: 1150),
+  Duration? visibleFor,
+  String? actionLabel,
+  VoidCallback? onAction,
 }) {
   if (!overlay.mounted) return;
 
@@ -61,7 +74,9 @@ void showQuickToastOn(
       message: message,
       icon: icon,
       tone: tone,
-      visibleFor: visibleFor,
+      visibleFor: visibleFor ?? _defaultDuration(tone, actionLabel != null),
+      actionLabel: actionLabel,
+      onAction: onAction,
       onFinished: () => handle.remove(),
       register: (dismiss) => handle.dismiss = dismiss,
     ),
@@ -70,6 +85,16 @@ void showQuickToastOn(
   handle = _ToastHandle(entry);
   _currentToast = handle;
   overlay.insert(entry);
+}
+
+/// How long a toast stays up when the caller does not say.
+///
+/// An acknowledgement is gone before it is in the way. A failure has to be
+/// read, and anything with a button has to be reachable — those two hold.
+Duration _defaultDuration(ToastTone tone, bool hasAction) {
+  if (hasAction) return const Duration(milliseconds: 3600);
+  if (tone == ToastTone.danger) return const Duration(milliseconds: 2600);
+  return const Duration(milliseconds: 1150);
 }
 
 _ToastHandle? _currentToast;
@@ -101,6 +126,8 @@ class _QuickToast extends StatefulWidget {
     required this.icon,
     required this.tone,
     required this.visibleFor,
+    required this.actionLabel,
+    required this.onAction,
     required this.onFinished,
     required this.register,
   });
@@ -109,6 +136,8 @@ class _QuickToast extends StatefulWidget {
   final IconData icon;
   final ToastTone tone;
   final Duration visibleFor;
+  final String? actionLabel;
+  final VoidCallback? onAction;
   final VoidCallback onFinished;
   final ValueChanged<VoidCallback> register;
 
@@ -172,6 +201,9 @@ class _QuickToastState extends State<_QuickToast>
       left: 24,
       right: 24,
       child: IgnorePointer(
+        // A plain acknowledgement must never eat a tap aimed at the screen
+        // behind it; one carrying a button obviously has to take them.
+        ignoring: widget.actionLabel == null,
         child: AnimatedBuilder(
           animation: curve,
           builder: (context, child) {
@@ -190,7 +222,12 @@ class _QuickToastState extends State<_QuickToast>
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(12, 10, 18, 10),
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  10,
+                  widget.actionLabel == null ? 18 : 10,
+                  10,
+                ),
                 decoration: BoxDecoration(
                   color: palette.surface,
                   borderRadius: BorderRadius.circular(999),
@@ -229,9 +266,58 @@ class _QuickToastState extends State<_QuickToast>
                         ),
                       ),
                     ),
+                    if (widget.actionLabel case final label?) ...[
+                      const SizedBox(width: 12),
+                      // Taking the action retires the toast with it: leaving an
+                      // "Undo" on screen that has already been used invites a
+                      // second tap that would do nothing.
+                      _ToastAction(
+                        label: label,
+                        onPressed: () {
+                          widget.onAction?.call();
+                          _leave();
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The one button a toast is allowed: an inline word, in the brand orange, big
+/// enough to hit without turning the pill into a bar.
+class _ToastAction extends StatelessWidget {
+  const _ToastAction({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    // Its own Material, inside the pill rather than the one wrapping it: ink
+    // paints on the nearest Material *under* that material's children, so a
+    // splash from the outer one would land behind the pill's own background.
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(999),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: palette.brandText,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
             ),
           ),
         ),

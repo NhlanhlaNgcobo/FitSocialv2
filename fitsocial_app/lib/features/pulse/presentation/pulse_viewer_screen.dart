@@ -1,3 +1,4 @@
+import '../../../shared/widgets/quick_toast.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -347,16 +348,27 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
       return;
     }
 
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     try {
       await ref.read(pulseActionsProvider).delete(segment.id);
-      messenger.showSnackBar(const SnackBar(content: Text('Pulse deleted.')));
+      showQuickToastOn(
+        overlay,
+        'Pulse deleted',
+        icon: Icons.delete_outline_rounded,
+        tone: ToastTone.success,
+      );
       // The snapshot this screen plays from still holds the deleted segment,
       // so leave rather than show something that no longer exists.
       _close();
     } catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+      debugPrint('Deleting a Pulse failed: $error');
+      showQuickToastOn(
+        overlay,
+        "Couldn't delete that Pulse. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
+      );
       _setPaused(false);
     }
   }
@@ -958,14 +970,17 @@ class _ReactionControl extends ConsumerWidget {
     WidgetRef ref,
     FitReaction? reaction,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     try {
       await ref.read(pulseActionsProvider).react(pulseId, reaction);
     } catch (_) {
       // The pill reads from the stored document, so a failed write simply
       // leaves it where it was — there is nothing to roll back, only to say.
-      messenger.showSnackBar(
-        const SnackBar(content: Text("That reaction didn't go through.")),
+      showQuickToastOn(
+        overlay,
+        "That reaction didn't go through.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     }
   }

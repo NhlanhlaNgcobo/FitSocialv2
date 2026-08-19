@@ -1,3 +1,4 @@
+import '../../../shared/widgets/quick_toast.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -130,24 +131,20 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
     });
     _syncDraft();
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('Removed ${removed.name}.'),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () {
-              setState(() {
-                final next = [..._items]..insert(index, removed);
-                _items = next;
-                _applyItemTotals();
-              });
-              _syncDraft();
-            },
-          ),
-        ),
-      );
+    showQuickToast(
+      context,
+      'Removed ${removed.name}',
+      icon: Icons.remove_circle_outline_rounded,
+      actionLabel: 'Undo',
+      onAction: () {
+        setState(() {
+          final next = [..._items]..insert(index, removed);
+          _items = next;
+          _applyItemTotals();
+        });
+        _syncDraft();
+      },
+    );
   }
 
   /// Adds a food the analyzer missed, straight from the nutrition database.
@@ -207,9 +204,7 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
       ref.read(createFlowControllerProvider.notifier).completeMeal(
             result.message,
           );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
     } catch (error) {
       if (!mounted) return;

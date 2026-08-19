@@ -16,3 +16,20 @@ npm test          # starts the emulator, runs everything, shuts it down
 ```
 
 Java is required — the Firestore emulator runs on it.
+
+## Every file here shares one emulator
+
+`env.clearFirestore()` wipes the **whole** database, not this file's slice of
+it. All the test files run against one emulator under one project id, so two
+files clearing and seeding at the same time delete each other's fixtures.
+
+That is why the `test` script passes `--test-concurrency=1`: `node --test`
+otherwise runs test *files* in parallel child processes. Adding a second file
+without it produced a genuinely confusing failure — the Pulse 75 manual-task
+tests started reporting `PERMISSION_DENIED ... Null value error` on a rule
+nobody had touched, because `enrollmentOwner()` calls `get(...).data.userId` and
+the enrollment had been cleared out from under it by another file.
+
+So: keep the concurrency flag, and read a `Null value error` in a rule that uses
+`get()` as "the document this rule reads is missing" before suspecting the rule.
+

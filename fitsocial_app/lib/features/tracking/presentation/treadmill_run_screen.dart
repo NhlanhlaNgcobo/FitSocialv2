@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../../main/application/activity_actions.dart';
 import '../../main/domain/app_models.dart';
@@ -135,9 +136,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
             ),
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(saved.message)),
-      );
+      showQuickToast(context, saved.message, tone: ToastTone.success);
       context.go('/home');
     } catch (e) {
       if (!mounted) return;

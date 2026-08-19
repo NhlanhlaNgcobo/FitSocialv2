@@ -145,13 +145,43 @@ class FirestoreContentRepository implements ContentRepository {
     // createdAt was recorded. Either way, an empty screen is the worst answer.
     if (posts.isEmpty) return _suggestedFeed();
 
-    return HomeFeed(posts: posts, source: FeedSource.following);
+    // Enough to stand on its own: this is their feed, and nothing is added.
+    if (posts.length >= _feedFloor) {
+      return HomeFeed(posts: posts, source: FeedSource.following);
+    }
+
+    return _blendedFeed(posts);
   }
 
   Future<HomeFeed> _suggestedFeed() async {
     return HomeFeed(
       posts: await fetchTrendingPosts(),
       source: FeedSource.suggested,
+    );
+  }
+
+  /// A thin following feed, topped up with suggestions underneath.
+  ///
+  /// The followed posts stay at the top and in their own order. That ordering
+  /// is the point: the people you chose come first, and a merge by recency
+  /// would bury a training partner's post under strangers' — which is the
+  /// opposite of what following is for.
+  Future<HomeFeed> _blendedFeed(List<FeedPost> followed) async {
+    final alreadyShown = followed.map((post) => post.id).toSet();
+    final topUp = (await fetchTrendingPosts())
+        .where((post) => !alreadyShown.contains(post.id))
+        .toList(growable: false);
+
+    // A small community where everything trending is already in the feed. No
+    // header, because there is nothing underneath it to introduce.
+    if (topUp.isEmpty) {
+      return HomeFeed(posts: followed, source: FeedSource.following);
+    }
+
+    return HomeFeed(
+      posts: [...followed, ...topUp],
+      source: FeedSource.blended,
+      followedIds: alreadyShown,
     );
   }
 
@@ -237,6 +267,14 @@ class FirestoreContentRepository implements ContentRepository {
 
   /// How many posts the home feed holds.
   static const int _feedLimit = 30;
+
+  /// How many followed posts a feed needs before it stands on its own.
+  ///
+  /// Below this the feed is topped up with suggestions — see [_blendedFeed].
+  /// Eight is roughly a screen and a half on a phone: enough that scrolling
+  /// finds something, and low enough that somebody with a healthy follow list
+  /// never sees a stranger's post on their feed at all.
+  static const int _feedFloor = 8;
 
   /// Firestore's ceiling on the number of values in a `whereIn` filter.
   static const int _authorChunkSize = 30;

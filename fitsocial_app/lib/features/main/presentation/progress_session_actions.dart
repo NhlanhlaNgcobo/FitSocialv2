@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../application/content_providers.dart';
 import '../data/content_repository.dart';
 import '../domain/progress_models.dart';
@@ -294,13 +295,20 @@ class SessionMenu extends ConsumerWidget {
           .deleteActivitySession(session.id, session.kind);
       ref.invalidate(activitySessionsProvider);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Log deleted.')),
+      showQuickToast(
+        context,
+        'Log deleted',
+        icon: Icons.delete_outline_rounded,
+        tone: ToastTone.success,
       );
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete the log: $error')),
+      debugPrint('Deleting a log failed: $error');
+      showQuickToast(
+        context,
+        "Couldn't delete that log. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     }
   }

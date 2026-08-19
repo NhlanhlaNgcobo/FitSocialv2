@@ -237,6 +237,17 @@ enum FeedSource {
   /// thinking the people they follow have gone quiet when they simply haven't
   /// followed anyone yet.
   suggested,
+
+  /// Both: everything from the people they follow, topped up with suggestions
+  /// underneath because there was not yet enough to fill a screen.
+  ///
+  /// This exists to remove a cliff. Following nobody showed a full suggested
+  /// feed; following one person replaced all of it with that person's single
+  /// post. The feed got *worse* the moment somebody engaged with it, which is
+  /// precisely backwards, and it read as a broken app rather than as a small
+  /// follow list. Blending means the feed can only ever grow as you follow
+  /// more people.
+  blended,
 }
 
 /// The home feed: the posts, and an honest account of where they came from.
@@ -246,21 +257,53 @@ enum FeedSource {
 /// posts reaches a widget, a following feed and a suggested one are
 /// indistinguishable.
 class HomeFeed {
-  const HomeFeed({required this.posts, required this.source});
+  const HomeFeed({
+    required this.posts,
+    required this.source,
+    this.followedIds = const {},
+  });
 
   const HomeFeed.empty()
       : posts = const [],
-        source = FeedSource.following;
+        source = FeedSource.following,
+        followedIds = const {};
 
   final List<FeedPost> posts;
   final FeedSource source;
 
+  /// The ids of the posts in [posts] that came from the follow graph.
+  ///
+  /// Ids rather than a boundary index, and that is worth stating because the
+  /// index is the obvious implementation and it is wrong. The feed removes
+  /// posts in place when one is deleted; an index would keep pointing at the
+  /// same position in a list that had shifted underneath it, and the first
+  /// suggestion would quietly start rendering above the "more from FitSocial"
+  /// line as if the user followed its author. Identity cannot drift.
+  ///
+  /// Only read for [FeedSource.blended]; empty for the other two, where every
+  /// post has the same provenance.
+  final Set<String> followedIds;
+
   bool get isEmpty => posts.isEmpty;
 
+  /// The posts from people the user actually follows.
+  List<FeedPost> get followedPosts => source == FeedSource.blended
+      ? posts.where((post) => followedIds.contains(post.id)).toList()
+      : posts;
+
+  /// The suggestions sitting underneath them, empty unless blended.
+  List<FeedPost> get suggestedPosts => source == FeedSource.blended
+      ? posts.where((post) => !followedIds.contains(post.id)).toList()
+      : const [];
+
   /// The same feed with its posts replaced — for the in-place edits the feed
-  /// makes as the user likes and comments, which never change its source.
-  HomeFeed withPosts(List<FeedPost> posts) =>
-      HomeFeed(posts: posts, source: source);
+  /// makes as the user likes, comments, or deletes, none of which change where
+  /// a post came from.
+  HomeFeed withPosts(List<FeedPost> posts) => HomeFeed(
+        posts: posts,
+        source: source,
+        followedIds: followedIds,
+      );
 }
 
 /// Guards the metric strip burned across the bottom of a post's photo.

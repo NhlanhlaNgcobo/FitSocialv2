@@ -9,6 +9,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/brand_image_tile.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../application/app_session.dart';
 import '../data/auth_repository.dart';
 import '../domain/username.dart';
@@ -147,42 +148,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
     if (email == null || !mounted) return;
 
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     try {
       await ref.read(authRepositoryProvider).sendPasswordResetEmail(email);
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Password reset email sent! Check your inbox.'),
-        ),
-      );
+      _resetEmailSent(overlay);
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       // 'user-not-found' is reported as success on purpose: confirming which
       // addresses have accounts would let anyone enumerate our user base.
       if (error.code == 'user-not-found') {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Password reset email sent! Check your inbox.'),
-          ),
-        );
+        _resetEmailSent(overlay);
         return;
       }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.code == 'invalid-email'
-                ? "That email address doesn't look valid."
-                : 'Could not send the reset email: ${error.message ?? error.code}',
-          ),
-        ),
+      // The code is logged rather than shown: the only failure a user can act
+      // on is a malformed address, and the rest are ours to fix.
+      debugPrint('Password reset failed: ${error.message ?? error.code}');
+      _resetEmailFailed(
+        overlay,
+        error.code == 'invalid-email'
+            ? "That email address doesn't look valid."
+            : "Couldn't send the reset email. Try again.",
       );
     } catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Could not send the reset email: $error')),
-      );
+      debugPrint('Password reset failed: $error');
+      _resetEmailFailed(overlay, "Couldn't send the reset email. Try again.");
     }
+  }
+
+  void _resetEmailSent(OverlayState overlay) {
+    showQuickToastOn(
+      overlay,
+      'Reset email sent — check your inbox.',
+      icon: Icons.mark_email_read_rounded,
+      tone: ToastTone.success,
+    );
+  }
+
+  void _resetEmailFailed(OverlayState overlay, String message) {
+    showQuickToastOn(
+      overlay,
+      message,
+      icon: Icons.error_outline_rounded,
+      tone: ToastTone.danger,
+    );
   }
 
   @override

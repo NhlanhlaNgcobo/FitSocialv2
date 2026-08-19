@@ -6,6 +6,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../../../shared/widgets/stepper_field.dart';
@@ -129,9 +130,7 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
       ref.read(createFlowControllerProvider.notifier).completeRun(
             result.message,
           );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
     } catch (error) {
       if (!mounted) return;

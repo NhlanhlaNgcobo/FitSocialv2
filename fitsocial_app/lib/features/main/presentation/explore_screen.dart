@@ -15,6 +15,8 @@ import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
 import 'post_detail_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../races/application/race_providers.dart';
+import '../../races/domain/race_formatting.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -115,12 +117,97 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               ),
             ),
           ),
+          // Hidden while searching: the box above searches people, and a race
+          // banner sitting over a list of user results would read as one of
+          // them.
+          if (!isSearching) const _RaceCalendarBanner(),
           Expanded(
             child: isSearching
                 ? _SearchResults(query: query)
                 : const _TrendingSection(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The way into the running calendar.
+///
+/// Explore is where somebody comes to find something they are not already
+/// following, which is exactly what a race calendar is for. It sits above the
+/// trending grid rather than inside it because it is a destination, not a post.
+class _RaceCalendarBanner extends ConsumerWidget {
+  const _RaceCalendarBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final next = ref.watch(nextSavedRaceProvider);
+    final now = ref.watch(raceClockProvider);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.md,
+      ),
+      child: GestureDetector(
+        // A saved race sends you to your own list, otherwise to the calendar.
+        // Somebody with a goal race is checking on that race; somebody without
+        // one is still looking for it.
+        onTap: () => context.push(next == null ? '/races' : '/races/saved'),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: palette.brandSoft,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: palette.brandSoftStroke),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.event_available_rounded,
+                size: 22,
+                color: palette.brand,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      next == null ? 'Find a race' : next.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: palette.text,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      next == null
+                          ? 'Road, trail and ultra events across South Africa'
+                          : '${RaceFormat.countdown(next, now) ?? 'Race day'} · '
+                              '${next.venue.shortLabel}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, color: palette.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: palette.muted,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

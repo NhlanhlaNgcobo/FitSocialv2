@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import 'quick_toast.dart';
 
 /// Everything a profile says about itself in words: the bio, the pronouns and
 /// location beside it, and the link the user put on their profile.
@@ -155,8 +156,8 @@ class _ProfileLink extends StatelessWidget {
   }
 
   Future<void> _copy(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
+    final overlay = Overlay.of(context, rootOverlay: true);
     await Clipboard.setData(ClipboardData(text: canonical(url)));
-    messenger.showSnackBar(const SnackBar(content: Text('Link copied.')));
+    showQuickToastOn(overlay, 'Link copied', icon: Icons.link_rounded);
   }
 }

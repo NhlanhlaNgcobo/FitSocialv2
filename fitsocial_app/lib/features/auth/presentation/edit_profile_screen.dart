@@ -9,6 +9,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/profile_photo_picker.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../application/app_session.dart';
 import '../application/body_metrics_providers.dart';
 import '../application/username_availability_checker.dart';
@@ -174,13 +175,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (cooldown != null) {
       // The notice under the card already explains the rule; this is for the
       // person who tapped the row anyway.
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'You can change your username again in '
-            '${describeCooldownRemaining(cooldown)}.',
-          ),
-        ),
+      showQuickToast(
+        context,
+        'You can change your username again in '
+        '${describeCooldownRemaining(cooldown)}.',
+        icon: Icons.schedule_rounded,
       );
       return;
     }
@@ -231,8 +230,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(bodyMetricsProvider);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't save your measurements.")),
+      showQuickToast(
+        context,
+        "Couldn't save your measurements.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     }
   }
@@ -287,8 +289,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // user finds out a save was rejected.
     final message =
         ref.read(appSessionProvider).errorMessage ?? "Couldn't save that.";
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    showQuickToast(
+      context,
+      message,
+      icon: Icons.error_outline_rounded,
+      tone: ToastTone.danger,
+    );
   }
 
   Future<void> _copyLink(String handle) async {
@@ -296,9 +302,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ClipboardData(text: 'https://$_profileLinkHost/$handle'),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile link copied.')),
-    );
+    showQuickToast(context, 'Profile link copied', icon: Icons.link_rounded);
   }
 }
 

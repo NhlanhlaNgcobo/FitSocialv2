@@ -8,6 +8,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_background_section.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
@@ -142,9 +143,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             ),
           );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
     } catch (error) {
       if (!mounted) return;

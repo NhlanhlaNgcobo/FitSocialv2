@@ -229,8 +229,11 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+    showQuickToast(
+      context,
+      message,
+      icon: Icons.error_outline_rounded,
+      tone: ToastTone.danger,
     );
   }
 

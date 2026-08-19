@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/confirm_destructive_sheet.dart';
+import '../../../shared/widgets/quick_toast.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../application/challenge_providers.dart';
 import '../domain/challenge_copy.dart';
@@ -83,8 +84,11 @@ class _ChallengeTrackerScreenState
       // to record it has to be said.
       debugPrint('Manual task ${task.key} failed: $error');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(ChallengeCopy.manualTaskFailed)),
+      showQuickToast(
+        context,
+        ChallengeCopy.manualTaskFailed,
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
       );
     }
   }

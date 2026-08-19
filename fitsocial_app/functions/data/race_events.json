@@ -1,0 +1,3280 @@
+[
+  {
+    "name": "Rooies Night Race",
+    "date": "2026-08-19",
+    "startTime": "19:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "Dennesig Primary",
+    "organiser": "Rooies AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_sources": "Two complementary sources, neither scraped wholesale. (1) AGN 2026 Fixtures Version 1 (agn.co.za, created 2025-11-10) — exact distances, start times, and the club league races that never reach an entry platform; stamped 'Subject to change*'. (2) entryninja.com/events/road-running/gauteng — entry links, commercial events, and fees; gives distances only as a range.",
+    "_fees": "Fees are recorded ONLY where read off an individual event page. The 'From R__' on Entry Ninja listing pages is NOT usable: 'From R0' means a free 70-and-over category exists, not that the race is free. Brooklyn's real fees are R66.90/R174.40/R250.70/R305.20 against a listed 'From R0'.",
+    "_qualifiers": "Nothing is tagged as a Comrades or Two Oceans qualifier. Neither source states it, and a wrong qualifier badge misleads exactly the runner who most depends on it. Deferred until there is an authoritative list.",
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "ARC Irene Road Run/Walk",
+    "date": "2026-08-22",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Irene",
+    "venueName": "Irene Athletics Club",
+    "distances": [
+      {
+        "km": 3
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84234",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84234/HMnNZ2C4XLuRKr4y2xuxS71RR1K4OxTw8s3VdVIN.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Bonteheuwel 10km",
+    "date": "2026-08-22",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Bonteheuwel",
+    "organiser": "Bonteheuwel AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Castle Walk Race",
+    "date": "2026-08-22",
+    "startTime": "07:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Castle Walk Shopping Centre",
+    "organiser": "Faranani AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Cross the Line Race",
+    "date": "2026-08-22",
+    "startTime": "08:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "Steelcrest High School, Middelbur",
+    "organiser": "Midack AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 15.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Khulasande 10km, 5km & 1km Charity Run",
+    "date": "2026-08-22",
+    "startTime": "07:00",
+    "province": "EC",
+    "city": "Gqeberha",
+    "venueName": "Linkside High School",
+    "addressLine": "Wychwood Avenue, Port Elizabeth",
+    "organiser": "Eastern Province Athletics",
+    "distances": [
+      {
+        "km": 1
+      },
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "charity"
+    ],
+    "imageUrl": "https://epathletics.co.za/wp-content/uploads/2026/07/Khulasande-2026.png"
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed. Confirm the distances in between on the entry page before relying on the distance filter.",
+    "name": "Langebaan Athletics Club Race",
+    "date": "2026-08-22",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "Langebaan",
+    "organiser": "Langebaan Athletics Club",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83533",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83533/QbVPhn7ezJDnglxJUYQvTbeuCZYfgdiTYtADkyFw.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Mathews Phosa",
+    "date": "2026-08-22",
+    "startTime": "05:30",
+    "province": "MP",
+    "city": "Mbombela",
+    "venueName": "Hoerskool Rob Ferreira",
+    "organiser": "RWFL",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja lists the distances as 0.1-10 km; only the 10 km is recorded because the short end is a children's dash rather than a race distance. The listing also notes it now runs Saturday 11:00-15:00.",
+    "name": "Mediclinic Vista Eskom AC Free State",
+    "date": "2026-08-22",
+    "startTime": "11:00",
+    "province": "FS",
+    "city": "Welkom",
+    "organiser": "Eskom AC Free State",
+    "distances": [
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84034",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84034/KYeBf5uU8tf22cdObVRysMeoufwg9EvvpqCkWtWZ.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Puffer",
+    "date": "2026-08-22",
+    "startTime": "05:00",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Cape Point Gate",
+    "organiser": "Fish Hoek",
+    "distances": [
+      {
+        "km": 65.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Pufhie",
+    "date": "2026-08-22",
+    "startTime": "08:00",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Beau Constantia",
+    "organiser": "Fish Hoek",
+    "distances": [
+      {
+        "km": 25.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "The Tshwane leg of the Absa RUN YOUR CITY series. Missed on the first Gauteng pass because that pass started at September.",
+    "name": "Absa RUN YOUR CITY TSHWANE 10K",
+    "date": "2026-08-23",
+    "startTime": "08:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Union Buildings",
+    "organiser": "Athletics Gauteng North",
+    "distances": [
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "Copperleaf Night Run/Walk",
+    "date": "2026-08-26",
+    "startTime": "18:00",
+    "province": "GP",
+    "city": "Centurion",
+    "venueName": "Copperleaf Golf Estate",
+    "distances": [
+      {
+        "km": 2
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "night"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84246",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84246/cXnOwx7ZIE1ZhUqQ145zm0Zx82yXpFZQVVuOl8py.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Laerskool Klipfontein Night Race",
+    "date": "2026-08-26",
+    "startTime": "18:30",
+    "province": "MP",
+    "city": "eMalahleni",
+    "venueName": "Laerskool Klipfontein, Witbank",
+    "organiser": "Eskom AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "PVR Dorpsfees Night Race",
+    "date": "2026-08-26",
+    "startTime": "18:30",
+    "province": "GP",
+    "city": "Centurion",
+    "venueName": "PVR Community Church, Pierre van Ryneveld",
+    "organiser": "Irene AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "night"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83946",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83946/O3d6ucrrErXmoAOnbATLER8obAN4pRpCsSnR5mcq.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "A 100 Miler (recorded as 160.9 km) running 06:00 to 18:00 across two days. The fixture list also offers a 24 Hour format, which is a timed event rather than a set distance and so has no row here.",
+    "name": "Dawn to Dusk",
+    "date": "2026-08-28",
+    "endDate": "2026-08-29",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Akasia",
+    "venueName": "Gerrit Maritz High School",
+    "organiser": "Akasia AC",
+    "distances": [
+      {
+        "km": 160.9
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Chillie",
+    "date": "2026-08-29",
+    "province": "WC",
+    "city": "Cape Town",
+    "organiser": "Chillie AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "_note": "The WPA fixture list published no venue for this race. Town inferred from the host club (Chillie AC) and needs confirming."
+  },
+  {
+    "name": "Despatch Road Race 10km & 5km",
+    "date": "2026-08-29",
+    "startTime": "07:00",
+    "province": "EC",
+    "city": "Despatch",
+    "venueName": "Despatch Superspar",
+    "addressLine": "Dr Rabie Street, Despatch",
+    "organiser": "Eastern Province Athletics",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "imageUrl": "https://epathletics.co.za/wp-content/uploads/2026/07/Despatch-2026-1.png"
+  },
+  {
+    "name": "Dullstroom Scenic Altitude 3-in-1",
+    "date": "2026-08-29",
+    "startTime": "07:00",
+    "province": "MP",
+    "city": "Dullstroom",
+    "venueName": "Highland Golf & Trout Estate",
+    "organiser": "Dullstroom RR",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja publishes the fee structure as R100 for adults and R50 for under-18s, so the adult price is recorded against both distances. The 'From R0' on the listing page is a concession category, not the entry price.",
+    "name": "Run For Me Fun Run",
+    "date": "2026-08-29",
+    "startTime": "07:30",
+    "province": "NC",
+    "city": "Kathu",
+    "venueName": "CRC Kathu",
+    "distances": [
+      {
+        "km": 5,
+        "priceCents": 10000
+      },
+      {
+        "km": 10,
+        "priceCents": 10000
+      }
+    ],
+    "tags": [
+      "road",
+      "charity"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84193",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84193/ZMYDMt2GEAYYW0WOeduck2MHx9y6g5dsI40By02p.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Sabi Sand Trail Run",
+    "date": "2026-08-29",
+    "startTime": "07:00",
+    "province": "MP",
+    "city": "Sabie",
+    "venueName": "Huntington Village, Sabi Sands",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "trail"
+    ]
+  },
+  {
+    "name": "Sandy Centre Fun Run",
+    "date": "2026-08-29",
+    "province": "KZN",
+    "city": "Pinetown",
+    "venueName": "Sandy Centre, 174 Josiah Gumede Road",
+    "organiser": "Apex Events",
+    "distances": [
+      {
+        "km": 5
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Sebenza 5km Fun Run",
+    "date": "2026-08-29",
+    "province": "KZN",
+    "city": "Durban",
+    "venueName": "Sun Coast Beachfront",
+    "organiser": "Sebenza Women Academy",
+    "distances": [
+      {
+        "km": 5
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Ultimate Fast Challenge Race",
+    "date": "2026-08-29",
+    "startTime": "07:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Kolonnade Retail Park",
+    "organiser": "Soshanguve Great Run AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83746",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83746/6dQgjArrIEXfodH7K2CN6tNPE0EzeegkP2pdx6G3.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "Women's Half",
+    "date": "2026-08-29",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Johannesburg",
+    "venueName": "St Vincent School for the Deaf",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road",
+      "womens"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83637",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83637/Yczkixbj6zmrMXZWDpXYmz60xmvMbrDK7HcrPZxg.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Linton's Corner Spring Race",
+    "date": "2026-08-30",
+    "startTime": "07:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Linton's Corner Shopping Centre",
+    "organiser": "Zwakala AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83243",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83243/l5bPJgMXD9QHv9v1AYOmolg0S6vi9x23byjTEHyH.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Velocity Family Day",
+    "date": "2026-08-30",
+    "province": "WC",
+    "city": "Durbanville",
+    "venueName": "Groot Phesantekraal View Shopping Mall",
+    "organiser": "Velocity AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Brooklyn Road Race",
+    "date": "2026-09-05",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Brooklyn Mall",
+    "organiser": "PMC",
+    "distances": [
+      {
+        "km": 5,
+        "priceCents": 6690
+      },
+      {
+        "km": 10,
+        "priceCents": 17440
+      },
+      {
+        "km": 21.1,
+        "priceCents": 25070
+      },
+      {
+        "km": 32,
+        "priceCents": 30520
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83841",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83841/HIglZvoKVfrN7m9fwr7u8BY3W7Rg3mSwBIxsdRAT.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Leandra 3-in-1 Race",
+    "date": "2026-09-05",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Leandra",
+    "venueName": "Osizweni Special School",
+    "organiser": "Leandra AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Lowmed tar & Trail",
+    "date": "2026-09-05",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Mbombela",
+    "venueName": "Nirvana Country House",
+    "organiser": "Lowmed RC",
+    "distances": [
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "trail"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed. Confirm the distances in between on the entry page before relying on the distance filter.",
+    "name": "Madibaz George Forest Run",
+    "date": "2026-09-05",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "George",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83991",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/82573/Jzk6ePH8MsLp0FflZLtwBYbDC2DTT3dbPN3q27tD.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Entry Ninja publishes a distance range rather than the full set, so only the endpoints are recorded. Check the entry page before relying on the distance filter. No fee is recorded. Entry Ninja's listing pages show a 'From R__' that can be a single category rather than the real entry price - the Brooklyn race listed 'From R0' against actual fees of R66.90 to R305.20.",
+    "name": "Musina Marathon",
+    "date": "2026-09-05",
+    "startTime": "06:00",
+    "province": "LP",
+    "city": "Musina",
+    "venueName": "Musina Rugby Field",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 42
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83840",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83840/xqPmBVodkKqMHSvMkfnRyKAxSBA9mjrbfMlM3qYU.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Entry Ninja publishes a distance range rather than the full set, so only the endpoints are recorded. Check the entry page before relying on the distance filter. No fee is recorded. Entry Ninja's listing pages show a 'From R__' that can be a single category rather than the real entry price - the Brooklyn race listed 'From R0' against actual fees of R66.90 to R305.20.",
+    "name": "TMC Half Marathon",
+    "date": "2026-09-05",
+    "startTime": "06:00",
+    "province": "LP",
+    "city": "Tzaneen",
+    "venueName": "Tzaneen Lifestyle Centre",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84214",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84214/xKFGzxFzxn0op8tzMXNa5WeB2vcURUmcep3Sf8gS.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Tekkie Challenge",
+    "date": "2026-09-05",
+    "province": "WC",
+    "city": "Kuilsrivier",
+    "venueName": "Jan Kriel School",
+    "organiser": "Cape Multisport Club",
+    "distances": [
+      {
+        "km": 10.0
+      },
+      {
+        "km": 16.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "KAC Road Race",
+    "date": "2026-09-06",
+    "province": "WC",
+    "city": "Khayelitsha",
+    "venueName": "Mandela Park Stadium",
+    "organiser": "Khayelitsha AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "The source lists the town only as 'City'; Merebank is in Durban South.",
+    "name": "Merewent 15km",
+    "date": "2026-09-06",
+    "province": "KZN",
+    "city": "Durban",
+    "venueName": "Dhubri Road Sports Ground, Merebank",
+    "organiser": "Merewent AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 15
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Riverwood College Capital Climb",
+    "date": "2026-09-06",
+    "province": "KZN",
+    "city": "Pietermaritzburg",
+    "venueName": "Riverwood College, Cordwallis Road",
+    "organiser": "Midlands AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 16
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Curro Bakenveld Witbank",
+    "date": "2026-09-09",
+    "startTime": "19:00",
+    "province": "MP",
+    "city": "eMalahleni",
+    "venueName": "Curro, Bakenveld, Witbank",
+    "organiser": "Eskom AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "DATE CONFLICT. Entry Ninja lists 9 September; the AGN fixture list says Wednesday 16 September. Both are Wednesdays so the weekday cannot settle it. Taking Entry Ninja's date because it is the live entry system, but confirm with Tuks AC.",
+    "name": "Sappi Tuks Night Race",
+    "date": "2026-09-09",
+    "startTime": "18:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "UP Hillcrest Campus",
+    "organiser": "Tuks AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "night"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83963",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83963/b3QfcYuf9AjRmCJHWPC62G6qPres9Bwu09A02nM4.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Barberton Makhonjwa Mountain 4in1",
+    "date": "2026-09-12",
+    "startTime": "05:30",
+    "province": "MP",
+    "city": "Barberton",
+    "venueName": "Coronation Park",
+    "organiser": "Bellas AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      },
+      {
+        "km": 42.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Bethal Bell 4-in-1 Race",
+    "date": "2026-09-12",
+    "startTime": "07:00",
+    "province": "MP",
+    "city": "Bethal",
+    "venueName": "Gereformeerde Church, Bethal",
+    "organiser": "Bethal MC",
+    "distances": [
+      {
+        "km": 2.0
+      },
+      {
+        "km": 4.8
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Fun Run Mooikloof",
+    "date": "2026-09-12",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Household of Christ, Mooikloof",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84351",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84351/4AQmMqfH5eC87DC5WtthYtamwUxGqWkgE2l1yik1.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "OUTsurance Gun Run",
+    "date": "2026-09-12",
+    "endDate": "2026-09-13",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Vlei Rd Green Point",
+    "organiser": "AAC",
+    "distances": [
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "OUTsurance Gun Run Trail Run",
+    "date": "2026-09-12",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Van Riebeek Park",
+    "organiser": "AAC",
+    "distances": [
+      {
+        "km": 18.8
+      }
+    ],
+    "tags": [
+      "road",
+      "trail"
+    ]
+  },
+  {
+    "name": "Run for Change",
+    "date": "2026-09-12",
+    "province": "MP",
+    "city": "eMalahleni",
+    "venueName": "Emalahleni",
+    "organiser": "N.A.",
+    "distances": [
+      {
+        "km": 4.9
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "Sosha Color Run",
+    "date": "2026-09-12",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Soshanguve",
+    "venueName": "Phillip Stadium",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 8
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84172",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84172/OZ3JFtYG2TTO3lTCC7U2edAzQEbGnukDzIBMvtZp.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Spirit of Flight",
+    "date": "2026-09-12",
+    "startTime": "06:30",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "AFB Swartkop",
+    "organiser": "Pretoria Military Marathon AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84191",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84191/aYZpMUlA4Kjy3pjJByVuQvesJobmq2CWfwYbXEmd.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Sportsmans Warehouse 15km",
+    "date": "2026-09-12",
+    "startTime": "06:30",
+    "province": "EC",
+    "city": "Gqeberha",
+    "venueName": "Sportsmans Warehouse",
+    "addressLine": "William Moffatt Expressway, Gqeberha",
+    "organiser": "Eastern Province Athletics",
+    "distances": [
+      {
+        "km": 15
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "imageUrl": "https://epathletics.co.za/wp-content/uploads/2026/07/sPORTSMANS-2026.png"
+  },
+  {
+    "_note": "Tagged trail because the venue is Westown Square Trails; the source calls it a fun run and does not state the surface outright.",
+    "name": "The Durban Wine Run",
+    "date": "2026-09-12",
+    "province": "KZN",
+    "city": "Shongweni",
+    "venueName": "Westown Square Trails, 600 Kassier Road",
+    "organiser": "Charmed",
+    "distances": [
+      {
+        "km": 5
+      }
+    ],
+    "tags": [
+      "road",
+      "trail"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "Waterfall City Half Marathon",
+    "date": "2026-09-12",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Midrand",
+    "venueName": "Waterfall City Park",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83893",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83893/OBakvzZ96knaOzCANhYTHnyWLmg4jhmaa7wV7pEG.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "OUTsurance Gun Run Fun Run",
+    "date": "2026-09-13",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Vlei Rd Green Point",
+    "organiser": "AAC",
+    "distances": [
+      {
+        "km": 5.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "SAPS Striders Heritage Challenge",
+    "date": "2026-09-13",
+    "province": "KZN",
+    "city": "Durban",
+    "venueName": "Kings Park Athletics Stadium",
+    "organiser": "SAPS Striders",
+    "distances": [
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "A Friday race, so an evening start is assumed; Entry Ninja publishes no time. Distances are the endpoints of its 5-10 km range.",
+    "name": "Berg-en-Daller",
+    "date": "2026-09-18",
+    "startTime": "17:00",
+    "province": "FS",
+    "city": "Berg-en-Dal",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84353",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84353/BfvyQbvvxpDW3tP40D1vuaX7nRaFRaGcXadhsEiY.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Boulders",
+    "date": "2026-09-19",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Kaapmuiden",
+    "venueName": "Kaapmuiden Primary",
+    "organiser": "Onderberg MC",
+    "distances": [
+      {
+        "km": 10.0
+      },
+      {
+        "km": 25.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "DATE NEEDS CONFIRMING. The fixture list labels this row Wed, but 2026-09-19 is a Saturday. The day number is trusted over the weekday label, since every other race here runs on a Saturday.",
+    "name": "Emalahleni City Marathon",
+    "date": "2026-09-19",
+    "startTime": "06:15",
+    "province": "MP",
+    "city": "eMalahleni",
+    "venueName": "Witbank High School",
+    "organiser": "Emalahleni City MC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      },
+      {
+        "km": 42.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Exxaro Road Race Challenge",
+    "date": "2026-09-19",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Centurion",
+    "venueName": "SuperSport Park",
+    "organiser": "Exxaro AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja publishes a distance range rather than the full set, so only the endpoints are recorded. Check the entry page before relying on the distance filter. No fee is recorded. Entry Ninja's listing pages show a 'From R__' that can be a single category rather than the real entry price - the Brooklyn race listed 'From R0' against actual fees of R66.90 to R305.20.",
+    "name": "Heritage Day Race",
+    "date": "2026-09-19",
+    "startTime": "06:00",
+    "province": "LP",
+    "city": "Mokopane",
+    "venueName": "Mokopane Plaza",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84313",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84313/1XSEpEyHJ60hRpkx23vYsIvXaNjmO9Il7y2MBfHI.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Town inferred: Foskor's mine and Phalaborwa Road Runners are both in Phalaborwa. Entry Ninja gives the province only. Entry Ninja publishes a distance range rather than the full set, so only the endpoints are recorded. Check the entry page before relying on the distance filter. No fee is recorded. Entry Ninja's listing pages show a 'From R__' that can be a single category rather than the real entry price - the Brooklyn race listed 'From R0' against actual fees of R66.90 to R305.20.",
+    "name": "Maroela 2026",
+    "date": "2026-09-19",
+    "startTime": "06:00",
+    "province": "LP",
+    "city": "Phalaborwa",
+    "venueName": "PRR Clubhouse, Foskor Parking Area",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84197",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84197/Irfb0uOfbot0iv0uSlavRSY9GFN6H7IIR1ZDeJ2q.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "DATE NEEDS CONFIRMING. The feed's machine date is 19 September (a Saturday) but its title and page slug both say 16 September (a Wednesday). The machine date is used because a calendar app would use it and because races here run on Saturdays - but check with the club.",
+    "name": "NMB Northern Areas 10km / 5km",
+    "date": "2026-09-19",
+    "startTime": "06:30",
+    "province": "EC",
+    "city": "Gqeberha",
+    "venueName": "Gelvandale Athletics Track",
+    "addressLine": "Liebenberg Road, Gelvandale, Port Elizabeth",
+    "organiser": "Eastern Province Athletics",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Chapman's Peak Half Marathon",
+    "date": "2026-09-20",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Hout Bay",
+    "organiser": "Hout Bay Harriers",
+    "distances": [
+      {
+        "km": 12.0
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Date taken from the ASA list, which labels it WED; 24 September 2026 is a Thursday and is Heritage Day, and this race is traditionally run on the holiday - so the date is trusted over the weekday label. Confirm before travelling.",
+    "name": "Absa RUN YOUR CITY 10K Johannesburg",
+    "date": "2026-09-24",
+    "province": "GP",
+    "city": "Johannesburg",
+    "organiser": "Stillwater Sports",
+    "distances": [
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Heritage Day, a Thursday in 2026 — a public-holiday race rather than a weekend one.",
+    "name": "Bophelong Marathon",
+    "date": "2026-09-24",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Bophelong",
+    "organiser": "Bophelong AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "HOKA HALF Pretoria",
+    "date": "2026-09-24",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Harlequins Rugby Club",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84255",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84255/i8wTtcXO0QljRZbb6oyRVHayfGis2oQZ9BmC8PLx.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Nantes Heritage Day Race",
+    "date": "2026-09-24",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Vangate Sports Complex",
+    "organiser": "Nantes AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Run for Life race",
+    "date": "2026-09-24",
+    "startTime": "07:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "Dennesig Primary",
+    "organiser": "Rooies AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja lists entry fees as a R250-R450 range without saying which distance costs what, so no fee is recorded. Check the entry page.",
+    "name": "Durban Sunrise Run",
+    "date": "2026-09-26",
+    "province": "KZN",
+    "city": "Durban",
+    "venueName": "Amphitheatre, Durban Beachfront",
+    "organiser": "B-Active Events",
+    "distances": [
+      {
+        "km": 10
+      },
+      {
+        "km": 21
+      },
+      {
+        "km": 42
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83790",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83790/B83HAwIyEIrwOAHl4YGQa6DFQLIEvMEXQk6I2xkc.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Entry Ninja publishes a distance range rather than the full set, so only the endpoints are recorded. Check the entry page before relying on the distance filter. No fee is recorded. Entry Ninja's listing pages show a 'From R__' that can be a single category rather than the real entry price - the Brooklyn race listed 'From R0' against actual fees of R66.90 to R305.20.",
+    "name": "Fetakgomo Tubatse Race",
+    "date": "2026-09-26",
+    "startTime": "06:00",
+    "province": "LP",
+    "city": "Steelpoort",
+    "venueName": "Mapodile Stadium, Steelpoort",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 42.2
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84158",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84158/2xQJjmXXzUfj4JC1z9WhYghpd8aWvBCZPT2Sjxxg.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Ford 3 in 1 Spring Road Race",
+    "date": "2026-09-26",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Ford Motor Company Sports Grounds, Silverton",
+    "organiser": "Ford AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84278",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84278/OgmEVOU0IZkmwiIpGCvO6nv1V12o1qlC1RKVRICy.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Goodwood Harriers Heritage 10km Challenge",
+    "date": "2026-09-26",
+    "province": "WC",
+    "city": "Goodwood",
+    "venueName": "Upper parking Deck N1 City Shopping Mall",
+    "organiser": "Goodwood Harriers",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84204",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84204/BeYHuNiiLvoKAn5mFyPEOUn4xQYHZINNvw6k8B0j.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed. Confirm the distances in between on the entry page before relying on the distance filter.",
+    "name": "Paarlberg Half Marathon",
+    "date": "2026-09-26",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "Paarl",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83766",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83766/zgDZel9wtMfdk9iuX09PTInbB5uj2b8oKzqpwVin.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "WH de Klerk 3-in-1 Race",
+    "date": "2026-09-26",
+    "startTime": "07:00",
+    "province": "MP",
+    "city": "eMalahleni",
+    "venueName": "WH de Klerk High , Witbank",
+    "organiser": "Eskom AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Venue listed as TBC in the fixture list. Jointly hosted by AGN and CGA.",
+    "name": "City to City Ultra Marathon",
+    "date": "2026-09-27",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "organiser": "AGN and CGA",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 50
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "The ASA list gives no distances. Entered as 10 km because the SPAR Women's Grand Prix is a 10 km series; a companion 5 km usually runs alongside it and is not listed here.",
+    "name": "SPAR Women's Grand Prix Series 4",
+    "date": "2026-09-27",
+    "province": "EC",
+    "city": "Gqeberha",
+    "organiser": "SPAR",
+    "distances": [
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "womens"
+    ]
+  },
+  {
+    "name": "Voet of the Wine",
+    "date": "2026-09-27",
+    "province": "WC",
+    "city": "Kuilsrivier",
+    "venueName": "Zevenwacht Mall",
+    "organiser": "Intouch AC",
+    "distances": [
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84363",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84363/gPk7XYzz0EQiStvfasnXhLwTpQrIy1GUtKexdLAp.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "ACVV Relay",
+    "date": "2026-09-29",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "George",
+    "distances": [
+      {
+        "km": 6
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84356",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84356/QuTR4r1BQesVRKJEZZ19uLDijCryriXGORxKyg8k.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Blouberg Marathon",
+    "date": "2026-10-03",
+    "endDate": "2026-10-04",
+    "startTime": "05:30",
+    "province": "WC",
+    "city": "Bloubergstrand",
+    "venueName": "Table Bay Mall",
+    "organiser": "West Coast AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      },
+      {
+        "km": 42.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84000",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84000/nvTzp564ZmBjJ25fzEui8TkrTW7OIvJndTxe9VdU.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Chamberlain Capital Classic",
+    "date": "2026-10-03",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Phobians Club, Queens Crescent, Lynnwood",
+    "organiser": "Phobians AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84258",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84258/x9HJqxcktln20cgNp9vUcjcIZ5HrXY4UqafFkGIT.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "From startingline.co.za, which lists a single 5 km. That is almost certainly the shortest of several distances rather than the whole event - a R180 entry for a 5 km would be unusual - so treat the distance list as incomplete.",
+    "name": "DoringDraad 2026",
+    "date": "2026-10-03",
+    "startTime": "06:00",
+    "province": "NC",
+    "city": "Deben",
+    "distances": [
+      {
+        "km": 5
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Edamini Summer Race",
+    "date": "2026-10-03",
+    "startTime": "07:00",
+    "province": "MP",
+    "city": "Driekoppies",
+    "venueName": "Driekoppies Dam",
+    "organiser": "Gijima Nkomazi AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Solomon Mahlangu 3-in-1",
+    "date": "2026-10-03",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Kwaggafontein",
+    "venueName": "Kwaggafontein Stadium",
+    "organiser": "Mkobola AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "The ASA list gives no distances. Entered as 10 km because the SPAR Women's Grand Prix is a 10 km series; a companion 5 km usually runs alongside it and is not listed here.",
+    "name": "SPAR Women's Grand Prix Series 5",
+    "date": "2026-10-04",
+    "province": "EC",
+    "city": "Gqeberha",
+    "organiser": "SPAR",
+    "distances": [
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "womens"
+    ]
+  },
+  {
+    "name": "Lake Umuzi Night Race",
+    "date": "2026-10-07",
+    "startTime": "19:00",
+    "province": "MP",
+    "city": "Secunda",
+    "venueName": "Lake Umuzi",
+    "organiser": "LUS Marathon Club",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Steelcrest Night Race",
+    "date": "2026-10-07",
+    "startTime": "18:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "Steelcrest High School",
+    "organiser": "Midack AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Bakgat 10km",
+    "date": "2026-10-10",
+    "province": "WC",
+    "city": "Bellville",
+    "organiser": "Bellville AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "_note": "The WPA fixture list published no venue for this race. Town inferred from the host club (Bellville AC) and needs confirming."
+  },
+  {
+    "name": "Empowering Women",
+    "date": "2026-10-10",
+    "startTime": "07:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Union Buildings",
+    "organiser": "Danville Development AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "womens"
+    ]
+  },
+  {
+    "name": "Red Star Marathon",
+    "date": "2026-10-10",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Delmas",
+    "venueName": "Red Star Raceway",
+    "organiser": "Red Star Runners",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      },
+      {
+        "km": 42.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "SHL Race",
+    "date": "2026-10-10",
+    "startTime": "06:30",
+    "province": "MP",
+    "city": "Mbombela",
+    "venueName": "TUT Mbombela",
+    "organiser": "Ngodwana",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "From startingline.co.za, which lists only a 5 km. The 21.1 km is added on the strength of the event's own name; any middle distances are unknown, so confirm with Sesheng AC before relying on the distance filter.",
+    "name": "Sesheng AC Half Marathon",
+    "date": "2026-10-10",
+    "startTime": "06:00",
+    "province": "NC",
+    "city": "Kathu",
+    "organiser": "Sesheng AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Ommiedraai 10km Road Race",
+    "date": "2026-10-11",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Primrose Sports Facility",
+    "organiser": "Ommiedraa & Friends AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "SAVF Old Age Middelburg",
+    "date": "2026-10-14",
+    "startTime": "19:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "SAVF old age Home . Middelburg",
+    "organiser": "Eskom AC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "CRUSADERS 21.1km, 10km & 5km",
+    "date": "2026-10-17",
+    "startTime": "06:00",
+    "province": "EC",
+    "city": "Gqeberha",
+    "venueName": "African Sky",
+    "addressLine": "120 Nassau Road, Port Elizabeth",
+    "organiser": "Eastern Province Athletics",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "imageUrl": "https://epathletics.co.za/wp-content/uploads/2026/05/crusaders-2026.png"
+  },
+  {
+    "name": "CSIR Road Race",
+    "date": "2026-10-17",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "CSIR Campus, Meiring Naude Road",
+    "organiser": "CSIR RC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83742",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83742/47uHa8zSAxYS34PkYQDitzc9cDVM6xWfuYvgugDe.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Town inferred from the venue (Fancourt is in George); Entry Ninja lists the province only. Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed. Confirm the distances in between on the entry page before relying on the distance filter.",
+    "name": "Fancourt Marathon",
+    "date": "2026-10-17",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "George",
+    "venueName": "Fancourt",
+    "distances": [
+      {
+        "km": 21.1
+      },
+      {
+        "km": 42
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83786",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83786/HZTzIpeofo2xmOvMdFF0NeIN4JZFyI9Yb5zPGWiK.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Kloppers/Nedbank race",
+    "date": "2026-10-17",
+    "province": "WC",
+    "city": "Brackenfell",
+    "venueName": "Cape Gate Life Style Centre",
+    "organiser": "Nedbank",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Incorporates the ASA 10km Inter-Provincial Championships, per the 2026 ASA national fixtures list. Replaces an earlier stub row that carried only the championship name and the 10 km. Entry Ninja shows 'From R0', which is a category price and not the real fee, so no fee is recorded.",
+    "name": "Letsgo Potch! Marathon",
+    "date": "2026-10-17",
+    "startTime": "06:00",
+    "province": "NW",
+    "city": "Potchefstroom",
+    "venueName": "JB Marks Oval",
+    "organiser": "Athletics South Africa / North West",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      },
+      {
+        "km": 42.2
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83467",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83467/UndU2DTPi8odsOM2lRAN8wpPl2m2UqfqDrUiirWG.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Slave Route Challenge",
+    "date": "2026-10-18",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Grand Parade",
+    "organiser": "Brimstone Itheko AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "Halloween Night Run",
+    "date": "2026-10-23",
+    "startTime": "18:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Prison Break Market",
+    "distances": [
+      {
+        "km": 3
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "night"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84037",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84037/zqkLye62athxHZDGYrc5VHUwoHXnQhd9vUySiZyF.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Coaldust Circuit Race",
+    "date": "2026-10-24",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "eMalahleni",
+    "venueName": "Elkana Educational Centre",
+    "organiser": "Coaldust Multisport",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      },
+      {
+        "km": 48.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Incorporates the AGN championships. The only marathon-distance road race in this block.",
+    "name": "Jacaranda City Challenge Marathon",
+    "date": "2026-10-24",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Faranani AC",
+    "organiser": "Faranani AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      },
+      {
+        "km": 42.2
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84195",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84195/AofPeQNm1mzoSdAkgP5Cs19PfTlH3BgQWXUjc40I.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Melkbos",
+    "date": "2026-10-24",
+    "province": "WC",
+    "city": "Melkbosstrand",
+    "venueName": "Melkbos",
+    "organiser": "Melkbos AC",
+    "distances": [
+      {
+        "km": 15.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84276",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84276/Z6j9XTfPrYbvGX6rwBZqm45PdKgUWRMwyhcuvsFD.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Town confirmed against startingline.co.za, which lists this race under Mokopane. Entry Ninja publishes a distance range rather than the full set, so only the endpoints are recorded. Check the entry page before relying on the distance filter. No fee is recorded. Entry Ninja's listing pages show a 'From R__' that can be a single category rather than the real entry price - the Brooklyn race listed 'From R0' against actual fees of R66.90 to R305.20.",
+    "name": "Sacrococcygeal Teratoma Campaign Run",
+    "date": "2026-10-24",
+    "startTime": "06:00",
+    "province": "LP",
+    "city": "Mokopane",
+    "venueName": "Waterberg High School",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "road",
+      "charity"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83410",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83410/6U0cdXFOmi8PsLp2MJ47CF6llGr7Vdk7neynuLyL.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Secunda Mall Race",
+    "date": "2026-10-24",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Secunda",
+    "venueName": "Secunda Mall",
+    "organiser": "Sasol MC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84017",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84017/fdyqAX2eNjUyDMoUFqpwWgulO8HGC39DJkywCJgU.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "The source lists '21km / 102km / 5km'. 102km between a 21 and a 5 is almost certainly 10.2km mis-rendered, so the middle distance is left out entirely rather than guessed. Confirm with the college.",
+    "name": "St Patrick's Scamper Trail Run",
+    "date": "2026-10-24",
+    "province": "KZN",
+    "city": "Kokstad",
+    "venueName": "St Patrick's College",
+    "organiser": "St Patricks College Kokstad",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "trail"
+    ]
+  },
+  {
+    "_note": "The inaugural Mangaung leg of the Absa RUN YOUR CITY series, making it the sixth city after Gqeberha, Durban, Cape Town, Johannesburg and Tshwane. Start on Sir George Grey Street, finish on Kings Way.",
+    "name": "Absa RUN YOUR CITY MANGAUNG 10K",
+    "date": "2026-10-25",
+    "startTime": "07:00",
+    "province": "FS",
+    "city": "Bloemfontein",
+    "venueName": "Sir George Grey Street, Grey College",
+    "organiser": "Stillwater Sports",
+    "distances": [
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://secure.onreg.com/onreg2/front/step1.php?id=7907",
+    "entryPlatform": "onreg"
+  },
+  {
+    "name": "Don Lock Memorial",
+    "date": "2026-10-25",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Claremont",
+    "organiser": "Celtic Harriers",
+    "distances": [
+      {
+        "km": 8.0
+      },
+      {
+        "km": 15.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "RWFL Middelburg",
+    "date": "2026-10-28",
+    "startTime": "18:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "Middelburg Country Club",
+    "organiser": "RWFL",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Eye for Cancer 10km Walk and Run",
+    "date": "2026-10-31",
+    "province": "KZN",
+    "city": "Umlazi",
+    "venueName": "King Zwelithini Stadium",
+    "organiser": "Isolempilo Organisation",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "charity"
+    ]
+  },
+  {
+    "name": "Irene Farm Race",
+    "date": "2026-10-31",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Irene",
+    "venueName": "ARC Campus, Irene",
+    "organiser": "Irene AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84315",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84315/qTeNbNvE8ecEKQ0riCl1ZeDdCJhIQ4V3DuuRG6qg.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Runners Awards Fun Run",
+    "date": "2026-10-31",
+    "province": "KZN",
+    "city": "Durban",
+    "venueName": "Suncoast Sundeck, Durban Promenade",
+    "organiser": "Runners Awards",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 8
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Landmarks Half Marathon",
+    "date": "2026-11-01",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "WPCC Club Rondebosch",
+    "organiser": "WPCC",
+    "distances": [
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "The ASA list names no distances. Only the marathon is recorded, on the strength of the name. Soweto normally also runs a half and a 10 km - confirm and add them, because the distance filter will currently miss this race for anyone searching for a half.",
+    "name": "Soweto Marathon",
+    "date": "2026-11-01",
+    "province": "GP",
+    "city": "Soweto",
+    "venueName": "FNB Stadium, Nasrec",
+    "organiser": "Central Gauteng Athletics",
+    "distances": [
+      {
+        "km": 42.2
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Sasol Secunda Night Race",
+    "date": "2026-11-04",
+    "startTime": "19:00",
+    "province": "MP",
+    "city": "Secunda",
+    "venueName": "Sasol Recreation Club Secunda",
+    "organiser": "Sasol MC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed here. Check the entry page for the distances in between before relying on the distance filter.",
+    "name": "HOKA HALF Johannesburg",
+    "date": "2026-11-07",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Johannesburg",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84274",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84274/x0farjYs8hOxVBOFpaOWLyLUdfIbGckV8EFI7By4.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Hope Challenge",
+    "date": "2026-11-07",
+    "province": "KZN",
+    "city": "Durban",
+    "venueName": "Amphitheatre, North Beach",
+    "organiser": "Ethekwini AC",
+    "distances": [
+      {
+        "km": 10
+      },
+      {
+        "km": 21
+      },
+      {
+        "km": 42
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Kaapse Hoop 3-in-1",
+    "date": "2026-11-07",
+    "startTime": "05:30",
+    "province": "MP",
+    "city": "Mbombela",
+    "venueName": "Mbombela Stadium",
+    "organiser": "Nelspruit MC",
+    "distances": [
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      },
+      {
+        "km": 42.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Sportsmans Warehouse Winelands Marathon",
+    "date": "2026-11-07",
+    "province": "WC",
+    "city": "Stellenbosch",
+    "venueName": "Eikestad Primary",
+    "organiser": "Helderberg Harriers",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.1
+      },
+      {
+        "km": 42.2
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Tshwane Oppiebol",
+    "date": "2026-11-07",
+    "startTime": "07:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Thaba Tshwane",
+    "organiser": "Oppiebol AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83768",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83768/AyYuTCCdNPKqfv5idxHgLqvlMEldE3mFZNpYsCMD.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "ARD 3 Vlei Race",
+    "date": "2026-11-08",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Fairmount Secondary School, Klip Road, Grassy Park",
+    "organiser": "ARD Athletics",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Chas Everitt Edgemead 10km",
+    "date": "2026-11-14",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Edgemead High School",
+    "organiser": "Edgemead Runners",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed. Confirm the distances in between on the entry page before relying on the distance filter.",
+    "name": "HOKA HALF Stellenbosch",
+    "date": "2026-11-14",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "Stellenbosch",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84273",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84273/0Z8OyiKO0Hud1gRQzBGGdmCf0ZEZq7DOZbTpXBdG.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Maximed",
+    "date": "2026-11-14",
+    "startTime": "07:00",
+    "province": "MP",
+    "city": "Standerton",
+    "venueName": "High School Standerton",
+    "organiser": "Standerton MC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "NG Church Panorama",
+    "date": "2026-11-14",
+    "startTime": "08:00",
+    "province": "MP",
+    "city": "eMalahleni",
+    "venueName": "NG Church Panorama , Witbank",
+    "organiser": "Coaldust Multisport",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Tom Jenkins Challenge with Discovery",
+    "date": "2026-11-14",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Union Buildings",
+    "organiser": "Arcadia RC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84284",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84284/tmqPoiRU5Z0YtjSA33nnqlFX6PYF0k5NBqCDvhdq.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed. Confirm the distances in between on the entry page before relying on the distance filter.",
+    "name": "Waterfront Half Marathon",
+    "date": "2026-11-14",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "Knysna",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84135",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84135/7BifpEh3jg6UBwF31j0FjQgiMmUINWBV8RFa9g5g.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "_note": "Entry Ninja publishes a distance range rather than the full set, so only the endpoints are recorded. Check the entry page before relying on the distance filter. No fee is recorded. Entry Ninja's listing pages show a 'From R__' that can be a single category rather than the real entry price - the Brooklyn race listed 'From R0' against actual fees of R66.90 to R305.20.",
+    "name": "Marathon and Fun Walk",
+    "date": "2026-11-15",
+    "startTime": "06:00",
+    "province": "LP",
+    "city": "Polokwane",
+    "venueName": "Peter Mokaba Stadium, Rugby Field",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 42
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/83778",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/83778/kUHOsdUshwZD0sW5ejXOYdofD8IIiIMwHQe1S0cw.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Totalsports VOB Grape Run",
+    "date": "2026-11-15",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Constantia",
+    "organiser": "Totalsports Varsity Old Boys AC",
+    "distances": [
+      {
+        "km": 14.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a distance range rather than the full set, so only the endpoints are listed. Confirm the distances in between on the entry page before relying on the distance filter.",
+    "name": "24th Vlakte Marathon",
+    "date": "2026-11-21",
+    "startTime": "06:00",
+    "province": "WC",
+    "city": "Heidelberg",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 42.2
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84059",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84059/J5vO8cSdOLpjVHFnoixR26s0uuzn1aB4J070DIaZ.jpg",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "MPTitans Road race",
+    "date": "2026-11-21",
+    "province": "WC",
+    "city": "Mitchells Plain",
+    "venueName": "Rocklands Sports field",
+    "organiser": "MPTitans",
+    "distances": [
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Mataffin Homerun",
+    "date": "2026-11-21",
+    "startTime": "06:30",
+    "province": "MP",
+    "city": "Mbombela",
+    "venueName": "Mbombela Stadium",
+    "organiser": "Ngodwana MC",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Volksrust 5-in-1",
+    "date": "2026-11-21",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Volksrust",
+    "venueName": "Volksrust High School",
+    "organiser": "Volksrust",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      },
+      {
+        "km": 21.0
+      },
+      {
+        "km": 32.0
+      },
+      {
+        "km": 42.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84342",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84342/hpYbNUBp0S2e11SiYy0SEwPEF3xR5iQ0XkolyAGa.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Voortrekker Monument Muller Potgieter Half Marathon",
+    "date": "2026-11-21",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Voortrekker Monument",
+    "organiser": "Voortrekkermonument Draf & Stap AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 15
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Phoenix Emancipation of Enslaved People 10km",
+    "date": "2026-11-22",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Castle of Good Hope",
+    "organiser": "Phoenix AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "MRC fundraiser Night Race",
+    "date": "2026-11-25",
+    "startTime": "18:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "Country Club , Middelburg",
+    "organiser": "RWFL",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Metropolitan 10km",
+    "date": "2026-11-25",
+    "province": "WC",
+    "city": "Cape Town",
+    "organiser": "Metropolitan AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "_note": "The WPA fixture list published no venue for this race. Town inferred from the host club (Metropolitan AC) and needs confirming."
+  },
+  {
+    "name": "Aspen 10km & 5km",
+    "date": "2026-11-28",
+    "startTime": "06:00",
+    "province": "EC",
+    "city": "Gqeberha",
+    "venueName": "Protea Child Care",
+    "addressLine": "5 Blackthorne Avenue, Port Elizabeth",
+    "organiser": "Eastern Province Athletics",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "imageUrl": "https://epathletics.co.za/wp-content/uploads/2026/08/Aspen-2026.png"
+  },
+  {
+    "name": "BDS Road Race",
+    "date": "2026-11-28",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Akasia",
+    "venueName": "Wonderpark Shopping Centre",
+    "organiser": "Black Diamonds AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "SAACA Fun Run",
+    "date": "2026-11-28",
+    "startTime": "08:00",
+    "province": "MP",
+    "city": "Middelburg",
+    "venueName": "Middelburg",
+    "distances": [
+      {
+        "km": 4.9
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "AVBOB 15 KM",
+    "date": "2026-11-29",
+    "province": "WC",
+    "city": "Table View",
+    "venueName": "Pick 'n Pay Centre, Table View",
+    "organiser": "Tygerberg",
+    "distances": [
+      {
+        "km": 15.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Bluff Marathon",
+    "date": "2026-11-29",
+    "province": "KZN",
+    "city": "Bluff",
+    "venueName": "Fynnlands Sports Club, 55 Smith Drive",
+    "organiser": "Bluff AC",
+    "distances": [
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      },
+      {
+        "km": 42.2
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Robben Island Memorial Run",
+    "date": "2026-12-05",
+    "endDate": "2026-12-06",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Robben Island",
+    "organiser": "WPA",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "DATE NEEDS CONFIRMING. The fixture list says 'Sat, 6' but 6 December 2026 is a Sunday; 5 December is the Saturday. Entered as the 5th on the assumption the weekday is right and the number is the typo — check with Soshanguve Great Run AC before trusting it.",
+    "name": "Skosana Legend Race",
+    "date": "2026-12-05",
+    "startTime": "07:00",
+    "province": "GP",
+    "city": "Irene",
+    "venueName": "Irene Mall",
+    "organiser": "Soshanguve Great Run AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      },
+      {
+        "km": 21
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "_note": "Entry Ninja shows a 4.9-10 km range; both endpoints are recorded.",
+    "name": "Westvaal VW Race",
+    "date": "2026-12-05",
+    "startTime": "06:00",
+    "province": "MP",
+    "city": "Mbombela",
+    "venueName": "R40 in front of VW Mbombela",
+    "distances": [
+      {
+        "km": 4.9
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84202",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84202/xMiXbyC0ZA5G93OIz2WOGzFM6MZN9PKC6DD01HbF.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Growthpoint Properties Sundowner 10km",
+    "date": "2026-12-08",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Green Point Cricket Club",
+    "organiser": "Easterns Kraaifontein AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Sport SA - Century City",
+    "date": "2026-12-12",
+    "province": "WC",
+    "city": "Cape Town",
+    "organiser": "Century City AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "_note": "The WPA fixture list published no venue for this race. Town inferred from the host club (Century City AC) and needs confirming."
+  },
+  {
+    "name": "Bottelary",
+    "date": "2026-12-13",
+    "province": "WC",
+    "city": "Kuilsrivier",
+    "organiser": "Bottelary AC",
+    "distances": [
+      {
+        "km": 5.0
+      },
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ],
+    "_note": "The WPA fixture list published no venue for this race. Town inferred from the host club (Bottelary AC) and needs confirming."
+  },
+  {
+    "_note": "Day of Reconciliation, a Wednesday in 2026. The 60 km is the headline; the relay legs in the source (30x2, 15x4) are team formats rather than individual entries and are left off.",
+    "name": "City 60 Marathon",
+    "date": "2026-12-16",
+    "startTime": "06:00",
+    "province": "GP",
+    "city": "Pretoria",
+    "venueName": "Church Square, Pretoria CBD",
+    "organiser": "Capital City Active AC",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 60
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "KMC Nite Race",
+    "date": "2026-12-16",
+    "startTime": "18:00",
+    "province": "WC",
+    "city": "Knysna",
+    "distances": [
+      {
+        "km": 5
+      },
+      {
+        "km": 10
+      }
+    ],
+    "tags": [
+      "road",
+      "night"
+    ],
+    "entryUrl": "https://www.entryninja.com/events/84166",
+    "entryPlatform": "entryninja",
+    "imageUrl": "https://d1zwi51l39apzt.cloudfront.net/uploads/events/84166/fjdRJPStdl94gPkXoTqgrPwlr4ifIG6LT2Fo68W7.png",
+    "_imageNote": "Hero image hotlinked from the Entry Ninja event page. It is the organiser's artwork on Entry Ninja's CDN, not ours — if it is rotated or removed the card falls back to generated art rather than breaking."
+  },
+  {
+    "name": "Reconciliation Day 10km & 4,2km",
+    "date": "2026-12-16",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Gugulethu Stadium",
+    "organiser": "RCS Gugulethu AC",
+    "distances": [
+      {
+        "km": 10.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Tokai Manor House Run",
+    "date": "2026-12-26",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Cape Academy",
+    "organiser": "Southern Striders AC",
+    "distances": [
+      {
+        "km": 8.0
+      },
+      {
+        "km": 16.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Runners Memorial 8km",
+    "date": "2026-12-31",
+    "province": "WC",
+    "city": "Cape Town",
+    "venueName": "Mouille Point Light House",
+    "organiser": "Edgemead Runners",
+    "distances": [
+      {
+        "km": 8.0
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  },
+  {
+    "name": "Scottburgh 21.1 / 10km",
+    "date": "2027-01-10",
+    "province": "KZN",
+    "city": "Scottburgh",
+    "venueName": "Scottburgh Golf Course",
+    "organiser": "Scottburgh AC",
+    "distances": [
+      {
+        "km": 10
+      },
+      {
+        "km": 21.1
+      }
+    ],
+    "tags": [
+      "road"
+    ]
+  }
+]

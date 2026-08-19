@@ -30,6 +30,17 @@ const nutrition = require("./nutrition_db");
 // Moving a callable's region changes the URL clients call. See
 // `functionsForRegion` in lib/features/auth/data/firebase_auth_repository.dart
 // — the Dart side must point at the same region or every call 404s.
+//
+// EXCEPT the two scheduled jobs, which stay in us-central1 and must be left
+// there. finaliseChallengeDays and aggregateChallengeStats run on Cloud
+// Scheduler, and Cloud Scheduler is not offered in africa-south1 — this was
+// tried and it failed on the region not being registered for it. So the
+// paragraph above is true of everything here except them: the nightly
+// finalisation does still sweep a Johannesburg database from Iowa, and that is
+// a platform limit rather than an oversight.
+//
+// `firebase functions:list` showing those two in us-central1 is therefore the
+// correct state. Do not "fix" it.
 setGlobalOptions({ region: "africa-south1" });
 
 // The Firebase Web API key, used to verify a password against Identity
@@ -584,6 +595,17 @@ exports.searchFoods = onCall(
 // self-contained sweep over every collection in the database, and the one
 // thing it must never become is a function somebody edits without reading.
 for (const [name, handler] of Object.entries(require("./account_deletion"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+
+// --- Race entry taps --------------------------------------------------------
+//
+// One trigger that turns private per-user tap records into an anonymous
+// aggregate. Its own module because the counting rule -- notably the cooldown
+// that stops one undecided runner counting four times -- is the part worth
+// reading and testing on its own.
+for (const [name, handler] of Object.entries(require("./race_entry_taps"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }

@@ -1,3 +1,4 @@
+import '../../../shared/widgets/quick_toast.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -91,20 +92,24 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
         } catch (_) {}
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.code == 'already_active'
-                  ? 'The photo picker is busy — please try again.'
-                  : 'Could not open the ${source == ImageSource.camera ? 'camera' : 'gallery'}: ${e.message ?? e.code}',
-            ),
-          ),
+        showQuickToast(
+          context,
+          e.code == 'already_active'
+              ? 'The photo picker is busy — try again.'
+              : "Couldn't open the "
+                    '${source == ImageSource.camera ? 'camera' : 'gallery'}.',
+          icon: Icons.error_outline_rounded,
+          tone: ToastTone.danger,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error picking image: $e')),
+        debugPrint('Picking an image failed: $e');
+        showQuickToast(
+          context,
+          "Couldn't open your photos. Try again.",
+          icon: Icons.error_outline_rounded,
+          tone: ToastTone.danger,
         );
       }
     }
@@ -148,12 +153,11 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
         // If analysis fails, still continue with just the image URL so the
         // user can fill in the fields manually.
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'AI analysis failed. You can fill in the details manually.',
-              ),
-            ),
+          showQuickToast(
+            context,
+            'Analysis failed — fill the details in yourself.',
+            icon: Icons.info_outline_rounded,
+            visibleFor: const Duration(milliseconds: 2600),
           );
           ref.read(createFlowControllerProvider.notifier).updateMeal(
                 MealDraftState(imageUrl: imageUrl),
@@ -174,8 +178,12 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
+        debugPrint('Meal upload failed: $e');
+        showQuickToast(
+          context,
+          "Couldn't upload that photo. Try again.",
+          icon: Icons.error_outline_rounded,
+          tone: ToastTone.danger,
         );
       }
     } finally {

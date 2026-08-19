@@ -353,6 +353,59 @@ service cloud.firestore {
                            && request.auth.uid == userId;
       }
 
+      // Races this user has saved off the running calendar. Private to their
+      // owner, like bookmarks: which races somebody is eyeing is their own
+      // business, and nothing in the app reads another user's list.
+      //
+      // The document id is the raceEvents id and the body carries only a
+      // timestamp, so there is nothing here worth validating beyond who is
+      // writing it.
+      match /savedRaces/{eventId} {
+        allow read, write: if request.auth != null
+                           && request.auth.uid == userId;
+      }
+
+      // Entry-link taps: which races this user has tapped through to enter.
+      //
+      // Private to its owner, and the only write the client makes for
+      // attribution. A Cloud Function reads these and maintains an anonymous
+      // per-race total in raceEntryStats, which is what lets referred volume be
+      // reported without publishing a log of who wants to enter what.
+      //
+      // The document id is the raceEvents id, so a user holds one row per race
+      // however many times they tap it. Bounds rather than exact validation:
+      // this is the user's own counter and the worst they can do is overstate
+      // their own interest, which the Cloud Function's cooldown discounts anyway.
+      match /entryTaps/{eventId} {
+        function tapIsValid(entry) {
+          return entry.keys().hasOnly(['eventId', 'lastTapAt', 'taps', 'ref',
+                                       'entryPlatform', 'firstTapAt'])
+                 && entry.keys().hasAll(['eventId', 'lastTapAt', 'taps', 'ref'])
+                 && entry.eventId == eventId
+                 // Server time, not a client clock: the cooldown that keeps the
+                 // public total honest is computed from this field, and a
+                 // client-set timestamp would let somebody defeat it.
+                 && entry.lastTapAt == request.time
+                 && entry.taps is int && entry.taps > 0 && entry.taps <= 100000
+                 && entry.ref is string && entry.ref.size() == 16
+                 && (!('entryPlatform' in entry)
+                     || (entry.entryPlatform is string
+                         && entry.entryPlatform.size() <= 40));
+        }
+
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null
+                      && request.auth.uid == userId
+                      && tapIsValid(request.resource.data);
+        // Must move forwards. A tap is an increment, and an update that left the
+        // counter where it was would be a timestamp edit dressed up as a tap.
+        allow update: if request.auth != null
+                      && request.auth.uid == userId
+                      && tapIsValid(request.resource.data)
+                      && request.resource.data.taps > resource.data.taps;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+
       // Who this user follows. Owned by {userId}.
       match /following/{followedId} {
         allow read: if request.auth != null;
@@ -870,6 +923,85 @@ service cloud.firestore {
     match /pointsLedger/{entryId} {
       allow read: if request.auth != null
                   && request.auth.uid == resource.data.userId;
+      allow write: if false;
+    }
+
+    // --- Running calendar ---------------------------------------------------
+    //
+    // The race calendar. Readable by any signed-in user, writable by nobody.
+    //
+    // This is editorial content, not user content. It is populated by
+    // functions/scripts/seed_races.js running under the Admin SDK, which
+    // bypasses these rules, and by a moderator promoting a submission. Leaving
+    // it closed is what keeps it trustworthy: a runner drives to a start line
+    // on the strength of a date in here, and a collection anybody could write
+    // would make that date worth nothing.
+    match /raceEvents/{eventId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Races submitted through the app, awaiting moderation.
+    //
+    // Create-only, and deliberately not readable — not even by the person who
+    // filed it. A submission is a claim about a public event, and the moderation
+    // queue is the one place it is meant to be read; letting clients query it
+    // would turn an unreviewed claim into a second, unvetted calendar.
+    //
+    // The shape is pinned rather than left open because this is the one
+    // client-writable door into the calendar's data. Every field is checked for
+    // type and length, reviewState must start at 'pending' so a submitter cannot
+    // file something pre-approved, and submittedBy has to be the caller.
+    match /raceSubmissions/{submissionId} {
+      function submissionIsValid(entry) {
+        return entry.keys().hasOnly(['submittedBy', 'submittedAt',
+                                     'reviewState', 'name', 'startAt', 'city',
+                                     'province', 'organiser', 'entryUrl',
+                                     'distancesNote', 'notes'])
+               && entry.keys().hasAll(['submittedBy', 'submittedAt',
+                                       'reviewState', 'name', 'startAt',
+                                       'city', 'province'])
+               && entry.submittedBy == request.auth.uid
+               && entry.submittedAt == request.time
+               && entry.reviewState == 'pending'
+               && entry.name is string
+               && entry.name.size() >= 3 && entry.name.size() <= 140
+               && entry.startAt is timestamp
+               // A race in the past is not a submission worth queueing, and a
+               // date more than three years out is somebody testing the form.
+               && entry.startAt > request.time
+               && entry.startAt < request.time + duration.value(1100, 'd')
+               && entry.city is string
+               && entry.city.size() >= 2 && entry.city.size() <= 80
+               && entry.province is string && entry.province.size() <= 4
+               && (!('organiser' in entry)
+                   || (entry.organiser is string
+                       && entry.organiser.size() <= 140))
+               && (!('entryUrl' in entry)
+                   || (entry.entryUrl is string
+                       && entry.entryUrl.size() <= 500))
+               && (!('distancesNote' in entry)
+                   || (entry.distancesNote is string
+                       && entry.distancesNote.size() <= 300))
+               && (!('notes' in entry)
+                   || (entry.notes is string && entry.notes.size() <= 1000));
+      }
+
+      allow read: if false;
+      allow create: if request.auth != null
+                    && submissionIsValid(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // Per-race entry-tap totals, derived by onRaceEntryTap from the private
+    // per-user records under users/{uid}/entryTaps.
+    //
+    // Closed to clients in both directions. It is written by a Cloud Function
+    // under Admin credentials, and it is read for reporting rather than by the
+    // app — there is no screen that needs it, and a per-race popularity figure is
+    // not something to hand out before deciding it should be public.
+    match /raceEntryStats/{eventId} {
+      allow read: if false;
       allow write: if false;
     }
 
