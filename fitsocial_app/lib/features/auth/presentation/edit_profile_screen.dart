@@ -20,6 +20,7 @@ import '../domain/username.dart';
 import 'account_switcher_sheet.dart';
 import 'body_metrics_fields.dart';
 import 'username_availability_hint.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Host for the user's public profile link. Usernames are unique — enforced by
 /// the `usernames` collection, whose document ids are the names themselves —
@@ -545,45 +546,49 @@ class _BodyEditorSheetState extends State<_BodyEditorSheet> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border.all(color: palette.stroke),
-        ),
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Height & weight',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: palette.text,
+      child: LiquidGlass(
+        // A sheet always has a page behind it, which makes it the one
+        // surface in the app guaranteed something worth bending.
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: palette.stroke),
+          ),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Height & weight',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: palette.text,
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                BodyMetricsFields(
-                  initial: widget.initial,
-                  showReadout: false,
-                  onChanged: (metrics) => setState(() => _draft = metrics),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                PrimaryButton(
-                  label: 'Save',
-                  // Refuses a figure it could not use rather than storing one
-                  // that would show no BMI later. An empty form is fine —
-                  // that is how a value gets cleared.
-                  onPressed: _draft.isEmpty || _draft.issue == null
-                      ? () => Navigator.of(context).pop(_draft)
-                      : null,
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.lg),
+                  BodyMetricsFields(
+                    initial: widget.initial,
+                    showReadout: false,
+                    onChanged: (metrics) => setState(() => _draft = metrics),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  PrimaryButton(
+                    label: 'Save',
+                    // Refuses a figure it could not use rather than storing one
+                    // that would show no BMI later. An empty form is fine —
+                    // that is how a value gets cleared.
+                    onPressed: _draft.isEmpty || _draft.issue == null
+                        ? () => Navigator.of(context).pop(_draft)
+                        : null,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -619,25 +624,29 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0)
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: palette.stroke,
-                indent: AppSpacing.md,
-              ),
-            children[i],
+    return LiquidGlass(
+      // Painted by the lens now rather than by a fill of its own:
+      // a pane over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: palette.stroke,
+                  indent: AppSpacing.md,
+                ),
+              children[i],
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -807,98 +816,99 @@ class _FieldEditorSheetState extends State<_FieldEditorSheet> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: palette.surface,
+      child: LiquidGlass(
+          // A sheet always has a page behind it, which makes it the one
+          // surface in the app guaranteed something worth bending.
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.title,
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _controller,
-                autofocus: true,
-                maxLines: widget.maxLines,
-                keyboardType: widget.keyboardType,
-                autocorrect: !_isUsername,
-                maxLength: _isUsername ? usernameMaxLength : null,
-                // Lowercased and filtered as it is typed, so what the user
-                // sees is exactly what gets saved — and exactly what becomes
-                // the reservation's document id.
-                inputFormatters: _isUsername
-                    ? [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[A-Za-z0-9._]'),
-                        ),
-                        TextInputFormatter.withFunction(
-                          (_, newValue) => newValue.copyWith(
-                            text: newValue.text.toLowerCase(),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    maxLines: widget.maxLines,
+                    keyboardType: widget.keyboardType,
+                    autocorrect: !_isUsername,
+                    maxLength: _isUsername ? usernameMaxLength : null,
+                    // Lowercased and filtered as it is typed, so what the user
+                    // sees is exactly what gets saved — and exactly what becomes
+                    // the reservation's document id.
+                    inputFormatters: _isUsername
+                        ? [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[A-Za-z0-9._]'),
+                            ),
+                            TextInputFormatter.withFunction(
+                              (_, newValue) => newValue.copyWith(
+                                text: newValue.text.toLowerCase(),
+                              ),
+                            ),
+                          ]
+                        : null,
+                    onChanged: widget.checker?.check,
+                    textInputAction: widget.maxLines > 1
+                        ? TextInputAction.newline
+                        : TextInputAction.done,
+                    onSubmitted: widget.maxLines > 1 ? null : (_) => _submit(),
+                    style: TextStyle(color: palette.text),
+                    decoration: _isUsername
+                        ? const InputDecoration(
+                            prefixText: '@', counterText: '')
+                        : null,
+                  ),
+                  if (widget.checker != null)
+                    UsernameAvailabilityHint(checker: widget.checker!),
+                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: AnimatedBuilder(
+                      animation: widget.checker ?? kAlwaysDismissedAnimation,
+                      builder: (context, _) {
+                        // Disabled while a lookup is outstanding as well as when
+                        // it came back negative: neither is a yes, and letting the
+                        // save through on a maybe just moves the rejection to a
+                        // less helpful place.
+                        final blocked =
+                            _isUsername && widget.checker!.canUse != true;
+                        return FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: palette.brand,
+                            foregroundColor: AppColors.onBrand,
+                            disabledBackgroundColor: palette.surfaceHigh,
+                            disabledForegroundColor: palette.muted,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                      ]
-                    : null,
-                onChanged: widget.checker?.check,
-                textInputAction: widget.maxLines > 1
-                    ? TextInputAction.newline
-                    : TextInputAction.done,
-                onSubmitted: widget.maxLines > 1 ? null : (_) => _submit(),
-                style: TextStyle(color: palette.text),
-                decoration: _isUsername
-                    ? const InputDecoration(prefixText: '@', counterText: '')
-                    : null,
+                          onPressed: blocked ? null : _submit,
+                          child: const Text('Save'),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-              if (widget.checker != null)
-                UsernameAvailabilityHint(checker: widget.checker!),
-              const SizedBox(height: AppSpacing.md),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: AnimatedBuilder(
-                  animation: widget.checker ?? kAlwaysDismissedAnimation,
-                  builder: (context, _) {
-                    // Disabled while a lookup is outstanding as well as when
-                    // it came back negative: neither is a yes, and letting the
-                    // save through on a maybe just moves the rejection to a
-                    // less helpful place.
-                    final blocked =
-                        _isUsername && widget.checker!.canUse != true;
-                    return FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: palette.brand,
-                        foregroundColor: AppColors.onBrand,
-                        disabledBackgroundColor: palette.surfaceHigh,
-                        disabledForegroundColor: palette.muted,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      onPressed: blocked ? null : _submit,
-                      child: const Text('Save'),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
+          )),
     );
   }
 

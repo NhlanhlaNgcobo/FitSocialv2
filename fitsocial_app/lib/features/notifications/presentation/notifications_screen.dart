@@ -148,9 +148,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         fresh.add(item);
         continue;
       }
-      byAge
-          .putIfAbsent(_ageSection(item.createdAt, now), () => [])
-          .add(item);
+      byAge.putIfAbsent(_ageSection(item.createdAt, now), () => []).add(item);
     }
 
     final entries = <_Entry>[];

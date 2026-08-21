@@ -8,6 +8,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../links/share_links.dart';
 import 'quick_toast.dart';
+import 'liquid_glass.dart';
 
 /// The three ways a post leaves the screen it is on.
 enum _ShareChoice {
@@ -29,55 +30,60 @@ enum _ShareChoice {
 /// leaves — never the caption, never the photo. Someone who receives it and has
 /// FitSocial opens the post; someone who doesn't gets the page that offers the
 /// app. See [FitSocialLinks].
-Future<void> showPostShareSheet(BuildContext context, SharedPostRef post) async {
+Future<void> showPostShareSheet(
+    BuildContext context, SharedPostRef post) async {
   final palette = context.palette;
 
   final choice = await showModalBottomSheet<_ShareChoice>(
     context: context,
-    backgroundColor: palette.surface,
+    backgroundColor: Colors.transparent,
     // The sheet may be opened from inside another sheet (Explore's post peek),
     // so it goes on the root navigator or it would be trapped under that one.
     useRootNavigator: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 8),
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: palette.stroke,
-                borderRadius: BorderRadius.circular(2),
+    builder: (sheetContext) => LiquidGlass(
+      // A sheet always has a page behind it, which makes it the one surface in
+      // the app guaranteed something worth bending.
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 8),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: palette.stroke,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          _ShareOption(
-            icon: Icons.bolt_rounded,
-            label: 'Add to your Pulse',
-            detail: 'Share it as a card for 24 hours',
-            onTap: () =>
-                Navigator.of(sheetContext).pop(_ShareChoice.pulse),
-          ),
-          _ShareOption(
-            icon: Icons.ios_share_rounded,
-            label: 'Share to…',
-            detail: 'Send a link through another app',
-            onTap: () =>
-                Navigator.of(sheetContext).pop(_ShareChoice.external),
-          ),
-          _ShareOption(
-            icon: Icons.link_rounded,
-            label: 'Copy link',
-            onTap: () =>
-                Navigator.of(sheetContext).pop(_ShareChoice.copyLink),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
+            _ShareOption(
+              icon: Icons.bolt_rounded,
+              label: 'Add to your Pulse',
+              detail: 'Share it as a card for 24 hours',
+              onTap: () => Navigator.of(sheetContext).pop(_ShareChoice.pulse),
+            ),
+            _ShareOption(
+              icon: Icons.ios_share_rounded,
+              label: 'Share to…',
+              detail: 'Send a link through another app',
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ShareChoice.external),
+            ),
+            _ShareOption(
+              icon: Icons.link_rounded,
+              label: 'Copy link',
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_ShareChoice.copyLink),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
       ),
     ),
   );

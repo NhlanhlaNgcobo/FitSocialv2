@@ -17,8 +17,8 @@ class FirestoreUserRecord {
       workoutsCount: (data['workoutsCount'] as num?)?.toInt() ?? 0,
       mealsCount: (data['mealsCount'] as num?)?.toInt() ?? 0,
       runsCount: (data['runsCount'] as num?)?.toInt() ?? 0,
-      weeklyGoalDays: (data['weeklyGoalDays'] as num?)?.toInt() ??
-          defaultWeeklyGoalDays,
+      weeklyGoalDays:
+          (data['weeklyGoalDays'] as num?)?.toInt() ?? defaultWeeklyGoalDays,
     );
   }
   const FirestoreUserRecord({

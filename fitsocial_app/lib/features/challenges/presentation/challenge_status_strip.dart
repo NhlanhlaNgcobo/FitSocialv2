@@ -8,6 +8,7 @@ import '../domain/challenge_copy.dart';
 import '../domain/challenge_models.dart';
 import '../domain/challenge_task.dart';
 import 'challenge_indicators.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The challenge line on the home feed.
 ///
@@ -62,16 +63,22 @@ class _RunningStrip extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Text(
-                  ChallengeCopy.statusLine(enrollment),
-                  style: TextStyle(
-                    color: warning ? palette.danger : palette.text,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
+                // Expanded rather than followed by a Spacer: the status line
+                // is the only part of this row that can grow, and at a large
+                // system font size it grew past the edge instead of wrapping,
+                // taking the task count and the chevron with it.
+                Expanded(
+                  child: Text(
+                    ChallengeCopy.statusLine(enrollment),
+                    style: TextStyle(
+                      color: warning ? palette.danger : palette.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                    ),
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 if (day != null)
                   Text(
                     day.tasksLabel,
@@ -139,20 +146,24 @@ class _OutstandingChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Text(
-        '${task.task.label} ${task.remainingLabel}',
-        style: TextStyle(
-          color: palette.muted,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          fontFeatures: const [FontFeature.tabularFigures()],
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Text(
+          '${task.task.label} ${task.remainingLabel}',
+          style: TextStyle(
+            color: palette.muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
       ),
     );
@@ -169,12 +180,16 @@ class _SkeletonChips extends StatelessWidget {
     return Row(
       children: [
         for (var i = 0; i < 3; i++) ...[
-          Container(
-            width: 62,
-            height: 24,
-            decoration: BoxDecoration(
-              color: palette.surfaceHigh,
-              borderRadius: BorderRadius.circular(20),
+          LiquidGlass(
+            // Painted by the lens rather than by a fill of its own: a pane
+            // over the app backdrop, like every other card.
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: 62,
+              height: 24,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+              ),
             ),
           ),
           const SizedBox(width: 6),
@@ -200,63 +215,67 @@ class _RecruitStrip extends ConsumerWidget {
     return InkWell(
       onTap: () => context.push('/challenges'),
       borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: palette.stroke),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: palette.brandSoft,
-                borderRadius: BorderRadius.circular(11),
-                border: Border.all(color: palette.brandSoftStroke),
+      child: LiquidGlass(
+        // Painted by the lens rather than by a fill of its own: a pane
+        // over the app backdrop, like every other card.
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: palette.brandSoft,
+                  borderRadius: BorderRadius.circular(11),
+                  border: Border.all(color: palette.brandSoftStroke),
+                ),
+                child: Icon(
+                  Icons.whatshot_rounded,
+                  size: 18,
+                  color: palette.brandText,
+                ),
               ),
-              child: Icon(
-                Icons.whatshot_rounded,
-                size: 18,
-                color: palette.brandText,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    ChallengeCopy.noActiveChallenge,
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.1,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ChallengeCopy.noActiveChallenge,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    // Somebody already keeping an Early Worm streak is shown
-                    // that instead: they are not a user with no challenge,
-                    // they are a user with one that costs nothing.
-                    earlyWorm.hasStreak
-                        ? '${earlyWorm.currentStreak} Early Worm mornings '
-                            'in a row.'
-                        : ChallengeCopy.recruit,
-                    style: TextStyle(color: palette.muted, fontSize: 12),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      // Somebody already keeping an Early Worm streak is shown
+                      // that instead: they are not a user with no challenge,
+                      // they are a user with one that costs nothing.
+                      earlyWorm.hasStreak
+                          ? '${earlyWorm.currentStreak} Early Worm mornings '
+                              'in a row.'
+                          : ChallengeCopy.recruit,
+                      style: TextStyle(color: palette.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: palette.muted,
-            ),
-          ],
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: palette.muted,
+              ),
+            ],
+          ),
         ),
       ),
     );

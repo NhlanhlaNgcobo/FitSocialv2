@@ -918,7 +918,6 @@ class FirestoreContentRepository implements ContentRepository {
     );
   }
 
-
   /// A run document as a session, or null when it carries no usable date.
   ///
   /// `startedAt` is preferred over `createdAt`: it is the client-side stamp
@@ -1854,7 +1853,8 @@ class FirestoreContentRepository implements ContentRepository {
     }
 
     final now = DateTime.now();
-    final storedMaxRunKm = (cached['maxRunDistanceKm'] as num?)?.toDouble() ?? 0;
+    final storedMaxRunKm =
+        (cached['maxRunDistanceKm'] as num?)?.toDouble() ?? 0;
 
     await _settleWrite(
       documentRef.set(
@@ -2014,7 +2014,8 @@ class FirestoreContentRepository implements ContentRepository {
 
       // The total moves only when someone joins or leaves; swapping one
       // reaction for another leaves it where it is.
-      final totalDelta = (reaction == null ? 0 : 1) - (previous == null ? 0 : 1);
+      final totalDelta =
+          (reaction == null ? 0 : 1) - (previous == null ? 0 : 1);
 
       if (reaction == null) {
         likedBy.remove(userId);

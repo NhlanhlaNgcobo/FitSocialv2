@@ -9,6 +9,7 @@ import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
 import 'mention_suggestions.dart';
 import 'quick_toast.dart';
+import '../../shared/widgets/liquid_glass.dart';
 
 /// The "Add a comment…" well and its send button.
 ///
@@ -129,32 +130,36 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     return Row(
       children: [
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: palette.surfaceHigh,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 15,
+          child: LiquidGlass(
+            // Painted by the lens rather than by a fill of its own: a pane
+            // over the app backdrop, like every other card.
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
               ),
-              decoration: InputDecoration(
-                hintText: 'Add a comment...',
-                hintStyle: TextStyle(color: palette.muted),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 15,
                 ),
+                decoration: InputDecoration(
+                  hintText: 'Add a comment...',
+                  hintStyle: TextStyle(color: palette.muted),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+                maxLines: 3,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _submit(),
               ),
-              maxLines: 3,
-              minLines: 1,
-              textCapitalization: TextCapitalization.sentences,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _submit(),
             ),
           ),
         ),

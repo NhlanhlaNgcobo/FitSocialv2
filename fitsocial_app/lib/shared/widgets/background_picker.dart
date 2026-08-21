@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../shared/widgets/liquid_glass.dart';
 
 /// The controls that choose the photo behind a workout or a run card.
 ///
@@ -85,27 +86,33 @@ class _BackgroundAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Material(
-      color: palette.surfaceHigh,
+    return LiquidGlass(
+      // Material stays for the ink splash and gives up its colour:
+      // an opaque fill in there would sit between the glass and
+      // everything it is meant to bend.
       borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: context.palette.brand),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                label,
-                style: TextStyle(
-                  color: palette.text,
-                  fontWeight: FontWeight.w700,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: context.palette.brand),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

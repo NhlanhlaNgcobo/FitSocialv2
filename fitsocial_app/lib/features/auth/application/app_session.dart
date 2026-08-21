@@ -182,9 +182,8 @@ class AppSession extends ChangeNotifier {
       _profile = await userProfileRepository.loadCurrentProfile();
       // No profile means the account exists but was never finished, so setup
       // is where they land rather than the feed.
-      _stage = _profile == null
-          ? AuthStage.profileSetup
-          : AuthStage.authenticated;
+      _stage =
+          _profile == null ? AuthStage.profileSetup : AuthStage.authenticated;
     } catch (error) {
       _errorMessage = describeAuthError(error);
     } finally {
@@ -317,7 +316,6 @@ class AppSession extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
-
 
   void _setLoading(bool value, {bool shouldNotify = true}) {
     _isLoading = value;

@@ -56,8 +56,9 @@ enum Province {
   }
 
   /// The nine SA provinces, in the order the filter shows them.
-  static List<Province> get southAfrican =>
-      values.where((province) => province.isSouthAfrican).toList(growable: false);
+  static List<Province> get southAfrican => values
+      .where((province) => province.isSouthAfrican)
+      .toList(growable: false);
 }
 
 /// The distance bands the filter offers.
@@ -596,4 +597,3 @@ bool _setEquals<T>(Set<T> a, Set<T> b) {
   if (a.length != b.length) return false;
   return a.containsAll(b);
 }
-

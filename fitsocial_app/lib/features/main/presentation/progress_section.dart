@@ -10,6 +10,7 @@ import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/progress_models.dart';
 import 'progress_session_actions.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The Progress tab: a period to report on, the numbers for it, the streak
 /// grid, and the sessions that make up the numbers.
@@ -83,43 +84,47 @@ class _PeriodPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        children: [
-          for (final period in ProgressPeriod.values)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSelected(period),
-                child: Container(
-                  height: 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: period == selected
-                        ? palette.brandSoft
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    period.label,
-                    style: TextStyle(
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            for (final period in ProgressPeriod.values)
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelected(period),
+                  child: Container(
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
                       color: period == selected
-                          ? palette.brandText
-                          : palette.muted,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                          ? palette.brandSoft
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      period.label,
+                      style: TextStyle(
+                        color: period == selected
+                            ? palette.brandText
+                            : palette.muted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

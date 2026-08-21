@@ -391,7 +391,8 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
           return _CaptureCanvas(
             icon: Icons.photo_camera_rounded,
             title: 'Capture a Pulse',
-            subtitle: 'Tap the shutter to shoot.\nIt disappears after 24 hours.',
+            subtitle:
+                'Tap the shutter to shoot.\nIt disappears after 24 hours.',
             captureLabel: 'Take a photo',
             onCamera: () => _pickPhoto(ImageSource.camera),
             onGallery: () => _pickPhoto(ImageSource.gallery),
@@ -881,9 +882,8 @@ class _GradientPicker extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: selected
-                        ? AppColors.onMedia
-                        : const Color(0x00FFFFFF),
+                    color:
+                        selected ? AppColors.onMedia : const Color(0x00FFFFFF),
                     width: 2,
                   ),
                 ),
@@ -931,8 +931,7 @@ class _ShareButtonState extends State<_ShareButton> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
-    final foreground =
-        enabled ? AppColors.onMedia : AppColors.onMediaMuted;
+    final foreground = enabled ? AppColors.onMedia : AppColors.onMediaMuted;
 
     return Semantics(
       button: true,
@@ -963,9 +962,8 @@ class _ShareButtonState extends State<_ShareButton> {
               color: enabled ? null : const Color(0x8A000000),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: enabled
-                    ? const Color(0x3DFFFFFF)
-                    : const Color(0x1FFFFFFF),
+                color:
+                    enabled ? const Color(0x3DFFFFFF) : const Color(0x1FFFFFFF),
               ),
               boxShadow: enabled
                   ? [
@@ -1054,8 +1052,7 @@ class _ModeSelector extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color:
-                              AppColors.orangeBright.withValues(alpha: 0.28),
+                          color: AppColors.orangeBright.withValues(alpha: 0.28),
                           blurRadius: 14,
                           offset: const Offset(0, 4),
                         ),

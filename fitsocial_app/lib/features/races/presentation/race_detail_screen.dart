@@ -15,13 +15,17 @@ import '../domain/race_models.dart';
 import 'race_artwork.dart';
 import 'race_toasts.dart';
 import 'race_widgets.dart';
+import '../../../shared/widgets/liquid_glass.dart';
+
+/// How tall the cover stands before the bar collapses onto it.
+const double _heroHeight = 320;
 
 /// One race, in full.
 ///
-/// The whole screen is arranged around one question — should I enter this? — so
-/// the entry button is pinned to the bottom rather than sitting at the end of a
-/// scroll, and the distances table with its fees is the first thing under the
-/// header.
+/// Arranged around one question — should I enter this? — so the entry button is
+/// pinned to the bottom rather than sitting at the end of a scroll, and the two
+/// things anybody checks first, when and where, are the two cards under the
+/// cover.
 class RaceDetailScreen extends ConsumerWidget {
   const RaceDetailScreen({required this.eventId, super.key});
 
@@ -31,40 +35,41 @@ class RaceDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final event = ref.watch(raceEventProvider(eventId));
+    final loaded = event.valueOrNull;
+
+    // The states with no race keep an ordinary bar. There is no cover for one to
+    // float over, and a transparent bar on a plain background is just a bar with
+    // its edge missing.
+    if (loaded == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('RACE')),
+        body: switch (event) {
+          AsyncValue(hasError: true) => const RaceMessage(
+              icon: Icons.cloud_off_rounded,
+              title: "Couldn't load this race",
+              body: 'Check your connection and try again.',
+            ),
+          // A resolved null is a race that is not there — a stale share link, or
+          // an event a moderator removed. Distinguished from a load failure
+          // because the two need different words and only one is worth retrying.
+          AsyncValue(isLoading: false) => const RaceMessage(
+              icon: Icons.event_busy_rounded,
+              title: 'Race not found',
+              body: 'This listing may have been removed from the calendar.',
+            ),
+          _ => Center(child: CircularProgressIndicator(color: palette.brand)),
+        },
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('RACE'),
-        actions: [
-          if (event.valueOrNull != null)
-            IconButton(
-              onPressed: () => _share(event.value!),
-              tooltip: 'Share',
-              icon: const Icon(Icons.ios_share_rounded),
-            ),
+      body: CustomScrollView(
+        slivers: [
+          _RaceHero(event: loaded, onShare: () => _share(loaded)),
+          SliverToBoxAdapter(child: _RaceBody(event: loaded)),
         ],
       ),
-      body: switch (event) {
-        AsyncValue(:final value?) => _RaceBody(event: value),
-        AsyncValue(hasError: true) => const RaceMessage(
-            icon: Icons.cloud_off_rounded,
-            title: "Couldn't load this race",
-            body: 'Check your connection and try again.',
-          ),
-        // A resolved null is a race that is not there — a stale share link, or
-        // an event a moderator removed. Distinguished from a load failure
-        // because the two need different words and only one is worth retrying.
-        AsyncValue(isLoading: false) => const RaceMessage(
-            icon: Icons.event_busy_rounded,
-            title: 'Race not found',
-            body: 'This listing may have been removed from the calendar.',
-          ),
-        _ => Center(
-            child: CircularProgressIndicator(color: palette.brand),
-          ),
-      },
-      bottomNavigationBar:
-          event.valueOrNull == null ? null : _EntryBar(event: event.value!),
+      bottomNavigationBar: _EntryBar(event: loaded),
     );
   }
 
@@ -79,6 +84,169 @@ class RaceDetailScreen extends ConsumerWidget {
   }
 }
 
+/// The cover, with the race's name written across the foot of it.
+///
+/// The name lives here rather than in the app bar's title. Shrinking a title
+/// into the toolbar is the usual pattern, but race names here run to
+/// "Voortrekker Monument Muller Potgieter Half Marathon" — scaled into one
+/// ellipsised line it says almost nothing, and the scaling is what makes that
+/// animation look cheap.
+class _RaceHero extends StatelessWidget {
+  const _RaceHero({required this.event, required this.onShare});
+
+  final RaceEvent event;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final badges = event.tags
+        .map(RaceBadge.forTag)
+        .whereType<RaceBadge>()
+        .toList(growable: false);
+
+    return SliverAppBar(
+      pinned: true,
+      expandedHeight: _heroHeight,
+      backgroundColor: palette.background,
+      foregroundColor: AppColors.onMedia,
+      // The glyphs sit on the picture while the bar is open, so they carry their
+      // own dark disc rather than trusting whatever the cover happens to be.
+      leading: const _HeroAction(icon: Icons.arrow_back_rounded, isBack: true),
+      actions: [
+        _HeroAction(icon: Icons.ios_share_rounded, onTap: onShare),
+        const SizedBox(width: AppSpacing.sm),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            RaceCover(event: event),
+            // Two scrims doing separate jobs: the top keeps the back and share
+            // glyphs legible, the bottom carries the name. Both fixed black
+            // rather than themed — they lie on a photograph, whose brightness
+            // owes nothing to the app's theme.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                  colors: [Color(0x8C000000), Color(0x00000000)],
+                ),
+              ),
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  stops: [0, 0.55, 1],
+                  colors: [
+                    Color(0xF2000000),
+                    Color(0x99000000),
+                    Color(0x00000000),
+                  ],
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (badges.isNotEmpty) ...[
+                      Wrap(spacing: 6, runSpacing: 6, children: badges),
+                      const SizedBox(height: 10),
+                    ],
+                    Text(
+                      event.name,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        height: 1.12,
+                        letterSpacing: -0.4,
+                        // Fixed, not themed: this lies on a picture. The theme
+                        // migration once shipped near-black text on dark tiles
+                        // by taking the page colour here.
+                        color: AppColors.onMedia,
+                        shadows: [
+                          Shadow(blurRadius: 12, color: Color(0xB3000000)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.place_rounded,
+                          size: 14,
+                          color: AppColors.onMediaMuted,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            event.venue.shortLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.onMediaMuted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A bar glyph with its own backing, so it stays visible on any cover.
+class _HeroAction extends StatelessWidget {
+  const _HeroAction({required this.icon, this.onTap, this.isBack = false});
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool isBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Material(
+        color: const Color(0x59000000),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap:
+              onTap ?? (isBack ? () => Navigator.of(context).maybePop() : null),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Icon(icon, size: 20, color: AppColors.onMedia),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RaceBody extends ConsumerWidget {
   const _RaceBody({required this.event});
 
@@ -89,105 +257,87 @@ class _RaceBody extends ConsumerWidget {
     final palette = context.palette;
     final now = ref.watch(raceClockProvider);
     final countdown = RaceFormat.countdown(event, now);
-    final badges = event.tags
-        .map(RaceBadge.forTag)
-        .whereType<RaceBadge>()
-        .toList(growable: false);
     final description = event.description;
     final organiser = event.organiser;
     final verifiedAt = event.verifiedAt;
 
-    return ListView(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
         AppSpacing.md,
         AppSpacing.md,
         AppSpacing.lg,
       ),
-      children: [
-        // Taller than the list band: here the cover is the header of a page
-        // somebody chose to open, not a strip they are scrolling past.
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: RaceCover(event: event),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          event.name,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            height: 1.2,
-            color: palette.text,
-          ),
-        ),
-        if (organiser != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            organiser,
-            style: TextStyle(fontSize: 13, color: palette.muted),
-          ),
-        ],
-        if (badges.isNotEmpty) ...[
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (organiser != null) ...[
+            Row(
+              children: [
+                Icon(Icons.groups_rounded, size: 15, color: palette.muted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    organiser,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: palette.muted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (event.status.needsNotice) ...[
+            _DetailNotice(status: event.status),
+            const SizedBox(height: AppSpacing.md),
+          ],
+
+          // When and where, as two cards. These are the questions asked before
+          // any other, and giving each its own card is what stops them reading
+          // as rows in a form.
+          _WhenCard(event: event, countdown: countdown),
           const SizedBox(height: AppSpacing.sm),
-          Wrap(spacing: 6, runSpacing: 6, children: badges),
-        ],
-        if (event.status.needsNotice) ...[
-          const SizedBox(height: AppSpacing.md),
-          _DetailNotice(status: event.status),
-        ],
-        const SizedBox(height: AppSpacing.lg),
-        _FactRow(
-          icon: Icons.event_rounded,
-          label: RaceFormat.dateRange(event),
-          detail: countdown == null
-              ? 'First start ${RaceFormat.time(event.startAt)}'
-              : '$countdown · first start ${RaceFormat.time(event.startAt)}',
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _FactRow(
-          icon: Icons.place_rounded,
-          label: event.venue.longLabel,
-          detail: event.venue.addressLine,
-          // Only offered when there is a pin to send the maps app to. A link
-          // that opens a map of nowhere in particular is worse than no link.
-          onTap: event.venue.hasCoordinates ? () => _openMap(context) : null,
-          actionLabel: 'Open in maps',
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        const RaceLabel('DISTANCES'),
-        const SizedBox(height: 10),
-        _DistanceTable(event: event),
-        if (description != null) ...[
+          _WhereCard(event: event, onOpenMap: () => _openMap(context)),
+
           const SizedBox(height: AppSpacing.lg),
-          const RaceLabel('ABOUT'),
+          const _SectionHeading('DISTANCES'),
           const SizedBox(height: 10),
+          _DistanceTable(event: event),
+
+          if (description != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            const _SectionHeading('ABOUT'),
+            const SizedBox(height: 10),
+            Text(
+              description,
+              style: TextStyle(fontSize: 14, height: 1.55, color: palette.text),
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.lg),
+          // Provenance, at the foot, in small type. It matters — a date is only
+          // as good as the last time somebody checked it — but it is not what
+          // the reader came for, and putting it up top would say otherwise.
           Text(
-            description,
-            style: TextStyle(fontSize: 14, height: 1.5, color: palette.text),
+            verifiedAt == null
+                ? _sourceNote(event.source)
+                : '${_sourceNote(event.source)} · last checked '
+                    '${RaceFormat.date(verifiedAt)}',
+            style: TextStyle(fontSize: 11.5, height: 1.4, color: palette.muted),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Always confirm the date and start time with the organiser before '
+            'you travel.',
+            style: TextStyle(fontSize: 11.5, height: 1.4, color: palette.muted),
           ),
         ],
-        const SizedBox(height: AppSpacing.lg),
-        // Provenance, at the bottom, in small type. It matters — a date is only
-        // as good as the last time somebody checked it — but it is not what the
-        // reader came for, and putting it up top would say otherwise.
-        Text(
-          verifiedAt == null
-              ? _sourceNote(event.source)
-              : '${_sourceNote(event.source)} · last checked '
-                  '${RaceFormat.date(verifiedAt)}',
-          style: TextStyle(fontSize: 11.5, height: 1.4, color: palette.muted),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Always confirm the date and start time with the organiser before '
-          'you travel.',
-          style: TextStyle(fontSize: 11.5, height: 1.4, color: palette.muted),
-        ),
-      ],
+      ),
     );
   }
 
@@ -226,6 +376,189 @@ class _RaceBody extends ConsumerWidget {
   }
 }
 
+/// A small-caps heading with a hairline running off to the right.
+///
+/// The rule is what gives the page its rhythm. Without it the sections read as
+/// one continuous column with occasional bold words in it.
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Row(
+      children: [
+        RaceLabel(text),
+        const SizedBox(width: 10),
+        Expanded(child: Divider(height: 1, color: palette.stroke)),
+      ],
+    );
+  }
+}
+
+/// The shell both fact cards sit in.
+class _FactCard extends StatelessWidget {
+  const _FactCard({required this.icon, required this.child, this.trailing});
+
+  final IconData icon;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final side = trailing;
+
+    return LiquidGlass(
+      // Painted by the lens now rather than by a fill of its own:
+      // a pane over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: palette.brandSoft,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: palette.brandSoftStroke),
+              ),
+              child: Icon(icon, size: 17, color: palette.brand),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: child),
+            if (side != null) ...[const SizedBox(width: AppSpacing.sm), side],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Date, start time, and how far off it is.
+class _WhenCard extends StatelessWidget {
+  const _WhenCard({required this.event, required this.countdown});
+
+  final RaceEvent event;
+  final String? countdown;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final until = countdown;
+
+    return _FactCard(
+      icon: Icons.event_rounded,
+      trailing: until == null
+          ? null
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: palette.brandSoft,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: palette.brandSoftStroke),
+              ),
+              child: Text(
+                until.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: palette.brandText,
+                ),
+              ),
+            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            RaceFormat.dateRange(event),
+            style: TextStyle(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+              color: palette.text,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'First start ${RaceFormat.time(event.startAt)}',
+            style: TextStyle(fontSize: 12.5, color: palette.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Venue, address, and the way out to a map.
+class _WhereCard extends StatelessWidget {
+  const _WhereCard({required this.event, required this.onOpenMap});
+
+  final RaceEvent event;
+  final VoidCallback onOpenMap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final address = event.venue.addressLine;
+
+    return _FactCard(
+      icon: Icons.place_rounded,
+      // Only offered when there is a pin to send the maps app to. A link that
+      // opens a map of nowhere in particular is worse than no link.
+      trailing: event.venue.hasCoordinates
+          ? IconButton(
+              onPressed: onOpenMap,
+              tooltip: 'Open in maps',
+              visualDensity: VisualDensity.compact,
+              style: IconButton.styleFrom(
+                backgroundColor: palette.surfaceHigh,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: Icon(Icons.map_outlined, size: 18, color: palette.brand),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            event.venue.longLabel,
+            style: TextStyle(
+              fontSize: 15.5,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+              color: palette.text,
+            ),
+          ),
+          if (address != null) ...[
+            const SizedBox(height: 3),
+            Text(
+              address,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.35,
+                color: palette.muted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// The distances, with their fees and start times.
 class _DistanceTable extends StatelessWidget {
   const _DistanceTable({required this.event});
@@ -243,24 +576,32 @@ class _DistanceTable extends StatelessWidget {
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        children: [
-          for (var index = 0; index < event.distances.length; index++) ...[
-            if (index > 0) Divider(height: 1, color: palette.stroke),
-            _DistanceRow(
-              distance: event.distances[index],
-              // A distance with no time of its own goes with the gun, so the
-              // event's first start is what it inherits.
-              fallbackTime: RaceFormat.time(event.startAt),
-            ),
+    return LiquidGlass(
+      // Painted by the lens now rather than by a fill of its own:
+      // a pane over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          children: [
+            for (var index = 0; index < event.distances.length; index++) ...[
+              // Indented past the band tile, so the rule separates the rows'
+              // content rather than cutting the column of tiles in half.
+              if (index > 0)
+                Divider(height: 1, indent: 58, color: palette.stroke),
+              _DistanceRow(
+                distance: event.distances[index],
+                // A distance with no time of its own goes with the gun, so the
+                // event's first start is what it inherits.
+                fallbackTime: RaceFormat.time(event.startAt),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -284,6 +625,31 @@ class _DistanceRow extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // The band, not the exact kilometres. The figure is already in the
+          // line beneath, so repeating it here would be a larger copy of the
+          // same word rather than a second piece of information.
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: palette.brandSoft,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: palette.brandSoftStroke),
+            ),
+            child: Text(
+              _bandLabel(distance.bucket),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+                height: 1.05,
+                color: palette.brandText,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -291,7 +657,7 @@ class _DistanceRow extends StatelessWidget {
                 Text(
                   distance.label,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.w700,
                     color: palette.text,
                   ),
@@ -305,14 +671,18 @@ class _DistanceRow extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.sm),
           Text(
             // "—" rather than "R0" or a blank: an unpublished fee is a real
             // state and reading it as free would send somebody to the start
             // line with no money.
             price ?? '—',
             style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              // Tabular, so the prices form a column instead of drifting a pixel
+              // or two per row.
+              fontFeatures: const [FontFeature.tabularFigures()],
               color: price == null ? palette.muted : palette.text,
             ),
           ),
@@ -320,75 +690,18 @@ class _DistanceRow extends StatelessWidget {
       ),
     );
   }
-}
 
-/// One line of the facts block.
-class _FactRow extends StatelessWidget {
-  const _FactRow({
-    required this.icon,
-    required this.label,
-    this.detail,
-    this.onTap,
-    this.actionLabel,
-  });
-
-  final IconData icon;
-  final String label;
-  final String? detail;
-  final VoidCallback? onTap;
-  final String? actionLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final sub = detail;
-    final tap = onTap;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: palette.brand),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  height: 1.3,
-                  color: palette.text,
-                ),
-              ),
-              if (sub != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  sub,
-                  style: TextStyle(fontSize: 12.5, color: palette.muted),
-                ),
-              ],
-              if (tap != null && actionLabel != null)
-                TextButton(
-                  onPressed: tap,
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    actionLabel!,
-                    style: const TextStyle(fontSize: 12.5),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  /// A short name for the distance band, for the leading tile.
+  static String _bandLabel(DistanceBucket bucket) => switch (bucket) {
+        DistanceBucket.fun => 'FUN',
+        DistanceBucket.fiveK => '5K',
+        DistanceBucket.tenK => '10K',
+        DistanceBucket.fifteenK => '15K',
+        DistanceBucket.half => 'HALF',
+        DistanceBucket.thirtyK => '30K',
+        DistanceBucket.marathon => 'FULL',
+        DistanceBucket.ultra => 'ULTRA',
+      };
 }
 
 class _DetailNotice extends StatelessWidget {
@@ -456,70 +769,74 @@ class _EntryBar extends ConsumerWidget {
     final isSaved = ref.watch(raceIsSavedProvider(event.id));
     final entryUrl = event.entryUrl;
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-        MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        border: Border(top: BorderSide(color: palette.stroke)),
-      ),
-      child: Row(
-        children: [
-          if (signedIn)
-            IconButton(
-              onPressed: () => _toggleSaved(context, ref),
-              tooltip: isSaved ? 'Remove from my races' : 'Save race',
-              style: IconButton.styleFrom(
-                backgroundColor: palette.background,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: palette.stroke),
-                ),
-                minimumSize: const Size(48, 48),
-              ),
-              icon: Icon(
-                isSaved
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_border_rounded,
-                color: isSaved ? palette.brand : palette.muted,
-              ),
-            ),
-          if (signedIn) const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: SizedBox(
-              height: 48,
-              child: FilledButton(
-                // Disabled rather than hidden when there is nowhere to enter.
-                // Its absence would read as a loading state; a greyed button
-                // with the reason on it reads as the answer.
-                onPressed: entryUrl == null || !event.status.isOpen
-                    ? null
-                    : () => _openEntry(context, ref, entryUrl),
-                style: FilledButton.styleFrom(
-                  backgroundColor: palette.brand,
-                  foregroundColor: AppColors.onBrandInk,
-                  disabledBackgroundColor: palette.stroke,
-                  disabledForegroundColor: palette.muted,
+    return LiquidGlass(
+      // Painted by the lens now rather than by a fill of its own:
+      // a pane over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(0),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+          MediaQuery.paddingOf(context).bottom + AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: palette.stroke)),
+        ),
+        child: Row(
+          children: [
+            if (signedIn)
+              IconButton(
+                onPressed: () => _toggleSaved(context, ref),
+                tooltip: isSaved ? 'Remove from my races' : 'Save race',
+                style: IconButton.styleFrom(
+                  backgroundColor: palette.background,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: palette.stroke),
                   ),
+                  minimumSize: const Size(48, 48),
                 ),
-                child: Text(
-                  _entryLabel(event),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.4,
+                icon: Icon(
+                  isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  color: isSaved ? palette.brand : palette.muted,
+                ),
+              ),
+            if (signedIn) const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: SizedBox(
+                height: 48,
+                child: FilledButton(
+                  // Disabled rather than hidden when there is nowhere to enter.
+                  // Its absence would read as a loading state; a greyed button
+                  // with the reason on it reads as the answer.
+                  onPressed: entryUrl == null || !event.status.isOpen
+                      ? null
+                      : () => _openEntry(context, ref, entryUrl),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: palette.brand,
+                    foregroundColor: AppColors.onBrandInk,
+                    disabledBackgroundColor: palette.stroke,
+                    disabledForegroundColor: palette.muted,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    _entryLabel(event),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../application/create_flow_controller.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class CreateScreen extends ConsumerWidget {
   const CreateScreen({super.key});
@@ -181,69 +182,71 @@ class _ActionTileState extends State<_ActionTile> {
         scale: _pressed ? 0.96 : 1,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: palette.surface,
-            border: Border.all(
-              color: widget.isActive
-                  ? accent.withValues(alpha: 0.75)
-                  : palette.stroke,
-              width: widget.isActive ? 1.5 : 1,
+        child: LiquidGlass(
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: widget.isActive
+                    ? accent.withValues(alpha: 0.75)
+                    : palette.stroke,
+                width: widget.isActive ? 1.5 : 1,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: palette.accentFill(action.accent),
-                  borderRadius: BorderRadius.circular(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: palette.accentFill(action.accent),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(action.icon, color: accent, size: 24),
                 ),
-                child: Icon(action.icon, color: accent, size: 24),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      action.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        action.title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      action.subtitle,
-                      style: TextStyle(
-                        color: palette.muted,
-                        fontSize: 13,
-                        height: 1.25,
+                      const SizedBox(height: 4),
+                      Text(
+                        action.subtitle,
+                        style: TextStyle(
+                          color: palette.muted,
+                          fontSize: 13,
+                          height: 1.25,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              if (widget.isActive) ...[
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Active',
-                  style: TextStyle(
-                    color: accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    ],
                   ),
                 ),
-                const SizedBox(width: AppSpacing.xs),
+                if (widget.isActive) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'Active',
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                ],
+                Icon(Icons.chevron_right_rounded, color: palette.muted),
               ],
-              Icon(Icons.chevron_right_rounded, color: palette.muted),
-            ],
+            ),
           ),
         ),
       ),
@@ -263,78 +266,83 @@ class _YouTubeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Opacity(
-      opacity: 0.55,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: palette.surface,
-          border: Border.all(color: palette.stroke),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                // Only the well is adjusted. The glyph keeps the exact YouTube
-                // red: it is their mark, not our accent, and deepening it for
-                // our page would misreport someone else's brand.
-                color: palette.accentFill(_kYouTubeAccent),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                Icons.smart_display_rounded,
-                color: _kYouTubeAccent,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'FitSocial on YouTube',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Workout videos and guides',
-                    style: TextStyle(
-                      color: palette.muted,
-                      fontSize: 13,
-                      height: 1.25,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: palette.surfaceHigh,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                'Coming soon',
-                style: TextStyle(
-                  color: palette.muted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
+    return LiquidGlass(
+      // Outside the Opacity, not inside it: Opacity gives its subtree its
+      // own layer, and a lens in there would sample that empty layer
+      // rather than the page. Dimming the content is the intent anyway.
+      borderRadius: BorderRadius.circular(20),
+      child: Opacity(
+        opacity: 0.55,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  // Only the well is adjusted. The glyph keeps the exact YouTube
+                  // red: it is their mark, not our accent, and deepening it for
+                  // our page would misreport someone else's brand.
+                  color: palette.accentFill(_kYouTubeAccent),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.smart_display_rounded,
+                  color: _kYouTubeAccent,
+                  size: 24,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'FitSocial on YouTube',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Workout videos and guides',
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 13,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: palette.surfaceHigh,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Coming soon',
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

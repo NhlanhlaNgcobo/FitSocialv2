@@ -111,7 +111,8 @@ class _RaceArtworkPainter extends CustomPainter {
     // a calendar where some rows glare and others recede is harder to scan,
     // not more interesting.
     final hue = (seed % 360).toDouble();
-    final base = HSLColor.fromAHSL(1, hue, 0.42, isDark ? 0.22 : 0.72).toColor();
+    final base =
+        HSLColor.fromAHSL(1, hue, 0.42, isDark ? 0.22 : 0.72).toColor();
     final far = HSLColor.fromAHSL(
       1,
       (hue + 38) % 360,
@@ -161,8 +162,7 @@ class _RaceArtworkPainter extends CustomPainter {
 
       canvas.drawPath(
         path,
-        Paint()
-          ..color = Colors.black.withValues(alpha: isDark ? 0.20 : 0.09),
+        Paint()..color = Colors.black.withValues(alpha: isDark ? 0.20 : 0.09),
       );
     }
   }
@@ -179,7 +179,8 @@ class _RaceArtworkPainter extends CustomPainter {
     for (var i = 1; i <= steps; i++) {
       final nx = size.width * 1.05 * i / steps;
       final ny = size.height *
-          (0.22 + random.nextDouble() * (profile == _Profile.trail ? 0.42 : 0.26));
+          (0.22 +
+              random.nextDouble() * (profile == _Profile.trail ? 0.42 : 0.26));
       if (profile == _Profile.trail) {
         path.lineTo(nx, ny);
       } else {

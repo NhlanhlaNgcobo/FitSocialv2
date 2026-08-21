@@ -29,7 +29,9 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
 
     final data = snapshot.data() ?? const <String, dynamic>{};
     return UserProfileDraft(
-      displayName: (data['displayName'] as String?) ?? user.displayName ?? 'FitSocial User',
+      displayName: (data['displayName'] as String?) ??
+          user.displayName ??
+          'FitSocial User',
       handle: normalizeUsername(data['handle'] as String?),
       bio: (data['bio'] as String?) ?? '',
       location: (data['location'] as String?) ?? '',
@@ -64,7 +66,8 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
   }) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) {
-      throw StateError('No authenticated Firebase user found for profile save.');
+      throw StateError(
+          'No authenticated Firebase user found for profile save.');
     }
 
     final requestedHandle = normalizeUsername(handle);
@@ -100,7 +103,8 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
       if (isNewClaim) {
         claimSnapshot = await transaction.get(usernames.doc(requestedHandle));
         if (currentHandle.isNotEmpty) {
-          previousSnapshot = await transaction.get(usernames.doc(currentHandle));
+          previousSnapshot =
+              await transaction.get(usernames.doc(currentHandle));
         }
       }
 
@@ -169,23 +173,26 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
       // The profile document is readable by any signed-in user (Explore search
       // needs it), so contact details must not live on it. Email goes to a
       // private subcollection that only the owner can read.
-      transaction.set(userRef, {
-        'displayName': displayName.trim(),
-        'handle': requestedHandle,
-        'bio': bio.trim(),
-        'location': location.trim(),
-        'pronouns': pronouns.trim(),
-        'links': links.trim(),
-        if (avatarUrl != null) 'avatarUrl': avatarUrl,
-        // Stamped only on a rename, and always from the server clock. The
-        // security rules require it to equal the request time, so a client
-        // cannot backdate it to shorten its own cooldown.
-        if (isRename) 'handleChangedAt': FieldValue.serverTimestamp(),
-        // Strips the legacy public copy for accounts created before the email
-        // was moved, so saving a profile self-heals the exposure.
-        'email': FieldValue.delete(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      transaction.set(
+          userRef,
+          {
+            'displayName': displayName.trim(),
+            'handle': requestedHandle,
+            'bio': bio.trim(),
+            'location': location.trim(),
+            'pronouns': pronouns.trim(),
+            'links': links.trim(),
+            if (avatarUrl != null) 'avatarUrl': avatarUrl,
+            // Stamped only on a rename, and always from the server clock. The
+            // security rules require it to equal the request time, so a client
+            // cannot backdate it to shorten its own cooldown.
+            if (isRename) 'handleChangedAt': FieldValue.serverTimestamp(),
+            // Strips the legacy public copy for accounts created before the email
+            // was moved, so saving a profile self-heals the exposure.
+            'email': FieldValue.delete(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
 
       transaction.set(
         userRef.collection('private').doc('account'),
@@ -220,8 +227,11 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
   /// Body metrics live at `users/{uid}/private/body`, alongside the email, and
   /// for the same reason: the profile document above is world-readable to
   /// signed-in users, so anything written there is published to everyone.
-  DocumentReference<Map<String, dynamic>> _bodyRef(String userId) =>
-      _firestore.collection('users').doc(userId).collection('private').doc('body');
+  DocumentReference<Map<String, dynamic>> _bodyRef(String userId) => _firestore
+      .collection('users')
+      .doc(userId)
+      .collection('private')
+      .doc('body');
 
   @override
   Future<BodyMetrics> loadBodyMetrics() async {
@@ -251,9 +261,8 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
   }
 
   Future<String> _uploadAvatar(String userId, String localFilePath) async {
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('profiles/$userId/avatar.jpg');
+    final ref =
+        FirebaseStorage.instance.ref().child('profiles/$userId/avatar.jpg');
 
     // Uploading bytes rather than a dart:io File keeps this working on every
     // platform: on mobile XFile reads the picked file from disk, and on web it

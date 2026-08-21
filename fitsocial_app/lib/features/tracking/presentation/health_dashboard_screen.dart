@@ -9,6 +9,7 @@ import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/tracking_providers.dart';
 import '../data/ble_heart_rate_service.dart';
+import '../data/health_service.dart';
 import '../../music/presentation/music_island_action.dart';
 
 /// Health & Devices: today's metrics from Health Connect (which watches
@@ -22,8 +23,7 @@ class HealthDashboardScreen extends ConsumerStatefulWidget {
       _HealthDashboardScreenState();
 }
 
-class _HealthDashboardScreenState
-    extends ConsumerState<HealthDashboardScreen> {
+class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen> {
   List<HeartRateDevice> _devices = [];
   bool _isScanning = false;
   bool _isConnecting = false;
@@ -56,13 +56,13 @@ class _HealthDashboardScreenState
     setState(() => _isScanning = true);
     _scanSub?.cancel();
     _scanSub = ble.scan().listen(
-      (devices) => setState(() => _devices = devices),
-      onError: (Object e) => setState(() {
-        _bleMessage = 'Scan failed: $e';
-        _isScanning = false;
-      }),
-      onDone: () => setState(() => _isScanning = false),
-    );
+          (devices) => setState(() => _devices = devices),
+          onError: (Object e) => setState(() {
+            _bleMessage = 'Scan failed: $e';
+            _isScanning = false;
+          }),
+          onDone: () => setState(() => _isScanning = false),
+        );
   }
 
   Future<void> _connect(HeartRateDevice device) async {
@@ -172,6 +172,8 @@ class _HealthDashboardScreenState
                             ),
                           ],
                         ),
+                        const SizedBox(height: AppSpacing.md),
+                        _SyncNote(summary),
                       ],
                     ),
                   ),
@@ -260,6 +262,86 @@ class _HealthDashboardScreenState
   }
 }
 
+/// Says where the numbers above came from, and when.
+///
+/// The card is a faithful read of Health Connect, but Health Connect is not
+/// live: Samsung Health and the watch write into it in batches, so their own
+/// screens can sit a few hundred steps ahead. Without a timestamp that gap
+/// reads as "FitSocial is wrong". With one it reads as "FitSocial is a few
+/// minutes behind", which is both true and something a refresh fixes.
+class _SyncNote extends StatelessWidget {
+  const _SyncNote(this.summary);
+
+  final HealthSummary summary;
+
+  static String _hhmm(DateTime t) {
+    final local = t.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _explain(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Where this number comes from'),
+        content: const Text(
+          'FitSocial reads Health Connect — the shared store your watch and '
+          'Samsung Health write into. It does not talk to your watch '
+          'directly.\n\n'
+          'Those apps write in batches rather than continuously, so their own '
+          'screens can be ahead of what Health Connect holds. Open Samsung '
+          'Health for a few seconds, then refresh here, and the count catches '
+          'up.\n\n'
+          'Challenge progress keeps the highest count seen during the day, so '
+          'a reading that comes back low never erases walking already '
+          'recorded.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final asOf = summary.stepsAsOf;
+    final readAt = summary.readAt;
+
+    final text = asOf != null
+        ? 'via Health Connect · synced to ${_hhmm(asOf)}'
+        : readAt != null
+            ? 'via Health Connect · checked ${_hhmm(readAt)}'
+            : 'via Health Connect';
+
+    return InkWell(
+      onTap: () => _explain(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.info_outline_rounded, size: 14, color: palette.muted),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: palette.muted, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
 
@@ -298,9 +380,7 @@ class _HealthMetric extends StatelessWidget {
     final palette = context.palette;
     return Column(
       children: [
-        Icon(icon,
-            color: accent ? palette.brand : palette.muted,
-            size: 28),
+        Icon(icon, color: accent ? palette.brand : palette.muted, size: 28),
         const SizedBox(height: 8),
         Text(
           value,

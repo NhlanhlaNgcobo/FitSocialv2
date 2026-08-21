@@ -60,7 +60,8 @@ class FirestoreRaceRepository implements RaceRepository {
       case RaceServerClause.tags:
         query = query.where(
           RaceFields.tags,
-          arrayContainsAny: filter.tags.map((t) => t.key).toList(growable: false),
+          arrayContainsAny:
+              filter.tags.map((t) => t.key).toList(growable: false),
         );
       case RaceServerClause.none:
         break;

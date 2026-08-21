@@ -19,6 +19,7 @@ import '../../../shared/widgets/stepper_field.dart';
 import '../application/activity_actions.dart';
 import '../domain/app_models.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class WorkoutLogScreen extends ConsumerStatefulWidget {
   const WorkoutLogScreen({super.key});
@@ -324,28 +325,32 @@ class _BackgroundSection extends StatelessWidget {
           hint: 'Optional',
         ),
         if (imagePath == null)
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: palette.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: palette.stroke),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'Add a photo behind this workout, or leave it for the '
-                  'default gradient.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: 13,
-                    height: 1.35,
+          LiquidGlass(
+            // Painted by the lens rather than by a fill of its own: a pane
+            // over the app backdrop, like every other card.
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: palette.stroke),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Add a photo behind this workout, or leave it for the '
+                    'default gradient.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                BackgroundPickerRow(onPick: onPick, onRemove: onRemove),
-              ],
+                  const SizedBox(height: AppSpacing.md),
+                  BackgroundPickerRow(onPick: onPick, onRemove: onRemove),
+                ],
+              ),
             ),
           )
         else

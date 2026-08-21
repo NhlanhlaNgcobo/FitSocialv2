@@ -14,6 +14,7 @@ import '../domain/challenge_task.dart';
 import 'challenge_indicators.dart';
 import 'day_history_strip.dart';
 import 'task_check_row.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The daily driver.
 ///
@@ -107,7 +108,8 @@ class _ChallengeTrackerScreenState
     }
 
     final progress = enrollment.progress;
-    final day = ref.watch(todayProgressProvider(widget.enrollmentId)).valueOrNull;
+    final day =
+        ref.watch(todayProgressProvider(widget.enrollmentId)).valueOrNull;
     final history =
         ref.watch(recentDaysProvider(widget.enrollmentId)).valueOrNull ??
             const <DailyProgress>[];
@@ -125,17 +127,13 @@ class _ChallengeTrackerScreenState
           40,
         ),
         children: [
-          if (progress.status.isWarning)
-            _WarningBanner(progress: progress),
+          if (progress.status.isWarning) _WarningBanner(progress: progress),
           if (progress.status.isTerminal)
             _TerminalBanner(enrollment: enrollment),
-
           _Headline(enrollment: enrollment),
           const SizedBox(height: AppSpacing.lg),
-
           _StatsRow(enrollment: enrollment),
           const SizedBox(height: AppSpacing.lg),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -152,9 +150,9 @@ class _ChallengeTrackerScreenState
             ],
           ),
           const SizedBox(height: 10),
-
           if (day == null)
-            const Center(child: Padding(
+            const Center(
+                child: Padding(
               padding: EdgeInsets.all(24),
               child: CircularProgressIndicator(),
             ))
@@ -167,18 +165,15 @@ class _ChallengeTrackerScreenState
                     ? (delta) => _adjust(enrollment, day, task.task, delta)
                     : null,
               ),
-
           const SizedBox(height: 6),
           Text(
             ChallengeCopy.cutoffNote,
             style: TextStyle(color: palette.muted, fontSize: 12, height: 1.4),
           ),
-
           const SizedBox(height: AppSpacing.lg),
           const ChallengeLabel('LAST 14 DAYS'),
           const SizedBox(height: 10),
           DayHistoryStrip(days: history, todayKey: day?.dayKey),
-
           const SizedBox(height: 40),
           if (progress.status.isRunning)
             Center(
@@ -266,30 +261,46 @@ class _StatsRow extends ConsumerWidget {
     final palette = context.palette;
     final progress = enrollment.progress;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        children: [
-          StreakFlame(
-            streak: progress.currentStreak,
-            atRisk: progress.status.isWarning,
-          ),
-          const Spacer(),
-          _MiniStat(
-            label: ChallengeCopy.bestStreak,
-            value: '${progress.longestStreak}',
-          ),
-          const SizedBox(width: 20),
-          _MiniStat(
-            label: ChallengeCopy.pointsThisChallenge,
-            value: '${enrollment.pointsEarned}',
-          ),
-        ],
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: palette.stroke),
+        ),
+        // Three equal columns rather than intrinsic widths pushed apart by a
+        // Spacer. The labels are long -- "POINTS THIS CHALLENGE" alone wants
+        // most of a phone's width -- and laid out at their natural size they
+        // needed 477 logical pixels inside the 296 a 360-wide handset has to
+        // give. The Spacer collapsed to nothing, the labels ran into each
+        // other, and the last one walked off the right edge. Sharing the width
+        // three ways instead lets a label that cannot fit on one line wrap
+        // onto two, which costs a few pixels of height and nothing else.
+        child: Row(
+          children: [
+            Expanded(
+              child: StreakFlame(
+                streak: progress.currentStreak,
+                atRisk: progress.status.isWarning,
+              ),
+            ),
+            Expanded(
+              child: _MiniStat(
+                label: ChallengeCopy.bestStreak,
+                value: '${progress.longestStreak}',
+              ),
+            ),
+            Expanded(
+              child: _MiniStat(
+                label: ChallengeCopy.pointsThisChallenge,
+                value: '${enrollment.pointsEarned}',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -322,6 +333,9 @@ class _MiniStat extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           label,
+          // Right-aligned so a label that wraps stacks under the figure it
+          // belongs to rather than trailing off towards the next column.
+          textAlign: TextAlign.end,
           style: TextStyle(
             color: palette.muted,
             fontSize: 9,
@@ -405,8 +419,7 @@ class _TerminalBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final completed =
-        enrollment.progress.status == EnrollmentStatus.completed;
+    final completed = enrollment.progress.status == EnrollmentStatus.completed;
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),

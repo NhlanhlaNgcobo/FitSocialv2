@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import 'liquid_glass.dart';
 
 /// A logged workout drawn as a tinted block: title, duration and calories, then
 /// the exercises that made it up.
@@ -88,7 +89,8 @@ class WorkoutSummaryCard extends StatelessWidget {
             .toList() ??
         const [];
 
-    final skin = _CardSkin.resolve(palette, hasPhoto: backgroundImageUrl != null);
+    final skin =
+        _CardSkin.resolve(palette, hasPhoto: backgroundImageUrl != null);
 
     final content = Container(
       width: double.infinity,
@@ -252,18 +254,15 @@ class WorkoutSummaryCard extends StatelessWidget {
         // the stroke rather than painting over it.
         borderRadius: BorderRadius.circular(19),
         child: backgroundImageUrl == null
-            ? DecoratedBox(
-                decoration: BoxDecoration(
-                  // Listed per theme rather than derived from the palette so
-                  // the dark values stay exactly what the app shipped with.
-                  gradient: LinearGradient(
-                    colors: palette.isDark
-                        ? const [Color(0xFF1E1E1E), Color(0xFF111111)]
-                        : const [Color(0xFFFFFFFF), Color(0xFFF4EFE7)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
+            ? LiquidGlass(
+                // With no photo there is nothing for the card to sit on, so it
+                // looks through to the app's backdrop rather than painting a
+                // slab of its own. This is what the flat gradient used to do,
+                // and why this card stayed opaque while the rest turned to
+                // glass.
+                borderRadius: BorderRadius.circular(19),
+                // The ClipRRect above already holds this shape.
+                clip: false,
                 child: content,
               )
             : Stack(

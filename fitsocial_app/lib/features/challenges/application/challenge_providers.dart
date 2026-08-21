@@ -20,8 +20,7 @@ final challengeClockProvider = Provider<ChallengeClock>((ref) {
 });
 
 /// Every run the signed-in user has started, newest first.
-final myEnrollmentsProvider =
-    StreamProvider<List<ChallengeEnrollment>>((ref) {
+final myEnrollmentsProvider = StreamProvider<List<ChallengeEnrollment>>((ref) {
   // Re-subscribe on sign-in and sign-out: which documents this reads is decided
   // by who is signed in, so the answer is wrong the moment that changes.
   ref.watch(appSessionProvider);
@@ -77,14 +76,11 @@ final todayProgressProvider =
   final enrollment = ref.watch(enrollmentProvider(enrollmentId)).valueOrNull;
   // The run's own stored offset, so the day being shown is the one the engine
   // will judge. The device clock stands in only until the run has loaded.
-  final ChallengeClock clock = enrollment == null
-      ? ref.watch(challengeClockProvider)
-      : enrollment.clock;
+  final ChallengeClock clock =
+      enrollment == null ? ref.watch(challengeClockProvider) : enrollment.clock;
   final dayKey = clock.today();
 
-  return ref
-      .watch(challengeRepositoryProvider)
-      .watchDay(enrollmentId, dayKey);
+  return ref.watch(challengeRepositoryProvider).watchDay(enrollmentId, dayKey);
 });
 
 /// The last fortnight of finalised days — the history strip under the tracker.
@@ -167,8 +163,7 @@ class ChallengeActions {
 
   final Ref _ref;
 
-  ChallengeRepository get _repository =>
-      _ref.read(challengeRepositoryProvider);
+  ChallengeRepository get _repository => _ref.read(challengeRepositoryProvider);
 
   /// Starts a run of [challengeKey] today. Returns null when nobody is signed
   /// in, which the caller should treat as "send them to sign in" rather than as
@@ -231,14 +226,24 @@ class ChallengeActions {
     );
   }
 
-  /// Persists the day's step total, so the 2 AM job has a number to read.
-  Future<void> recordSteps({required int steps, required String source}) async {
+  /// Persists a day's step total, so the 2 AM job has a number to read.
+  ///
+  /// [dayKey] defaults to today. It is passed explicitly only by the backfill
+  /// that corrects yesterday inside its grace window — Health Connect receives
+  /// the last of an evening's walking after the walking has stopped, so the
+  /// number the day closes on is not always the number that was readable while
+  /// the user was still awake.
+  Future<void> recordSteps({
+    required int steps,
+    required String source,
+    String? dayKey,
+  }) async {
     final userId = _ref.read(currentUserIdProvider);
     if (userId == null || steps <= 0) return;
 
     await _repository.recordDailySteps(
       userId: userId,
-      dayKey: _ref.read(challengeClockProvider).today(),
+      dayKey: dayKey ?? _ref.read(challengeClockProvider).today(),
       steps: steps,
       source: source,
     );

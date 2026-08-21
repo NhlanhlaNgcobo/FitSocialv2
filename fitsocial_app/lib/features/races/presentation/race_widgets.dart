@@ -6,6 +6,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../domain/race_formatting.dart';
 import '../domain/race_models.dart';
 import 'race_artwork.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// A small caps section heading, matching the challenge screens.
 class RaceLabel extends StatelessWidget {
@@ -202,138 +203,142 @@ class RaceCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: palette.stroke),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // A wide, short band rather than a square hero. This list is read by
-            // somebody scanning for a free Saturday, so the cover has to add
-            // identity without pushing the next race off the screen.
-            AspectRatio(
-              aspectRatio: 3.4,
-              child: RaceCover(event: event),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _DateBlock(event: event),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              event.name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                height: 1.25,
-                                color: palette.text,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.place_outlined,
-                                  size: 13,
-                                  color: palette.muted,
+      child: LiquidGlass(
+        // Painted by the lens now rather than by a fill of its own:
+        // a pane over the app backdrop, like every other card.
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // A wide, short band rather than a square hero. This list is read by
+              // somebody scanning for a free Saturday, so the cover has to add
+              // identity without pushing the next race off the screen.
+              AspectRatio(
+                aspectRatio: 3.4,
+                child: RaceCover(event: event),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _DateBlock(event: event),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                event.name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.25,
+                                  color: palette.text,
                                 ),
-                                const SizedBox(width: 3),
-                                Expanded(
-                                  child: Text(
-                                    event.venue.shortLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: palette.muted,
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.place_outlined,
+                                    size: 13,
+                                    color: palette.muted,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Expanded(
+                                    child: Text(
+                                      event.venue.shortLabel,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: palette.muted,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (toggle != null)
+                          IconButton(
+                            onPressed: toggle,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
                             ),
-                          ],
-                        ),
-                      ),
-                      if (toggle != null)
-                        IconButton(
-                          onPressed: toggle,
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                          tooltip:
-                              isSaved ? 'Remove from my races' : 'Save race',
-                          icon: Icon(
-                            isSaved
-                                ? Icons.bookmark_rounded
-                                : Icons.bookmark_border_rounded,
-                            size: 20,
-                            color: isSaved ? palette.brand : palette.muted,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    RaceFormat.distanceSummary(event),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: palette.text,
-                    ),
-                  ),
-                  if (badges.isNotEmpty || price != null) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: badges,
-                          ),
-                        ),
-                        if (price != null) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          Text(
-                            price,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: palette.muted,
+                            tooltip:
+                                isSaved ? 'Remove from my races' : 'Save race',
+                            icon: Icon(
+                              isSaved
+                                  ? Icons.bookmark_rounded
+                                  : Icons.bookmark_border_rounded,
+                              size: 20,
+                              color: isSaved ? palette.brand : palette.muted,
                             ),
                           ),
-                        ],
                       ],
                     ),
-                  ],
-                  if (event.status.needsNotice) ...[
                     const SizedBox(height: 10),
-                    _StatusNotice(status: event.status),
+                    Text(
+                      RaceFormat.distanceSummary(event),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: palette.text,
+                      ),
+                    ),
+                    if (badges.isNotEmpty || price != null) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: badges,
+                            ),
+                          ),
+                          if (price != null) ...[
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(
+                              price,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: palette.muted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                    if (event.status.needsNotice) ...[
+                      const SizedBox(height: 10),
+                      _StatusNotice(status: event.status),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

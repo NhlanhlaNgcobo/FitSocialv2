@@ -162,32 +162,39 @@ class StreakFlame extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$streak',
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                height: 1,
-                // Tabular, so the number does not jitter sideways as it grows.
-                fontFeatures: const [FontFeature.tabularFigures()],
+        // Flexible, because a Row hands its non-flexible children unbounded
+        // width on the main axis: the label would never be told how little
+        // room it has and would run past the edge instead of wrapping. The
+        // flame keeps its intrinsic size; only the text gives ground.
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$streak',
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                  // Tabular, so the number does not jitter sideways as it
+                  // grows.
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label ?? (streak == 1 ? 'DAY STREAK' : 'DAY STREAK'),
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
+              const SizedBox(height: 2),
+              Text(
+                label ?? 'DAY STREAK',
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

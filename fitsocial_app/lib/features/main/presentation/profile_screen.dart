@@ -417,7 +417,9 @@ class _MediaGrid extends ConsumerWidget {
       ),
       error: (_, __) => _ErrorGrid(
         onRetry: () => ref.invalidate(
-          mediaOnly ? userMediaPostsProvider(userId) : userPostsProvider(userId),
+          mediaOnly
+              ? userMediaPostsProvider(userId)
+              : userPostsProvider(userId),
         ),
       ),
       data: (all) {

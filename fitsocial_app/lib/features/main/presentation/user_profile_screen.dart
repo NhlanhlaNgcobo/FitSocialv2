@@ -77,8 +77,8 @@ class _TopActionBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final isOn = ref.watch(userNotificationsProvider(userId)).valueOrNull ??
-        false;
+    final isOn =
+        ref.watch(userNotificationsProvider(userId)).valueOrNull ?? false;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
@@ -154,8 +154,7 @@ class _ProfileBody extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 child: Text(
                   user.displayName,
                   maxLines: 1,
@@ -169,8 +168,7 @@ class _ProfileBody extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                 child: Text(
                   _formatHandle(user.handle),
                   maxLines: 1,
@@ -247,8 +245,7 @@ class _ProfileBody extends ConsumerWidget {
               SliverPadding(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 sliver: SliverGrid(
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,

@@ -903,8 +903,25 @@ service cloud.firestore {
     // instead: a figure above 200,000 is not a person walking, and the write is
     // refused rather than flagged.
     match /dailySteps/{docId} {
+      // `resource == null` is the whole reason this collection ever held
+      // anything. The client writes a day's total inside a transaction, and a
+      // transaction has to `get()` the document before it can decide whether
+      // the new reading beats the stored one. On the first write of any day
+      // that document does not exist yet, and `resource` is null for one of
+      // those -- so a rule that reaches into `resource.data` denied the read,
+      // the transaction aborted, and the document could never come into
+      // existence. Every later write then read a document that still was not
+      // there and was refused identically. The collection was empty for every
+      // user on every day, and both callers swallow the error, so nothing ever
+      // said so.
+      //
+      // This is the same shape as the bug fixed above in `manual`. Nothing is
+      // given away by allowing it: `create` below pins the document id to
+      // `<uid>_<dayKey>`, so the most a caller learns is that a key they could
+      // already construct for themselves holds nothing.
       allow read: if request.auth != null
-                  && request.auth.uid == resource.data.userId;
+                  && (resource == null
+                      || request.auth.uid == resource.data.userId);
       allow create, update: if request.auth != null
                             && request.auth.uid == request.resource.data.userId
                             && docId == request.auth.uid + '_' +

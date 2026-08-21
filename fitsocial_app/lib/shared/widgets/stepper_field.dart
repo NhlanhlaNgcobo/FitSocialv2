@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_palette.dart';
+import '../../shared/widgets/liquid_glass.dart';
 
 /// A tactile +/- numeric input with an animated value readout.
 class StepperField extends StatelessWidget {
@@ -25,8 +26,9 @@ class StepperField extends StatelessWidget {
   final int decimals;
   final String suffix;
 
-  String get _display =>
-      decimals == 0 ? value.toInt().toString() : value.toStringAsFixed(decimals);
+  String get _display => decimals == 0
+      ? value.toInt().toString()
+      : value.toStringAsFixed(decimals);
 
   @override
   Widget build(BuildContext context) {
@@ -46,53 +48,59 @@ class StepperField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: palette.stroke),
-          ),
-          child: Row(
-            children: [
-              _StepperButton(
-                icon: Icons.remove_rounded,
-                onTap: canDecrement
-                    ? () => onChanged(
-                          double.parse((value - step).toStringAsFixed(decimals)),
-                        )
-                    : null,
-              ),
-              Expanded(
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    transitionBuilder: (child, animation) => SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.5),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: FadeTransition(opacity: animation, child: child),
-                    ),
-                    child: Text(
-                      '$_display$suffix',
-                      key: ValueKey(_display),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
+        LiquidGlass(
+          // Painted by the lens rather than by a fill of its own: a pane
+          // over the app backdrop, like every other card.
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: palette.stroke),
+            ),
+            child: Row(
+              children: [
+                _StepperButton(
+                  icon: Icons.remove_rounded,
+                  onTap: canDecrement
+                      ? () => onChanged(
+                            double.parse(
+                                (value - step).toStringAsFixed(decimals)),
+                          )
+                      : null,
+                ),
+                Expanded(
+                  child: Center(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      transitionBuilder: (child, animation) => SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.5),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                      child: Text(
+                        '$_display$suffix',
+                        key: ValueKey(_display),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              _StepperButton(
-                icon: Icons.add_rounded,
-                onTap: canIncrement
-                    ? () => onChanged(
-                          double.parse((value + step).toStringAsFixed(decimals)),
-                        )
-                    : null,
-              ),
-            ],
+                _StepperButton(
+                  icon: Icons.add_rounded,
+                  onTap: canIncrement
+                      ? () => onChanged(
+                            double.parse(
+                                (value + step).toStringAsFixed(decimals)),
+                          )
+                      : null,
+                ),
+              ],
+            ),
           ),
         ),
       ],

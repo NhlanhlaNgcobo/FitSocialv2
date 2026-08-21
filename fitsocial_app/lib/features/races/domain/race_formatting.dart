@@ -105,8 +105,9 @@ abstract final class RaceFormat {
   /// not push the row's other information off the screen.
   static String distanceSummary(RaceEvent event, {int max = 4}) {
     if (event.distances.isEmpty) return 'Distances to be confirmed';
-    final labels =
-        event.distances.map((distance) => distance.label).toList(growable: false);
+    final labels = event.distances
+        .map((distance) => distance.label)
+        .toList(growable: false);
     if (labels.length <= max) return labels.join(' · ');
     return '${labels.take(max).join(' · ')} +${labels.length - max}';
   }

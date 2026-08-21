@@ -8,6 +8,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../application/content_providers.dart';
 import '../data/content_repository.dart';
 import '../domain/meal_tracking.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Opens the daily macro targets editor.
 Future<void> showMacroGoalsSheet(BuildContext context, WidgetRef ref) async {
@@ -77,50 +78,54 @@ class _MacroGoalsSheetState extends State<_MacroGoalsSheet> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border.all(color: palette.stroke),
-        ),
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Daily targets',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: palette.text,
+      child: LiquidGlass(
+        // A sheet always has a page behind it, which makes it the one
+        // surface in the app guaranteed something worth bending.
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: palette.stroke),
+          ),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily targets',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: palette.text,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'A week or a month is measured against these, multiplied by '
-                  'the days in the period.',
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: 13,
-                    height: 1.35,
+                  const SizedBox(height: 4),
+                  Text(
+                    'A week or a month is measured against these, multiplied by '
+                    'the days in the period.',
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 13,
+                      height: 1.35,
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                for (final kind in MacroKind.values) ...[
-                  _GoalField(
-                    label: kind.label,
-                    unit: kind.unit,
-                    controller: _controllers[kind]!,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(height: AppSpacing.lg),
+                  for (final kind in MacroKind.values) ...[
+                    _GoalField(
+                      label: kind.label,
+                      unit: kind.unit,
+                      controller: _controllers[kind]!,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  const SizedBox(height: AppSpacing.sm),
+                  PrimaryButton(label: 'Save targets', onPressed: _save),
                 ],
-                const SizedBox(height: AppSpacing.sm),
-                PrimaryButton(label: 'Save targets', onPressed: _save),
-              ],
+              ),
             ),
           ),
         ),

@@ -18,6 +18,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Where a meal analysis has got to. Drives the overlay's caption, so what the
 /// user is told is what is actually happening rather than one blanket message.
@@ -97,7 +98,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
           e.code == 'already_active'
               ? 'The photo picker is busy — try again.'
               : "Couldn't open the "
-                    '${source == ImageSource.camera ? 'camera' : 'gallery'}.',
+                  '${source == ImageSource.camera ? 'camera' : 'gallery'}.',
           icon: Icons.error_outline_rounded,
           tone: ToastTone.danger,
         );
@@ -197,7 +198,6 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final hasPhoto = _imagePath != null;
 
     // The scrim has to cover the app bar and the action bar as well as the
@@ -205,13 +205,16 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: palette.background,
+          // Transparent so this page sits on the app's one backdrop, the
+          // same ground every other screen looks through.
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
             title: const Text('Upload Meal'),
             backgroundColor: Colors.transparent,
             actions: const [MusicIslandAction()],
           ),
-          body: hasPhoto ? _buildPhotoState(context) : _buildEmptyState(context),
+          body:
+              hasPhoto ? _buildPhotoState(context) : _buildEmptyState(context),
           bottomNavigationBar: _buildActions(context, hasPhoto: hasPhoto),
         ),
         if (_isBusy) _AnalyzingOverlay(stage: _stage),
@@ -348,60 +351,65 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   Widget _buildActions(BuildContext context, {required bool hasPhoto}) {
     final palette = context.palette;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.background,
-        border: Border(top: BorderSide(color: palette.stroke)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.sm,
-          ),
-          child: hasPhoto
-              ? PrimaryButton(
-                  label: 'Analyze Meal',
-                  icon: Icons.auto_awesome_rounded,
-                  onPressed: _isBusy ? null : _analyzeAndNavigate,
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    PrimaryButton(
-                      label: 'Take Photo',
-                      icon: Icons.photo_camera_rounded,
-                      onPressed: () => _pickImage(ImageSource.camera),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    SizedBox(
-                      height: 52,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _pickImage(ImageSource.gallery),
-                        icon: const Icon(Icons.photo_library_rounded, size: 18),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: palette.text,
-                          side: BorderSide(color: palette.stroke),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(0),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: palette.stroke)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.sm,
+            ),
+            child: hasPhoto
+                ? PrimaryButton(
+                    label: 'Analyze Meal',
+                    icon: Icons.auto_awesome_rounded,
+                    onPressed: _isBusy ? null : _analyzeAndNavigate,
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PrimaryButton(
+                        label: 'Take Photo',
+                        icon: Icons.photo_camera_rounded,
+                        onPressed: () => _pickImage(ImageSource.camera),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      SizedBox(
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _pickImage(ImageSource.gallery),
+                          icon:
+                              const Icon(Icons.photo_library_rounded, size: 18),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: palette.text,
+                            side: BorderSide(color: palette.stroke),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                          textStyle: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                          label: const Text(
+                            'Upload from Gallery',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        label: const Text(
-                          'Upload from Gallery',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );

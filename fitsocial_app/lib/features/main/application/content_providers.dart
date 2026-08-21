@@ -102,8 +102,8 @@ class FeedPostsNotifier extends StateNotifier<AsyncValue<HomeFeed>> {
       reactionsBy[reaction] = (reactionsBy[reaction] ?? 0) + 1;
     }
 
-    final total = (post.likes - (previous == null ? 0 : 1)) +
-        (reaction == null ? 0 : 1);
+    final total =
+        (post.likes - (previous == null ? 0 : 1)) + (reaction == null ? 0 : 1);
 
     return post.copyWith(
       likedBy: likedBy,
@@ -167,9 +167,7 @@ final postReactionProvider =
     StreamProvider.family<FitReaction?, String>((ref, postId) {
   final userId = FirebaseAuth.instance.currentUser?.uid;
   if (userId == null) return Stream.value(null);
-  return ref
-      .watch(contentRepositoryProvider)
-      .watchPostReaction(postId, userId);
+  return ref.watch(contentRepositoryProvider).watchPostReaction(postId, userId);
 });
 
 /// Watches whether the active user has bookmarked a specific post.
@@ -280,8 +278,7 @@ final windowSessionsProvider = FutureProvider.autoDispose
 /// autoDispose for the same reason as [activitySessionsProvider] — everything
 /// derived from it is anchored to "today", and a cached list would still be
 /// reporting yesterday's totals after midnight.
-final loggedMealsProvider =
-    FutureProvider.autoDispose<List<LoggedMeal>>((ref) {
+final loggedMealsProvider = FutureProvider.autoDispose<List<LoggedMeal>>((ref) {
   return ref.watch(contentRepositoryProvider).getLoggedMeals();
 });
 

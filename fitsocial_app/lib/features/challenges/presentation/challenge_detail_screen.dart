@@ -12,6 +12,7 @@ import '../domain/challenge_models.dart';
 import '../domain/challenge_points.dart';
 import '../domain/challenge_task.dart';
 import 'challenge_indicators.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// What a challenge asks for, before anybody commits to it.
 ///
@@ -29,8 +30,7 @@ class ChallengeDetailScreen extends ConsumerStatefulWidget {
       _ChallengeDetailScreenState();
 }
 
-class _ChallengeDetailScreenState
-    extends ConsumerState<ChallengeDetailScreen> {
+class _ChallengeDetailScreenState extends ConsumerState<ChallengeDetailScreen> {
   bool _entering = false;
 
   Future<void> _enter() async {
@@ -55,13 +55,12 @@ class _ChallengeDetailScreenState
     final palette = context.palette;
     final isPulse = widget.challengeKey == ChallengeKey.pulse75;
     final running = ref.watch(primaryEnrollmentProvider);
-    final stats = ref.watch(challengeStatsProvider(widget.challengeKey))
-        .valueOrNull;
+    final stats =
+        ref.watch(challengeStatsProvider(widget.challengeKey)).valueOrNull;
     final earlyWorm = ref.watch(earlyWormProvider);
 
-    final title = isPulse
-        ? ChallengeCopy.pulse75Title
-        : ChallengeCopy.earlyWormTitle;
+    final title =
+        isPulse ? ChallengeCopy.pulse75Title : ChallengeCopy.earlyWormTitle;
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -86,12 +85,9 @@ class _ChallengeDetailScreenState
           ),
           const SizedBox(height: 10),
           Text(
-            isPulse
-                ? ChallengeCopy.pulse75Blurb
-                : ChallengeCopy.earlyWormBlurb,
+            isPulse ? ChallengeCopy.pulse75Blurb : ChallengeCopy.earlyWormBlurb,
             style: TextStyle(color: palette.text, fontSize: 15, height: 1.5),
           ),
-
           if (isPulse && stats != null && !stats.isEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -100,14 +96,11 @@ class _ChallengeDetailScreenState
               style: TextStyle(color: palette.muted, fontSize: 13),
             ),
           ],
-
           const SizedBox(height: AppSpacing.lg),
-
           if (isPulse) ...[
             const ChallengeLabel('EVERY DAY'),
             const SizedBox(height: 10),
-            for (final task in ChallengeTask.values)
-              _TaskLine(task: task),
+            for (final task in ChallengeTask.values) _TaskLine(task: task),
           ] else ...[
             const ChallengeLabel('THE WINDOW'),
             const SizedBox(height: 10),
@@ -130,14 +123,12 @@ class _ChallengeDetailScreenState
                   : 'Post before 6 AM to start one.',
             ),
           ],
-
           const SizedBox(height: AppSpacing.lg),
           _FailureBlock(
             text: isPulse
                 ? ChallengeCopy.pulse75FailureRule
                 : ChallengeCopy.earlyWormFailureRule,
           ),
-
           if (isPulse) ...[
             const SizedBox(height: AppSpacing.lg),
             const ChallengeLabel('WHAT COUNTS'),
@@ -275,9 +266,8 @@ class _TaskLine extends StatelessWidget {
                     ),
                   ),
                   TextSpan(
-                    text: task.isManual
-                        ? '   you count it'
-                        : '   from your logs',
+                    text:
+                        task.isManual ? '   you count it' : '   from your logs',
                     style: TextStyle(color: palette.muted, fontSize: 12),
                   ),
                 ],
@@ -314,43 +304,47 @@ class _InfoBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: palette.brandText),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: palette.brandText),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  body,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: 13,
-                    height: 1.4,
+                  const SizedBox(height: 4),
+                  Text(
+                    body,
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

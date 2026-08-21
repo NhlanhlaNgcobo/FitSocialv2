@@ -43,6 +43,28 @@ const nutrition = require("./nutrition_db");
 // correct state. Do not "fix" it.
 setGlobalOptions({ region: "africa-south1" });
 
+// The default Admin app, created here at load rather than lazily inside each
+// handler.
+//
+// Every module in this codebase creates it on demand and each one now asks for
+// it correctly, so this line is not what makes them work. What it does is close
+// the window they were all falling into: until a default app exists,
+// firebase-functions installs a **named** app of its own the moment it has to
+// build a Firestore trigger's `event.data`, and any guard that counts apps
+// rather than naming the default one then concludes the work is already done.
+// That is precisely the bug that stopped the whole challenge engine (see
+// challenges.js). Creating the app before a single handler can run means the
+// SDK finds it and reuses it, and the window is simply never open.
+//
+// Asked by name, the same way every module here now asks it. Counting apps is
+// the mistake this whole comment is about, and it would be an odd place to
+// repeat it.
+try {
+  admin.app();
+} catch (_) {
+  admin.initializeApp();
+}
+
 // The Firebase Web API key, used to verify a password against Identity
 // Toolkit. Not a secret — it ships inside every copy of the client app, and is
 // the same value as `web.apiKey` in lib/firebase_options.dart — which is why it
@@ -457,10 +479,6 @@ exports.signInWithUsername = onCall(
         "failed-precondition",
         "Username sign-in is not configured on this server."
       );
-    }
-
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
     }
 
     // One error for every failure below this point. Saying "no such username"

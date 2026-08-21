@@ -557,8 +557,8 @@ class FirestorePulseRepository implements PulseRepository {
   }
 
   PulseSegment _segmentFromDoc(String id, Map<String, dynamic> data) {
-    final expiresAt =
-        _readTimestamp(data['expiresAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final expiresAt = _readTimestamp(data['expiresAt']) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
     // A just-written document reaches its author from the local cache before
     // the server has stamped createdAt. Deriving it from expiresAt keeps the
     // segment orderable during that window instead of sorting as epoch zero.

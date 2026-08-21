@@ -55,13 +55,14 @@ class BrandImageTile extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: radius,
-          border:
-              showBorder ? Border.all(color: context.palette.stroke) : null,
+          border: showBorder ? Border.all(color: context.palette.stroke) : null,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final panelWidth = constraints.maxWidth <= 0 ? 120.0 : constraints.maxWidth;
-            final panelHeight = constraints.maxHeight <= 0 ? 120.0 : constraints.maxHeight;
+            final panelWidth =
+                constraints.maxWidth <= 0 ? 120.0 : constraints.maxWidth;
+            final panelHeight =
+                constraints.maxHeight <= 0 ? 120.0 : constraints.maxHeight;
 
             return Stack(
               fit: StackFit.expand,

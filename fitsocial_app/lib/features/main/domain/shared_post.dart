@@ -234,9 +234,10 @@ class SharedPostRef {
       // denormalised author name in the app is: this is shown to everyone, and
       // the document was written by a client.
       authorName: PublicAuthorName.sanitize(value['authorName'] as String?),
-      authorAvatarUrl: (value['authorAvatarUrl'] ?? '').toString().trim().isEmpty
-          ? null
-          : (value['authorAvatarUrl'] as String).trim(),
+      authorAvatarUrl:
+          (value['authorAvatarUrl'] ?? '').toString().trim().isEmpty
+              ? null
+              : (value['authorAvatarUrl'] as String).trim(),
       kind: SharedPostKind.fromKey(value['kind'] as String?),
       activity: (value['activity'] ?? '').toString().trim(),
       caption: _truncate(caption),

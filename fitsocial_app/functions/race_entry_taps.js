@@ -19,7 +19,7 @@
 
 // The modular subpaths, not the `admin.firestore()` namespace: the root export
 // dropped `.firestore` in firebase-admin v14, and these work from v11 onward.
-const { initializeApp, getApps } = require("firebase-admin/app");
+const { initializeApp, getApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 
@@ -35,8 +35,22 @@ const STATS = "raceEntryStats";
  */
 const COOLDOWN_MS = 60 * 60 * 1000;
 
+/**
+ * Creates the default Admin app if nothing has yet, and hands back Firestore.
+ *
+ * `getApps().length === 0` was the guard, and it was wrong: this is a Firestore
+ * trigger, and firebase-functions installs its own **named** app before the
+ * handler runs in order to build `event.data`. That made the count non-zero
+ * while the default app -- the one `getFirestore()` goes looking for -- still
+ * did not exist, so this threw on every cold start. Ask for the default by name
+ * instead. challenges.js carries the full account; it had the same bug.
+ */
 function db() {
-  if (getApps().length === 0) initializeApp();
+  try {
+    getApp();
+  } catch (_) {
+    initializeApp();
+  }
   return getFirestore();
 }
 
@@ -124,4 +138,5 @@ exports.onRaceEntryTap = onDocumentWritten(
   }
 );
 
-exports._internals = { plan, monthKey, COOLDOWN_MS, STATS };
+// `db` is here for test/admin_app_init.js -- see the note in challenges.js.
+exports._internals = { db, plan, monthKey, COOLDOWN_MS, STATS };

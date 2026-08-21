@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/app_session.dart';
-import '../../main/application/content_providers.dart' show currentUserIdProvider;
+import '../../main/application/content_providers.dart'
+    show currentUserIdProvider;
 import '../data/notification_repository.dart';
 import '../domain/notification_models.dart';
 

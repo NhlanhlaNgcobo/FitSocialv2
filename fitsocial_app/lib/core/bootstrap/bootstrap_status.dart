@@ -11,7 +11,8 @@ class BootstrapStatus {
   final BackendMode backendMode;
   final bool firebaseConfigured;
 
-  bool get canUseFirebase => backendMode == BackendMode.firebase && firebaseConfigured;
+  bool get canUseFirebase =>
+      backendMode == BackendMode.firebase && firebaseConfigured;
 }
 
 final bootstrapStatusProvider = Provider<BootstrapStatus>((ref) {

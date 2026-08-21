@@ -209,7 +209,8 @@ class WeatherSnapshot {
     if (feelsLikeC >= 35) return 'Serious heat. Hydrate, or move indoors.';
     if (feelsLikeC <= 0) return 'Freezing. Layer up or train inside.';
     if (windKph >= 45) return 'Very windy — hard going out there.';
-    if (condition == WeatherCondition.snow) return 'Snow underfoot. Watch your footing.';
+    if (condition == WeatherCondition.snow)
+      return 'Snow underfoot. Watch your footing.';
     if (condition.isWet) return "You'll get wet, but it's runnable.";
     if (feelsLikeC >= 30) return 'Warm one. Take water.';
     if (feelsLikeC <= 6) return 'Cold start — warm up properly.';

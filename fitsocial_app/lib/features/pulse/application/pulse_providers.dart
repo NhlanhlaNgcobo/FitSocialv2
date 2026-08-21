@@ -32,8 +32,7 @@ final activePulsesProvider = StreamProvider<List<PulseSegment>>((ref) {
 });
 
 /// The signed-in user's per-author "last watched" cursors.
-final pulseSeenMarkersProvider =
-    StreamProvider<Map<String, DateTime>>((ref) {
+final pulseSeenMarkersProvider = StreamProvider<Map<String, DateTime>>((ref) {
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) return Stream.value(const <String, DateTime>{});
   return ref.watch(pulseRepositoryProvider).watchSeenMarkers(userId);
@@ -168,9 +167,7 @@ class PulseActions {
   }
 
   Future<void> deleteComment(String pulseId, String commentId) {
-    return _ref
-        .read(pulseRepositoryProvider)
-        .deleteComment(pulseId, commentId);
+    return _ref.read(pulseRepositoryProvider).deleteComment(pulseId, commentId);
   }
 }
 

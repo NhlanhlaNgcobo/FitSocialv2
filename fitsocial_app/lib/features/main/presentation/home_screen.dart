@@ -16,6 +16,7 @@ import '../../notifications/application/notification_providers.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -173,57 +174,62 @@ class _SuggestedHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.explore_outlined,
-                size: 18,
-                color: palette.brand,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isTopUp ? 'More from FitSocial' : 'Suggested for you',
-                style: TextStyle(
-                  color: palette.text,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.explore_outlined,
+                  size: 18,
+                  color: palette.brand,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isTopUp ? 'More from FitSocial' : 'Suggested for you',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              isTopUp
+                  ? "That's everything from the people you follow. Follow a few "
+                      'more and this section shrinks.'
+                  : 'Follow people and their posts land here first.',
+              style:
+                  TextStyle(color: palette.muted, fontSize: 13.5, height: 1.4),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: palette.text,
+                side: BorderSide(color: palette.stroke),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isTopUp
-                ? "That's everything from the people you follow. Follow a few "
-                    'more and this section shrinks.'
-                : 'Follow people and their posts land here first.',
-            style: TextStyle(color: palette.muted, fontSize: 13.5, height: 1.4),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: palette.text,
-              side: BorderSide(color: palette.stroke),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+              onPressed: () => context.go('/explore'),
+              icon: const Icon(Icons.person_search_outlined, size: 18),
+              label: Text(isTopUp ? 'Find more people' : 'Find people'),
             ),
-            onPressed: () => context.go('/explore'),
-            icon: const Icon(Icons.person_search_outlined, size: 18),
-            label: Text(isTopUp ? 'Find more people' : 'Find people'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -238,64 +244,68 @@ class _NothingPostedYet extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xl,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: palette.brandSoft,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.bolt_rounded,
-              color: palette.brand,
-              size: 30,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'The feed is empty',
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Nobody has posted yet. Log a session and start it off.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: palette.muted, fontSize: 14),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: palette.brandText,
-              side: BorderSide(color: palette.brand),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.xl,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: palette.brandSoft,
+                shape: BoxShape.circle,
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+              child: Icon(
+                Icons.bolt_rounded,
+                color: palette.brand,
+                size: 30,
               ),
             ),
-            onPressed: () => context.go('/create'),
-            child: const Text('Create a post'),
-          ),
-        ],
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'The feed is empty',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Nobody has posted yet. Log a session and start it off.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: palette.muted, fontSize: 14),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: palette.brandText,
+                side: BorderSide(color: palette.brand),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: () => context.go('/create'),
+              child: const Text('Create a post'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -359,18 +369,22 @@ class _SectionPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      width: double.infinity,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: palette.muted),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(color: palette.muted),
+        ),
       ),
     );
   }

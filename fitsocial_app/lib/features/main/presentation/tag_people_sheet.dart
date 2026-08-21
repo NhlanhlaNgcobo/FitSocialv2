@@ -11,6 +11,7 @@ import '../../auth/domain/username.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/mentions.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// "Tag people" — pick the accounts to attach to a post.
 ///
@@ -100,64 +101,65 @@ class _TagPeopleSheetState extends ConsumerState<_TagPeopleSheet> {
       padding: EdgeInsets.only(
         bottom: math.max(media.viewInsets.bottom, media.viewPadding.bottom),
       ),
-      child: Container(
-        constraints: BoxConstraints(maxHeight: media.size.height * 0.8),
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 4),
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: palette.stroke,
-                  borderRadius: BorderRadius.circular(2),
+      child: LiquidGlass(
+        // A sheet always has a page behind it, which makes it the
+        // one surface guaranteed something worth bending.
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Container(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: 4),
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.stroke,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.sm,
-                AppSpacing.sm,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.sm,
+                  AppSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Tag people',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: palette.text,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(_selected),
+                      style: TextButton.styleFrom(
+                        foregroundColor: palette.brandText,
+                      ),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  Text(
-                    'Tag people',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: palette.text,
-                    ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(_selected),
-                    style: TextButton.styleFrom(
-                      foregroundColor: palette.brandText,
-                    ),
-                    child: const Text(
-                      'Done',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
+              _SearchField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
               ),
-            ),
-            _SearchField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-            ),
-            if (_selected.isNotEmpty) _selectedChips(palette),
-            Flexible(child: _results(palette, atLimit: atLimit)),
-          ],
+              if (_selected.isNotEmpty) _selectedChips(palette),
+              Flexible(child: _results(palette, atLimit: atLimit)),
+            ],
+          ),
         ),
       ),
     );
@@ -254,23 +256,27 @@ class _SearchField extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: Container(
-        decoration: BoxDecoration(
-          color: palette.surfaceHigh,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: palette.stroke),
-        ),
-        child: TextField(
-          controller: controller,
-          onChanged: onChanged,
-          autofocus: true,
-          style: TextStyle(color: palette.text, fontSize: 15),
-          decoration: InputDecoration(
-            hintText: 'Search people',
-            hintStyle: TextStyle(color: palette.muted),
-            prefixIcon: Icon(Icons.search_rounded, color: palette.muted),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      child: LiquidGlass(
+        // Painted by the lens rather than by a fill of its own: a pane
+        // over the app backdrop, like every other card.
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: TextField(
+            controller: controller,
+            onChanged: onChanged,
+            autofocus: true,
+            style: TextStyle(color: palette.text, fontSize: 15),
+            decoration: InputDecoration(
+              hintText: 'Search people',
+              hintStyle: TextStyle(color: palette.muted),
+              prefixIcon: Icon(Icons.search_rounded, color: palette.muted),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
           ),
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_palette.dart';
 import '../application/username_availability_checker.dart';
 import '../domain/username.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The one-line verdict under a username field: checking, free, or taken.
 ///
@@ -37,9 +38,8 @@ class UsernameAvailabilityHint extends StatelessWidget {
         final usable = result.canUse;
         return _HintLine(
           color: usable ? palette.success : palette.danger,
-          icon: usable
-              ? Icons.check_circle_rounded
-              : Icons.error_outline_rounded,
+          icon:
+              usable ? Icons.check_circle_rounded : Icons.error_outline_rounded,
           text: result.message ?? '',
         );
       },
@@ -98,32 +98,36 @@ class UsernameCooldownNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.lock_clock_rounded, size: 16, color: palette.muted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'You can change your username again in '
-              '${describeCooldownRemaining(remaining)}. '
-              'Usernames are limited to one change every 14 days so nobody '
-              'can pass themselves off as someone else and move on.',
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 12.5,
-                height: 1.35,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.lock_clock_rounded, size: 16, color: palette.muted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'You can change your username again in '
+                '${describeCooldownRemaining(remaining)}. '
+                'Usernames are limited to one change every 14 days so nobody '
+                'can pass themselves off as someone else and move on.',
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 12.5,
+                  height: 1.35,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

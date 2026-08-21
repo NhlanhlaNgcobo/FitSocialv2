@@ -9,6 +9,7 @@ import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 import 'macro_goals_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The colour each macro keeps, on the summary bars and on the meal rows.
 ///
@@ -92,7 +93,8 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
               window: window,
               onPrevious: () => setState(() => _offset -= 1),
               // Null past the current period — nobody has eaten tomorrow yet.
-              onNext: window.isCurrent ? null : () => setState(() => _offset += 1),
+              onNext:
+                  window.isCurrent ? null : () => setState(() => _offset += 1),
             ),
             const SizedBox(height: AppSpacing.md),
             summary.when(
@@ -138,41 +140,45 @@ class _PeriodPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        children: [
-          for (final period in _mealPeriods)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onSelected(period),
-                child: Container(
-                  height: 38,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: period == selected
-                        ? palette.brandSoft
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    period.label,
-                    style: TextStyle(
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            for (final period in _mealPeriods)
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => onSelected(period),
+                  child: Container(
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
                       color: period == selected
-                          ? palette.brandText
-                          : palette.muted,
-                      fontWeight: FontWeight.w700,
+                          ? palette.brandSoft
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      period.label,
+                      style: TextStyle(
+                        color: period == selected
+                            ? palette.brandText
+                            : palette.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -383,42 +389,46 @@ class _InsightRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: palette.success.withValues(alpha: 0.16),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.insights_rounded,
-              size: 17,
-              color: palette.success,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              summary.insight,
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 13,
-                height: 1.35,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 12,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: palette.success.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.insights_rounded,
+                size: 17,
+                color: palette.success,
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                summary.insight,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 13,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -695,14 +705,18 @@ class _Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }
@@ -714,12 +728,16 @@ class _SummarySkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    Widget block(double height) => Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: palette.stroke),
+    Widget block(double height) => LiquidGlass(
+          // Painted by the lens rather than by a fill of its own: a pane over
+          // the app backdrop, like every other card.
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: palette.stroke),
+            ),
           ),
         );
 

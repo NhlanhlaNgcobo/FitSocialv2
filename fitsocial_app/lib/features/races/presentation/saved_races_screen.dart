@@ -37,8 +37,7 @@ class SavedRacesScreen extends ConsumerWidget {
                   'between devices.',
             )
           : switch (saved) {
-              AsyncValue(:final value?) =>
-                _SavedList(events: value, now: now),
+              AsyncValue(:final value?) => _SavedList(events: value, now: now),
               AsyncValue(hasError: true) => const RaceMessage(
                   icon: Icons.cloud_off_rounded,
                   title: "Couldn't load your races",
@@ -73,7 +72,10 @@ class _SavedList extends ConsumerWidget {
     }
 
     final upcoming = events.where((event) => !event.isPast(now)).toList();
-    final past = events.where((event) => event.isPast(now)).toList().reversed
+    final past = events
+        .where((event) => event.isPast(now))
+        .toList()
+        .reversed
         .toList(growable: false);
 
     return ListView(

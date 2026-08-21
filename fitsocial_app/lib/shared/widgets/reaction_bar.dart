@@ -150,8 +150,7 @@ class _ReactionTriggerState extends State<ReactionTrigger>
     // edge so the row never runs into the side of the screen.
     const margin = 12.0;
     final available = screen.width - (margin * 2) - (_trayPadding * 2);
-    _itemExtent =
-        math.min(_maxItemExtent, available / FitReaction.all.length);
+    _itemExtent = math.min(_maxItemExtent, available / FitReaction.all.length);
 
     final trayWidth =
         (_itemExtent * FitReaction.all.length) + (_trayPadding * 2);

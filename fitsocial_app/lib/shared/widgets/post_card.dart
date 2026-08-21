@@ -13,6 +13,7 @@ import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
 import 'avatar.dart';
 import 'confirm_destructive_sheet.dart';
+import 'liquid_glass.dart';
 import 'mention_text.dart';
 import 'profile_link.dart';
 import 'quick_toast.dart';
@@ -20,6 +21,7 @@ import 'reaction_bar.dart';
 import 'run_summary_card.dart';
 import 'share_sheet.dart';
 import 'workout_summary_card.dart';
+import '../../shared/widgets/liquid_glass.dart';
 
 class PostCard extends StatelessWidget {
   const PostCard({
@@ -136,34 +138,55 @@ class PostCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: palette.surface,
+        // No fill. The card is a pane of glass over the shell's backdrop, and
+        // an opaque surface here would be the one thing standing between the
+        // lens and anything worth bending. The hairline stays: it is what
+        // separates one post from the next.
         borderRadius: BorderRadius.circular(_cardRadius),
         border: Border.all(color: palette.stroke),
+        // Drawn out here rather than inside the clip, which would cut away the
+        // shadow the shape is casting. Dark mode's is transparent — there a
+        // post separates from the page by a lit rim instead.
+        boxShadow: [
+          BoxShadow(
+            color: palette.paneShadow,
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       // Media runs to the card's edges, so the card does the rounding for it.
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(palette),
-          if (taggedUsers.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 8),
-              child: TaggedUsersLine(tagged: taggedUsers),
+      child: LiquidGlass(
+        borderRadius: BorderRadius.circular(_cardRadius),
+        // The Container already clips to this shape.
+        clip: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(palette),
+            if (taggedUsers.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 8),
+                child: TaggedUsersLine(tagged: taggedUsers),
+              ),
+            if (_hasPayload)
+              _buildPayload(palette)
+            else
+              _buildBodyText(palette),
+            PostInteractionRow(
+              post: _shareRef,
+              likes: likes,
+              comments: comments,
+              onCommentTapped: onCommentTapped,
             ),
-          if (_hasPayload) _buildPayload(palette) else _buildBodyText(palette),
-          PostInteractionRow(
-            post: _shareRef,
-            likes: likes,
-            comments: comments,
-            onCommentTapped: onCommentTapped,
-          ),
-          // A text post's words are already the body, so there's no caption
-          // line to repeat underneath.
-          if (_hasPayload) _buildCaption(palette),
-          _buildCommentLink(palette),
-          _buildTimestamp(palette),
-        ],
+            // A text post's words are already the body, so there's no caption
+            // line to repeat underneath.
+            if (_hasPayload) _buildCaption(palette),
+            _buildCommentLink(palette),
+            _buildTimestamp(palette),
+          ],
+        ),
       ),
     );
   }
@@ -266,9 +289,8 @@ class PostCard extends StatelessWidget {
   /// comment icon. Hidden when there is nothing to view.
   Widget _buildCommentLink(AppPalette palette) {
     if (comments <= 0) return const SizedBox.shrink();
-    final label = comments == 1
-        ? 'View 1 comment'
-        : 'View all $comments comments';
+    final label =
+        comments == 1 ? 'View 1 comment' : 'View all $comments comments';
 
     return GestureDetector(
       onTap: onCommentTapped,
@@ -663,57 +685,63 @@ class PostMenuButton extends ConsumerWidget {
     final palette = context.palette;
 
     final action = await showModalBottomSheet<_PostMenuAction>(
-      context: context,
-      backgroundColor: palette.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: 8),
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: palette.stroke,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            ListTile(
-              leading: Icon(Icons.ios_share_rounded, color: palette.text),
-              title: Text(
-                'Share post',
-                style: TextStyle(
-                  color: palette.text,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () =>
-                  Navigator.of(sheetContext).pop(_PostMenuAction.share),
-            ),
-            if (isAuthor)
-              ListTile(
-                leading:
-                    Icon(Icons.delete_outline_rounded, color: palette.danger),
-                title: Text(
-                  'Delete post',
-                  style: TextStyle(
-                    color: palette.danger,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                onTap: () =>
-                    Navigator.of(sheetContext).pop(_PostMenuAction.delete),
-              ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
+        context: context,
+        backgroundColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-      ),
-    );
+        builder: (sheetContext) => LiquidGlass(
+              // A sheet always has a page behind it, which makes it the one
+              // surface in the app guaranteed something worth bending.
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 8),
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: palette.stroke,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      leading:
+                          Icon(Icons.ios_share_rounded, color: palette.text),
+                      title: Text(
+                        'Share post',
+                        style: TextStyle(
+                          color: palette.text,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop(_PostMenuAction.share),
+                    ),
+                    if (isAuthor)
+                      ListTile(
+                        leading: Icon(Icons.delete_outline_rounded,
+                            color: palette.danger),
+                        title: Text(
+                          'Delete post',
+                          style: TextStyle(
+                            color: palette.danger,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () => Navigator.of(sheetContext)
+                            .pop(_PostMenuAction.delete),
+                      ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                ),
+              ),
+            ));
 
     if (action == null || !context.mounted) return;
     if (action == _PostMenuAction.share) {
@@ -775,7 +803,6 @@ class PostMenuButton extends ConsumerWidget {
       );
     }
   }
-
 }
 
 /// A feed action: a light outlined glyph with its count beside it.

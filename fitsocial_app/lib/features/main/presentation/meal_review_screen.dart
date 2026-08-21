@@ -17,6 +17,7 @@ import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../domain/app_models.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The three macros, each with a colour it keeps everywhere on this screen —
 /// the split bar, the field tiles and the per-item readouts all agree, so a
@@ -150,16 +151,22 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
   /// Adds a food the analyzer missed, straight from the nutrition database.
   Future<void> _addFoodFromDatabase() async {
     final food = await showModalBottomSheet<FoodSearchResult>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: context.palette.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => _FoodSearchSheet(
-        search: (query) => ref.read(contentRepositoryProvider).searchFoods(query),
-      ),
-    );
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (context) => LiquidGlass(
+              // A sheet always has a page behind it, which makes it the one
+              // surface in the app guaranteed something worth bending.
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+              child: _FoodSearchSheet(
+                search: (query) =>
+                    ref.read(contentRepositoryProvider).searchFoods(query),
+              ),
+            ));
 
     if (food == null || !mounted) return;
 
@@ -254,10 +261,10 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-
     return Scaffold(
-      backgroundColor: palette.background,
+      // Transparent so this page sits on the app's one backdrop, the
+      // same ground every other screen looks through.
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Meal Review'),
         actions: const [MusicIslandAction()],
@@ -615,24 +622,28 @@ class _SaveBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.background,
-        border: Border(top: BorderSide(color: palette.stroke)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.sm,
-          ),
-          child: PrimaryButton(
-            label: label,
-            icon: isSaving ? null : Icons.check_rounded,
-            onPressed: onPressed,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(0),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: palette.stroke)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.sm,
+            ),
+            child: PrimaryButton(
+              label: label,
+              icon: isSaving ? null : Icons.check_rounded,
+              onPressed: onPressed,
+            ),
           ),
         ),
       ),
@@ -869,7 +880,8 @@ class _BreakdownCard extends StatelessWidget {
             _FoodItemTile(
               // Keyed by identity so each tile keeps its own text field state
               // when the list around it changes.
-              key: ValueKey('${items[index].foodId ?? items[index].name}-$index'),
+              key: ValueKey(
+                  '${items[index].foodId ?? items[index].name}-$index'),
               item: items[index],
               onGramsChanged: (grams) => onGramsChanged(index, grams),
               onRemove: () => onRemove(index),
@@ -1136,8 +1148,7 @@ class _FoodSearchSheetState extends State<_FoodSearchSheet> {
     return ListView.separated(
       shrinkWrap: true,
       itemCount: _results.length,
-      separatorBuilder: (_, __) =>
-          Divider(color: palette.stroke, height: 1),
+      separatorBuilder: (_, __) => Divider(color: palette.stroke, height: 1),
       itemBuilder: (context, index) {
         final food = _results[index];
         return ListTile(
@@ -1209,9 +1220,8 @@ class _FoodItemTileState extends State<_FoodItemTile> {
   }
 
   void _nudge(int delta) {
-    final current = widget.item.grams ??
-        int.tryParse(_gramsController.text.trim()) ??
-        0;
+    final current =
+        widget.item.grams ?? int.tryParse(_gramsController.text.trim()) ?? 0;
     final next = (current + delta).clamp(_step, 5000);
     if (next == current) return;
     _gramsController.text = next.toString();
@@ -1224,147 +1234,152 @@ class _FoodItemTileState extends State<_FoodItemTile> {
     final item = widget.item;
     final matched = item.matchedFood;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _titleCase(item.name),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: palette.text,
-                        ),
-                      ),
-                      if (matched != null &&
-                          matched.toLowerCase() != item.name.toLowerCase()) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Matched: $matched',
-                          style: TextStyle(
-                            color: palette.muted,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: _SourceBadge(source: item.source),
-              ),
-              IconButton(
-                onPressed: widget.onRemove,
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: palette.muted,
-                ),
-                tooltip: 'Remove item',
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _GramsStepper(
-                controller: _gramsController,
-                onCommit: _commitGrams,
-                onDecrement: () => _nudge(-_step),
-                onIncrement: () => _nudge(_step),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${item.calories} kcal',
-                      style: TextStyle(
-                        color: palette.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    // Scaled down rather than wrapped: on a narrow phone the
-                    // three pips are still one glanceable line.
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _MacroPip(
-                            label: 'P',
-                            value: item.protein,
-                            color: _proteinColor,
-                          ),
-                          const SizedBox(width: 8),
-                          _MacroPip(
-                            label: 'C',
-                            value: item.carbs,
-                            color: _carbsColor,
-                          ),
-                          const SizedBox(width: 8),
-                          _MacroPip(
-                            label: 'F',
-                            value: item.fat,
-                            color: _fatColor,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (item.per100g == null && item.grams != null) ...[
-            const SizedBox(height: 10),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 13,
-                  color: palette.muted,
-                ),
-                const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
-                    'Not in the database — changing the weight will not '
-                    'recalculate these macros.',
-                    style: TextStyle(
-                      color: palette.muted,
-                      fontSize: 11,
-                      height: 1.3,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _titleCase(item.name),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: palette.text,
+                          ),
+                        ),
+                        if (matched != null &&
+                            matched.toLowerCase() !=
+                                item.name.toLowerCase()) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Matched: $matched',
+                            style: TextStyle(
+                              color: palette.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _SourceBadge(source: item.source),
+                ),
+                IconButton(
+                  onPressed: widget.onRemove,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: palette.muted,
+                  ),
+                  tooltip: 'Remove item',
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _GramsStepper(
+                  controller: _gramsController,
+                  onCommit: _commitGrams,
+                  onDecrement: () => _nudge(-_step),
+                  onIncrement: () => _nudge(_step),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${item.calories} kcal',
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      // Scaled down rather than wrapped: on a narrow phone the
+                      // three pips are still one glanceable line.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _MacroPip(
+                              label: 'P',
+                              value: item.protein,
+                              color: _proteinColor,
+                            ),
+                            const SizedBox(width: 8),
+                            _MacroPip(
+                              label: 'C',
+                              value: item.carbs,
+                              color: _carbsColor,
+                            ),
+                            const SizedBox(width: 8),
+                            _MacroPip(
+                              label: 'F',
+                              value: item.fat,
+                              color: _fatColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
+            if (item.per100g == null && item.grams != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 13,
+                    color: palette.muted,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Not in the database — changing the weight will not '
+                      'recalculate these macros.',
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1513,9 +1528,7 @@ class _SourceBadge extends StatelessWidget {
             : palette.overlay.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: fromDatabase
-              ? palette.brandSoftStroke
-              : palette.stroke,
+          color: fromDatabase ? palette.brandSoftStroke : palette.stroke,
         ),
       ),
       child: Text(
@@ -1656,83 +1669,88 @@ class _MacroField extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration:
+                      BoxDecoration(color: color, shape: BoxShape.circle),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  textInputAction: TextInputAction.next,
-                  cursorColor: AppColors.orangeBright,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: palette.text,
-                  ),
-                  decoration: InputDecoration(
-                    filled: false,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    hintText: '0',
-                    hintStyle: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
                       color: palette.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
                     ),
                   ),
-                  onChanged: (_) => onChanged(),
                 ),
-              ),
-              Text(
-                'g',
-                style: TextStyle(
-                  color: palette.muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+              ],
+            ),
+            const SizedBox(height: 2),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    textInputAction: TextInputAction.next,
+                    cursorColor: AppColors.orangeBright,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: palette.text,
+                    ),
+                    decoration: InputDecoration(
+                      filled: false,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      hintText: '0',
+                      hintStyle: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: palette.muted,
+                      ),
+                    ),
+                    onChanged: (_) => onChanged(),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                Text(
+                  'g',
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

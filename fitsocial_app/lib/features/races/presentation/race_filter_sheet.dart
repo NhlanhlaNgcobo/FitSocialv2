@@ -6,6 +6,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../application/race_providers.dart';
 import '../domain/race_models.dart';
 import 'race_widgets.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Opens the province and distance filters.
 Future<void> showRaceFilterSheet(BuildContext context) {
@@ -42,121 +43,125 @@ class _RaceFilterSheet extends ConsumerWidget {
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: palette.background,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(color: palette.stroke),
-          ),
-          child: Column(
-            children: [
-              const _SheetHandle(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  0,
-                  AppSpacing.sm,
-                  0,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Filter races',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: palette.text,
-                        ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: notifier.clear,
-                      child: const Text('Reset'),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
+        return LiquidGlass(
+          // A sheet always has a page behind it, which makes it the one
+          // surface in the app guaranteed something worth bending.
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border.all(color: palette.stroke),
+            ),
+            child: Column(
+              children: [
+                const _SheetHandle(),
+                Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.md,
+                    0,
                     AppSpacing.sm,
-                    AppSpacing.md,
-                    AppSpacing.xl,
+                    0,
                   ),
-                  children: [
-                    const RaceLabel('DISTANCE'),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final bucket in DistanceBucket.values)
-                          RaceChip(
-                            label: bucket.label,
-                            isSelected: filter.buckets.contains(bucket),
-                            onTap: () => notifier.toggleBucket(bucket),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Filter races',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: palette.text,
                           ),
-                      ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: notifier.clear,
+                        child: const Text('Reset'),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.sm,
+                      AppSpacing.md,
+                      AppSpacing.xl,
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const RaceLabel('PROVINCE'),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final province in Province.southAfrican)
-                          RaceChip(
-                            label: province.label,
-                            isSelected: filter.provinces.contains(province),
-                            onTap: () => notifier.toggleProvince(province),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    // The neighbours sit under their own heading rather than
-                    // mixed in with the provinces. A runner scanning for
-                    // Mpumalanga should not have to read past Namibia to find
-                    // it, and somebody planning a trip to Vic Falls knows to
-                    // look further down.
-                    const RaceLabel('BEYOND SOUTH AFRICA'),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final province in Province.values)
-                          if (!province.isSouthAfrican)
+                    children: [
+                      const RaceLabel('DISTANCE'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          for (final bucket in DistanceBucket.values)
+                            RaceChip(
+                              label: bucket.label,
+                              isSelected: filter.buckets.contains(bucket),
+                              onTap: () => notifier.toggleBucket(bucket),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      const RaceLabel('PROVINCE'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          for (final province in Province.southAfrican)
                             RaceChip(
                               label: province.label,
                               isSelected: filter.provinces.contains(province),
                               onTap: () => notifier.toggleProvince(province),
                             ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    const RaceLabel('RACE TYPE'),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final tag in _filterableTags)
-                          RaceChip(
-                            label: tag.label,
-                            isSelected: filter.tags.contains(tag),
-                            onTap: () => notifier.toggleTag(tag),
-                          ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      // The neighbours sit under their own heading rather than
+                      // mixed in with the provinces. A runner scanning for
+                      // Mpumalanga should not have to read past Namibia to find
+                      // it, and somebody planning a trip to Vic Falls knows to
+                      // look further down.
+                      const RaceLabel('BEYOND SOUTH AFRICA'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          for (final province in Province.values)
+                            if (!province.isSouthAfrican)
+                              RaceChip(
+                                label: province.label,
+                                isSelected: filter.provinces.contains(province),
+                                onTap: () => notifier.toggleProvince(province),
+                              ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      const RaceLabel('RACE TYPE'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          for (final tag in _filterableTags)
+                            RaceChip(
+                              label: tag.label,
+                              isSelected: filter.tags.contains(tag),
+                              onTap: () => notifier.toggleTag(tag),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

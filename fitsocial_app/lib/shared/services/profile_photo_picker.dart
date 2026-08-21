@@ -19,8 +19,7 @@ abstract final class ProfilePhotoPicker {
 
   static const int _quality = 85;
 
-  static const CropAspectRatio _square =
-      CropAspectRatio(ratioX: 1, ratioY: 1);
+  static const CropAspectRatio _square = CropAspectRatio(ratioX: 1, ratioY: 1);
 
   /// Returns the cropped file's path, or null if the user backed out of the
   /// picker or the cropper.

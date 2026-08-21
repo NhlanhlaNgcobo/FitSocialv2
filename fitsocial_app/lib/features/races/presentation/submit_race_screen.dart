@@ -82,7 +82,8 @@ class _SubmitRaceScreenState extends ConsumerState<SubmitRaceScreen> {
             Text(
               'Know a race that should be on the calendar? Send us what you '
               'know and we’ll check it before it goes live.',
-              style: TextStyle(fontSize: 13.5, height: 1.45, color: palette.muted),
+              style:
+                  TextStyle(fontSize: 13.5, height: 1.45, color: palette.muted),
             ),
             const SizedBox(height: AppSpacing.lg),
             _Field(
@@ -370,7 +371,8 @@ class _DateField extends StatelessWidget {
                   picked == null ? 'Pick a date' : RaceFormat.date(picked),
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: picked == null ? FontWeight.w400 : FontWeight.w600,
+                    fontWeight:
+                        picked == null ? FontWeight.w400 : FontWeight.w600,
                     color: picked == null ? palette.muted : palette.text,
                   ),
                 ),

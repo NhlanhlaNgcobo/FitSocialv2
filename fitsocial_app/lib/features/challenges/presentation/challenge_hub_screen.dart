@@ -9,6 +9,7 @@ import '../application/challenge_providers.dart';
 import '../domain/challenge_copy.dart';
 import '../domain/challenge_models.dart';
 import 'challenge_indicators.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The challenge catalogue, and whatever the user has running.
 ///
@@ -50,7 +51,6 @@ class ChallengeHubScreen extends ConsumerWidget {
             _RunningCard(enrollment: running),
             const SizedBox(height: AppSpacing.lg),
           ],
-
           const ChallengeLabel('CHALLENGES'),
           const SizedBox(height: 10),
           _ChallengeCard(
@@ -58,9 +58,7 @@ class ChallengeHubScreen extends ConsumerWidget {
             tagline: ChallengeCopy.pulse75Tagline,
             blurb: ChallengeCopy.pulse75Blurb,
             icon: Icons.whatshot_rounded,
-            trailing: running == null
-                ? null
-                : const _RunningPill(),
+            trailing: running == null ? null : const _RunningPill(),
             onTap: () => context.push('/challenge/pulse75'),
           ),
           const SizedBox(height: 10),
@@ -76,7 +74,6 @@ class ChallengeHubScreen extends ConsumerWidget {
                 : null,
             onTap: () => context.push('/challenge/earlyWorm'),
           ),
-
           if (finished.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
             const ChallengeLabel('YOUR RECORD'),
@@ -87,7 +84,6 @@ class ChallengeHubScreen extends ConsumerWidget {
                 child: _RecordRow(enrollment: enrollment),
               ),
           ],
-
           const SizedBox(height: AppSpacing.lg),
           Text(
             'Days are judged in your own timezone and close at midnight. '
@@ -125,68 +121,72 @@ class _ChallengeCard extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: palette.stroke),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: palette.brandSoft,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: palette.brandSoftStroke),
+      child: LiquidGlass(
+        // Painted by the lens rather than by a fill of its own: a pane
+        // over the app backdrop, like every other card.
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: palette.brandSoft,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: palette.brandSoftStroke),
+                    ),
+                    child: Icon(icon, size: 20, color: palette.brandText),
                   ),
-                  child: Icon(icon, size: 20, color: palette.brandText),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          color: palette.text,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            color: palette.text,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        tagline,
-                        style: TextStyle(
-                          color: palette.brandText,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.4,
+                        const SizedBox(height: 2),
+                        Text(
+                          tagline,
+                          style: TextStyle(
+                            color: palette.brandText,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.4,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                if (trailing != null) trailing!,
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              blurb,
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 13,
-                height: 1.45,
+                  if (trailing != null) trailing!,
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                blurb,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 13,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -280,46 +280,48 @@ class _RecordRow extends StatelessWidget {
     return InkWell(
       onTap: () => context.push('/challenge/track/${enrollment.id}'),
       borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: palette.surfaceHigh,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: palette.stroke),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              completed
-                  ? Icons.emoji_events_rounded
-                  : Icons.history_rounded,
-              size: 18,
-              color: completed ? palette.brandText : palette.muted,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    ChallengeCopy.statusLine(enrollment),
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${progress.daysCompleted} days completed · '
-                    'best streak ${progress.longestStreak}',
-                    style: TextStyle(color: palette.muted, fontSize: 12),
-                  ),
-                ],
+      child: LiquidGlass(
+        // Painted by the lens rather than by a fill of its own: a pane
+        // over the app backdrop, like every other card.
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                completed ? Icons.emoji_events_rounded : Icons.history_rounded,
+                size: 18,
+                color: completed ? palette.brandText : palette.muted,
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ChallengeCopy.statusLine(enrollment),
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${progress.daysCompleted} days completed · '
+                      'best streak ${progress.longestStreak}',
+                      style: TextStyle(color: palette.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

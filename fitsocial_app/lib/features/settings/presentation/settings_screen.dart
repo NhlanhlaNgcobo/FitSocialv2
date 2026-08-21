@@ -14,6 +14,7 @@ import '../../auth/presentation/account_switcher_sheet.dart';
 import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
 import 'delete_account_sheet.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// One accent per row, following the Create screen's rule: a hue identifies
 /// *what the row is about*, so it stays the same in both themes and is resolved
@@ -183,29 +184,33 @@ class SettingsScreen extends ConsumerWidget {
     final palette = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: palette.surface,
-        title: const Text('Sign out?'),
-        content: Text(
-          "You'll need your email and password to get back in.",
-          style: TextStyle(color: palette.muted),
+      builder: (dialogContext) => LiquidGlass(
+        // A dialog interrupts a page, so there is always something
+        // behind it -- which makes it glass like everything else.
+        borderRadius: BorderRadius.circular(22),
+        child: AlertDialog(
+          title: const Text('Sign out?'),
+          content: Text(
+            "You'll need your email and password to get back in.",
+            style: TextStyle(color: palette.muted),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: palette.muted),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                'Sign out',
+                style: TextStyle(color: palette.danger),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: palette.muted),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              'Sign out',
-              style: TextStyle(color: palette.danger),
-            ),
-          ),
-        ],
       ),
     );
 
@@ -239,26 +244,30 @@ class _ThemeModePicker extends ConsumerWidget {
     final palette = context.palette;
     final selected = ref.watch(themeModeProvider);
 
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        children: [
-          for (final (mode, label, icon) in _options)
-            Expanded(
-              child: _ThemeModeSegment(
-                label: label,
-                icon: icon,
-                isSelected: mode == selected,
-                onTap: () =>
-                    ref.read(themeModeProvider.notifier).setMode(mode),
+    return LiquidGlass(
+      // Painted by the lens now rather than by a fill of its own:
+      // a pane over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            for (final (mode, label, icon) in _options)
+              Expanded(
+                child: _ThemeModeSegment(
+                  label: label,
+                  icon: icon,
+                  isSelected: mode == selected,
+                  onTap: () =>
+                      ref.read(themeModeProvider.notifier).setMode(mode),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -302,9 +311,7 @@ class _ThemeModeSegment extends StatelessWidget {
             // pale enough against white that fill alone barely reads as a
             // selection.
             border: Border.all(
-              color: isSelected
-                  ? palette.brandSoftStroke
-                  : Colors.transparent,
+              color: isSelected ? palette.brandSoftStroke : Colors.transparent,
             ),
           ),
           child: Column(
@@ -473,32 +480,36 @@ class _SettingsGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
-      ),
-      // So a row's ripple stops at the card's rounded corner instead of
-      // squaring it off.
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        type: MaterialType.transparency,
-        child: Column(
-          children: [
-            for (var i = 0; i < children.length; i++) ...[
-              if (i > 0)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  // 14 padding + 40 well + 14 gap: the hairline starts where
-                  // the labels do.
-                  indent: 68,
-                  color: palette.stroke,
-                ),
-              children[i],
+    return LiquidGlass(
+      // Painted by the lens now rather than by a fill of its own:
+      // a pane over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        // So a row's ripple stops at the card's rounded corner instead of
+        // squaring it off.
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    // 14 padding + 40 well + 14 gap: the hairline starts where
+                    // the labels do.
+                    indent: 68,
+                    color: palette.stroke,
+                  ),
+                children[i],
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -621,37 +632,41 @@ class _SettingsNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: palette.accentFill(accent),
-              borderRadius: BorderRadius.circular(13),
+    return LiquidGlass(
+      // Painted by the lens now rather than by a fill of its own:
+      // a pane over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: palette.accentFill(accent),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, color: palette.accent(accent), size: 21),
             ),
-            child: Icon(icon, color: palette.accent(accent), size: 21),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 13.5,
-                height: 1.45,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 13.5,
+                  height: 1.45,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

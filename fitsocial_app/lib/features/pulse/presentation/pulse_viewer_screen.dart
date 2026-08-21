@@ -21,6 +21,7 @@ import 'pulse_comments_sheet.dart';
 import 'pulse_reactions_sheet.dart';
 import 'pulse_text.dart';
 import 'pulse_viewers_sheet.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Full-screen Pulse playback.
 ///
@@ -116,7 +117,8 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
   PulseSegment? get _currentSegment {
     final entry = _currentEntry;
     if (entry == null) return null;
-    if (_segmentIndex < 0 || _segmentIndex >= entry.segments.length) return null;
+    if (_segmentIndex < 0 || _segmentIndex >= entry.segments.length)
+      return null;
     return entry.segments[_segmentIndex];
   }
 
@@ -320,25 +322,29 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
     _setPaused(true);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: context.palette.surface,
-        title: const Text('Delete this Pulse?'),
-        content: const Text(
-          "It will disappear for everyone straight away. This can't be undone.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep'),
+      builder: (context) => LiquidGlass(
+        // A dialog interrupts a page, so there is always something
+        // behind it -- which makes it glass like everything else.
+        borderRadius: BorderRadius.circular(22),
+        child: AlertDialog(
+          title: const Text('Delete this Pulse?'),
+          content: const Text(
+            "It will disappear for everyone straight away. This can't be undone.",
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(
-              'Delete',
-              style: TextStyle(color: context.palette.danger),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep'),
             ),
-          ),
-        ],
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                'Delete',
+                style: TextStyle(color: context.palette.danger),
+              ),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -455,8 +461,8 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
     // Off-screen pages show their first frame with no player attached; they
     // are only visible for the length of a swipe.
     final segmentIndex = isActive ? _segmentIndex : entry.firstUnseenIndex;
-    final segment = entry.segments[
-        segmentIndex.clamp(0, entry.segments.length - 1)];
+    final segment =
+        entry.segments[segmentIndex.clamp(0, entry.segments.length - 1)];
 
     return Stack(
       fit: StackFit.expand,
@@ -645,8 +651,7 @@ class _CubePage extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        final page = controller.hasClients &&
-                controller.position.haveDimensions
+        final page = controller.hasClients && controller.position.haveDimensions
             ? (controller.page ?? fallbackPage.toDouble())
             : fallbackPage.toDouble();
         final delta = (index - page).clamp(-1.0, 1.0);
@@ -658,8 +663,7 @@ class _CubePage extends StatelessWidget {
 
         return Transform(
           // Each reaction hinges on the edge it shares with the page in view.
-          alignment:
-              delta <= 0 ? Alignment.centerRight : Alignment.centerLeft,
+          alignment: delta <= 0 ? Alignment.centerRight : Alignment.centerLeft,
           transform: transform,
           child: Stack(
             fit: StackFit.expand,

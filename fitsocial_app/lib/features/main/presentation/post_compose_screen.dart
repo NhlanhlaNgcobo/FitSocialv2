@@ -23,6 +23,7 @@ import '../data/content_repository.dart';
 import '../domain/app_models.dart';
 import 'tag_people_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class PostComposeScreen extends ConsumerStatefulWidget {
   const PostComposeScreen({super.key});
@@ -178,12 +179,13 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final profile = ref.watch(appSessionProvider).profile;
     final displayName = profile?.displayName ?? 'FitSocial User';
 
     return Scaffold(
-      backgroundColor: palette.background,
+      // Transparent so this page sits on the app's one backdrop, the
+      // same ground every other screen looks through.
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Share Post'),
         actions: const [MusicIslandAction()],
@@ -260,64 +262,69 @@ class _MediaPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.lg,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: palette.brandSoft,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: palette.brandSoftStroke),
-            ),
-            child: Icon(
-              Icons.add_photo_alternate_rounded,
-              color: palette.brand,
-              size: 32,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          const Text(
-            'Add a photo',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Optional — a post without one still lands in the feed.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _MediaAction(
-                  icon: Icons.photo_library_rounded,
-                  label: 'Gallery',
-                  onTap: onGallery,
-                ),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.lg,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: palette.brandSoft,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: palette.brandSoftStroke),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _MediaAction(
-                  icon: Icons.photo_camera_rounded,
-                  label: 'Camera',
-                  onTap: onCamera,
-                ),
+              child: Icon(
+                Icons.add_photo_alternate_rounded,
+                color: palette.brand,
+                size: 32,
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              'Add a photo',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Optional — a post without one still lands in the feed.',
+              textAlign: TextAlign.center,
+              style:
+                  TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: _MediaAction(
+                    icon: Icons.photo_library_rounded,
+                    label: 'Gallery',
+                    onTap: onGallery,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _MediaAction(
+                    icon: Icons.photo_camera_rounded,
+                    label: 'Camera',
+                    onTap: onCamera,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -338,32 +345,38 @@ class _MediaAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Material(
-      color: palette.surfaceHigh,
+    return LiquidGlass(
+      // Material stays for the ink splash and gives up its colour:
+      // an opaque fill in there would sit between the glass and
+      // everything it is meant to bend.
       borderRadius: BorderRadius.circular(16),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: palette.brandText),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: palette.brandText),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -461,145 +474,149 @@ class _ComposerCard extends StatelessWidget {
     final palette = context.palette;
     final activityLength = activityController.text.characters.length;
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Avatar(
-                initials: accountInitials(displayName),
-                imageUrl: avatarUrl,
-                size: 40,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.text,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      handle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: palette.muted, fontSize: 12),
-                    ),
-                  ],
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Avatar(
+                  initials: accountInitials(displayName),
+                  imageUrl: avatarUrl,
+                  size: 40,
                 ),
-              ),
-              const _AudienceChip(),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: captionController,
-            focusNode: captionFocusNode,
-            minLines: 4,
-            maxLines: 10,
-            textCapitalization: TextCapitalization.sentences,
-            cursorColor: palette.brand,
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 16,
-              height: 1.45,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        handle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: palette.muted, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const _AudienceChip(),
+              ],
             ),
-            decoration: InputDecoration(
-              filled: false,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              hintText: 'How did the session go?',
-              hintStyle: TextStyle(
-                color: palette.muted,
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: captionController,
+              focusNode: captionFocusNode,
+              minLines: 4,
+              maxLines: 10,
+              textCapitalization: TextCapitalization.sentences,
+              cursorColor: palette.brand,
+              style: TextStyle(
+                color: palette.text,
                 fontSize: 16,
                 height: 1.45,
               ),
+              decoration: InputDecoration(
+                filled: false,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: 'How did the session go?',
+                hintStyle: TextStyle(
+                  color: palette.muted,
+                  fontSize: 16,
+                  height: 1.45,
+                ),
+              ),
+              onChanged: (_) => onChanged(),
             ),
-            onChanged: (_) => onChanged(),
-          ),
-          // Below the caption, where there is room to open: unlike the comment
-          // bar this field is not sitting on the keyboard.
-          MentionSuggestions(
-            controller: captionController,
-            focusNode: captionFocusNode,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Divider(color: palette.stroke, height: 1),
-          const SizedBox(height: AppSpacing.sm),
-          _TagPeopleRow(tagged: taggedUsers, onTap: onTagPeople),
-          const SizedBox(height: AppSpacing.sm),
-          Divider(color: palette.stroke, height: 1),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Icon(
-                Icons.bolt_rounded,
-                size: 18,
-                color: palette.brandText,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: activityController,
-                  textCapitalization: TextCapitalization.sentences,
-                  maxLength: activityLimit,
-                  cursorColor: palette.brand,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: InputDecoration(
-                    filled: false,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    // The built-in counter parks itself below the field and
-                    // pulls the whole row out of line; this one sits in it.
-                    counterText: '',
-                    hintText: 'Add an activity, e.g. 5km Morning Run',
-                    hintStyle: TextStyle(color: palette.muted, fontSize: 14),
-                  ),
-                  onChanged: (_) => onChanged(),
+            // Below the caption, where there is room to open: unlike the comment
+            // bar this field is not sitting on the keyboard.
+            MentionSuggestions(
+              controller: captionController,
+              focusNode: captionFocusNode,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Divider(color: palette.stroke, height: 1),
+            const SizedBox(height: AppSpacing.sm),
+            _TagPeopleRow(tagged: taggedUsers, onTap: onTagPeople),
+            const SizedBox(height: AppSpacing.sm),
+            Divider(color: palette.stroke, height: 1),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Icon(
+                  Icons.bolt_rounded,
+                  size: 18,
+                  color: palette.brandText,
                 ),
-              ),
-              // Only worth showing once the limit is in sight.
-              if (activityLength > activityLimit - 12) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '${activityLimit - activityLength}',
-                  style: TextStyle(
-                    color: activityLength >= activityLimit
-                        ? palette.danger
-                        : palette.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: activityController,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLength: activityLimit,
+                    cursorColor: palette.brand,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      filled: false,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      // The built-in counter parks itself below the field and
+                      // pulls the whole row out of line; this one sits in it.
+                      counterText: '',
+                      hintText: 'Add an activity, e.g. 5km Morning Run',
+                      hintStyle: TextStyle(color: palette.muted, fontSize: 14),
+                    ),
+                    onChanged: (_) => onChanged(),
                   ),
                 ),
+                // Only worth showing once the limit is in sight.
+                if (activityLength > activityLimit - 12) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '${activityLimit - activityLength}',
+                    style: TextStyle(
+                      color: activityLength >= activityLimit
+                          ? palette.danger
+                          : palette.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -708,48 +725,52 @@ class _ShareBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.background,
-        border: Border(top: BorderSide(color: palette.stroke)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.md,
-          AppSpacing.md,
-          AppSpacing.sm,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(0),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: palette.stroke)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (showProgress) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: palette.brand,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.sm,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showProgress) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: palette.brand,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Uploading your photo...',
-                    style: TextStyle(color: palette.muted, fontSize: 13),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Text(
+                      'Uploading your photo...',
+                      style: TextStyle(color: palette.muted, fontSize: 13),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+              PrimaryButton(
+                label: isSaving ? 'Sharing...' : 'Share Post',
+                icon: isSaving ? null : Icons.send_rounded,
+                onPressed: onPressed,
               ),
-              const SizedBox(height: AppSpacing.sm),
             ],
-            PrimaryButton(
-              label: isSaving ? 'Sharing...' : 'Share Post',
-              icon: isSaving ? null : Icons.send_rounded,
-              onPressed: onPressed,
-            ),
-          ],
+          ),
         ),
       ),
     );

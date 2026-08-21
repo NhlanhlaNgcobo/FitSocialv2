@@ -8,6 +8,7 @@ import '../../../shared/widgets/quick_toast.dart';
 import '../application/content_providers.dart';
 import '../data/content_repository.dart';
 import '../domain/progress_models.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Opens what a session led to.
 ///
@@ -50,90 +51,94 @@ class _SessionLogSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        border: Border.all(color: palette.stroke),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md,
-        AppSpacing.lg,
-        AppSpacing.lg + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: palette.stroke,
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Icon(
-                session.kind == ActivityKind.run
-                    ? Icons.directions_run_rounded
-                    : Icons.fitness_center_rounded,
-                color: context.palette.brand,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  session.title,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20,
-                  ),
+    return LiquidGlass(
+      // A sheet always has a page behind it, which makes it the one
+      // surface in the app guaranteed something worth bending.
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: palette.stroke),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.lg + MediaQuery.of(context).padding.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: palette.stroke,
+                  borderRadius: BorderRadius.circular(99),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _fullDate(session.startedAt),
-            style: TextStyle(color: palette.muted, fontSize: 13),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _LogRow(
-            label: 'Duration',
-            value: formatSessionDuration(session.duration),
-          ),
-          if (session.distanceKm != null)
-            _LogRow(
-              label: 'Distance',
-              value: '${session.distanceKm!.toStringAsFixed(2)} km',
             ),
-          if (session.exerciseCount != null)
-            _LogRow(
-              label: 'Exercises',
-              value: '${session.exerciseCount}',
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Icon(
+                  session.kind == ActivityKind.run
+                      ? Icons.directions_run_rounded
+                      : Icons.fitness_center_rounded,
+                  color: context.palette.brand,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    session.title,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          _LogRow(
-            label: 'Calories',
-            value: '${formatThousands(session.calories)} kcal',
-            note: session.caloriesAreEstimated
-                ? 'Estimated from distance'
-                : null,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            session.sharedToFeed
-                ? 'Shared to the feed. The post could not be found — it may '
-                    'have been deleted.'
-                : 'Kept private. This session was never posted.',
-            style: TextStyle(color: palette.muted, fontSize: 12),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              _fullDate(session.startedAt),
+              style: TextStyle(color: palette.muted, fontSize: 13),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _LogRow(
+              label: 'Duration',
+              value: formatSessionDuration(session.duration),
+            ),
+            if (session.distanceKm != null)
+              _LogRow(
+                label: 'Distance',
+                value: '${session.distanceKm!.toStringAsFixed(2)} km',
+              ),
+            if (session.exerciseCount != null)
+              _LogRow(
+                label: 'Exercises',
+                value: '${session.exerciseCount}',
+              ),
+            _LogRow(
+              label: 'Calories',
+              value: '${formatThousands(session.calories)} kcal',
+              note: session.caloriesAreEstimated
+                  ? 'Estimated from distance'
+                  : null,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              session.sharedToFeed
+                  ? 'Shared to the feed. The post could not be found — it may '
+                      'have been deleted.'
+                  : 'Kept private. This session was never posted.',
+              style: TextStyle(color: palette.muted, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -263,27 +268,32 @@ class SessionMenu extends ConsumerWidget {
     final palette = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete this log?'),
-        content: Text(
-          session.sharedToFeed
-              // Said out loud, because the two are easy to conflate and only
-              // one of them is about to happen.
-              ? 'The session is removed from your progress and its squares. '
-                  'The post you shared stays on the feed.'
-              : 'The session is removed from your progress and its squares. '
-                  'This cannot be undone.',
+      builder: (context) => LiquidGlass(
+        // A dialog interrupts a page, so there is always something
+        // behind it -- which makes it glass like everything else.
+        borderRadius: BorderRadius.circular(22),
+        child: AlertDialog(
+          title: const Text('Delete this log?'),
+          content: Text(
+            session.sharedToFeed
+                // Said out loud, because the two are easy to conflate and only
+                // one of them is about to happen.
+                ? 'The session is removed from your progress and its squares. '
+                    'The post you shared stays on the feed.'
+                : 'The session is removed from your progress and its squares. '
+                    'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Delete', style: TextStyle(color: palette.danger)),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Delete', style: TextStyle(color: palette.danger)),
-          ),
-        ],
       ),
     );
 

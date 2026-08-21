@@ -78,8 +78,8 @@ void main() {
       test('$name clears WCAG AA for body text', () {
         expect(contrast(palette.text, palette.background),
             greaterThanOrEqualTo(4.5));
-        expect(contrast(palette.text, palette.surface),
-            greaterThanOrEqualTo(4.5));
+        expect(
+            contrast(palette.text, palette.surface), greaterThanOrEqualTo(4.5));
         expect(contrast(palette.text, palette.surfaceHigh),
             greaterThanOrEqualTo(4.5));
       });
@@ -94,8 +94,8 @@ void main() {
       test('$name separates its surfaces from the page', () {
         // Not a legibility rule — a card has to be *visible* as a card, and on
         // the light theme white-on-cream is a small difference by design.
-        expect(contrast(palette.surface, palette.background),
-            greaterThan(1.02));
+        expect(
+            contrast(palette.surface, palette.background), greaterThan(1.02));
         expect(contrast(palette.stroke, palette.surface), greaterThan(1.1));
       });
 
@@ -130,17 +130,27 @@ void main() {
       );
     });
 
-    test('scaffold and body text follow the palette', () {
-      // Widgets that name no colour inherit these two, so a mismatch here is
+    test('body text follows the palette', () {
+      // Widgets that name no colour inherit this, so a mismatch here is
       // invisible text on every screen at once.
-      expect(AppTheme.lightTheme.scaffoldBackgroundColor,
-          AppPalette.light.background);
-      expect(AppTheme.lightTheme.textTheme.bodyMedium?.color,
-          AppPalette.light.text);
-      expect(AppTheme.darkTheme.scaffoldBackgroundColor,
-          AppPalette.dark.background);
-      expect(AppTheme.darkTheme.textTheme.bodyMedium?.color,
-          AppPalette.dark.text);
+      expect(
+        AppTheme.lightTheme.textTheme.bodyMedium?.color,
+        AppPalette.light.text,
+      );
+      expect(
+        AppTheme.darkTheme.textTheme.bodyMedium?.color,
+        AppPalette.dark.text,
+      );
+    });
+
+    test('no theme paints its own page ground', () {
+      // The app has exactly one ground: the LiquidBackdrop painted below the
+      // Navigator, which is what every pane of glass bends. A Scaffold that
+      // painted the palette's background would cover it and leave that screen's
+      // glass with nothing behind it — so transparent here is load-bearing, not
+      // an omission.
+      expect(AppTheme.lightTheme.scaffoldBackgroundColor, Colors.transparent);
+      expect(AppTheme.darkTheme.scaffoldBackgroundColor, Colors.transparent);
     });
   });
 

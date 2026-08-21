@@ -118,8 +118,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
               foregroundColor: palette.text,
               // Following reads as the settled state, so it steps back to a
               // grey outline rather than competing with the orange.
-              backgroundColor:
-                  _sitsOnOwnSurface ? palette.surfaceHigh : null,
+              backgroundColor: _sitsOnOwnSurface ? palette.surfaceHigh : null,
               side: BorderSide(color: palette.stroke),
               padding: padding,
               minimumSize: minimumSize,

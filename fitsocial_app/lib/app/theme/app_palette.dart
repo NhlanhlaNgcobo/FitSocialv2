@@ -32,6 +32,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.glassSheen,
     required this.glassRimHigh,
     required this.glassRimSoft,
+    required this.liquidTint,
+    required this.paneShadow,
     required this.navShadow,
   });
 
@@ -110,6 +112,23 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color glassRimHigh;
   final Color glassRimSoft;
 
+  /// What liquid glass mixes into the backdrop it is bending, with the alpha
+  /// carrying *how much*.
+  ///
+  /// Deliberately faint. The frosted pane above holds text legible by fogging
+  /// what is behind it; a lens holds it with refraction and a lit rim instead,
+  /// and past roughly 20% this stops being glass and becomes the fog again.
+  final Color liquidTint;
+
+  /// What a pane of glass drops onto the page beneath it.
+  ///
+  /// Only the light theme has one, and the reason is not taste. On near-black a
+  /// pane separates from the page by being *brighter* at its rim; on cream
+  /// there is no brighter to go, so the only way it reads as sitting above the
+  /// page is by darkening what is under it. Fully transparent on dark, where
+  /// the lit rim already does this job and a shadow would just be fill rate.
+  final Color paneShadow;
+
   /// Drop shadow under the floating nav. Far softer on cream, where a heavy
   /// shadow reads as dirt rather than elevation.
   final Color navShadow;
@@ -138,6 +157,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     glassSheen: Color(0x1AFFFFFF),
     glassRimHigh: Color(0x73FFFFFF),
     glassRimSoft: Color(0x1AFFFFFF),
+    liquidTint: Color(0x1F000000),
+    paneShadow: Color(0x00000000),
     navShadow: Color(0x8C000000),
   );
 
@@ -183,6 +204,12 @@ class AppPalette extends ThemeExtension<AppPalette> {
     glassSheen: Color(0x8CFFFFFF),
     glassRimHigh: Color(0x1F000000),
     glassRimSoft: Color(0x0A000000),
+    // 78% white, the same weight the frosted pane used before the lens
+    // arrived. The 14% it briefly ran at is invisible on cream: the card
+    // loses its surface entirely and only the hairline is left, which is
+    // the exact flat-sheet-of-cream failure this palette was tuned against.
+    liquidTint: Color(0xC7FFFFFF),
+    paneShadow: Color(0x1F000000),
     navShadow: Color(0x1A000000),
   );
 
@@ -242,6 +269,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? glassSheen,
     Color? glassRimHigh,
     Color? glassRimSoft,
+    Color? liquidTint,
+    Color? paneShadow,
     Color? navShadow,
   }) {
     return AppPalette(
@@ -264,6 +293,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
       glassSheen: glassSheen ?? this.glassSheen,
       glassRimHigh: glassRimHigh ?? this.glassRimHigh,
       glassRimSoft: glassRimSoft ?? this.glassRimSoft,
+      liquidTint: liquidTint ?? this.liquidTint,
+      paneShadow: paneShadow ?? this.paneShadow,
       navShadow: navShadow ?? this.navShadow,
     );
   }
@@ -287,14 +318,15 @@ class AppPalette extends ThemeExtension<AppPalette> {
       brand: Color.lerp(brand, other.brand, t)!,
       brandText: Color.lerp(brandText, other.brandText, t)!,
       brandSoft: Color.lerp(brandSoft, other.brandSoft, t)!,
-      brandSoftStroke:
-          Color.lerp(brandSoftStroke, other.brandSoftStroke, t)!,
+      brandSoftStroke: Color.lerp(brandSoftStroke, other.brandSoftStroke, t)!,
       overlay: Color.lerp(overlay, other.overlay, t)!,
       glassTop: Color.lerp(glassTop, other.glassTop, t)!,
       glassBottom: Color.lerp(glassBottom, other.glassBottom, t)!,
       glassSheen: Color.lerp(glassSheen, other.glassSheen, t)!,
       glassRimHigh: Color.lerp(glassRimHigh, other.glassRimHigh, t)!,
       glassRimSoft: Color.lerp(glassRimSoft, other.glassRimSoft, t)!,
+      liquidTint: Color.lerp(liquidTint, other.liquidTint, t)!,
+      paneShadow: Color.lerp(paneShadow, other.paneShadow, t)!,
       navShadow: Color.lerp(navShadow, other.navShadow, t)!,
     );
   }

@@ -31,8 +31,25 @@ const admin = require("firebase-admin");
  *    surviving documents stay consistent with what is left under them.
  */
 
+/**
+ * Creates the default Admin app if nothing has yet.
+ *
+ * By name, not by counting `admin.apps` -- firebase-functions installs a
+ * **named** app of its own when it has to build a trigger's snapshot, and a
+ * count cannot tell that apart from the default app existing. See the long
+ * version of this in challenges.js, where counting broke every challenge
+ * trigger in production.
+ */
+function ensureDefaultApp() {
+  try {
+    admin.app();
+  } catch (_) {
+    admin.initializeApp();
+  }
+}
+
 function db() {
-  if (admin.apps.length === 0) admin.initializeApp();
+  ensureDefaultApp();
   return admin.firestore();
 }
 
@@ -505,6 +522,8 @@ exports.deleteAccount = onCall(
 // Test seam. Skipped by the export loop in index.js, which treats every other
 // export of a required module as a function to deploy.
 exports._internals = {
+  // See the note beside `db` in challenges.js's _internals.
+  db,
   purgeAccount,
   noteCounterChange,
   withdrawReactions,

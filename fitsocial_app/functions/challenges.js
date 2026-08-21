@@ -22,9 +22,54 @@ const { onDocumentCreated, onDocumentWritten } = require(
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 
+/**
+ * Creates the default Admin app if nothing has yet, and hands back Firestore.
+ *
+ * The guard used to read `admin.apps.length === 0`, and that one line took
+ * every automatic task on the tracker down with it for as long as it stood.
+ * `admin.apps` is *every* app, not the default one -- and before a Firestore
+ * trigger's handler is called, firebase-functions builds the snapshot behind
+ * `event.data` through its own `getApp()`, which on finding no default app
+ * initialises a **named** one of its own, `__FIREBASE_FUNCTIONS_SDK__`. So by
+ * the time a handler in this file asked, `apps` held exactly one entry, the
+ * guard concluded initialisation had already happened, skipped it, and the next
+ * line asked for the *default* app and threw "The default Firebase app does not
+ * exist".
+ *
+ * Every trigger here died on its first invocation, on every cold start, from
+ * the moment the app was deployed. Water and reading kept working only because
+ * they are the two the client writes and overlays for itself; the five the
+ * engine computes -- workout, run, steps, nutrition, pulse -- and Early Worm,
+ * which lives entirely in `onPulsePublished`, recorded nothing for anybody.
+ *
+ * So ask for the default app by name and let the miss tell you. `getApps()`,
+ * the modular spelling, counts the same way and is the same bug -- see
+ * race_entry_taps.js, which had it too.
+ */
+function ensureDefaultApp() {
+  try {
+    admin.app();
+  } catch (_) {
+    admin.initializeApp();
+  }
+}
+
+/**
+ * Firestore, memoised.
+ *
+ * `admin.firestore` is a namespace getter that rebuilds its function object on
+ * every read -- requiring @google-cloud/firestore and reassembling the
+ * v1/v1beta1 accessors each time. This is called dozens of times per
+ * invocation, so it is worth holding on to.
+ */
+let firestoreInstance;
+
 function db() {
-  if (admin.apps.length === 0) admin.initializeApp();
-  return admin.firestore();
+  if (!firestoreInstance) {
+    ensureDefaultApp();
+    firestoreInstance = admin.firestore();
+  }
+  return firestoreInstance;
 }
 
 // --- Rules, mirrored from the Dart domain ---------------------------------
@@ -435,6 +480,18 @@ async function badgeFactsFor(userId, enrollment) {
  * document being written at all and leaves all seven tasks reading zero. That
  * is exactly how `workouts` and `meals` shipped missing their `createdAt`
  * pairs, and 75 Pulse recorded nothing for anybody until they were added.
+ *
+ * The **direction** counts too, and having the index is no protection at all
+ * from getting it wrong. Every one of these indexes is declared descending,
+ * because that is the order the app's own screens read the same collections in.
+ * A range with no `orderBy` is implicitly ordered *ascending* on the range
+ * field, and a descending composite cannot serve it — so these queries threw
+ * FAILED_PRECONDITION against indexes that were present, live, and named in the
+ * error as the thing to go and create. Hence the explicit descending `orderBy`
+ * below. It does not change the answer — the caller counts and sums, and reads
+ * through a Map that has already discarded order — it exists purely to name the
+ * index this query is meant to use. Take it away and the same outage comes
+ * back, with an error message pointing at an index that already exists.
  */
 async function activityInDay(collection, userId, fields, start, end) {
   const found = new Map();
@@ -445,6 +502,9 @@ async function activityInDay(collection, userId, fields, start, end) {
       .where("authorId", "==", userId)
       .where(field, ">=", admin.firestore.Timestamp.fromDate(start))
       .where(field, "<", admin.firestore.Timestamp.fromDate(end))
+      // Descending to match the declared index — see the note above. Not a
+      // preference about ordering; the result is read order-insensitively.
+      .orderBy(field, "desc")
       .get();
 
     for (const doc of snapshot.docs) {
@@ -1088,6 +1148,10 @@ exports.aggregateChallengeStats = onSchedule(
 // path itself — reachable from an admin script or `firebase functions:shell`
 // when a total has to be rebuilt from the ledger by hand.
 exports._internals = {
+  // The database accessor is exposed for one reason: test/admin_app_init.js
+  // checks that it still works after firebase-functions has installed an app
+  // of its own, which is the failure that broke every trigger in this file.
+  db,
   awardPoints,
   recomputePointsTotals,
   dayKeyOf,

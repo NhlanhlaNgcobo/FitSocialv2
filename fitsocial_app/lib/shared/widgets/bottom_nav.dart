@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
+import 'liquid_glass.dart';
 import 'nav_icons.dart';
 
 /// Floating capsule navigation, modelled on the iOS 26 "Liquid Glass" tab bar
@@ -76,13 +77,10 @@ class FitSocialBottomNav extends StatefulWidget {
   static const Curve _hideCurve = Curves.easeInCubic;
   static const Curve _revealCurve = Curves.easeOutBack;
 
-  /// Built once and shared by every instance. Handing [BackdropFilter] the same
-  /// filter object each build is what lets the engine keep its layer instead of
-  /// tearing it down and rebuilding it.
-  ///
-  /// Sigma is deliberately moderate: blur cost scales with it, and this runs on
-  /// every scrolled frame.
-  static final ImageFilter _blur = ImageFilter.blur(sigmaX: 18, sigmaY: 18);
+  /// The capsule is short, so the bend has to be shallower than a card's or
+  /// the two rims meet in the middle and the whole bar reads as a bubble.
+  static const double _refraction = 20;
+  static const double _bendDepth = 16;
 
   /// Space a scrollable must leave below its last item so that item can be
   /// scrolled clear of the floating bar.
@@ -150,8 +148,7 @@ class _FitSocialBottomNavState extends State<FitSocialBottomNav>
 
     // Far enough that the capsule clears the screen entirely — its own height
     // plus everything below it. Anything less parks a sliver on the edge.
-    final travel =
-        FitSocialBottomNav._barHeight +
+    final travel = FitSocialBottomNav._barHeight +
         FitSocialBottomNav._bottomMargin +
         bottomInset;
 
@@ -199,73 +196,38 @@ class _FitSocialBottomNavState extends State<FitSocialBottomNav>
   }
 
   Widget _buildGlass(AppPalette palette) {
-    return CustomPaint(
-      // The rim sits outside the BackdropFilter. It changes only with the
-      // theme, and keeping it out of the filtered subtree spares it the
-      // per-frame repaint the blur itself cannot avoid.
-      foregroundPainter: _GlassRim(
-        radius: FitSocialBottomNav._radius,
-        highlight: palette.glassRimHigh,
-        soft: palette.glassRimSoft,
+    return DecoratedBox(
+      // Outside the clip on purpose: a shadow drawn inside ClipRRect would be
+      // clipped away by the very shape casting it.
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(FitSocialBottomNav._radius),
+        boxShadow: [
+          BoxShadow(
+            color: palette.navShadow,
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: DecoratedBox(
-        // Outside the clip on purpose: a shadow drawn inside ClipRRect would be
-        // clipped away by the very shape casting it.
-        decoration: BoxDecoration(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(FitSocialBottomNav._radius),
+        // The bar is fixed while the page scrolls underneath, so this is the
+        // one surface in the app looking through genuinely moving content --
+        // the refraction re-reads the feed every frame and the colour inside
+        // the capsule shifts continuously. It is also why the shell has to keep
+        // `extendBody: true`: without it the Scaffold reserves the space and
+        // the lens would have nothing behind it but flat background.
+        child: LiquidGlass(
           borderRadius: BorderRadius.circular(FitSocialBottomNav._radius),
-          boxShadow: [
-            BoxShadow(
-              color: palette.navShadow,
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(FitSocialBottomNav._radius),
-          child: BackdropFilter(
-            filter: FitSocialBottomNav._blur,
-            child: Container(
-              height: FitSocialBottomNav._barHeight,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(
-                  FitSocialBottomNav._radius,
-                ),
-                // Tinted glass, not frosted. The tint is always drawn *from*
-                // the theme's own surfaces — a white overlay on the black app
-                // reads as a pale grey slab, and equally a dark overlay on the
-                // cream one reads as a smudge. Either way the blur alone
-                // carries the translucency.
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [palette.glassTop, palette.glassBottom],
-                ),
-              ),
-              child: DecoratedBox(
-                // The sheen: a thin band of light along the top of the glass,
-                // gone by a third of the way down. Its own layer so it lifts
-                // only the top edge instead of washing out the whole capsule
-                // the way a full-height white fill did.
-                //
-                // Stays a white highlight in both themes — glass catches light
-                // the same way whatever is behind it.
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      palette.glassSheen,
-                      palette.glassSheen.withValues(alpha: 0),
-                    ],
-                    stops: const [0, 0.35],
-                  ),
-                ),
-                child: _NavRow(
-                  currentIndex: widget.currentIndex,
-                  onTap: widget.onTap,
-                ),
-              ),
+          refraction: FitSocialBottomNav._refraction,
+          edge: FitSocialBottomNav._bendDepth,
+          // Already clipped, just above.
+          clip: false,
+          child: SizedBox(
+            height: FitSocialBottomNav._barHeight,
+            child: _NavRow(
+              currentIndex: widget.currentIndex,
+              onTap: widget.onTap,
             ),
           ),
         ),
@@ -311,70 +273,6 @@ class _NavRow extends StatelessWidget {
       },
     );
   }
-}
-
-/// The lit rim of the glass.
-///
-/// A gradient stroke rather than a [Border], which can only take one flat
-/// colour all the way round. Physical glass is brightest where light strikes
-/// the top edge and unlit underneath, and that difference is most of what
-/// gives the capsule its thickness.
-class _GlassRim extends CustomPainter {
-  const _GlassRim({
-    required this.radius,
-    required this.highlight,
-    required this.soft,
-  });
-
-  final double radius;
-
-  /// Where the light hits — the top edge.
-  final Color highlight;
-
-  /// The rim as it turns away from the light, before it goes out entirely.
-  final Color soft;
-
-  /// Built per paint rather than held as a static, because the two colours now
-  /// come from the theme. It is one small object on a painter that only runs
-  /// when the capsule's size or the theme changes, not per animation frame —
-  /// the rim deliberately sits outside the animated, blurred subtree.
-  LinearGradient get _gradient => LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          highlight,
-          soft,
-          // Fully out by the bottom edge. Faded from the rim's own hue so the
-          // light theme doesn't fade a black rim through transparent white.
-          soft.withValues(alpha: 0),
-        ],
-        stops: const [0, 0.45, 1],
-      );
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bounds = Offset.zero & size;
-    // Inset by half the stroke so the line lands inside the clip instead of
-    // being sliced in half by it.
-    final rrect = RRect.fromRectAndRadius(
-      bounds.deflate(0.5),
-      Radius.circular(radius),
-    );
-
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..shader = _gradient.createShader(bounds),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_GlassRim oldDelegate) =>
-      oldDelegate.radius != radius ||
-      oldDelegate.highlight != highlight ||
-      oldDelegate.soft != soft;
 }
 
 class _NavDestination {

@@ -15,6 +15,7 @@ import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/activity_actions.dart';
 import '../domain/app_models.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class RunLogScreen extends ConsumerStatefulWidget {
   const RunLogScreen({super.key});
@@ -206,46 +207,50 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             controller: _entranceController,
             index: sectionIndex++,
             itemCount: _sectionCount,
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: palette.surface,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: palette.stroke),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _MetricField(
-                    icon: Icons.straighten_rounded,
-                    label: 'Distance',
-                    controller: _distanceController,
-                    suffix: 'km',
-                    hint: '0.00',
-                    decimal: true,
-                    invalid: _showFieldErrors && !_hasDistance,
-                    onChanged: (value) {
-                      setState(() {
-                        _distanceKm = double.tryParse(value.trim()) ?? 0;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _MetricField(
-                    icon: Icons.timer_outlined,
-                    label: 'Duration',
-                    controller: _durationController,
-                    suffix: 'min',
-                    hint: '0',
-                    decimal: false,
-                    invalid: _showFieldErrors && !_hasDuration,
-                    onChanged: (value) {
-                      setState(() {
-                        _durationMinutes = int.tryParse(value.trim()) ?? 0;
-                      });
-                    },
-                  ),
-                ],
+            child: LiquidGlass(
+              // Painted by the lens rather than by a fill of its own: a pane
+              // over the app backdrop, like every other card.
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: palette.stroke),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _MetricField(
+                      icon: Icons.straighten_rounded,
+                      label: 'Distance',
+                      controller: _distanceController,
+                      suffix: 'km',
+                      hint: '0.00',
+                      decimal: true,
+                      invalid: _showFieldErrors && !_hasDistance,
+                      onChanged: (value) {
+                        setState(() {
+                          _distanceKm = double.tryParse(value.trim()) ?? 0;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _MetricField(
+                      icon: Icons.timer_outlined,
+                      label: 'Duration',
+                      controller: _durationController,
+                      suffix: 'min',
+                      hint: '0',
+                      decimal: false,
+                      invalid: _showFieldErrors && !_hasDuration,
+                      onChanged: (value) {
+                        setState(() {
+                          _durationMinutes = int.tryParse(value.trim()) ?? 0;
+                        });
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -433,65 +438,71 @@ class _TreadmillCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Material(
-      color: palette.surface,
+    return LiquidGlass(
+      // Material stays for the ink splash and gives up its colour:
+      // an opaque fill in there would sit between the glass and
+      // everything it is meant to bend.
       borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: palette.stroke),
-          ),
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: palette.brandSoft,
-                  shape: BoxShape.circle,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: palette.stroke),
+            ),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: palette.brandSoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.timer_outlined,
+                    color: palette.brand,
+                    size: 22,
+                  ),
                 ),
-                child: Icon(
-                  Icons.timer_outlined,
-                  color: palette.brand,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Treadmill run',
-                      style: TextStyle(
-                        color: palette.text,
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w800,
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Treadmill run',
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Press start and the timer runs — no GPS needed',
-                      style: TextStyle(
-                        color: palette.muted,
-                        fontSize: 12.5,
-                        height: 1.3,
+                      const SizedBox(height: 3),
+                      Text(
+                        'Press start and the timer runs — no GPS needed',
+                        style: TextStyle(
+                          color: palette.muted,
+                          fontSize: 12.5,
+                          height: 1.3,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Icon(
-                Icons.arrow_forward_rounded,
-                color: palette.muted,
-                size: 18,
-              ),
-            ],
+                const SizedBox(width: AppSpacing.sm),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: palette.muted,
+                  size: 18,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -574,63 +585,67 @@ class _MetricField extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          decoration: BoxDecoration(
-            color: palette.surfaceHigh,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: invalid ? palette.danger : palette.stroke,
-              width: invalid ? 1.4 : 1,
+        LiquidGlass(
+          // Painted by the lens rather than by a fill of its own: a pane
+          // over the app backdrop, like every other card.
+          borderRadius: BorderRadius.circular(18),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: invalid ? palette.danger : palette.stroke,
+                width: invalid ? 1.4 : 1,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              // Balances the unit on the right so the number stays optically
-              // centred in the well.
-              SizedBox(width: _suffixWidth(suffix)),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  onChanged: onChanged,
-                  keyboardType: decimal
-                      ? const TextInputType.numberWithOptions(decimal: true)
-                      : TextInputType.number,
-                  textAlign: TextAlign.center,
-                  cursorColor: palette.brand,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 18),
-                    border: InputBorder.none,
-                    hintText: hint,
-                    hintStyle: TextStyle(
-                      color: palette.muted.withValues(alpha: 0.5),
+            child: Row(
+              children: [
+                // Balances the unit on the right so the number stays optically
+                // centred in the well.
+                SizedBox(width: _suffixWidth(suffix)),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    onChanged: onChanged,
+                    keyboardType: decimal
+                        ? const TextInputType.numberWithOptions(decimal: true)
+                        : TextInputType.number,
+                    textAlign: TextAlign.center,
+                    cursorColor: palette.brand,
+                    style: TextStyle(
+                      color: palette.text,
                       fontSize: 32,
                       fontWeight: FontWeight.w800,
                     ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                      border: InputBorder.none,
+                      hintText: hint,
+                      hintStyle: TextStyle(
+                        color: palette.muted.withValues(alpha: 0.5),
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(
-                width: _suffixWidth(suffix),
-                child: Text(
-                  suffix,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                SizedBox(
+                  width: _suffixWidth(suffix),
+                  child: Text(
+                    suffix,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],

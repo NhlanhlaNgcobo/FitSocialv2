@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../domain/challenge_badges.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The badges somebody holds, as a row above their post grid.
 ///
@@ -82,8 +83,8 @@ class BadgeTile extends StatelessWidget {
                     right: -2,
                     bottom: -2,
                     child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(
                         color: palette.brand,
                         borderRadius: BorderRadius.circular(8),
@@ -126,66 +127,81 @@ Future<void> showBadgeSheet(BuildContext context, UserBadge badge) {
   final palette = Theme.of(context).extension<AppPalette>() ?? AppPalette.dark;
 
   return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: palette.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: palette.brandSoft,
-                shape: BoxShape.circle,
-                border: Border.all(color: palette.brandSoftStroke),
-              ),
-              child: Icon(
-                _iconFor(badge.badge),
-                size: 34,
-                color: palette.brandText,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              badge.badge.label.toUpperCase(),
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              badge.badge.description,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: palette.muted, fontSize: 14, height: 1.4),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              badge.count > 1
-                  ? 'Earned ${badge.count} times. Most recently '
-                      '${_dateLabel(badge.awardedAt)}.'
-                  : 'Earned ${_dateLabel(badge.awardedAt)}.',
-              style: TextStyle(color: palette.muted, fontSize: 12),
-            ),
-          ],
-        ),
+      context: context,
+      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-    ),
-  );
+      builder: (context) => LiquidGlass(
+            // A sheet always has a page behind it, which makes it the one
+            // surface in the app guaranteed something worth bending.
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: palette.brandSoft,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: palette.brandSoftStroke),
+                      ),
+                      child: Icon(
+                        _iconFor(badge.badge),
+                        size: 34,
+                        color: palette.brandText,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      badge.badge.label.toUpperCase(),
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      badge.badge.description,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: palette.muted, fontSize: 14, height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      badge.count > 1
+                          ? 'Earned ${badge.count} times. Most recently '
+                              '${_dateLabel(badge.awardedAt)}.'
+                          : 'Earned ${_dateLabel(badge.awardedAt)}.',
+                      style: TextStyle(color: palette.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ));
 }
 
 String _dateLabel(DateTime date) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   return '${date.day} ${months[date.month - 1]} ${date.year}';
 }

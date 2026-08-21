@@ -42,7 +42,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final palette = context.palette;
 
     return Scaffold(
-      backgroundColor: palette.background,
+      // Transparent so this page sits on the app's one backdrop, the
+      // same ground every other screen looks through.
+      backgroundColor: Colors.transparent,
       body: Container(
         color: palette.background,
         child: SafeArea(
@@ -103,7 +105,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           child: AnimatedBuilder(
                             animation: _beamController,
                             builder: (context, _) {
-                              return _PulseBeam(progress: _beamController.value);
+                              return _PulseBeam(
+                                  progress: _beamController.value);
                             },
                           ),
                         ),
@@ -242,11 +245,13 @@ class _PulseGlyphPainter extends CustomPainter {
         radius,
       ),
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(size.width * 0.11, barHeight + spacing, size.width * 0.68, barHeight),
+        Rect.fromLTWH(size.width * 0.11, barHeight + spacing, size.width * 0.68,
+            barHeight),
         radius,
       ),
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, (barHeight + spacing) * 2, size.width * 0.58, barHeight),
+        Rect.fromLTWH(
+            0, (barHeight + spacing) * 2, size.width * 0.58, barHeight),
         radius,
       ),
     ];
@@ -337,7 +342,8 @@ class _PulseBeam extends StatelessWidget {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.orangeBright.withValues(alpha: 0.38 + glowStrength * 0.16),
+                  color: AppColors.orangeBright
+                      .withValues(alpha: 0.38 + glowStrength * 0.16),
                   blurRadius: 18,
                   spreadRadius: 1,
                 ),

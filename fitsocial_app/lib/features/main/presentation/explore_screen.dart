@@ -17,6 +17,7 @@ import 'post_detail_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../races/application/race_providers.dart';
 import '../../races/domain/race_formatting.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -271,46 +272,50 @@ class _UserResultTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () => context.push('/user/${user.id}'),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: palette.stroke),
-        ),
-        child: Row(
-          children: [
-            _UserAvatar(user: user, size: 48),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    user.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
+      child: LiquidGlass(
+        // Painted by the lens rather than by a fill of its own: a pane
+        // over the app backdrop, like every other card.
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Row(
+            children: [
+              _UserAvatar(user: user, size: 48),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    user.handle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: palette.muted),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      user.handle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: palette.muted),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              '${user.postsCount} ${user.postsCount == 1 ? 'post' : 'posts'}',
-              style: TextStyle(color: palette.muted, fontSize: 13),
-            ),
-            Icon(Icons.chevron_right_rounded, color: palette.muted),
-          ],
+              Text(
+                '${user.postsCount} ${user.postsCount == 1 ? 'post' : 'posts'}',
+                style: TextStyle(color: palette.muted, fontSize: 13),
+              ),
+              Icon(Icons.chevron_right_rounded, color: palette.muted),
+            ],
+          ),
         ),
       ),
     );

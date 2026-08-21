@@ -9,6 +9,7 @@ import '../../challenges/domain/challenge_models.dart';
 import '../../challenges/presentation/badge_shelf.dart';
 import '../../challenges/presentation/challenge_indicators.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Points and badges — what the app has to say about what somebody has done.
 ///
@@ -41,16 +42,13 @@ class AchievementsScreen extends ConsumerWidget {
         ),
         children: [
           _PointsCard(points: points),
-
           if (earlyWorm.totalDays > 0) ...[
             const SizedBox(height: AppSpacing.md),
             _EarlyWormCard(streak: earlyWorm),
           ],
-
           const SizedBox(height: AppSpacing.xl),
           const ChallengeLabel('BADGES'),
           const SizedBox(height: AppSpacing.sm),
-
           if (badges.isEmpty)
             _EmptyBadges(palette: palette)
           else
@@ -144,25 +142,29 @@ class _EarlyWormCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        children: [
-          StreakFlame(
-            streak: streak.currentStreak,
-            label: 'EARLY WORM',
-          ),
-          const Spacer(),
-          Text(
-            'Best ${streak.longestStreak} · ${streak.totalDays} mornings',
-            style: TextStyle(color: palette.muted, fontSize: 12),
-          ),
-        ],
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            StreakFlame(
+              streak: streak.currentStreak,
+              label: 'EARLY WORM',
+            ),
+            const Spacer(),
+            Text(
+              'Best ${streak.longestStreak} · ${streak.totalDays} mornings',
+              style: TextStyle(color: palette.muted, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -175,32 +177,36 @@ class _EmptyBadges extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.emoji_events_outlined, size: 30, color: palette.muted),
-          const SizedBox(height: 10),
-          Text(
-            'No badges yet.',
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.emoji_events_outlined, size: 30, color: palette.muted),
+            const SizedBox(height: 10),
+            Text(
+              'No badges yet.',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Enter a challenge, or post a Pulse before 6 AM.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: palette.muted, fontSize: 13),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              'Enter a challenge, or post a Pulse before 6 AM.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: palette.muted, fontSize: 13),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -12,6 +12,8 @@ class HealthSummary {
     required this.activeCaloriesKcal,
     required this.distanceKm,
     required this.available,
+    this.readAt,
+    this.stepsAsOf,
   });
 
   static const unavailable = HealthSummary(
@@ -31,6 +33,19 @@ class HealthSummary {
 
   /// False when Health Connect isn't installed / permissions denied.
   final bool available;
+
+  /// When this summary was read. Null on [unavailable].
+  final DateTime? readAt;
+
+  /// End of the most recent step record Health Connect held for today.
+  ///
+  /// Apps write into Health Connect in batches rather than live — Samsung
+  /// Health flushes on its own schedule — so the total here trails what their
+  /// own screen shows by however long it has been since that last write. This
+  /// is that moment, kept so a lagging number can be shown as "synced a few
+  /// minutes ago" instead of reading as wrong. Null when nothing has been
+  /// written today.
+  final DateTime? stepsAsOf;
 }
 
 class HealthService {
@@ -80,6 +95,20 @@ class HealthService {
     }
   }
 
+  /// Health Connect's own de-duplicated step total for a window.
+  ///
+  /// Null when the store is unavailable or the read throws. Used for reading a
+  /// day that has already ended, where [readTodaySummary]'s midnight-to-now
+  /// window is the wrong question.
+  Future<int?> readStepsBetween(DateTime start, DateTime end) async {
+    try {
+      await _health.configure();
+      return await _health.getTotalStepsInInterval(start, end);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Reads today's summary (and last night's sleep).
   Future<HealthSummary> readTodaySummary() async {
     try {
@@ -97,6 +126,7 @@ class HealthService {
 
       double? latestHr;
       DateTime? latestHrTime;
+      DateTime? stepsAsOf;
       double activeKcal = 0;
       double distanceMeters = 0;
       Duration sleepTotal = Duration.zero;
@@ -118,6 +148,15 @@ class HealthService {
             if (value is NumericHealthValue && !p.dateFrom.isBefore(midnight)) {
               distanceMeters += value.numericValue.toDouble();
             }
+          case HealthDataType.STEPS:
+            // Only the freshness of the records is taken from here. The total
+            // stays with getTotalStepsInInterval, which is Health Connect's own
+            // de-duplicated aggregate — these raw records overlap across
+            // sources and summing them would double-count phone against watch.
+            if (!p.dateTo.isBefore(midnight) &&
+                (stepsAsOf == null || p.dateTo.isAfter(stepsAsOf))) {
+              stepsAsOf = p.dateTo;
+            }
           case HealthDataType.SLEEP_SESSION:
             sleepTotal += p.dateTo.difference(p.dateFrom);
           default:
@@ -132,6 +171,8 @@ class HealthService {
         activeCaloriesKcal: activeKcal == 0 ? null : activeKcal,
         distanceKm: distanceMeters == 0 ? null : distanceMeters / 1000.0,
         available: true,
+        readAt: DateTime.now(),
+        stepsAsOf: stepsAsOf,
       );
     } catch (_) {
       return HealthSummary.unavailable;

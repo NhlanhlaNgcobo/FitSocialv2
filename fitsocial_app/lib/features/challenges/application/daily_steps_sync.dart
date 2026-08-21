@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../tracking/application/tracking_providers.dart';
+import '../domain/challenge_clock.dart';
 import 'challenge_providers.dart';
 
 /// Keeps a durable record of today's step count.
@@ -35,6 +36,13 @@ class _DailyStepsSyncState extends ConsumerState<DailyStepsSync>
   /// clock that has not moved is not rewritten every half hour — the server
   /// needs the value to be current, not to be re-sent.
   int? _writtenOffset;
+
+  /// The last correction written for yesterday, and the day it was written
+  /// for. Kept so the same number is not rewritten on every tick, while a
+  /// larger one — Health Connect having received another late batch in the
+  /// meantime — still goes through.
+  String? _backfilledDayKey;
+  int _backfilledSteps = 0;
 
   /// Slow on purpose. A step count that is half an hour stale still closes the
   /// day correctly, and polling Health Connect harder would cost battery for
@@ -89,19 +97,75 @@ class _DailyStepsSyncState extends ConsumerState<DailyStepsSync>
     if (!ref.read(hasRunningEnrollmentProvider)) return;
 
     try {
-      final summary =
-          await ref.read(healthServiceProvider).readTodaySummary();
+      final summary = await ref.read(healthServiceProvider).readTodaySummary();
       final steps = summary.steps;
-      if (!summary.available || steps == null || steps <= 0) return;
-
-      await actions.recordSteps(
-            steps: steps,
-            source: 'health_connect',
-          );
+      if (summary.available && steps != null && steps > 0) {
+        await actions.recordSteps(
+          steps: steps,
+          source: 'health_connect',
+        );
+      }
     } catch (_) {
       // A failed sync is not worth surfacing: the next one is half an hour
       // away at worst, and there is nothing the user could do about it.
     }
+
+    // Deliberately not inside the block above, and not behind its early
+    // return: in the small hours today's count is legitimately zero, and
+    // correcting yesterday is the whole reason to be awake at that time.
+    try {
+      await _backfillYesterday(actions);
+    } catch (_) {
+      // Same reasoning. Yesterday either gets corrected before 2 AM or closes
+      // on the number it already has, which is the behaviour without this.
+    }
+  }
+
+  /// Corrects yesterday's total while the day is still inside its 2 AM grace.
+  ///
+  /// Health Connect is not written to live. Samsung Health flushes into it in
+  /// batches, so the last stretch of an evening's walking usually lands after
+  /// the phone has been put down — and the reading the day would otherwise
+  /// close on is short by exactly that much, permanently. After midnight the
+  /// figure is both complete and still changeable, so it is read once more
+  /// against yesterday's window and written under yesterday's key. The server
+  /// recomputes yesterday alongside today on every step write, so a correction
+  /// that arrives before the lock is picked up without any change there.
+  ///
+  /// This only helps somebody who opens the app between midnight and 2 AM, and
+  /// that is on purpose. The version that always works is a background job at
+  /// 01:30, which is the first thing aggressive battery management kills — it
+  /// would fail most reliably on the devices with the worst lag.
+  Future<void> _backfillYesterday(ChallengeActions actions) async {
+    final now = DateTime.now();
+    final clock = ref.read(challengeClockProvider);
+    final dayKey = ChallengeClock.addDays(clock.today(now), -1);
+
+    // The same predicate the lock is judged by, rather than a hand-rolled
+    // "is it before 2 AM": outside the grace window there is nothing a write
+    // could still change, and the server would drop it anyway.
+    if (!clock.isOpen(dayKey, now)) return;
+
+    // Yesterday in local wall-clock terms: the midnight that just passed, back
+    // one day. Health Connect is asked for its own de-duplicated total over
+    // that window rather than for a summary, because the day is over — there
+    // is no "so far today" left to read.
+    final midnight = DateTime(now.year, now.month, now.day);
+    final steps = await ref.read(healthServiceProvider).readStepsBetween(
+          midnight.subtract(const Duration(days: 1)),
+          midnight,
+        );
+
+    if (!mounted || steps == null || steps <= 0) return;
+    if (dayKey == _backfilledDayKey && steps <= _backfilledSteps) return;
+
+    await actions.recordSteps(
+      steps: steps,
+      source: 'health_connect_backfill',
+      dayKey: dayKey,
+    );
+    _backfilledDayKey = dayKey;
+    _backfilledSteps = steps;
   }
 
   @override

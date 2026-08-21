@@ -14,6 +14,7 @@ import '../application/activity_actions.dart';
 import '../application/create_flow_controller.dart';
 import '../domain/app_models.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class ManualRunEntryScreen extends ConsumerStatefulWidget {
   const ManualRunEntryScreen({super.key});
@@ -174,50 +175,54 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                   ),
                 ),
                 const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: BoxDecoration(
-                    color: palette.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: palette.stroke),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _distanceController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: palette.text,
-                          ),
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: '0.00',
-                          ),
-                          onChanged: (value) {
-                            setState(() {
-                              _distanceKm = double.tryParse(value) ?? 0;
-                            });
-                            _syncDraft();
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Text(
-                          'km',
-                          style: TextStyle(
-                            color: palette.muted,
-                            fontWeight: FontWeight.w700,
+                LiquidGlass(
+                  // Painted by the lens rather than by a fill of its own: a pane
+                  // over the app backdrop, like every other card.
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: palette.stroke),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _distanceController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: palette.text,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              hintText: '0.00',
+                            ),
+                            onChanged: (value) {
+                              setState(() {
+                                _distanceKm = double.tryParse(value) ?? 0;
+                              });
+                              _syncDraft();
+                            },
                           ),
                         ),
-                      ),
-                    ],
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            'km',
+                            style: TextStyle(
+                              color: palette.muted,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -227,7 +232,8 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                   children: [0.1, 0.5, 1, 5]
                       .map(
                         (amount) => BouncyChip(
-                          label: '+${amount.toStringAsFixed(amount < 1 ? 1 : 0)} km',
+                          label:
+                              '+${amount.toStringAsFixed(amount < 1 ? 1 : 0)} km',
                           onTap: () => _bumpDistance(amount.toDouble()),
                         ),
                       )
@@ -350,17 +356,21 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
           ),
           const SizedBox(height: AppSpacing.md),
           if (_errorMessage != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: palette.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: palette.stroke),
-              ),
-              child: Text(
-                _errorMessage!,
-                style: TextStyle(color: palette.brandText),
+            LiquidGlass(
+              // Painted by the lens rather than by a fill of its own: a pane
+              // over the app backdrop, like every other card.
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: palette.stroke),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(color: palette.brandText),
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.md),

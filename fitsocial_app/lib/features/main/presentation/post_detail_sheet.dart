@@ -6,6 +6,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../domain/app_models.dart';
 import 'comments_sheet.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Opens [post] in a sheet over whatever is on screen.
 ///
@@ -47,59 +48,64 @@ class PostDetailSheet extends StatelessWidget {
       // content rather than claiming the full screen behind the barrier.
       expand: false,
       builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: palette.background,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: palette.stroke),
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: ListView(
-            controller: scrollController,
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              0,
-              AppSpacing.md,
-              AppSpacing.md + MediaQuery.of(context).viewPadding.bottom,
-            ),
-            children: [
-              const _GrabHandle(),
-              _SheetHeader(post: post),
-              const SizedBox(height: AppSpacing.sm),
-              // The same card the feed renders, so like, save, comment and the
-              // overflow menu behave identically here — there is no second
-              // implementation of a post to keep in step.
-              PostCard(
-                postId: post.id,
-                authorId: post.authorId,
-                userName: post.userName,
-                activity: post.activity,
-                caption: post.caption,
-                metricLabels: post.metricLabels,
-                timestamp: post.timestamp,
-                likes: post.likes,
-                comments: post.comments,
-                backgroundColors: post.backgroundColors,
-                postType: post.postType,
-                imageUrl: post.imageUrl,
-                workoutData: post.workoutData,
-                routePoints: post.routePoints,
-                authorAvatarUrl: post.authorAvatarUrl,
-                imageAspectRatio: post.imageAspectRatio,
-                taggedUsers: post.taggedUsers,
-                onCommentTapped: () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    useRootNavigator: true,
-                    builder: (_) => CommentsSheet(postId: post.id),
-                  );
-                },
+        return LiquidGlass(
+          // A sheet always has a page behind it, which makes it the one
+          // surface in the app guaranteed something worth bending.
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border(
+                top: BorderSide(color: palette.stroke),
               ),
-            ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ListView(
+              controller: scrollController,
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.md + MediaQuery.of(context).viewPadding.bottom,
+              ),
+              children: [
+                const _GrabHandle(),
+                _SheetHeader(post: post),
+                const SizedBox(height: AppSpacing.sm),
+                // The same card the feed renders, so like, save, comment and the
+                // overflow menu behave identically here — there is no second
+                // implementation of a post to keep in step.
+                PostCard(
+                  postId: post.id,
+                  authorId: post.authorId,
+                  userName: post.userName,
+                  activity: post.activity,
+                  caption: post.caption,
+                  metricLabels: post.metricLabels,
+                  timestamp: post.timestamp,
+                  likes: post.likes,
+                  comments: post.comments,
+                  backgroundColors: post.backgroundColors,
+                  postType: post.postType,
+                  imageUrl: post.imageUrl,
+                  workoutData: post.workoutData,
+                  routePoints: post.routePoints,
+                  authorAvatarUrl: post.authorAvatarUrl,
+                  imageAspectRatio: post.imageAspectRatio,
+                  taggedUsers: post.taggedUsers,
+                  onCommentTapped: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      useRootNavigator: true,
+                      builder: (_) => CommentsSheet(postId: post.id),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },

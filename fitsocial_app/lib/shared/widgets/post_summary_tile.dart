@@ -87,8 +87,8 @@ class PostSummaryTile extends StatelessWidget {
     // A run with a trace shows the trace. Everything else leads with what it
     // has: the headline number for a workout, a meal or a hand-typed run, and
     // for a written post the words themselves.
-    final hasRoute = kind == _PostKind.run &&
-        RouteSparkline.canDraw(post.routePoints);
+    final hasRoute =
+        kind == _PostKind.run && RouteSparkline.canDraw(post.routePoints);
     final headline = metrics.isEmpty ? null : metrics.first;
     final words = post.caption.trim();
 
@@ -102,7 +102,8 @@ class PostSummaryTile extends StatelessWidget {
       // The trace carries the eye, so the distance heads the footer.
       caption = headline ?? post.activity;
     } else if (kind == _PostKind.text) {
-      body = _Words(text: words.isEmpty ? post.activity : words, compact: compact);
+      body =
+          _Words(text: words.isEmpty ? post.activity : words, compact: compact);
       // The author's own subtitle, when they wrote one and it isn't already
       // the thing in the body.
       final subtitle = post.activity.trim();
@@ -257,7 +258,8 @@ class PostMediaTile extends StatelessWidget {
           if (scrim != null)
             DecoratedBox(decoration: BoxDecoration(gradient: scrim)),
           Padding(
-            padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.sm + 2),
+            padding:
+                EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.sm + 2),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -348,7 +350,12 @@ class PostMediaTile extends StatelessWidget {
     }
 
     return const LinearGradient(
-      colors: [Color(0x73050505), Color(0x1A050505), Color(0x59050505), Color(0xD9050505)],
+      colors: [
+        Color(0x73050505),
+        Color(0x1A050505),
+        Color(0x59050505),
+        Color(0xD9050505)
+      ],
       stops: [0, 0.32, 0.66, 1],
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -375,8 +382,9 @@ class _PostPhoto extends StatelessWidget {
       fit: BoxFit.cover,
       errorBuilder: (_, __, ___) =>
           MediaPlaceholder(borderRadius: borderRadius, failed: true),
-      loadingBuilder: (_, child, progress) =>
-          progress == null ? child : MediaPlaceholder(borderRadius: borderRadius),
+      loadingBuilder: (_, child, progress) => progress == null
+          ? child
+          : MediaPlaceholder(borderRadius: borderRadius),
     );
   }
 }
@@ -476,7 +484,8 @@ class _KindGlyph extends StatelessWidget {
 /// picture a moment later would flash a different layout on every scroll, and
 /// a grid of them would look like a grid of different things.
 class MediaPlaceholder extends StatelessWidget {
-  const MediaPlaceholder({this.borderRadius = 18, this.failed = false, super.key});
+  const MediaPlaceholder(
+      {this.borderRadius = 18, this.failed = false, super.key});
 
   final double borderRadius;
 

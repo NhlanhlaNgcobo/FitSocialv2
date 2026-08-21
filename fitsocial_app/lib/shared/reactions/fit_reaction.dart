@@ -193,17 +193,14 @@ class FitReactionSummary {
       ..sort((a, b) {
         final byCount = countOf(b).compareTo(countOf(a));
         if (byCount != 0) return byCount;
-        return FitReaction.all
-            .indexOf(a)
-            .compareTo(FitReaction.all.indexOf(b));
+        return FitReaction.all.indexOf(a).compareTo(FitReaction.all.indexOf(b));
       });
     return present;
   }
 
   /// The ones stacked on the summary row — at most three, the way Facebook
   /// caps its own.
-  List<FitReaction> get topReactions =>
-      ranked.take(3).toList(growable: false);
+  List<FitReaction> get topReactions => ranked.take(3).toList(growable: false);
 }
 
 /// Counts [records] into a [FitReactionSummary].

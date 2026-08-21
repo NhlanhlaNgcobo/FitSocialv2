@@ -9,7 +9,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// has wired into both platform builds — see `MusicTokenStore`. There is
 /// nothing secret about a theme name; encryption here is incidental.
 class ThemeModeStore {
-  const ThemeModeStore({FlutterSecureStorage storage = const FlutterSecureStorage()})
+  const ThemeModeStore(
+      {FlutterSecureStorage storage = const FlutterSecureStorage()})
       : _storage = storage;
 
   static const String _key = 'app_theme_mode';

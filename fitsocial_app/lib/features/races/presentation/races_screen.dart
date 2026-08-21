@@ -228,8 +228,7 @@ class _RacesScreenState extends ConsumerState<RacesScreen> {
 
   Future<void> _toggleSaved(RaceEvent event) async {
     try {
-      final saved =
-          await ref.read(raceActionsProvider).toggleSaved(event.id);
+      final saved = await ref.read(raceActionsProvider).toggleSaved(event.id);
       if (!mounted) return;
       showRaceSavedToast(context, saved: saved);
     } catch (_) {

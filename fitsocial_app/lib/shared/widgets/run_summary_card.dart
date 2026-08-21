@@ -9,6 +9,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/app_models.dart';
 import 'fit_social_logo.dart';
 import 'route_sparkline.dart';
+import 'liquid_glass.dart';
 
 /// A photo that has not been uploaded yet, as something [Image] can draw.
 ///
@@ -171,8 +172,15 @@ class _Backdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final image = background;
     if (image == null) {
-      return DecoratedBox(
-        decoration: BoxDecoration(gradient: skin.fallbackGradient),
+      // With no photo there is nothing for the card to sit on, so it looks
+      // through to the app's backdrop rather than painting a slab of its own.
+      // This is what the flat gradient used to do, and why this card stayed
+      // opaque while the rest turned to glass.
+      return const LiquidGlass(
+        borderRadius: BorderRadius.all(Radius.circular(19)),
+        // The card's own ClipRRect already holds this shape.
+        clip: false,
+        child: SizedBox.expand(),
       );
     }
 
@@ -315,7 +323,6 @@ class _RunSkin {
     required this.wordmark,
     required this.border,
     required this.photoFallback,
-    required this.fallbackGradient,
     required this.textShadows,
   });
 
@@ -329,15 +336,6 @@ class _RunSkin {
         wordmark: null,
         border: palette.stroke,
         photoFallback: palette.surfaceHigh,
-        fallbackGradient: LinearGradient(
-          // Listed per theme rather than derived, so a run and a workout with
-          // no backdrop are the same card.
-          colors: palette.isDark
-              ? const [Color(0xFF1E1E1E), Color(0xFF111111)]
-              : const [Color(0xFFFFFFFF), Color(0xFFF4EFE7)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
         textShadows: const [],
       );
     }
@@ -348,7 +346,6 @@ class _RunSkin {
       wordmark: AppColors.onMedia,
       border: Color(0x38F7F7F7),
       photoFallback: Color(0xFF1E1E1E),
-      fallbackGradient: LinearGradient(colors: [Color(0xFF1E1E1E), Color(0xFF111111)]),
       // The scrim handles most photos; this is what carries the numbers across
       // the one that is bright exactly where they sit.
       textShadows: [
@@ -367,9 +364,6 @@ class _RunSkin {
 
   /// Painted when the photo itself fails to load.
   final Color photoFallback;
-
-  /// Drawn when there is no photo at all.
-  final Gradient fallbackGradient;
 
   final List<Shadow> textShadows;
 }

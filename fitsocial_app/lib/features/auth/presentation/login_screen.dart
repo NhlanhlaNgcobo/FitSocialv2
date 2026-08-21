@@ -13,6 +13,7 @@ import '../../../shared/widgets/quick_toast.dart';
 import '../application/app_session.dart';
 import '../data/auth_repository.dart';
 import '../domain/username.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.isLoginMode = true});
@@ -242,7 +243,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Container(
                           height: 120,
                           decoration: BoxDecoration(
-                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+                            borderRadius: const BorderRadius.vertical(
+                                bottom: Radius.circular(32)),
                             gradient: LinearGradient(
                               colors: [
                                 AppColors.orangeBright.withValues(alpha: 0.2),
@@ -270,7 +272,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             Text(
-                              _isLoginMode ? 'Welcome back' : 'Create your account',
+                              _isLoginMode
+                                  ? 'Welcome back'
+                                  : 'Create your account',
                               style: const TextStyle(
                                 color: AppColors.onMedia,
                                 fontSize: 30,
@@ -279,7 +283,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _isLoginMode ? 'Log in to continue.' : 'Join the fitness community.',
+                              _isLoginMode
+                                  ? 'Log in to continue.'
+                                  : 'Join the fitness community.',
                               style: const TextStyle(
                                 color: AppColors.onMediaMuted,
                                 fontSize: 16,
@@ -335,19 +341,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: AppSpacing.md),
               ],
               if (session.errorMessage != null) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: palette.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: palette.stroke),
-                  ),
-                  child: Text(
-                    session.errorMessage!,
-                    style: const TextStyle(
-                      color: AppColors.orangeBright,
-                      fontSize: 13,
+                LiquidGlass(
+                  // Painted by the lens rather than by a fill of its own: a pane
+                  // over the app backdrop, like every other card.
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: palette.stroke),
+                    ),
+                    child: Text(
+                      session.errorMessage!,
+                      style: const TextStyle(
+                        color: AppColors.orangeBright,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
@@ -442,113 +452,124 @@ class _EmailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Form(
-        key: formKey,
-        child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            isLoginMode ? 'Username or email' : 'Email',
-            style: TextStyle(color: palette.text, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: emailController,
-            // The email keyboard is right for signup and wrong for logging in
-            // with a username, where its layout buries the letters people
-            // actually need behind an '@' and a '.com'.
-            keyboardType: isLoginMode
-                ? TextInputType.text
-                : TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            autocorrect: false,
-            // Offering `username` as well lets a password manager fill either
-            // credential; `email` alone would leave a saved username unfilled.
-            autofillHints: isLoginMode
-                ? const [AutofillHints.username, AutofillHints.email]
-                : const [AutofillHints.email],
-            validator: validateEmail,
-            decoration: InputDecoration(
-              hintText: isLoginMode ? 'yourhandle or you@example.com' : 'you@example.com',
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Password',
-            style: TextStyle(color: palette.text, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: passwordController,
-            obscureText: obscurePassword,
-            textInputAction:
-                isLoginMode ? TextInputAction.done : TextInputAction.next,
-            autofillHints: [
-              isLoginMode ? AutofillHints.password : AutofillHints.newPassword,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Form(
+          key: formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isLoginMode ? 'Username or email' : 'Email',
+                style:
+                    TextStyle(color: palette.text, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: emailController,
+                // The email keyboard is right for signup and wrong for logging in
+                // with a username, where its layout buries the letters people
+                // actually need behind an '@' and a '.com'.
+                keyboardType: isLoginMode
+                    ? TextInputType.text
+                    : TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autocorrect: false,
+                // Offering `username` as well lets a password manager fill either
+                // credential; `email` alone would leave a saved username unfilled.
+                autofillHints: isLoginMode
+                    ? const [AutofillHints.username, AutofillHints.email]
+                    : const [AutofillHints.email],
+                validator: validateEmail,
+                decoration: InputDecoration(
+                  hintText: isLoginMode
+                      ? 'yourhandle or you@example.com'
+                      : 'you@example.com',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Password',
+                style:
+                    TextStyle(color: palette.text, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: passwordController,
+                obscureText: obscurePassword,
+                textInputAction:
+                    isLoginMode ? TextInputAction.done : TextInputAction.next,
+                autofillHints: [
+                  isLoginMode
+                      ? AutofillHints.password
+                      : AutofillHints.newPassword,
+                ],
+                validator: validatePassword,
+                onFieldSubmitted: (_) {
+                  if (isLoginMode) onSubmitted();
+                },
+                decoration: InputDecoration(
+                  hintText: isLoginMode
+                      ? 'Enter your password'
+                      : 'At least 6 characters',
+                  suffixIcon: _VisibilityToggle(
+                    obscured: obscurePassword,
+                    onPressed: onTogglePassword,
+                  ),
+                ),
+              ),
+              if (!isLoginMode) ...[
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Confirm Password',
+                  style: TextStyle(
+                      color: palette.text, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: confirmController,
+                  obscureText: obscureConfirm,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: const [AutofillHints.newPassword],
+                  validator: validateConfirm,
+                  onFieldSubmitted: (_) => onSubmitted(),
+                  decoration: InputDecoration(
+                    hintText: 'Re-enter your password',
+                    suffixIcon: _VisibilityToggle(
+                      obscured: obscureConfirm,
+                      onPressed: onToggleConfirm,
+                    ),
+                  ),
+                ),
+              ],
+              if (onForgotPassword != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: onForgotPassword,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.orangeBright,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Forgot Password?',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ),
+                ),
             ],
-            validator: validatePassword,
-            onFieldSubmitted: (_) {
-              if (isLoginMode) onSubmitted();
-            },
-            decoration: InputDecoration(
-              hintText: isLoginMode
-                  ? 'Enter your password'
-                  : 'At least 6 characters',
-              suffixIcon: _VisibilityToggle(
-                obscured: obscurePassword,
-                onPressed: onTogglePassword,
-              ),
-            ),
           ),
-          if (!isLoginMode) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              'Confirm Password',
-              style:
-                  TextStyle(color: palette.text, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: confirmController,
-              obscureText: obscureConfirm,
-              textInputAction: TextInputAction.done,
-              autofillHints: const [AutofillHints.newPassword],
-              validator: validateConfirm,
-              onFieldSubmitted: (_) => onSubmitted(),
-              decoration: InputDecoration(
-                hintText: 'Re-enter your password',
-                suffixIcon: _VisibilityToggle(
-                  obscured: obscureConfirm,
-                  onPressed: onToggleConfirm,
-                ),
-              ),
-            ),
-          ],
-          if (onForgotPassword != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: onForgotPassword,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.orangeBright,
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Forgot Password?',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                ),
-              ),
-            ),
-        ],
         ),
       ),
     );
@@ -571,9 +592,7 @@ class _VisibilityToggle extends StatelessWidget {
       color: context.palette.muted,
       tooltip: obscured ? 'Show password' : 'Hide password',
       icon: Icon(
-        obscured
-            ? Icons.visibility_outlined
-            : Icons.visibility_off_outlined,
+        obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
       ),
     );
   }
@@ -620,56 +639,56 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return AlertDialog(
-      backgroundColor: palette.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: palette.stroke),
-      ),
-      title: const Text(
-        'Reset your password',
-        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "We'll email you a link to set a new password.",
-            style: TextStyle(color: palette.muted, height: 1.4),
+    return LiquidGlass(
+      // A dialog interrupts a page, so there is always something
+      // behind it -- which makes it glass like everything else.
+      borderRadius: BorderRadius.circular(22),
+      child: AlertDialog(
+        title: const Text(
+          'Reset your password',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "We'll email you a link to set a new password.",
+              style: TextStyle(color: palette.muted, height: 1.4),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _controller,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
+              autocorrect: false,
+              autofocus: true,
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                hintText: 'you@example.com',
+                errorText: _errorText,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(foregroundColor: palette.muted),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(height: AppSpacing.md),
-          TextField(
-            controller: _controller,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
-            autocorrect: false,
-            autofocus: true,
-            onSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              hintText: 'you@example.com',
-              errorText: _errorText,
+          TextButton(
+            onPressed: _submit,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.orangeBright,
+            ),
+            child: const Text(
+              'Send Link',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          style: TextButton.styleFrom(foregroundColor: palette.muted),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: _submit,
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.orangeBright,
-          ),
-          child: const Text(
-            'Send Link',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-      ],
     );
   }
 }

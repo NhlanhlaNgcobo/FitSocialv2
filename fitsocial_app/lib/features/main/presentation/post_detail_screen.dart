@@ -19,6 +19,7 @@ import '../domain/app_models.dart';
 import '../domain/shared_post.dart';
 import 'comments_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// A single post on its own page.
 ///
@@ -115,13 +116,14 @@ class _PostPageState extends ConsumerState<_PostPage> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final post = widget.post;
     final media = _MediaKind.of(post);
     final strip = _strip(post, media);
 
     return Scaffold(
-      backgroundColor: palette.background,
+      // Transparent so this page sits on the app's one backdrop, the
+      // same ground every other screen looks through.
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Post', style: TextStyle(fontSize: 18)),
         actions: [
@@ -526,47 +528,51 @@ class _MetricPill extends StatelessWidget {
     final value = split == -1 ? label.trim() : label.substring(0, split);
     final unit = split == -1 ? '' : label.substring(split + 1).trim();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                height: 1.1,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 12,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  height: 1.1,
+                ),
               ),
             ),
-          ),
-          if (unit.isNotEmpty) ...[
-            const SizedBox(height: 3),
-            Text(
-              unit,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 11.5,
-                letterSpacing: 0.2,
+            if (unit.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(
+                unit,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 11.5,
+                  letterSpacing: 0.2,
+                ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -735,7 +741,9 @@ class _StatusScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.palette.background,
+      // Transparent so this page sits on the app's one backdrop, the
+      // same ground every other screen looks through.
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         title: const Text('Post', style: TextStyle(fontSize: 18)),
         actions: const [MusicIslandAction()],

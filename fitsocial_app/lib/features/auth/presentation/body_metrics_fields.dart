@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../domain/body_metrics.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The height, weight and units inputs, with whatever they currently add up to.
 ///
@@ -316,9 +317,7 @@ class BmiReadout extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              showIssue
-                  ? issue.message
-                  : 'Your BMI appears here as you type.',
+              showIssue ? issue.message : 'Your BMI appears here as you type.',
               textAlign: TextAlign.center,
               style: TextStyle(color: palette.muted, height: 1.35),
             ),
@@ -389,15 +388,19 @@ class _ReadoutShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }
@@ -443,7 +446,8 @@ class BmiScale extends StatelessWidget {
     const bands = BmiCategory.values;
     final index = bands.indexOf(BmiCategory.of(bmi));
     final start = bands[index].lowerBound;
-    final end = index + 1 < bands.length ? bands[index + 1].lowerBound : _ceiling;
+    final end =
+        index + 1 < bands.length ? bands[index + 1].lowerBound : _ceiling;
     final within = ((bmi - start) / (end - start)).clamp(0.0, 1.0);
     return ((index + within) / bands.length).clamp(0.0, 1.0);
   }
@@ -556,9 +560,8 @@ class _UnitsToggle extends StatelessWidget {
                         : 'Imperial (ft/lb)',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: option == units
-                          ? palette.brandText
-                          : palette.muted,
+                      color:
+                          option == units ? palette.brandText : palette.muted,
                     ),
                   ),
                 ),

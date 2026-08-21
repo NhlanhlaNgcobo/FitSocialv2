@@ -311,9 +311,8 @@ class FirestoreChallengeRepository implements ChallengeRepository {
     return ChallengeEnrollment(
       id: id,
       userId: (data['userId'] as String?) ?? '',
-      challengeKey:
-          ChallengeKey.byKey(data['challengeKey'] as String? ?? '') ??
-              ChallengeKey.pulse75,
+      challengeKey: ChallengeKey.byKey(data['challengeKey'] as String? ?? '') ??
+          ChallengeKey.pulse75,
       startDayKey: (data['startDayKey'] as String?) ?? '',
       utcOffsetMinutes: _int(data['utcOffsetMinutes'], fallback: 0),
       pointsEarned: _int(data['pointsEarned']),

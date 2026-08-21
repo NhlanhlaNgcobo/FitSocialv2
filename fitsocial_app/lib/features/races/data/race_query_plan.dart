@@ -45,7 +45,8 @@ class RaceQueryPlan {
     // the clause only when they are the sole filter, which is the case that
     // matters: "Comrades qualifiers" on its own is a real query somebody runs.
     final RaceServerClause serverClause;
-    if (filter.provinces.isNotEmpty && filter.provinces.length <= whereInLimit) {
+    if (filter.provinces.isNotEmpty &&
+        filter.provinces.length <= whereInLimit) {
       serverClause = RaceServerClause.provinces;
     } else if (filter.buckets.isNotEmpty &&
         filter.buckets.length <= whereInLimit) {

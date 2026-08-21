@@ -1120,6 +1120,28 @@ enum MusicProviderService {
   spotify,
   appleMusic,
   youtubeMusic,
+
+  /// Whatever music app is playing on this phone, read through Android's media
+  /// session rather than through anyone's API.
+  ///
+  /// Unlike the three above this is not an account anybody connects — there is
+  /// no sign-in, no token and no dashboard behind it. It is the value a
+  /// snapshot carries when the player on the other end is an app we have no
+  /// branding for, which is most of them. A recognised app still reports as
+  /// itself, so Spotify playing reads as [spotify] and keeps its own colours.
+  device;
+
+  /// The services a user signs in to.
+  ///
+  /// [values] minus [device], and the list every account-shaped path should
+  /// walk instead of `values`: the connect sheet, the saved-session restore,
+  /// and anything that reaches for a token store. Asking `device` for an
+  /// account throws, because there is no account to ask about.
+  static const connectable = <MusicProviderService>[
+    spotify,
+    appleMusic,
+    youtubeMusic,
+  ];
 }
 
 enum ActivitySection {
@@ -1153,6 +1175,8 @@ extension MusicProviderServiceX on MusicProviderService {
         return 'Apple Music';
       case MusicProviderService.youtubeMusic:
         return 'YouTube Music';
+      case MusicProviderService.device:
+        return 'Your music';
     }
   }
 }

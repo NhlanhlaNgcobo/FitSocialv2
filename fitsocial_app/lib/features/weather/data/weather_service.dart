@@ -96,13 +96,13 @@ WeatherSnapshot parseForecast(
     temperatureC: temperature,
     feelsLikeC:
         (current['apparent_temperature'] as num?)?.toDouble() ?? temperature,
-    condition:
-        WeatherCondition.fromWmoCode((current['weather_code'] as num?)?.toInt()),
+    condition: WeatherCondition.fromWmoCode(
+        (current['weather_code'] as num?)?.toInt()),
     windKph: (current['wind_speed_10m'] as num?)?.toDouble() ?? 0,
     // Open-Meteo sends is_day as 1/0 rather than a bool.
     isDay: ((current['is_day'] as num?)?.toInt() ?? 1) == 1,
-    observedAt: DateTime.tryParse(current['time'] as String? ?? '') ??
-        DateTime.now(),
+    observedAt:
+        DateTime.tryParse(current['time'] as String? ?? '') ?? DateTime.now(),
     highC: _firstNumber(dailyMap?['temperature_2m_max']),
     lowC: _firstNumber(dailyMap?['temperature_2m_min']),
     precipitationChance:

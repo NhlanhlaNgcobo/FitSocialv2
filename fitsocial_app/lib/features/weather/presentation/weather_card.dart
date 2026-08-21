@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../application/weather_providers.dart';
 import '../domain/weather.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Conditions where the user is, and whether they should train outside.
 ///
@@ -39,9 +40,8 @@ IconData weatherIcon(WeatherCondition condition, {required bool isDay}) {
   return switch (condition) {
     WeatherCondition.clear =>
       isDay ? Icons.wb_sunny_rounded : Icons.nightlight_round,
-    WeatherCondition.partlyCloudy => isDay
-        ? Icons.wb_cloudy_outlined
-        : Icons.nights_stay_outlined,
+    WeatherCondition.partlyCloudy =>
+      isDay ? Icons.wb_cloudy_outlined : Icons.nights_stay_outlined,
     WeatherCondition.cloudy => Icons.cloud_rounded,
     WeatherCondition.fog => Icons.foggy,
     WeatherCondition.drizzle => Icons.grain_rounded,
@@ -217,12 +217,16 @@ class _WeatherSkeleton extends StatelessWidget {
     return DarkCard(
       child: Row(
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: palette.surfaceHigh,
-              borderRadius: BorderRadius.circular(16),
+          LiquidGlass(
+            // Painted by the lens rather than by a fill of its own: a pane
+            // over the app backdrop, like every other card.
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
           const SizedBox(width: AppSpacing.md),

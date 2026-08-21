@@ -8,6 +8,7 @@ import '../../auth/application/app_session.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
 import 'pulse_ring.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The horizontal rail of Pulse rings at the top of the feed.
 ///
@@ -27,7 +28,10 @@ class PulseTray extends ConsumerWidget {
     return SizedBox(
       height: height,
       child: tray.when(
-        data: (entries) => _Rail(entries: entries, profileName: profile?.displayName, profileAvatarUrl: profile?.avatarUrl),
+        data: (entries) => _Rail(
+            entries: entries,
+            profileName: profile?.displayName,
+            profileAvatarUrl: profile?.avatarUrl),
         loading: () => _Rail(
           entries: const [],
           profileName: profile?.displayName,
@@ -54,9 +58,8 @@ class _Rail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // buildPulseTray already sorts the user's own ring to the front when they
     // have one; when they don't, a placeholder tile stands in for it.
-    final ownEntry = entries.isNotEmpty && entries.first.isOwn
-        ? entries.first
-        : null;
+    final ownEntry =
+        entries.isNotEmpty && entries.first.isOwn ? entries.first : null;
     final others = ownEntry == null ? entries : entries.skip(1).toList();
 
     return ListView.separated(
@@ -181,15 +184,19 @@ class _TrayMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      width: double.infinity,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.stroke),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Text(label, style: TextStyle(color: palette.muted)),
       ),
-      child: Text(label, style: TextStyle(color: palette.muted)),
     );
   }
 }

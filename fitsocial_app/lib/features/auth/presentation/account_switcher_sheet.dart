@@ -7,6 +7,7 @@ import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../application/app_session.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The account list behind the chevron next to the profile name.
 ///
@@ -34,94 +35,95 @@ class _AccountSwitcherSheet extends ConsumerWidget {
 
     return SafeArea(
       top: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12, bottom: AppSpacing.sm),
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: palette.stroke,
-                  borderRadius: BorderRadius.circular(2),
+      child: LiquidGlass(
+        // A sheet always has a page behind it, which makes it the
+        // one surface guaranteed something worth bending.
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 12, bottom: AppSpacing.sm),
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: palette.stroke,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 4,
-              ),
-              leading: Avatar(
-                initials: accountInitials(displayName),
-                size: 44,
-                imageUrl: profile?.avatarUrl,
-              ),
-              title: Text(
-                displayName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: palette.text,
-                  fontWeight: FontWeight.w700,
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: 4,
                 ),
-              ),
-              subtitle: Text(
-                formatHandle(profile?.handle),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: palette.muted),
-              ),
-              trailing: Icon(
-                Icons.check_circle_rounded,
-                color: palette.brand,
-              ),
-            ),
-            Divider(color: palette.stroke, height: 1),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 4,
-              ),
-              leading: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: palette.stroke),
+                leading: Avatar(
+                  initials: accountInitials(displayName),
+                  size: 44,
+                  imageUrl: profile?.avatarUrl,
                 ),
-                child: Icon(
-                  Icons.add_rounded,
+                title: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: Text(
+                  formatHandle(profile?.handle),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: palette.muted),
+                ),
+                trailing: Icon(
+                  Icons.check_circle_rounded,
                   color: palette.brand,
                 ),
               ),
-              title: Text(
-                'Add account',
-                style: TextStyle(
-                  color: palette.text,
-                  fontWeight: FontWeight.w700,
+              Divider(color: palette.stroke, height: 1),
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: 4,
                 ),
+                leading: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: palette.stroke),
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    color: palette.brand,
+                  ),
+                ),
+                title: Text(
+                  'Add account',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                onTap: () {
+                  // Resolved before the pop: afterwards this context is gone
+                  // and the overlay can no longer be looked up from it.
+                  final overlay = Overlay.of(context, rootOverlay: true);
+                  Navigator.of(context).pop();
+                  showQuickToastOn(
+                    overlay,
+                    'A second account is coming soon.',
+                    icon: Icons.schedule_rounded,
+                  );
+                },
               ),
-              onTap: () {
-                // Resolved before the pop: afterwards this context is gone
-                // and the overlay can no longer be looked up from it.
-                final overlay = Overlay.of(context, rootOverlay: true);
-                Navigator.of(context).pop();
-                showQuickToastOn(
-                  overlay,
-                  'A second account is coming soon.',
-                  icon: Icons.schedule_rounded,
-                );
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

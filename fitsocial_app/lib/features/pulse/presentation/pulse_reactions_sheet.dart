@@ -9,6 +9,7 @@ import '../../../shared/reactions/fit_reaction.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Who reacted to a Pulse, and with what.
 ///
@@ -25,8 +26,7 @@ class FitReactionsSheet extends ConsumerStatefulWidget {
   final String pulseId;
 
   @override
-  ConsumerState<FitReactionsSheet> createState() =>
-      _FitReactionsSheetState();
+  ConsumerState<FitReactionsSheet> createState() => _FitReactionsSheetState();
 }
 
 class _FitReactionsSheetState extends ConsumerState<FitReactionsSheet> {
@@ -44,11 +44,10 @@ class _FitReactionsSheetState extends ConsumerState<FitReactionsSheet> {
       maxChildSize: 0.9,
       expand: false,
       builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
+        return LiquidGlass(
+          // A sheet always has a page behind it, which makes it the one surface
+          // in the app guaranteed something worth bending.
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: reactions.when(
             data: (records) => _content(records, scrollController),
             loading: () => const Center(
@@ -193,9 +192,8 @@ class _Tab extends StatelessWidget {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: isSelected
-                ? tint.withValues(alpha: 0.18)
-                : palette.surfaceHigh,
+            color:
+                isSelected ? tint.withValues(alpha: 0.18) : palette.surfaceHigh,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isSelected ? tint : Colors.transparent,

@@ -88,8 +88,7 @@ Stream<BackendReachability> reachabilityFromCacheFlags(
 /// extra. There is no separate connectivity plugin here on purpose — what
 /// matters is whether *Firestore* is reachable, and a phone can hold a wifi
 /// association that routes nowhere.
-final backendReachabilityProvider =
-    StreamProvider<BackendReachability>((ref) {
+final backendReachabilityProvider = StreamProvider<BackendReachability>((ref) {
   // Re-subscribes when the signed-in user changes.
   ref.watch(appSessionProvider);
 

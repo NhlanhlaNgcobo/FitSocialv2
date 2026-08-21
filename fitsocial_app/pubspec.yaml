@@ -61,6 +61,8 @@ flutter:
   assets:
     - assets/images/
     - assets/images/welcome_reference_athlete.png
+  shaders:
+    - assets/shaders/liquid_glass.frag
 
 flutter_launcher_icons:
   android: true

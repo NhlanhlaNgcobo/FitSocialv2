@@ -55,8 +55,7 @@ class BleHeartRateService {
         found[r.device.remoteId.str] =
             HeartRateDevice(device: r.device, rssi: r.rssi);
       }
-      yield found.values.toList()
-        ..sort((a, b) => b.rssi.compareTo(a.rssi));
+      yield found.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
       if (!FlutterBluePlus.isScanningNow) break;
     }
   }

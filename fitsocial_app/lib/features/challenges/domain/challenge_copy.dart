@@ -117,7 +117,8 @@ class ChallengeCopy {
   /// A reminder about a task finished four hours ago is how a useful nudge
   /// turns into the notification a user switches off, so the caller passes the
   /// outstanding list and nothing else is ever mentioned.
-  static String outstandingNudge(int dayNumber, List<TaskProgress> outstanding) {
+  static String outstandingNudge(
+      int dayNumber, List<TaskProgress> outstanding) {
     if (outstanding.isEmpty) {
       return 'PULSE 75 — DAY $dayNumber is done. All seven.';
     }

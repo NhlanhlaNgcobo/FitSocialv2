@@ -39,7 +39,8 @@ class DayHistoryStrip extends StatelessWidget {
       child: Row(
         children: [
           for (final day in days) ...[
-            Expanded(child: _DaySquare(day: day, isToday: day.dayKey == todayKey)),
+            Expanded(
+                child: _DaySquare(day: day, isToday: day.dayKey == todayKey)),
             if (day != days.last) const SizedBox(width: 4),
           ],
         ],

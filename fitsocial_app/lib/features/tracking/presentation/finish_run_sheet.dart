@@ -8,6 +8,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/run_background_section.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../main/domain/app_models.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// What the runner decided on the way out of a tracked run.
 class FinishRunChoice {
@@ -87,84 +88,85 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
     final palette = context.palette;
     final media = MediaQuery.of(context);
 
-    return Container(
-      // Never taller than most of the screen: the card, the buttons and the
-      // toggle all have to be reachable on a short phone, so the column
-      // scrolls inside a bounded sheet rather than growing past the top.
-      constraints: BoxConstraints(maxHeight: media.size.height * 0.9),
-      decoration: BoxDecoration(
-        color: palette.background,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.sm,
-            AppSpacing.md,
-            AppSpacing.md,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: palette.stroke,
-                    borderRadius: BorderRadius.circular(2),
+    return LiquidGlass(
+      // A sheet always has a page behind it, which makes it the
+      // one surface guaranteed something worth bending.
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: Container(
+        // Never taller than most of the screen: the card, the buttons and the
+        // toggle all have to be reachable on a short phone, so the column
+        // scrolls inside a bounded sheet rather than growing past the top.
+        constraints: BoxConstraints(maxHeight: media.size.height * 0.9),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.md,
+              AppSpacing.md,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: palette.stroke,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              Text(
-                'Nice run.',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'This is the card that goes out. Put a photo behind it if you '
-                'like.',
-                style: TextStyle(
-                  color: palette.muted,
-                  fontSize: 13,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              RunBackgroundSection(
-                imagePath: _backgroundPath,
-                route: widget.route,
-                distanceLabel: widget.distanceLabel,
-                durationLabel: widget.durationLabel,
-                onPick: _pickBackground,
-                onRemove: () => setState(() => _backgroundPath = null),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              ShareToFeedToggle(
-                value: _shareToFeed,
-                subtitle: 'Post this run to your profile activity',
-                onChanged: (value) => setState(() => _shareToFeed = value),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              PrimaryButton(
-                icon: Icons.check_rounded,
-                label: _shareToFeed ? 'Save Run & Share' : 'Save Run',
-                onPressed: () => Navigator.of(context).pop(
-                  FinishRunChoice(
-                    shareToFeed: _shareToFeed,
-                    backgroundImagePath: _backgroundPath,
+                Text(
+                  'Nice run.',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  'This is the card that goes out. Put a photo behind it if you '
+                  'like.',
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                RunBackgroundSection(
+                  imagePath: _backgroundPath,
+                  route: widget.route,
+                  distanceLabel: widget.distanceLabel,
+                  durationLabel: widget.durationLabel,
+                  onPick: _pickBackground,
+                  onRemove: () => setState(() => _backgroundPath = null),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                ShareToFeedToggle(
+                  value: _shareToFeed,
+                  subtitle: 'Post this run to your profile activity',
+                  onChanged: (value) => setState(() => _shareToFeed = value),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                PrimaryButton(
+                  icon: Icons.check_rounded,
+                  label: _shareToFeed ? 'Save Run & Share' : 'Save Run',
+                  onPressed: () => Navigator.of(context).pop(
+                    FinishRunChoice(
+                      shareToFeed: _shareToFeed,
+                      backgroundImagePath: _backgroundPath,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

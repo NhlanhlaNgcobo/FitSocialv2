@@ -11,6 +11,7 @@ import '../../features/main/application/content_providers.dart';
 import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/mentions.dart';
 import 'avatar.dart';
+import '../../shared/widgets/liquid_glass.dart';
 
 /// The account picker that opens while an `@` is being typed.
 ///
@@ -161,27 +162,31 @@ class _MentionSuggestionsState extends ConsumerState<MentionSuggestions> {
     final cap = math.min(widget.maxHeight, free * 0.4);
 
     final palette = context.palette;
-    return Container(
-      constraints: BoxConstraints(maxHeight: cap),
-      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: palette.surfaceHigh,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.stroke),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ListView.builder(
-        shrinkWrap: true,
-        padding: EdgeInsets.zero,
-        itemCount: mentionable.length,
-        itemBuilder: (context, index) {
-          final user = mentionable[index];
-          return _SuggestionTile(
-            user: user,
-            username: normalizeUsername(user.handle),
-            onTap: _accept,
-          );
-        },
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: cap),
+        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.stroke),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ListView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          itemCount: mentionable.length,
+          itemBuilder: (context, index) {
+            final user = mentionable[index];
+            return _SuggestionTile(
+              user: user,
+              username: normalizeUsername(user.handle),
+              onTap: _accept,
+            );
+          },
+        ),
       ),
     );
   }

@@ -22,9 +22,11 @@ class RaceFilterController extends StateNotifier<RaceFilter> {
   void setTimeframe(RaceTimeframe timeframe) =>
       state = state.copyWith(timeframe: timeframe);
 
-  void toggleProvince(Province province) => state = state.toggleProvince(province);
+  void toggleProvince(Province province) =>
+      state = state.toggleProvince(province);
 
-  void toggleBucket(DistanceBucket bucket) => state = state.toggleBucket(bucket);
+  void toggleBucket(DistanceBucket bucket) =>
+      state = state.toggleBucket(bucket);
 
   void toggleTag(RaceTag tag) => state = state.toggleTag(tag);
 

@@ -7,8 +7,10 @@ import 'package:fitsocial_app/features/challenges/data/challenge_repository.dart
 import 'package:fitsocial_app/features/challenges/data/challenge_repository_contract.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_badges.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_clock.dart';
+import 'package:fitsocial_app/features/challenges/domain/challenge_copy.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_models.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_task.dart';
+import 'package:fitsocial_app/features/challenges/presentation/challenge_outcome_screen.dart';
 import 'package:fitsocial_app/features/challenges/presentation/challenge_status_strip.dart';
 import 'package:fitsocial_app/features/challenges/presentation/challenge_tracker_screen.dart';
 import 'package:fitsocial_app/features/main/application/content_providers.dart';
@@ -162,6 +164,32 @@ Future<void> _useTallSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+/// The tracker on a real budget phone rather than on a tablet.
+///
+/// [_useTallSurface] above is 800 wide, which is what let the stat strip
+/// overflow ship: at that width every label fits with room to spare. The
+/// tester who reported the jumbled streak row was on a 720x1600 handset --
+/// 360 logical pixels across -- so that is the width worth defending. Still
+/// tall, because the tracker is a ListView and rows past the fold never build.
+Future<void> _useHandsetSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(360, 2400));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+/// Re-runs [child] at a system font size other than the default.
+///
+/// Reads the ambient data and copies it rather than building a fresh
+/// [MediaQueryData], which would drop the surface size the test just set.
+Widget _atTextScale(double scale, Widget child) {
+  return Builder(
+    builder: (context) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: TextScaler.linear(scale)),
+      child: child,
+    ),
+  );
+}
+
 void main() {
   group('tracker screen', () {
     testWidgets('lists all seven tasks with their figures', (tester) async {
@@ -278,6 +306,121 @@ void main() {
 
       expect(find.text('ELIMINATED'), findsOneWidget);
       expect(find.text('QUIT PULSE 75'), findsNothing);
+    });
+  });
+
+  /// The strip reading "0 DAY STREAK / 0 BEST STREAK / 0 POINTS THIS
+  /// CHALLENGE". On the reporter's phone the three labels ran into each other
+  /// and the last one walked off the right edge -- a plain RenderFlex
+  /// overflow, invisible in these tests because they all ran 800 wide.
+  ///
+  /// Asserted through [WidgetTester.takeException] rather than by measuring
+  /// anything: an overflowing Row reports a FlutterError while it paints, and
+  /// that error is the bug itself.
+  group('tracker stat strip', () {
+    testWidgets('fits a 360-wide handset', (tester) async {
+      await _useHandsetSurface(tester);
+      final repository = _FakeChallengeRepository(
+        enrollment: _enrollment(),
+        day: _partialDay(),
+      );
+
+      await tester.pumpWidget(_host(
+        const ChallengeTrackerScreen(enrollmentId: 'me_pulse75_2026-08-01'),
+        repository,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text(ChallengeCopy.bestStreak), findsOneWidget);
+      expect(find.text(ChallengeCopy.pointsThisChallenge), findsOneWidget);
+    });
+
+    testWidgets('fits a 360-wide handset with large system text',
+        (tester) async {
+      await _useHandsetSurface(tester);
+      final repository = _FakeChallengeRepository(
+        enrollment: _enrollment(),
+        day: _partialDay(),
+      );
+
+      await tester.pumpWidget(_host(
+        _atTextScale(
+          1.3,
+          const ChallengeTrackerScreen(enrollmentId: 'me_pulse75_2026-08-01'),
+        ),
+        repository,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a four-figure point total still fits', (tester) async {
+      await _useHandsetSurface(tester);
+      final repository = _FakeChallengeRepository(
+        // Day 75 of a clean run: the widest every figure ever gets.
+        enrollment: _enrollment(
+          daysCompleted: 75,
+          currentStreak: 75,
+          longestStreak: 75,
+          pointsEarned: 99999,
+        ),
+        day: _partialDay(),
+      );
+
+      await tester.pumpWidget(_host(
+        const ChallengeTrackerScreen(enrollmentId: 'me_pulse75_2026-08-01'),
+        repository,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
+    /// The outcome screen sets four stats in one row. It overflowed on a
+    /// handset at the default font size, which made the reward for finishing
+    /// seventy-five days the most broken screen in the feature.
+    testWidgets('the finish screen fits a handset too', (tester) async {
+      await _useHandsetSurface(tester);
+      final repository = _FakeChallengeRepository(
+        enrollment: _enrollment(
+          status: EnrollmentStatus.completed,
+          daysCompleted: 75,
+          longestStreak: 75,
+          pointsEarned: 99999,
+        ),
+        day: _partialDay(),
+      );
+
+      await tester.pumpWidget(_host(
+        const ChallengeOutcomeScreen(enrollmentId: 'me_pulse75_2026-08-01'),
+        repository,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('BEST STREAK'), findsOneWidget);
+      expect(find.text('POINTS'), findsOneWidget);
+    });
+
+    /// The strip on the home feed. This one only broke at a raised system font
+    /// size, which is why it is worth a case of its own.
+    testWidgets('the home strip fits at a large system font size',
+        (tester) async {
+      await _useHandsetSurface(tester);
+      final repository = _FakeChallengeRepository(
+        enrollment: _enrollment(),
+        day: _partialDay(),
+      );
+
+      await tester.pumpWidget(_host(
+        _atTextScale(1.3, const Scaffold(body: ChallengeStatusStrip())),
+        repository,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
   });
 

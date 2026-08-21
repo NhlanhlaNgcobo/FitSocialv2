@@ -58,11 +58,7 @@ final RegExp _endsAlphanumeric = RegExp(r'[a-z0-9]$');
 /// '@' (some carry it, some don't), so it is stripped here too and never
 /// persisted; the '@' is decoration the UI adds back when it draws one.
 String normalizeUsername(String? raw) {
-  return (raw ?? '')
-      .trim()
-      .replaceAll(RegExp(r'^@+'), '')
-      .trim()
-      .toLowerCase();
+  return (raw ?? '').trim().replaceAll(RegExp(r'^@+'), '').trim().toLowerCase();
 }
 
 /// Why a username was rejected, or null when it is well-formed.
@@ -244,8 +240,7 @@ class UsernameChangeTooSoonException implements Exception {
   final Duration remaining;
 
   @override
-  String toString() =>
-      'Username was changed too recently. '
+  String toString() => 'Username was changed too recently. '
       'Try again in ${describeCooldownRemaining(remaining)}.';
 }
 

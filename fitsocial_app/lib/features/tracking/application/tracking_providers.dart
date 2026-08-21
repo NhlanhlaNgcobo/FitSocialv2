@@ -31,7 +31,8 @@ final treadmillRunServiceProvider = Provider<TreadmillRunService>((ref) {
 /// Opens with [TreadmillRunService.current] so a screen that subscribes
 /// part-way through a run — on the way back from another page, say — paints the
 /// run in progress rather than sitting on a zeroed clock until the next tick.
-final treadmillRunStateProvider = StreamProvider<TreadmillRunState>((ref) async* {
+final treadmillRunStateProvider =
+    StreamProvider<TreadmillRunState>((ref) async* {
   final service = ref.watch(treadmillRunServiceProvider);
   yield service.current;
   yield* service.stream;

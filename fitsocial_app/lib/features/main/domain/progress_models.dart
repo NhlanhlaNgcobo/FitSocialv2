@@ -227,7 +227,8 @@ class ProgressWindow {
     return switch (period) {
       ProgressPeriod.day => 1,
       ProgressPeriod.week => goal,
-      ProgressPeriod.month || ProgressPeriod.year =>
+      ProgressPeriod.month ||
+      ProgressPeriod.year =>
         (dayCount / 7 * goal).round().clamp(1, dayCount),
     };
   }
@@ -312,9 +313,8 @@ class ProgressOverview {
 
   /// Capped at 100: beating the goal is worth celebrating, not worth a number
   /// that reads like a broken percentage.
-  int get consistencyPercent => goalDays == 0
-      ? 0
-      : ((activeDays / goalDays) * 100).round().clamp(0, 100);
+  int get consistencyPercent =>
+      goalDays == 0 ? 0 : ((activeDays / goalDays) * 100).round().clamp(0, 100);
 }
 
 /// "5h 32m", "45m", "0m" — how durations read on the Progress tab.

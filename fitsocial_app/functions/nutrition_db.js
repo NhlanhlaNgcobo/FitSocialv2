@@ -32,8 +32,18 @@ const MATCH_THRESHOLD = 0.55;
 let cache = null;
 let cacheLoadedAt = 0;
 
+/**
+ * Creates the default Admin app if nothing has yet.
+ *
+ * By name rather than by counting `admin.apps` -- see challenges.js. Only
+ * callables reach this module today, which is the one shape the counting bug
+ * spares, but it is the same wrong question and it is one edit away from being
+ * asked somewhere it matters.
+ */
 function ensureAdmin() {
-  if (admin.apps.length === 0) {
+  try {
+    admin.app();
+  } catch (_) {
     admin.initializeApp();
   }
   return admin;
@@ -396,6 +406,8 @@ function clearCache() {
 }
 
 module.exports = {
+  // See the note beside `db` in challenges.js's _internals.
+  _internals: { ensureAdmin },
   loadFoodIndex,
   buildIndex,
   matchFood,

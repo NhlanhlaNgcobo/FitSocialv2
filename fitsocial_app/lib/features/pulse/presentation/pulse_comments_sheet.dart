@@ -12,6 +12,7 @@ import '../../main/domain/app_models.dart' show Comment;
 import '../../main/presentation/comments_sheet.dart' show CommentTile;
 import '../../../shared/widgets/quick_toast.dart';
 import '../application/pulse_providers.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The conversation under a Pulse.
 ///
@@ -40,95 +41,97 @@ class PulseCommentsSheet extends ConsumerWidget {
     final palette = context.palette;
     final comments = ref.watch(pulseCommentsProvider(pulseId));
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.75,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 4),
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: palette.stroke,
-                borderRadius: BorderRadius.circular(2),
+    return LiquidGlass(
+      // A sheet always has a page behind it, which makes it the
+      // one surface guaranteed something worth bending.
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 4),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: palette.stroke,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'Comments',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: palette.text,
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: Icon(
-                    Icons.close_rounded,
-                    color: palette.muted,
-                    size: 22,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(height: 1, color: palette.stroke),
-          Flexible(
-            child: comments.when(
-              data: (list) => list.isEmpty
-                  ? const _Message(
-                      label: 'No comments yet.\n'
-                          'Say something about this Pulse.',
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.md,
-                        vertical: AppSpacing.sm,
-                      ),
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(height: AppSpacing.md),
-                      itemBuilder: (context, index) => _PulseCommentRow(
-                        pulseId: pulseId,
-                        pulseAuthorId: pulseAuthorId,
-                        comment: list[index],
-                      ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'Comments',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: palette.text,
                     ),
-              loading: () => const Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.orangeBright,
-                    strokeWidth: 2,
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: palette.muted,
+                      size: 22,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(height: 1, color: palette.stroke),
+            Flexible(
+              child: comments.when(
+                data: (list) => list.isEmpty
+                    ? const _Message(
+                        label: 'No comments yet.\n'
+                            'Say something about this Pulse.',
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(height: AppSpacing.md),
+                        itemBuilder: (context, index) => _PulseCommentRow(
+                          pulseId: pulseId,
+                          pulseAuthorId: pulseAuthorId,
+                          comment: list[index],
+                        ),
+                      ),
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(AppSpacing.xl),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.orangeBright,
+                      strokeWidth: 2,
+                    ),
                   ),
                 ),
+                error: (_, __) =>
+                    const _Message(label: "Couldn't load comments."),
               ),
-              error: (_, __) =>
-                  const _Message(label: "Couldn't load comments."),
             ),
-          ),
-          // This sheet floats over its own barrier, so nothing else lifts the
-          // composer clear of the keyboard — it pads for whichever of the
-          // keyboard and the nav bar is taller itself.
-          KeyboardSafeBottomBar(child: _PulseCommentComposer(pulseId: pulseId)),
-        ],
+            // This sheet floats over its own barrier, so nothing else lifts the
+            // composer clear of the keyboard — it pads for whichever of the
+            // keyboard and the nav bar is taller itself.
+            KeyboardSafeBottomBar(
+                child: _PulseCommentComposer(pulseId: pulseId)),
+          ],
+        ),
       ),
     );
   }
@@ -165,22 +168,26 @@ class _PulseCommentRow extends ConsumerWidget {
     final palette = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: palette.surface,
-        title: const Text('Delete this comment?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(
-              'Delete',
-              style: TextStyle(color: palette.danger),
+      builder: (context) => LiquidGlass(
+        // A dialog interrupts a page, so there is always something
+        // behind it -- which makes it glass like everything else.
+        borderRadius: BorderRadius.circular(22),
+        child: AlertDialog(
+          title: const Text('Delete this comment?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep'),
             ),
-          ),
-        ],
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                'Delete',
+                style: TextStyle(color: palette.danger),
+              ),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true || !context.mounted) return;
@@ -264,84 +271,92 @@ class _PulseCommentComposerState extends ConsumerState<_PulseCommentComposer> {
       return const SizedBox.shrink();
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.surface,
-        border: Border(top: BorderSide(color: palette.stroke)),
-      ),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Above the field, not below it: this bar already sits on the
-          // keyboard, so there is no room underneath to open into.
-          MentionSuggestions(controller: _controller, focusNode: _focusNode),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: palette.surfaceHigh,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(0),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: palette.stroke)),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.sm,
+          AppSpacing.sm,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Above the field, not below it: this bar already sits on the
+            // keyboard, so there is no room underneath to open into.
+            MentionSuggestions(controller: _controller, focusNode: _focusNode),
+            Row(
+              children: [
+                Expanded(
+                  child: LiquidGlass(
+                    // Painted by the lens rather than by a fill of its own: a pane
+                    // over the app backdrop, like every other card.
                     borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    style: TextStyle(color: palette.text, fontSize: 15),
-                    decoration: InputDecoration(
-                      hintText: 'Add a comment...',
-                      hintStyle: TextStyle(color: palette.muted),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        style: TextStyle(color: palette.text, fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: 'Add a comment...',
+                          hintStyle: TextStyle(color: palette.muted),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                        ),
+                        maxLines: 3,
+                        minLines: 1,
+                        textCapitalization: TextCapitalization.sentences,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _submit(),
                       ),
                     ),
-                    maxLines: 3,
-                    minLines: 1,
-                    textCapitalization: TextCapitalization.sentences,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _submit(),
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              GestureDetector(
-                onTap: _submit,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFFFA053), Color(0xFFFF6B2C)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                const SizedBox(width: AppSpacing.sm),
+                GestureDetector(
+                  onTap: _submit,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFA053), Color(0xFFFF6B2C)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: _isSending
-                      ? const Padding(
-                          padding: EdgeInsets.all(10),
-                          child: CircularProgressIndicator(
-                            color: AppColors.onBrand,
-                            strokeWidth: 2,
+                    child: _isSending
+                        ? const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: CircularProgressIndicator(
+                              color: AppColors.onBrand,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Icon(
+                            Icons.send_rounded,
+                            color: palette.text,
+                            size: 18,
                           ),
-                        )
-                      : Icon(
-                          Icons.send_rounded,
-                          color: palette.text,
-                          size: 18,
-                        ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

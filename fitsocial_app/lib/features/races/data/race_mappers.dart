@@ -101,8 +101,8 @@ RaceEvent? raceEventFromDoc(String id, Map<String, dynamic>? data) {
 
   // An unknown province code falls back to Gauteng rather than dropping the
   // event. Wrong-but-visible is recoverable by a moderator; invisible is not.
-  final province = Province.byCode(data[RaceFields.province] as String?) ??
-      Province.gauteng;
+  final province =
+      Province.byCode(data[RaceFields.province] as String?) ?? Province.gauteng;
 
   final rawDistances = data[RaceFields.distances];
   final distances = <RaceDistance>[];
@@ -195,9 +195,8 @@ String _defaultDistanceLabel(double km) {
   if (bucket == DistanceBucket.marathon) return 'Marathon';
   if (bucket == DistanceBucket.half) return 'Half Marathon';
   // Trim a trailing .0 so 10.0 reads as "10 km".
-  final rounded = km == km.roundToDouble()
-      ? km.round().toString()
-      : km.toStringAsFixed(1);
+  final rounded =
+      km == km.roundToDouble() ? km.round().toString() : km.toStringAsFixed(1);
   return '$rounded km';
 }
 

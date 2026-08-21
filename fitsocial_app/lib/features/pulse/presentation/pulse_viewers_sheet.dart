@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Who has watched one of your Pulses. Author-only — the security rules make
 /// the underlying collection unreadable to anyone else.
@@ -26,11 +27,10 @@ class PulseViewersSheet extends ConsumerWidget {
       maxChildSize: 0.9,
       expand: false,
       builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: palette.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
+        return LiquidGlass(
+          // A sheet always has a page behind it, which makes it the one surface
+          // in the app guaranteed something worth bending.
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           child: Column(
             children: [
               const SizedBox(height: AppSpacing.sm),

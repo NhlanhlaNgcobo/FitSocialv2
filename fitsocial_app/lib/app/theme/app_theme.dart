@@ -18,7 +18,12 @@ abstract final class AppTheme {
         : ThemeData.light(useMaterial3: true);
 
     return base.copyWith(
-      scaffoldBackgroundColor: palette.background,
+      // Transparent so the app's single LiquidBackdrop shows through every
+      // page. The ground is painted once in FitSocialApp; a Scaffold that
+      // painted its own would cover it and leave that screen's glass with
+      // nothing to bend. Screens that genuinely need an opaque ground — the
+      // media viewers — still pin their own.
+      scaffoldBackgroundColor: Colors.transparent,
       // Carried on the ThemeData so `context.palette` resolves anywhere under
       // the app, and so Flutter crossfades the colours when the mode changes
       // instead of snapping.
@@ -41,19 +46,18 @@ abstract final class AppTheme {
       // Built from the ColorScheme.dark/light factories rather than the raw
       // constructor so the slots this app never names keep sensible defaults
       // for their brightness.
-      colorScheme:
-          (palette.isDark
-                  ? const ColorScheme.dark()
-                  : const ColorScheme.light())
-              .copyWith(
-                primary: AppColors.orange,
-                secondary: AppColors.orangeBright,
-                surface: palette.surface,
-                onPrimary: AppColors.onBrand,
-                onSecondary: AppColors.onBrand,
-                onSurface: palette.text,
-                error: palette.danger,
-              ),
+      colorScheme: (palette.isDark
+              ? const ColorScheme.dark()
+              : const ColorScheme.light())
+          .copyWith(
+        primary: AppColors.orange,
+        secondary: AppColors.orangeBright,
+        surface: palette.surface,
+        onPrimary: AppColors.onBrand,
+        onSecondary: AppColors.onBrand,
+        onSurface: palette.text,
+        error: palette.danger,
+      ),
       textTheme: base.textTheme.apply(
         bodyColor: palette.text,
         displayColor: palette.text,
@@ -82,8 +86,16 @@ abstract final class AppTheme {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: palette.surface,
+        // Transparent, because every dialog is wrapped in liquid glass and the
+        // lens supplies the surface. One shape for all of them, set here rather
+        // than site by site — an inconsistency that was invisible while they
+        // were opaque slabs and obvious once they are panes.
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: palette.stroke),
+        ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: palette.surface,

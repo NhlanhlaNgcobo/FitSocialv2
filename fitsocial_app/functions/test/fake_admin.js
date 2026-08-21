@@ -299,7 +299,12 @@ function createFakeAdmin(seed = {}) {
   firestore.FieldValue = FieldValue;
 
   const admin = {
-    apps: [{}], // Non-empty, so the module under test skips initializeApp.
+    // A default app already exists, which is what the modules under test check
+    // for. `apps` is carried alongside it only so that anything still counting
+    // is visibly answered the same way the real SDK would answer it -- see
+    // ensureDefaultApp in challenges.js for why counting is the wrong question.
+    app: () => ({ name: "[DEFAULT]" }),
+    apps: [{ name: "[DEFAULT]" }],
     initializeApp: () => {},
     firestore,
     auth: () => ({

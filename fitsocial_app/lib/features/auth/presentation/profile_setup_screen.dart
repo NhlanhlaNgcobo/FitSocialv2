@@ -21,6 +21,7 @@ import '../domain/body_metrics.dart';
 import '../domain/username.dart';
 import 'body_metrics_fields.dart';
 import 'username_availability_hint.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The first screen with the user's own name on it, so it is built as a
 /// preview of the profile rather than as a form: the photo, name and handle
@@ -135,9 +136,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
   }
 
   static String _suggestHandle(String displayName) {
-    final slug = displayName
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9._]'), '');
+    final slug =
+        displayName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9._]'), '');
     return slug.length > 20 ? slug.substring(0, 20) : slug;
   }
 
@@ -240,36 +240,36 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
     final palette = context.palette;
     final shouldSignOut = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: palette.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-          side: BorderSide(color: palette.stroke),
-        ),
-        title: const Text(
-          'Sign out?',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
-        ),
-        content: Text(
-          "Your account stays put — you'll just need to log in again to "
-          'finish setting up your profile.',
-          style: TextStyle(color: palette.muted, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            style: TextButton.styleFrom(foregroundColor: palette.muted),
-            child: const Text('Cancel'),
+      builder: (dialogContext) => LiquidGlass(
+        // A dialog interrupts a page, so there is always something
+        // behind it -- which makes it glass like everything else.
+        borderRadius: BorderRadius.circular(22),
+        child: AlertDialog(
+          title: const Text(
+            'Sign out?',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: TextButton.styleFrom(foregroundColor: palette.danger),
-            child: const Text(
-              'Sign out',
-              style: TextStyle(fontWeight: FontWeight.w700),
+          content: Text(
+            "Your account stays put — you'll just need to log in again to "
+            'finish setting up your profile.',
+            style: TextStyle(color: palette.muted, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              style: TextButton.styleFrom(foregroundColor: palette.muted),
+              child: const Text('Cancel'),
             ),
-          ),
-        ],
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: palette.danger),
+              child: const Text(
+                'Sign out',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -293,8 +293,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               children: [
                 _SetupHeader(
                   avatar: _pickedAvatar,
@@ -854,9 +853,7 @@ class _AvatarPicker extends StatelessWidget {
                     border: Border.all(color: palette.background, width: 3),
                   ),
                   child: Icon(
-                    hasPhoto
-                        ? Icons.edit_rounded
-                        : Icons.add_a_photo_rounded,
+                    hasPhoto ? Icons.edit_rounded : Icons.add_a_photo_rounded,
                     color: AppColors.onBrand,
                     size: 16,
                   ),
@@ -979,9 +976,7 @@ class _ProfileProgress extends StatelessWidget {
         Row(
           children: [
             Icon(
-              complete
-                  ? Icons.check_circle_rounded
-                  : Icons.trending_up_rounded,
+              complete ? Icons.check_circle_rounded : Icons.trending_up_rounded,
               size: 16,
               color: complete ? palette.success : palette.brandText,
             ),
@@ -1050,53 +1045,57 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(11),
-                  color: AppColors.orangeBright.withValues(alpha: 0.14),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(11),
+                    color: AppColors.orangeBright.withValues(alpha: 0.14),
+                  ),
+                  child: Icon(icon, size: 18, color: palette.brandText),
                 ),
-                child: Icon(icon, size: 18, color: palette.brandText),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: palette.text,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(color: palette.muted, fontSize: 12.5),
-                    ),
-                  ],
+                      Text(
+                        subtitle,
+                        style: TextStyle(color: palette.muted, fontSize: 12.5),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ...children,
-        ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -1194,33 +1193,37 @@ class _SubmitBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: palette.background,
-        border: Border(top: BorderSide(color: palette.stroke)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.md,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (errorMessage != null) ...[
-                _SetupErrorBanner(message: errorMessage!),
-                const SizedBox(height: AppSpacing.md),
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(0),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: palette.stroke)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (errorMessage != null) ...[
+                  _SetupErrorBanner(message: errorMessage!),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                PrimaryButton(
+                  label: isLoading ? 'Saving…' : 'Complete Setup',
+                  icon: isLoading ? null : Icons.arrow_forward_rounded,
+                  onPressed: isLoading ? null : onSubmit,
+                ),
               ],
-              PrimaryButton(
-                label: isLoading ? 'Saving…' : 'Complete Setup',
-                icon: isLoading ? null : Icons.arrow_forward_rounded,
-                onPressed: isLoading ? null : onSubmit,
-              ),
-            ],
+            ),
           ),
         ),
       ),

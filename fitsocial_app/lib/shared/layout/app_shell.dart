@@ -84,6 +84,7 @@ class _AppShellState extends State<AppShell> {
       // what gives its backdrop filter real content to blur. Scroll views under
       // the shell pad themselves by FitSocialBottomNav.clearance in exchange.
       extendBody: true,
+      backgroundColor: Colors.transparent,
       // Catches scrolls from any list under the shell, whichever branch is
       // showing, so no screen has to wire itself up to the nav.
       //

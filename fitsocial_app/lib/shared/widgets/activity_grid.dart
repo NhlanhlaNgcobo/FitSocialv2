@@ -7,6 +7,8 @@ import '../../app/theme/app_spacing.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/domain/app_models.dart';
 import 'dark_card.dart';
+import 'glass.dart';
+import '../../shared/widgets/liquid_glass.dart';
 
 /// The activity grid wired to its data.
 ///
@@ -192,6 +194,10 @@ class _ActivityGridState extends State<ActivityGrid> {
     final calendar = widget.calendar;
 
     return DarkCard(
+      // The one card in the app that has something to say with colour: the
+      // streak lights it from behind, so a week that is going well is visible
+      // before a single number is read.
+      backdrop: _StreakBloom.forStreak(calendar.currentStreak),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -233,6 +239,47 @@ class _ActivityGridState extends State<ActivityGrid> {
   }
 }
 
+/// The heat behind the card's glass, as the streak builds.
+///
+/// Nothing at zero — a card with no streak has nothing to say with colour, and
+/// stays the solid surface every other card in the app is. From day one it
+/// warms, reaching full strength at [_fullStreak], so the card gains heat over
+/// a week rather than switching on.
+class _StreakBloom extends StatelessWidget {
+  const _StreakBloom._(this.streak);
+
+  /// Null below one day, which is what keeps a cold card off the glass path
+  /// entirely rather than handing [DarkCard] a backdrop that paints nothing.
+  static Widget? forStreak(int streak) =>
+      streak > 0 ? _StreakBloom._(streak) : null;
+
+  final int streak;
+
+  /// Where the bloom stops brightening. A week is the window the home card
+  /// shows, so it reaches full heat exactly as the grid fills.
+  static const int _fullStreak = 7;
+
+  /// Day one still has to be visible. Without a floor the first day of a streak
+  /// is a bloom too faint to notice, which reads as a bug rather than a start.
+  static const double _minIntensity = 0.4;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final t = (streak / _fullStreak).clamp(0.0, 1.0);
+
+    return GlassBloom(
+      colors: [
+        palette.brand,
+        // The brighter hue only joins once the streak is worth remarking on, so
+        // a long run does not merely get louder — it gets richer.
+        if (t > 0.5) AppColors.orangeBright,
+      ],
+      intensity: _minIntensity + (1 - _minIntensity) * t,
+    );
+  }
+}
+
 // The four cell colours are resolved per theme rather than taken from the
 // palette, because the grid needs finer steps than the app's surfaces provide:
 // empty and future have to be distinguishable from each other *and* from the
@@ -255,7 +302,6 @@ Color _futureCellColor(AppPalette p) =>
 
 Color _futureCellBorder(AppPalette p) =>
     p.isDark ? const Color(0xFF1F1F1F) : const Color(0xFFE7E3DA);
-
 
 /// Corner radius for a square of [size].
 ///
@@ -336,44 +382,48 @@ class _RangePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        // The page colour, inside a card: an inset well in either theme.
-        color: palette.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        children: [
-          for (final range in ActivityRange.values)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSelected(range),
-                child: Container(
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: range == selected
-                        ? palette.brandSoft
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    range.label,
-                    style: TextStyle(
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          // The page colour, inside a card: an inset well in either theme.
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            for (final range in ActivityRange.values)
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelected(range),
+                  child: Container(
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
                       color: range == selected
-                          ? palette.brandText
-                          : palette.muted,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                          ? palette.brandSoft
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      range.label,
+                      style: TextStyle(
+                        color: range == selected
+                            ? palette.brandText
+                            : palette.muted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -482,8 +532,8 @@ class _WeekRowsGrid extends StatelessWidget {
             const SizedBox(height: 6),
             for (var r = 0; r < rows.length; r++)
               Padding(
-                padding:
-                    EdgeInsets.only(bottom: r == rows.length - 1 ? 0 : _cellGap),
+                padding: EdgeInsets.only(
+                    bottom: r == rows.length - 1 ? 0 : _cellGap),
                 child: Row(
                   children: [
                     for (var d = 0; d < 7; d++)
@@ -671,8 +721,8 @@ class _MonthLabels extends StatelessWidget {
       children: [
         for (var w = 0; w < weeks.length; w++)
           Padding(
-            padding:
-                EdgeInsets.only(right: w == weeks.length - 1 ? 0 : _yearCellGap),
+            padding: EdgeInsets.only(
+                right: w == weeks.length - 1 ? 0 : _yearCellGap),
             child: SizedBox(
               width: _yearCellSize,
               height: 14,
