@@ -12,7 +12,10 @@ import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/auth/presentation/welcome_screen.dart';
 import '../../features/challenges/domain/challenge_models.dart';
 import '../../features/challenges/presentation/challenge_detail_screen.dart';
+import '../../features/challenges/presentation/challenge_board_screen.dart';
 import '../../features/challenges/presentation/challenge_hub_screen.dart';
+import '../../features/challenges/presentation/create_challenge_screen.dart';
+import '../../features/challenges/presentation/live_challenges_screen.dart';
 import '../../features/challenges/presentation/challenge_outcome_screen.dart';
 import '../../features/challenges/presentation/challenge_tracker_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
@@ -220,6 +223,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/challenges',
         builder: (context, state) => const ChallengeHubScreen(),
+      ),
+      // User-created running challenges.
+      //
+      // Declared before /challenge/:challengeKey, though nothing depends on
+      // that: these carry three path segments and the fixed-challenge route
+      // carries two, so go_router cannot confuse them. Ordering them anyway
+      // keeps the challenge routes readable as one group.
+      GoRoute(
+        path: '/challenges/live',
+        builder: (context, state) => const LiveChallengesScreen(),
+      ),
+      GoRoute(
+        path: '/challenges/create',
+        builder: (context, state) => const CreateChallengeScreen(),
+      ),
+      // Also the deep link a shared private challenge resolves to. The screen
+      // handles the unreadable case itself: a challenge the viewer is not on
+      // reports "not available" rather than distinguishing "private" from
+      // "does not exist", because saying which is most of what privacy is for.
+      GoRoute(
+        path: '/challenge/board/:challengeId',
+        builder: (context, state) => ChallengeBoardScreen(
+          challengeId: state.pathParameters['challengeId']!,
+        ),
       ),
       // An unknown challenge key goes to the hub rather than rendering an
       // empty screen — a stale share link should land somewhere useful.

@@ -48,6 +48,19 @@ function matches(data, [field, op, value]) {
       return actual === value;
     case "array-contains":
       return Array.isArray(actual) && actual.includes(value);
+    // The running-challenge engine filters membership by a set of statuses and
+    // buckets attributions by day key, so `in` and the range operators are
+    // exercised here even though the deletion sweep never needed them.
+    case "in":
+      return Array.isArray(value) && value.includes(actual);
+    case ">=":
+      return actual !== undefined && actual >= value;
+    case ">":
+      return actual !== undefined && actual > value;
+    case "<=":
+      return actual !== undefined && actual <= value;
+    case "<":
+      return actual !== undefined && actual < value;
     default:
       throw new Error(`fake_admin: unsupported operator ${op}`);
   }
@@ -142,6 +155,28 @@ class FakeQuery {
     return new FakeQuery(this._store, this._scope, this._filters, n);
   }
 
+  /**
+   * Ordering is accepted and ignored.
+   *
+   * Every caller under test either sorts the result itself or reads it
+   * order-insensitively, so honouring this would test nothing. It is accepted
+   * rather than thrown on so that a query written the way the real one is stays
+   * runnable here.
+   */
+  orderBy() {
+    return this;
+  }
+
+  count() {
+    const query = this;
+    return {
+      async get() {
+        const snapshot = await query.get();
+        return { data: () => ({ count: snapshot.size }) };
+      },
+    };
+  }
+
   async get() {
     const hits = [];
     for (const [path, data] of this._store) {
@@ -167,6 +202,11 @@ function makeSnapshot(store, path, data) {
     ref: makeDocRef(store, path),
     exists: true,
     data: () => data,
+    // Field access, as the real DocumentSnapshot offers it. Dotted paths are
+    // not supported for the same reason `matches` does not support them: no
+    // caller under test uses one, and a plain property read on "a.b" would be
+    // silently wrong rather than loudly unsupported.
+    get: (field) => data[field],
   };
 }
 
@@ -189,7 +229,13 @@ function makeDocRef(store, path) {
       const data = store.get(path);
       return data
         ? makeSnapshot(store, path, data)
-        : { exists: false, id: this.id, ref: this, data: () => undefined };
+        : {
+            exists: false,
+            id: this.id,
+            ref: this,
+            data: () => undefined,
+            get: () => undefined,
+          };
     },
     async set(updates, options = {}) {
       applyWrite(store, path, updates, { merge: options.merge === true });
@@ -223,7 +269,20 @@ class FakeCollection extends FakeQuery {
   doc(id) {
     return makeDocRef(this._store, `${this._prefix}/${id}`);
   }
+
+  /**
+   * Auto-id create. The ids are sequential rather than random so a test can
+   * assert on a path, which a real auto-id would make impossible.
+   */
+  async add(data) {
+    const id = `auto_${++FakeCollection._autoId}`;
+    const ref = this.doc(id);
+    await ref.set(data);
+    return ref;
+  }
 }
+
+FakeCollection._autoId = 0;
 
 class FakeBatch {
   constructor(store) {

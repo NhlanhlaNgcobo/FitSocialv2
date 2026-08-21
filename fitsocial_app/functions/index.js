@@ -640,3 +640,17 @@ for (const [name, handler] of Object.entries(require("./challenges"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }
+
+// --- Running challenges -----------------------------------------------------
+//
+// The second challenge model: user-created, public or private, with a
+// leaderboard. Its own module beside challenges.js rather than inside it,
+// because the two share the clock and nothing else -- and because keeping them
+// apart is what makes it true that adding this could not move a Pulse 75
+// streak. Note that it adds a SECOND trigger on runs/{runId} rather than
+// editing the one challenges.js already has; both deploy, and neither can see
+// the other fail.
+for (const [name, handler] of Object.entries(require("./running_challenges"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}

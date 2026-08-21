@@ -84,6 +84,12 @@ class FirestoreNotificationRepository implements NotificationRepository {
       postType: data['postType'] as String?,
       commentId: data['commentId'] as String?,
       reaction: FitReaction.fromKey(data['reaction'] as String?),
+      // Written by the running-challenge engine rather than by this app. Read
+      // permissively for the same reason every other field here is: a row
+      // written by a newer build should render as much of itself as this one
+      // understands, not be dropped.
+      challengeId: data['challengeId'] as String?,
+      challengeTitle: data['challengeTitle'] as String?,
     );
   }
 }

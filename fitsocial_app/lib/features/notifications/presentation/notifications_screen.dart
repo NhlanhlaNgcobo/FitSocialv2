@@ -232,6 +232,13 @@ Color _accentFor(FitNotification notification, AppPalette palette) {
     case FitNotificationType.mention:
     case FitNotificationType.tag:
       return palette.accent(const Color(0xFF3AA9C9));
+    // The three challenge kinds share the brand orange, which is what the
+    // challenge screens are already painted in — a fourth accent would be a
+    // colour that means nothing anywhere else in the app.
+    case FitNotificationType.challengeInvite:
+    case FitNotificationType.challengeAccepted:
+    case FitNotificationType.challengeCompleted:
+      return palette.brand;
   }
 }
 
@@ -479,6 +486,12 @@ class _ActorAvatar extends StatelessWidget {
       case FitNotificationType.mention:
       case FitNotificationType.tag:
         return Icons.alternate_email_rounded;
+      case FitNotificationType.challengeInvite:
+        return Icons.emoji_events_outlined;
+      case FitNotificationType.challengeAccepted:
+        return Icons.group_add_rounded;
+      case FitNotificationType.challengeCompleted:
+        return Icons.emoji_events_rounded;
     }
   }
 }

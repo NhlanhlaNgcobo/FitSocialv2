@@ -21,7 +21,22 @@ enum FitNotificationType {
   mention,
 
   /// Someone attached you to a post from its composer.
-  tag;
+  tag,
+
+  /// Someone asked you onto a running challenge they created.
+  challengeInvite,
+
+  /// Someone accepted an invitation to a challenge you created, or joined a
+  /// public one of yours.
+  challengeAccepted,
+
+  /// You reached a challenge's goal.
+  ///
+  /// Written by the engine rather than by a person, but carried as an ordinary
+  /// notification from the challenge's creator — this app has no system actor,
+  /// and inventing one for a single row would mean every avatar, name and route
+  /// in the list learning about a user who does not exist.
+  challengeCompleted;
 
   /// Stored form. Explicit rather than [name] so renaming the enum can never
   /// silently orphan the documents already written.
@@ -35,6 +50,12 @@ enum FitNotificationType {
         return 'mention';
       case FitNotificationType.tag:
         return 'tag';
+      case FitNotificationType.challengeInvite:
+        return 'challengeInvite';
+      case FitNotificationType.challengeAccepted:
+        return 'challengeAccepted';
+      case FitNotificationType.challengeCompleted:
+        return 'challengeCompleted';
     }
   }
 
@@ -48,6 +69,12 @@ enum FitNotificationType {
         return FitNotificationType.mention;
       case 'tag':
         return FitNotificationType.tag;
+      case 'challengeInvite':
+        return FitNotificationType.challengeInvite;
+      case 'challengeAccepted':
+        return FitNotificationType.challengeAccepted;
+      case 'challengeCompleted':
+        return FitNotificationType.challengeCompleted;
       default:
         return null;
     }
@@ -91,6 +118,8 @@ class FitNotification {
     this.postType,
     this.commentId,
     this.reaction,
+    this.challengeId,
+    this.challengeTitle,
   });
 
   final String id;
@@ -131,6 +160,15 @@ class FitNotification {
   /// wording rather than being retconned into a reaction nobody chose.
   final FitReaction? reaction;
 
+  /// The running challenge a challenge notification is about. Null on every
+  /// other kind.
+  final String? challengeId;
+
+  /// The challenge's name, denormalised for the same reason the actor's is:
+  /// so the list renders from the query it already runs rather than a
+  /// challenge read per row.
+  final String? challengeTitle;
+
   /// The sentence that follows the actor's name.
   String get message {
     switch (type) {
@@ -150,7 +188,24 @@ class FitNotification {
             : 'mentioned you in a comment';
       case FitNotificationType.tag:
         return 'tagged you in a $_likedNoun';
+      case FitNotificationType.challengeInvite:
+        return 'invited you to $_challengeNoun';
+      case FitNotificationType.challengeAccepted:
+        return 'joined $_challengeNoun';
+      case FitNotificationType.challengeCompleted:
+        // Addressed to the recipient about their own achievement, which is why
+        // this one reads as a statement rather than as something the actor did.
+        return 'You finished $_challengeNoun';
     }
+  }
+
+  /// The challenge's name where it is known, and a plain noun where it is not.
+  ///
+  /// A notification written before the title was carried, or one whose
+  /// challenge has since been renamed, still reads as a sentence.
+  String get _challengeNoun {
+    final title = challengeTitle;
+    return (title == null || title.isEmpty) ? 'a challenge' : title;
   }
 
   /// What the liked thing is called in that sentence. Unknown and missing
@@ -182,6 +237,11 @@ class FitNotification {
       case FitNotificationType.tag:
         final id = postId;
         return (id == null || id.isEmpty) ? null : '/post/$id';
+      case FitNotificationType.challengeInvite:
+      case FitNotificationType.challengeAccepted:
+      case FitNotificationType.challengeCompleted:
+        final id = challengeId;
+        return (id == null || id.isEmpty) ? null : '/challenge/board/$id';
     }
   }
 }

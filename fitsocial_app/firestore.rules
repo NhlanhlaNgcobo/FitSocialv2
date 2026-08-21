@@ -323,6 +323,45 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/challengeEnrollments/$(enrollmentId)).data.userId;
     }
 
+    // --- User-created running challenges ----------------------------------
+    //
+    // Who created a challenge, and whether the caller is on it. Both are one
+    // document read. The paths are unbroken literals for the same reason the
+    // one above is: the rules parser will not accept a path split across lines,
+    // however long that makes it.
+
+    function challengeCreator(challengeId) {
+      return get(/databases/$(database)/documents/challenges/$(challengeId)).data.get('creatorId', '');
+    }
+
+    function isChallengeCreator(challengeId) {
+      return request.auth != null && request.auth.uid == challengeCreator(challengeId);
+    }
+
+    // Whether the caller holds a participant record on a challenge, in any
+    // state. Invited counts: an invitation is what gives somebody the right to
+    // look at a private challenge and decide whether to accept it.
+    function isOnChallenge(challengeId) {
+      return request.auth != null
+             && exists(/databases/$(database)/documents/challenges/$(challengeId)/participants/$(request.auth.uid));
+    }
+
+    // A participant record at a standing start. The same guard the enrollment
+    // create rule applies to Pulse 75, for the same reason: a join that arrived
+    // pre-loaded with completed days would be a place somebody awarded
+    // themselves. Every one of these is a figure the leaderboard is ordered by,
+    // and the engine is the only thing allowed to move them afterwards.
+    function participantStartsFromZero(entry) {
+      return entry.totalDistanceKm == 0
+             && entry.completedDays == 0
+             && entry.currentStreak == 0
+             && entry.longestStreak == 0
+             && entry.completionPercentage == 0
+             && entry.rank == 0
+             && entry.runCount == 0
+             && entry.totalDurationSeconds == 0;
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
@@ -1027,6 +1066,187 @@ service cloud.firestore {
     match /earlyWorm/{userId} {
       allow read: if request.auth != null;
       allow write: if false;
+    }
+
+    // --- User-created running challenges ----------------------------------
+    //
+    // The second challenge model: somebody sets a distance and a date range,
+    // other people join, and a leaderboard says who is doing best. Separate
+    // collections from challengeEnrollments on purpose -- see
+    // functions/running_challenges.js.
+    //
+    // ON PRIVACY, AND WHY DISCOVERY LOOKS THE WAY IT DOES.
+    //
+    // Firestore rules cannot filter a list query. A query that *could* return a
+    // document the caller may not read fails outright rather than dropping the
+    // row -- so `read` below is not a filter, it is a test every returned
+    // document has to pass. That means discovery has to be pinned to
+    //
+    //     where('visibility', '==', 'public').where('status', '==', 'active')
+    //
+    // and a broader query over /challenges simply fails, for everybody. That is
+    // the behaviour we want: it makes "private challenge data must not leak
+    // through public discovery" true by construction rather than by remembering
+    // to add a filter at each call site. A private challenge is reachable only
+    // by its id, and only by somebody already on it.
+    match /challenges/{challengeId} {
+      // `.get(field, default)` rather than a bare field read, and that is not
+      // style. This collection already held six documents from an abandoned
+      // earlier design -- early_worm, forged, grind, pulse, recomp, shift --
+      // with a completely different shape and no `visibility` or `creatorId` on
+      // them at all. A bare `resource.data.visibility` on one of those is an
+      // error rather than a false, and a rule that denies by erroring is a rule
+      // whose behaviour nobody chose. Stated explicitly, a document with no
+      // visibility is not public, which is the answer we want for the legacy
+      // rows and for anything else that arrives malformed.
+      //
+      // Those six are unreachable either way: nothing in the app or the
+      // functions reads this collection by that shape, and before this block
+      // existed /challenges had no rule at all, so they were already denied to
+      // every client. They are dead data pending a decision to remove them.
+      allow read: if request.auth != null
+                  && (resource.data.get('visibility', '') == 'public'
+                      || request.auth.uid == resource.data.get('creatorId', '')
+                      || isOnChallenge(challengeId));
+
+      // Creating one. Everything that decides an outcome is pinned here: a
+      // challenge cannot be born completed, cannot claim participants it does
+      // not have, and cannot run backwards in time.
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.creatorId
+                    && request.resource.data.status == 'active'
+                    && request.resource.data.participantCount == 0
+                    && request.resource.data.type == 'running'
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() >= 3
+                    && request.resource.data.title.size() <= 80
+                    && request.resource.data.goalValueKm is number
+                    && request.resource.data.goalValueKm >= 1
+                    && request.resource.data.goalValueKm <= 10000
+                    && request.resource.data.dailyMinimumKm is number
+                    && request.resource.data.dailyMinimumKm >= 0.1
+                    && request.resource.data.dailyMinimumKm <= 200
+                    && request.resource.data.visibility in ['public', 'private']
+                    && request.resource.data.startDayKey is string
+                    && request.resource.data.endDayKey is string
+                    && request.resource.data.startDayKey.size() == 10
+                    && request.resource.data.endDayKey.size() == 10
+                    // Day keys are YYYY-MM-DD, so a string compare is a date
+                    // compare, and a backwards range is refused here rather
+                    // than producing a challenge with no days in it.
+                    && request.resource.data.startDayKey <= request.resource.data.endDayKey
+                    && request.resource.data.maxParticipants is int
+                    && request.resource.data.maxParticipants > 0
+                    && request.resource.data.maxParticipants <= 500
+                    && request.resource.data.utcOffsetMinutes is int
+                    && request.resource.data.utcOffsetMinutes >= -720
+                    && request.resource.data.utcOffsetMinutes <= 840;
+
+      // The creator may retitle it or call it off. Nothing else: the dates, the
+      // goal and the visibility are what people agreed to when they joined, and
+      // moving them afterwards would rewrite a competition already in progress.
+      // participantCount and the completed status belong to the engine.
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.creatorId
+                    && request.resource.data.diff(resource.data)
+                         .affectedKeys().hasOnly(['title', 'description',
+                                                  'status', 'updatedAt'])
+                    && request.resource.data.status in ['active', 'cancelled']
+                    && resource.data.status == 'active';
+
+      // A challenge is history once it exists, exactly like an enrollment. A
+      // creator who wants out cancels it, which leaves everybody's record
+      // intact rather than deleting a competition other people ran.
+      allow delete: if false;
+
+      // One person's standing. The document id IS the participant's uid, which
+      // is what makes a duplicate join or a duplicate invite impossible to
+      // write rather than something to remember to check for -- the same thing
+      // usernames/{username} does for handles.
+      match /participants/{userId} {
+        // Entitlement is checked BEFORE the denormalised field, and the field
+        // defaults to 'private', not 'public'. Both of those are deliberate.
+        //
+        // A privacy rule has to fail closed. Defaulting a missing `visibility`
+        // to 'public' means any participant row written without that field --
+        // by an older build, a migration, a hand edit, a bug -- becomes world
+        // readable, and the failure is silent because nothing errors. The row
+        // is a copy of the parent's visibility kept for read cost; a copy that
+        // has gone missing is not evidence that the challenge is public, it is
+        // the absence of evidence, and the safe reading of that is 'private'.
+        //
+        // Putting the two entitlement clauses first also means the common
+        // cases -- you reading your own row, a member reading the board --
+        // never depend on the denormalised copy being right at all.
+        allow read: if request.auth != null
+                    && (request.auth.uid == userId
+                        || isOnChallenge(challengeId)
+                        || resource.data.get('visibility', 'private') == 'public');
+
+        // Joining a public challenge yourself.
+        //
+        // `visibility` is denormalised onto the row so the read rule above can
+        // test a field on the document in front of it. Without it every row of
+        // a leaderboard would cost a get() on the parent challenge -- a read
+        // per row, on the one screen that lists the most rows.
+        allow create: if request.auth != null
+                      && request.auth.uid == userId
+                      && request.resource.data.userId == userId
+                      && request.resource.data.challengeId == challengeId
+                      && participantStartsFromZero(request.resource.data)
+                      && request.resource.data.status == 'active'
+                      && request.resource.data.visibility == 'public'
+                      && get(/databases/$(database)/documents/challenges/$(challengeId)).data.visibility == 'public'
+                      && get(/databases/$(database)/documents/challenges/$(challengeId)).data.status == 'active';
+
+        // Or being invited to one, which only its creator may do. An invitation
+        // is a participant record that has not accepted yet, so it starts from
+        // zero like any other.
+        allow create: if isChallengeCreator(challengeId)
+                      && request.auth.uid != userId
+                      && request.resource.data.userId == userId
+                      && request.resource.data.challengeId == challengeId
+                      && participantStartsFromZero(request.resource.data)
+                      && request.resource.data.status == 'invited';
+
+        // Accepting, declining, leaving. The caller moves their own status and
+        // touches nothing else -- every figure the board is ordered by is
+        // outside the allowed key set and is refused here.
+        allow update: if request.auth != null
+                      && request.auth.uid == userId
+                      && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['status', 'joinedAt',
+                                                    'updatedAt'])
+                      && (
+                        (resource.data.status == 'invited'
+                         && request.resource.data.status in ['active', 'declined'])
+                        ||
+                        (resource.data.status in ['active', 'completed']
+                         && request.resource.data.status == 'left')
+                      );
+
+        allow delete: if false;
+
+        // The per-day record the streak is derived from. Engine-written, and
+        // readable by anyone already on the challenge -- which is what lets a
+        // board show somebody else's recent qualifying activity.
+        match /days/{dayKey} {
+          allow read: if request.auth != null && isOnChallenge(challengeId);
+          allow write: if false;
+        }
+      }
+
+      // The activity-to-challenge attribution records. The document id is the
+      // activity id, and that IS the UNIQUE(challenge_id, activity_id)
+      // constraint the design calls for.
+      //
+      // Closed to clients entirely. These are what every total is rebuilt from,
+      // so a client that could write one could manufacture distance it never
+      // ran -- which is the whole thing a server-side engine exists to prevent.
+      match /attributions/{activityId} {
+        allow read: if request.auth != null && isOnChallenge(challengeId);
+        allow write: if false;
+      }
     }
   }
 }

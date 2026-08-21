@@ -6,18 +6,27 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../application/challenge_providers.dart';
+import '../application/running_challenge_providers.dart';
 import '../domain/challenge_copy.dart';
 import '../domain/challenge_models.dart';
+import '../domain/running_challenge.dart';
 import 'challenge_indicators.dart';
+import 'live_challenges_screen.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// The challenge catalogue, and whatever the user has running.
 ///
-/// Two challenges, in a fixed order: Pulse 75 first because it is the hardest
-/// thing in the app and the reason somebody would come here, then Early Worm,
-/// which asks nothing and is already running for everybody. The record of
+/// Two fixed challenges, in a fixed order: Pulse 75 first because it is the
+/// hardest thing in the app and the reason somebody would come here, then Early
+/// Worm, which asks nothing and is already running for everybody. The record of
 /// finished runs sits underneath — a run that ended is still something the user
 /// did, and burying it would say otherwise.
+///
+/// Under both sits the third kind, which nobody at FitSocial wrote: running
+/// challenges people create for each other. They are listed last on purpose.
+/// The two above are the app's own and are always there; that section is
+/// whatever the users have made this week, and it is empty until somebody makes
+/// something.
 class ChallengeHubScreen extends ConsumerWidget {
   const ChallengeHubScreen({super.key});
 
@@ -27,6 +36,10 @@ class ChallengeHubScreen extends ConsumerWidget {
     final running = ref.watch(primaryEnrollmentProvider);
     final enrollments = ref.watch(myEnrollmentsProvider);
     final earlyWorm = ref.watch(earlyWormProvider);
+    final invites = ref.watch(myChallengeInvitesProvider);
+    final myChallenges = ref.watch(myActiveParticipationsProvider);
+    final liveCount =
+        ref.watch(publicChallengesProvider).valueOrNull?.length ?? 0;
 
     final finished = (enrollments.valueOrNull ?? const <ChallengeEnrollment>[])
         .where((enrollment) => enrollment.status.isTerminal)
@@ -74,6 +87,30 @@ class ChallengeHubScreen extends ConsumerWidget {
                 : null,
             onTap: () => context.push('/challenge/earlyWorm'),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              const Expanded(child: ChallengeLabel('RUNNING CHALLENGES')),
+              TextButton.icon(
+                onPressed: () => context.push('/challenges/create'),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('New'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Invitations first, and only when there are some. An unanswered
+          // invitation is the one thing on this screen somebody else is waiting
+          // on, so it outranks everything below it.
+          for (final invite in invites)
+            _InviteCard(participant: invite),
+
+          for (final joined in myChallenges)
+            _MyChallengeCard(participant: joined),
+
+          _LiveChallengesRow(count: liveCount),
+
           if (finished.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
             const ChallengeLabel('YOUR RECORD'),
@@ -372,6 +409,150 @@ class _Pill extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w800,
           letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+}
+
+/// An unanswered invitation to somebody else's challenge.
+///
+/// Accept and decline are not offered here. Both are on the board, which is
+/// where the dates, the goal and who else is on it are — deciding without
+/// seeing any of that is not really deciding.
+class _InviteCard extends ConsumerWidget {
+  const _InviteCard({required this.participant});
+
+  final ChallengeParticipant participant;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final challenge =
+        ref.watch(runningChallengeProvider(participant.challengeId));
+
+    return challenge.when(
+      loading: () => const SizedBox.shrink(),
+      // A challenge that cannot be read is not rendered as a broken row. An
+      // invitation whose challenge was cancelled is the normal case here.
+      error: (_, __) => const SizedBox.shrink(),
+      data: (value) => value == null
+          ? const SizedBox.shrink()
+          : RunningChallengeCard(
+              challenge: value,
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: palette.brandSoft,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: palette.brandSoftStroke),
+                ),
+                child: Text(
+                  'Invited',
+                  style: TextStyle(
+                    color: palette.brand,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// A challenge the user is on, with their own standing on it.
+class _MyChallengeCard extends ConsumerWidget {
+  const _MyChallengeCard({required this.participant});
+
+  final ChallengeParticipant participant;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final challenge =
+        ref.watch(runningChallengeProvider(participant.challengeId));
+
+    return challenge.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (value) => value == null
+          ? const SizedBox.shrink()
+          : RunningChallengeCard(
+              challenge: value,
+              trailing: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (participant.rank > 0)
+                    Text(
+                      '#${participant.rank}',
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  Text(
+                    '${participant.completionPercentage.round()}%',
+                    style: TextStyle(color: palette.brand, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+/// The way in to public discovery.
+class _LiveChallengesRow extends StatelessWidget {
+  const _LiveChallengesRow({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => context.push('/challenges/live'),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.public_rounded, size: 20, color: palette.brand),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Live challenges',
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    count == 0
+                        ? 'Nothing public is running. Start one.'
+                        : '$count open to anyone',
+                    style: TextStyle(color: palette.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: palette.muted),
+          ],
         ),
       ),
     );
