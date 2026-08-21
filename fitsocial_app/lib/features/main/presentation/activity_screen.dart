@@ -84,6 +84,15 @@ class _MusicSection extends ConsumerWidget {
     // Any music source at all, not just a linked account: notification access
     // alone is enough to drive the player, and it is the route most users take.
     final hasMusicSource = ref.watch(hasMusicSourceProvider);
+    final accountsEnabled = ref.watch(musicAccountsEnabledProvider);
+
+    // With accounts off, the phone's own session is the only source there is —
+    // so once it is granted there is nothing left to set up. Leaving the call
+    // to action there put a bright "Set up music" button directly under a
+    // player that was visibly playing, which reads as the feature being broken
+    // rather than as an offer. With accounts on it stays: there is always
+    // another service to add.
+    final offersSetup = accountsEnabled || !hasMusicSource;
 
     return Column(
       children: [
@@ -95,8 +104,10 @@ class _MusicSection extends ConsumerWidget {
           const MusicPlayerCard()
         else
           const _MusicHeroCard(),
-        const SizedBox(height: AppSpacing.md),
-        const ConnectMusicAction(),
+        if (offersSetup) ...[
+          const SizedBox(height: AppSpacing.md),
+          const ConnectMusicAction(),
+        ],
       ],
     );
   }

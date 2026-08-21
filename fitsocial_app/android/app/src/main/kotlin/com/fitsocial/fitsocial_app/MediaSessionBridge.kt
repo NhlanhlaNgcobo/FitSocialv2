@@ -4,20 +4,26 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
 import android.os.SystemClock
 import android.provider.Settings
 import android.text.TextUtils
+import android.util.Log
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.Executors
 
 /**
  * Reads and drives whatever music app is currently playing, through Android's
@@ -59,6 +65,11 @@ class MediaSessionBridge(
          * but will not accept a new one.
          */
         private const val VOLUME_CONTROL_FIXED = 0
+
+        /** Connect and read timeout for cover art fetched over the network. */
+        private const val ART_TIMEOUT_MS = 5000
+
+        private const val TAG = "FitSocialMedia"
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -90,6 +101,31 @@ class MediaSessionBridge(
     private var lastArtKey: String? = null
 
     private var listeningToSessions = false
+
+    /**
+     * Cover art is not always a bitmap.
+     *
+     * Plenty of media sessions publish artwork as a *reference* —
+     * METADATA_KEY_ALBUM_ART_URI and its siblings — rather than as pixels,
+     * because handing every listener a full-size bitmap costs memory the source
+     * app has no reason to spend. Spotify is one of them, which is why this
+     * bridge drew a placeholder note for every track it ever read.
+     *
+     * A URI has to be opened, and opening one is I/O: a content:// read reaches
+     * into another app's provider and an https:// one reaches the network,
+     * neither of which may happen on the main thread. So the fetch runs here,
+     * off-thread, and its result is cached against the track it belongs to and
+     * pushed on a later emission.
+     */
+    private val io = Executors.newSingleThreadExecutor()
+
+    /** The track a URI fetch is currently in flight for, so it runs once. */
+    private var fetchingArtKey: String? = null
+
+    /** The track [fetchedArt] belongs to. */
+    private var fetchedArtKey: String? = null
+
+    private var fetchedArt: ByteArray? = null
 
     // --- Permission ---
 
@@ -205,6 +241,7 @@ class MediaSessionBridge(
     /** Releases every listener. Called when the engine detaches. */
     fun dispose() {
         stop()
+        io.shutdownNow()
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
         sink = null
@@ -253,6 +290,16 @@ class MediaSessionBridge(
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
             ?: return null
+        return compress(bitmap)
+    }
+
+    /**
+     * Downscales and JPEG-encodes, leaving the caller's bitmap alone.
+     *
+     * The source may belong to a MediaMetadata that other code still reads, so
+     * the only thing recycled here is a scaled copy this function made itself.
+     */
+    private fun compress(bitmap: Bitmap): ByteArray? {
         return try {
             val longest = maxOf(bitmap.width, bitmap.height)
             val scaled = if (longest > ART_MAX_PX && longest > 0) {
@@ -268,14 +315,100 @@ class MediaSessionBridge(
             }
             val out = ByteArrayOutputStream()
             scaled.compress(Bitmap.CompressFormat.JPEG, ART_QUALITY, out)
-            // Only the copy is ours to release; the original belongs to the
-            // metadata object and is still needed by whoever reads it next.
             if (scaled !== bitmap) scaled.recycle()
             out.toByteArray()
         } catch (e: Exception) {
             // Artwork is decoration. A recycled or oversized bitmap must never
             // take the whole snapshot down with it.
             null
+        }
+    }
+
+    /**
+     * Cover art for this track: the bitmap if the session published one, the
+     * cached result of a URI fetch if one has already landed, otherwise null
+     * with a fetch started in the background.
+     */
+    private fun resolveArt(key: String, metadata: MediaMetadata?): ByteArray? {
+        artBytes(metadata)?.let { return it }
+        if (fetchedArtKey == key) return fetchedArt
+        fetchArt(key, metadata)
+        return null
+    }
+
+    /** Opens the artwork URI off the main thread, then re-emits with it. */
+    private fun fetchArt(key: String, metadata: MediaMetadata?) {
+        val uri = metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
+            ?: metadata?.getString(MediaMetadata.METADATA_KEY_ART_URI)
+            ?: metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
+        if (uri.isNullOrEmpty()) {
+            // Neither a bitmap nor a reference. Naming the keys the session did
+            // set is the one line that turns "the cover is missing" from a
+            // guess into a fact, and it costs a log call per track change.
+            Log.d(TAG, "no artwork on this session; keys=" +
+                metadata?.keySet()?.joinToString(","))
+            return
+        }
+        if (fetchingArtKey == key) return
+        fetchingArtKey = key
+
+        io.execute {
+            val bytes = readArt(uri)
+            main.post {
+                if (fetchingArtKey == key) fetchingArtKey = null
+                if (bytes == null) {
+                    Log.d(TAG, "artwork uri would not open: $uri")
+                    return@post
+                }
+                fetchedArt = bytes
+                fetchedArtKey = key
+                // The snapshot that asked for this already went out without it,
+                // and sessions only emit on change — so unless we forget having
+                // sent this track's artwork, nothing would ever send it. This
+                // marks it dirty again for the emit below.
+                if (lastArtKey == key) lastArtKey = null
+                emit()
+            }
+        }
+    }
+
+    /**
+     * Reads an artwork URI into JPEG bytes. Runs on [io], never on main.
+     *
+     * Every failure here is ordinary: a provider that will not grant us a read,
+     * a scheme with no opener, a dead network, or one of the pseudo-URIs some
+     * apps publish that are not addressable at all. They all mean the same
+     * thing to the caller — this track has no cover to draw.
+     */
+    private fun readArt(raw: String): ByteArray? {
+        var connection: HttpURLConnection? = null
+        return try {
+            val parsed = Uri.parse(raw)
+            val stream = when (parsed.scheme?.lowercase()) {
+                "http", "https" -> {
+                    connection = (URL(raw).openConnection() as HttpURLConnection)
+                        .apply {
+                            connectTimeout = ART_TIMEOUT_MS
+                            readTimeout = ART_TIMEOUT_MS
+                        }
+                    connection?.inputStream
+                }
+                // content://, file:// and android.resource:// all open through
+                // the resolver; a scheme it cannot handle throws, which the
+                // catch below turns into "no cover".
+                else -> context.contentResolver.openInputStream(parsed)
+            } ?: return null
+
+            val bitmap = stream.use { BitmapFactory.decodeStream(it) }
+                ?: return null
+            val bytes = compress(bitmap)
+            // This one we decoded ourselves, so this one is ours to release.
+            bitmap.recycle()
+            bytes
+        } catch (e: Exception) {
+            null
+        } finally {
+            connection?.disconnect()
         }
     }
 
@@ -305,7 +438,7 @@ class MediaSessionBridge(
         // so the fields a person would use to name the song stand in for one.
         val artKey = active.packageName + "|" + title + "|" + artist + "|" + album
         val artChanged = artKey != lastArtKey
-        val art = if (artChanged) artBytes(metadata) else null
+        val art = if (artChanged) resolveArt(artKey, metadata) else null
         if (artChanged) lastArtKey = artKey
 
         val actions = state?.actions ?: 0L
