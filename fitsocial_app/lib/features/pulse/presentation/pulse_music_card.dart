@@ -134,6 +134,14 @@ class _ListenActionState extends ConsumerState<_ListenAction> {
     // or a service this app does not drive. The sticker still names the song.
     if (!music.isPlayable) return const SizedBox.shrink();
 
+    // Starting a named track needs an account, and there are none on offer
+    // right now — the phone's media session can steer what is playing but
+    // cannot pick it. The sticker still names the song, which is the part that
+    // travels between people anyway. See musicAccountsEnabledProvider.
+    if (!ref.watch(musicAccountsEnabledProvider)) {
+      return const SizedBox.shrink();
+    }
+
     final isConnected =
         ref.watch(musicConnectionsProvider).isConnected(music.provider);
 

@@ -57,7 +57,8 @@ class _MusicIslandActionState extends ConsumerState<MusicIslandAction>
   /// A short drop, so the card reads as coming down out of the bar rather than
   /// appearing in place.
   late final Animation<Offset> _slide = _motion.drive(
-    Tween<Offset>(begin: const Offset(0, -0.04), end: Offset.zero).chain(_eased),
+    Tween<Offset>(begin: const Offset(0, -0.04), end: Offset.zero)
+        .chain(_eased),
   );
 
   /// Owns only the idle timeout. The expanded card is an [OverlayEntry], whose
@@ -213,9 +214,8 @@ class _MusicIslandActionState extends ConsumerState<MusicIslandAction>
     }
 
     final service = presence.service;
-    final accent = service == null
-        ? context.palette.brand
-        : MusicBrand.of(service).accent;
+    final accent =
+        service == null ? context.palette.brand : MusicBrand.of(service).accent;
 
     return Semantics(
       button: true,

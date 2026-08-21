@@ -1,6 +1,7 @@
 package com.fitsocial.fitsocial_app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.engine.FlutterEngine
 
 /**
  * FlutterFragmentActivity, not FlutterActivity.
@@ -17,4 +18,28 @@ import io.flutter.embedding.android.FlutterFragmentActivity
  * It failed quietly because the registrant catches the throw and carries on, so
  * the app still launched and only the health data was missing.
  */
-class MainActivity : FlutterFragmentActivity()
+class MainActivity : FlutterFragmentActivity() {
+
+    private var mediaSession: MediaSessionBridge? = null
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        // Built against the application context, not this activity: the bridge
+        // holds a MediaController subscription that has to survive the activity
+        // being recreated on rotation, and leaking an Activity into a long-lived
+        // system listener is how that turns into a memory leak.
+        mediaSession = MediaSessionBridge(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        // The session-manager listener is registered with the *system*, which
+        // will happily keep calling into a dead engine. Unregistering here is
+        // what stops that.
+        mediaSession?.dispose()
+        mediaSession = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+}

@@ -44,6 +44,7 @@ Future<void> pumpBar(WidgetTester tester, MusicPresence presence) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        musicAccountsEnabledProvider.overrideWithValue(true),
         musicPresenceProvider.overrideWithValue(presence),
         musicConnectionsProvider.overrideWith((ref) => _ConnectedSpotify(ref)),
       ],
@@ -455,6 +456,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
+          musicAccountsEnabledProvider.overrideWithValue(true),
           spotifyAppRemoteServiceProvider.overrideWithValue(remote),
           musicConnectionsProvider.overrideWith((ref) => _LinkedSpotify(ref)),
         ],
@@ -480,6 +482,7 @@ void main() {
 
       final container = ProviderContainer(
         overrides: [
+          musicAccountsEnabledProvider.overrideWithValue(true),
           spotifyAppRemoteServiceProvider.overrideWithValue(remote),
           musicConnectionsProvider.overrideWith((ref) => _LinkedSpotify(ref)),
         ],

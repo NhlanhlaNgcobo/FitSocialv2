@@ -184,6 +184,27 @@
             android:initOrder="100"
             android:enabled="false" />
 
+        <!-- Reads nothing from notifications. Declared because Android grants
+             access to MediaSessionManager.getActiveSessions() per *component*,
+             and a NotificationListenerService is the only component that can
+             hold it — see MediaSessionListener. That access is what lets the
+             music island show, and the transport controls drive, whatever the
+             user is already playing in Spotify, YouTube Music or anything else,
+             with no account linking of any kind.
+
+             android:exported must be true: the system binds this, not us.
+             The permission below is held by the system side of that bind, so
+             only the system can reach it. -->
+        <service
+            android:name=".MediaSessionListener"
+            android:exported="true"
+            android:label="@string/media_session_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService"/>
+            </intent-filter>
+        </service>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -204,6 +225,18 @@
         <package android:name="com.google.android.apps.healthdata"/>
         <intent>
             <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
+        </intent>
+        <!-- Music apps, so the media-session bridge can put a name to the one
+             that is playing. Android 11+ filters package queries, and without
+             this getApplicationInfo() throws NameNotFoundException for every
+             other app on the phone — the player would fall back to showing
+             "com.spotify.music" where it should read "Spotify".
+
+             Declared as an intent rather than a package list on purpose: it
+             matches whatever the user actually uses, instead of a hardcoded
+             three that would leave every other player unnamed. -->
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService"/>
         </intent>
     </queries>
 </manifest>

@@ -56,9 +56,16 @@ class _FakeSpotify extends SpotifyApiService {
   }
 }
 
-Future<void> pumpCard(WidgetTester tester, PulseMusic music) async {
+Future<void> pumpCard(
+  WidgetTester tester,
+  PulseMusic music, {
+  bool accountsEnabled = true,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
+      overrides: [
+        musicAccountsEnabledProvider.overrideWithValue(accountsEnabled),
+      ],
       child: MaterialApp(
         theme: AppTheme.darkTheme,
         home: Scaffold(body: PulseMusicCard(music: music)),
@@ -233,6 +240,20 @@ void main() {
         ),
       );
 
+      expect(find.text('Bad Habits'), findsOneWidget);
+      expect(find.text('Play'), findsNothing);
+      expect(find.text('Connect Spotify'), findsNothing);
+    });
+
+    testWidgets('offers nothing to press while accounts are off',
+        (tester) async {
+      await pumpCard(tester, _track, accountsEnabled: false);
+
+      // The sticker still names the song — that is the part that travels
+      // between people. What it cannot do is start it: the phone's media
+      // session steers what is playing but cannot pick it, and there is no
+      // account on offer that could. A "Connect Spotify" button leading to a
+      // sheet with no Spotify in it would be worse than no button.
       expect(find.text('Bad Habits'), findsOneWidget);
       expect(find.text('Play'), findsNothing);
       expect(find.text('Connect Spotify'), findsNothing);

@@ -132,6 +132,11 @@ class MusicPlayerSnapshot {
     this.deviceName,
     this.volumePercent,
     this.supportsVolume = false,
+    this.sourceAppName,
+    this.canSkipNext = true,
+    this.canSkipPrevious = true,
+    this.canSeek = true,
+    this.canSetShuffleRepeat = true,
   });
 
   final MusicProviderService service;
@@ -150,6 +155,35 @@ class MusicPlayerSnapshot {
   /// and accepting a new one are separate capabilities on Spotify Connect.
   final bool supportsVolume;
 
+  /// The app producing the sound, as the phone would name it — 'Spotify',
+  /// 'Pocket Casts', 'Poweramp'.
+  ///
+  /// Only the media-session path fills this in, and it is the honest label
+  /// there: [service] collapses every unrecognised player to
+  /// [MusicProviderService.device], so without this a player card driven by a
+  /// podcast app could only say 'Your music'. Null on the API-backed paths,
+  /// where [service] already names the source exactly.
+  final String? sourceAppName;
+
+  /// What the far end says it will accept.
+  ///
+  /// A media session publishes the subset of transport actions it supports,
+  /// and they are not all always present — a live radio stream offers no seek,
+  /// and the last track in a queue offers no skip. Defaulted true so the
+  /// API-backed paths, which have no such notion, behave exactly as before.
+  final bool canSkipNext;
+  final bool canSkipPrevious;
+  final bool canSeek;
+
+  /// Whether shuffle and repeat can be read or changed at all.
+  ///
+  /// False on the media-session path, and not because a particular app is
+  /// terse: `android.media.session.MediaController` has no repeat or shuffle
+  /// accessors whatsoever — they exist only on androidx's
+  /// `MediaControllerCompat`. Nothing the user does can turn this on, so the
+  /// two buttons are disabled rather than left to fail silently.
+  final bool canSetShuffleRepeat;
+
   bool get hasTrack => track != null;
 
   /// True only when there is a level to show *and* a device that will act on
@@ -164,6 +198,11 @@ class MusicPlayerSnapshot {
     String? deviceName,
     int? volumePercent,
     bool? supportsVolume,
+    String? sourceAppName,
+    bool? canSkipNext,
+    bool? canSkipPrevious,
+    bool? canSeek,
+    bool? canSetShuffleRepeat,
     bool clearTrack = false,
   }) {
     return MusicPlayerSnapshot(
@@ -175,6 +214,11 @@ class MusicPlayerSnapshot {
       deviceName: deviceName ?? this.deviceName,
       volumePercent: volumePercent ?? this.volumePercent,
       supportsVolume: supportsVolume ?? this.supportsVolume,
+      sourceAppName: sourceAppName ?? this.sourceAppName,
+      canSkipNext: canSkipNext ?? this.canSkipNext,
+      canSkipPrevious: canSkipPrevious ?? this.canSkipPrevious,
+      canSeek: canSeek ?? this.canSeek,
+      canSetShuffleRepeat: canSetShuffleRepeat ?? this.canSetShuffleRepeat,
     );
   }
 }

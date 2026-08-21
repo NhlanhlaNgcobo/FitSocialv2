@@ -4,15 +4,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
-import '../../../shared/widgets/dark_card.dart';
+import '../../main/domain/app_models.dart';
 import '../../pulse/domain/pulse_music.dart';
 import '../application/music_player_controller.dart';
 import '../application/music_providers.dart';
 import '../domain/music_brand.dart';
 import '../domain/music_playback.dart';
 import 'music_library_sheet.dart';
+import 'widgets/album_art_glass.dart';
 import 'widgets/music_album_art.dart';
 import 'widgets/music_brand_logos.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// The transport controls for the connected service.
 ///
@@ -24,11 +26,18 @@ class MusicPlayerCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final connections = ref.watch(musicConnectionsProvider);
-    if (!connections.hasAnyConnection) return const SizedBox.shrink();
+    // A linked account *or* notification access to the phone's own session.
+    // The second needs no sign-in, and gating on connections alone hid the
+    // whole player from everyone who took it.
+    if (!ref.watch(hasMusicSourceProvider)) return const SizedBox.shrink();
 
     final player = ref.watch(musicPlayerControllerProvider);
-    final service = player.service ?? connections.connectedServices.first;
+    // Whatever is playing names itself; a linked account stands in until the
+    // first snapshot lands, and `device` stands in for that, because the
+    // media-session path has no account to name.
+    final connected = ref.watch(musicConnectionsProvider).connectedServices;
+    final service = player.service ??
+        (connected.isEmpty ? MusicProviderService.device : connected.first);
     final brand = MusicBrand.of(service);
     final controller = ref.read(musicPlayerControllerProvider.notifier);
     final track = player.snapshot?.track;
@@ -37,7 +46,12 @@ class MusicPlayerCard extends ConsumerWidget {
     // driving a Connect device elsewhere.
     final canControl = player.canControl;
 
-    return DarkCard(
+    // The card wears the cover art: blurred to glass behind the controls, so
+    // the player takes on the colour of whatever is playing instead of sitting
+    // on the same grey slab all day.
+    return AlbumArtGlass(
+      imageUrl: track?.albumArtUrl,
+      imageBytes: track?.albumArtBytes,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -109,7 +123,9 @@ class MusicPlayerCard extends ConsumerWidget {
           _SeekBar(
             track: track,
             accent: brand.accent,
-            enabled: canControl,
+            // A live stream publishes no seek action; the bar still draws so
+            // the elapsed time is readable, it just does not take a drag.
+            enabled: canControl && (player.snapshot?.canSeek ?? true),
             onSeek: controller.seek,
           ),
           const SizedBox(height: 6),
@@ -206,32 +222,38 @@ class _ShareToPulseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Material(
-      color: palette.surfaceHigh,
+    return LiquidGlass(
+      // Material stays for the ink splash and gives up its colour:
+      // an opaque fill in there would sit between the glass and
+      // everything it is meant to bend.
       borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: palette.stroke),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.bolt_rounded, size: 18, color: accent),
-              const SizedBox(width: 8),
-              Text(
-                'Share to Pulse',
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: palette.stroke),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bolt_rounded, size: 18, color: accent),
+                const SizedBox(width: 8),
+                Text(
+                  'Share to Pulse',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -258,32 +280,38 @@ class _BrowseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Material(
-      color: palette.surfaceHigh,
+    return LiquidGlass(
+      // Material stays for the ink splash and gives up its colour:
+      // an opaque fill in there would sit between the glass and
+      // everything it is meant to bend.
       borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: palette.stroke),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.queue_music_rounded, size: 18, color: accent),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: palette.stroke),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.queue_music_rounded, size: 18, color: accent),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -425,13 +453,13 @@ class _SeekBarState extends State<_SeekBar> {
     return Column(
       children: [
         SliderTheme(
-          data: _sliderTheme(widget.accent, palette: palette, enabled: scrubbable),
+          data: _sliderTheme(widget.accent,
+              palette: palette, enabled: scrubbable),
           child: Slider(
             value: scrubbable ? positionMs : 0,
             max: scrubbable ? totalMs.toDouble() : 1,
-            onChanged: scrubbable
-                ? (value) => setState(() => _dragMs = value)
-                : null,
+            onChanged:
+                scrubbable ? (value) => setState(() => _dragMs = value) : null,
             onChangeEnd: scrubbable
                 ? (value) {
                     widget.onSeek(Duration(milliseconds: value.round()));
@@ -570,7 +598,10 @@ class _TransportRow extends StatelessWidget {
           // same signal both Spotify and Apple Music use.
           active: player.shuffleEnabled,
           accent: accent,
-          enabled: enabled,
+          // Dimmed rather than absent on the media-session path: the control
+          // exists in every other transport, and a button that vanishes
+          // between sessions reads as a bug.
+          enabled: enabled && player.canSetShuffleRepeat,
           onPressed: onShuffle,
         ),
         _TransportButton(
@@ -578,7 +609,7 @@ class _TransportRow extends StatelessWidget {
           tooltip: 'Previous track',
           size: 32,
           accent: accent,
-          enabled: enabled,
+          enabled: enabled && (player.snapshot?.canSkipPrevious ?? true),
           onPressed: onPrevious,
         ),
         _PlayPauseButton(
@@ -592,7 +623,7 @@ class _TransportRow extends StatelessWidget {
           tooltip: 'Next track',
           size: 32,
           accent: accent,
-          enabled: enabled,
+          enabled: enabled && (player.snapshot?.canSkipNext ?? true),
           onPressed: onNext,
         ),
         _TransportButton(
@@ -606,7 +637,7 @@ class _TransportRow extends StatelessWidget {
           },
           active: repeat != MusicRepeatMode.off,
           accent: accent,
-          enabled: enabled,
+          enabled: enabled && player.canSetShuffleRepeat,
           onPressed: onRepeat,
         ),
       ],

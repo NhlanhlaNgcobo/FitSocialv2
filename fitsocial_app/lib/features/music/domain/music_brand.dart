@@ -77,6 +77,25 @@ class MusicBrand {
     comingSoon: true,
   );
 
+  /// Whatever app is playing, when it is not one of the three above.
+  ///
+  /// Deliberately unbranded: this stands in for a music app we have no licence
+  /// to draw a mark for and often cannot name in advance. The palette is the
+  /// app's own accent rather than anybody else's, so a player driven by a
+  /// podcast app or a local-files player looks like part of FitSocial instead
+  /// of like a service that failed to load.
+  ///
+  /// Never appears in [all] — there is nothing here to connect to.
+  static const device = MusicBrand(
+    service: MusicProviderService.device,
+    name: 'Your music',
+    tagline: 'Playing on this phone',
+    buttonColors: [Color(0xFF3A3A3C), Color(0xFF2C2C2E)],
+    foreground: Color(0xFFFFFFFF),
+    accent: Color(0xFFE5E5EA),
+  );
+
+  /// The connect sheet's buttons, in order. [device] is absent on purpose.
   static const all = <MusicBrand>[spotify, appleMusic, youTubeMusic];
 
   static MusicBrand of(MusicProviderService service) {
@@ -87,6 +106,8 @@ class MusicBrand {
         return appleMusic;
       case MusicProviderService.youtubeMusic:
         return youTubeMusic;
+      case MusicProviderService.device:
+        return device;
     }
   }
 }

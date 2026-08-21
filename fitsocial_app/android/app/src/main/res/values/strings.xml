@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown in Settings > Notification access, next to the toggle the user
+         has to switch on. It is the only place this name appears, so it says
+         what the access is actually used for rather than repeating the app
+         name back at them. -->
+    <string name="media_session_listener_label">FitSocial music controls</string>
+</resources>

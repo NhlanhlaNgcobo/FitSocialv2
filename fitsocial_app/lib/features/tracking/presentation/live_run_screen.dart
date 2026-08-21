@@ -18,6 +18,7 @@ import '../data/live_run_service.dart';
 import 'finish_run_sheet.dart';
 import 'run_session_widgets.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 /// Live GPS run tracking: start/pause/stop with real-time distance,
 /// duration, and pace from the phone's location sensors, plus live BPM
@@ -132,8 +133,9 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     final runState =
         ref.watch(liveRunStateProvider).valueOrNull ?? LiveRunState.idle;
     final liveBpm = ref.watch(liveHeartRateProvider).valueOrNull;
-    final hasMusicConnection =
-        ref.watch(musicConnectionsProvider).hasAnyConnection;
+    // Notification access counts as much as a linked account here: both give
+    // the mini player something to drive.
+    final hasMusicSource = ref.watch(hasMusicSourceProvider);
 
     // "Running right now" — the one condition that lights the screen up. A
     // paused or auto-paused run keeps the numbers but drops the glow, so a
@@ -268,7 +270,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                 controller: _entranceController,
                 index: sectionIndex++,
                 itemCount: _sectionCount,
-                child: hasMusicConnection
+                child: hasMusicSource
                     ? const MusicMiniPlayer()
                     : const ConnectMusicAction(),
               ),
@@ -345,45 +347,49 @@ class _RoutePlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      height: 240,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: context.palette.brandSoft,
-              shape: BoxShape.circle,
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        height: 240,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: context.palette.brandSoft,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.route_rounded,
+                color: context.palette.brand,
+                size: 26,
+              ),
             ),
-            child: Icon(
-              Icons.route_rounded,
-              color: context.palette.brand,
-              size: 26,
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Your route draws here',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Your route draws here',
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+            const SizedBox(height: 4),
+            Text(
+              'Start the run and GPS takes over',
+              style: TextStyle(color: palette.muted, fontSize: 12.5),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Start the run and GPS takes over',
-            style: TextStyle(color: palette.muted, fontSize: 12.5),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

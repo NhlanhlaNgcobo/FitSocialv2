@@ -1,8 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../main/domain/app_models.dart';
 import '../data/apple_music_auth_service.dart';
 import '../data/apple_music_config.dart';
+import '../data/media_session_service.dart';
 import '../data/music_token_store.dart';
 import '../data/pkce_oauth_client.dart';
 import '../data/spotify_api_service.dart';
@@ -11,6 +15,7 @@ import '../data/spotify_config.dart';
 import '../data/youtube_music_api_service.dart';
 import '../data/youtube_music_config.dart';
 import '../domain/music_brand.dart';
+import '../domain/music_feature_flags.dart';
 
 // --- Services ---
 
@@ -45,14 +50,100 @@ final spotifyApiServiceProvider = Provider<SpotifyApiService>((ref) {
 /// Root-scoped on purpose: the connection has to outlive the player card, or
 /// navigating away from the workout screen would tear down the link to the
 /// process that is actually producing sound.
-final spotifyAppRemoteServiceProvider = Provider<SpotifyAppRemoteService>((ref) {
+final spotifyAppRemoteServiceProvider =
+    Provider<SpotifyAppRemoteService>((ref) {
   final service = SpotifyAppRemoteService();
   ref.onDispose(service.disconnect);
   return service;
 });
 
+/// The phone's own media session — what is playing, and the buttons to
+/// drive it — with no account behind it.
+///
+/// Root-scoped for the same reason as the App Remote bridge: it holds a single
+/// platform-channel subscription that both the music island and the player
+/// card read from, and opening that channel twice leaves one of them silent.
+final mediaSessionServiceProvider = Provider<MediaSessionService>((ref) {
+  return MediaSessionService();
+});
+
+/// Whether Android will let us read the phone's media session.
+///
+/// Notification access is granted on a system screen: there is no runtime
+/// dialog to await, no result handed back to the caller, and no callback when
+/// the switch is flipped. Coming back to the foreground is therefore the only
+/// moment the answer can be re-read, and this re-reads it there.
+///
+/// App-wide rather than owned by the connect sheet. Everything that depends on
+/// the media session watches this, so granting the toggle lights the feature up
+/// on return instead of on the next cold start — which is what it used to take.
+class MediaSessionPermissionController extends StateNotifier<bool>
+    with WidgetsBindingObserver {
+  MediaSessionPermissionController(this._service) : super(false) {
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(refresh());
+  }
+
+  final MediaSessionService _service;
+
+  /// Re-reads the switch. Safe to call at any time.
+  Future<void> refresh() async {
+    final granted = await _service.hasPermission();
+    // The container may be gone by the time the channel answers.
+    if (!mounted) return;
+    state = granted;
+  }
+
+  // The parameter shadows StateNotifier's own `state`, which is why nothing in
+  // here touches it — the name is fixed by the overridden method.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(refresh());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+}
+
+/// Starts false and flips to the truth a moment later, rather than exposing an
+/// AsyncValue: every reader of this is answering "can we show music yet", and
+/// "not yet, still asking" and "no" call for exactly the same UI.
+final mediaSessionPermissionProvider =
+    StateNotifierProvider<MediaSessionPermissionController, bool>((ref) {
+  return MediaSessionPermissionController(
+    ref.watch(mediaSessionServiceProvider),
+  );
+});
+
+/// Whether the app has any way at all to see what is playing.
+///
+/// Two independent sources, and no music UI may gate on only one of them: a
+/// linked account, or notification access to whatever this phone is already
+/// playing. The second needs no sign-in, which is the entire reason it exists —
+/// gating the player on connections alone hid it from every user who took that
+/// route, which is most of them.
+final hasMusicSourceProvider = Provider<bool>((ref) {
+  if (ref.watch(mediaSessionPermissionProvider)) return true;
+  return ref.watch(musicAccountsEnabledProvider) &&
+      ref.watch(musicConnectionsProvider).hasAnyConnection;
+});
+
+/// [kMusicAccountsEnabled], read through the container.
+///
+/// The const is the product decision; this is how the app asks about it. Going
+/// through a provider means the account paths — OAuth, the Web API, the App
+/// Remote bridge, the library sheet — can still be exercised under test with
+/// one override, instead of their coverage being deleted along with the UI
+/// that reaches them. Nothing in the app overrides it.
+final musicAccountsEnabledProvider =
+    Provider<bool>((ref) => kMusicAccountsEnabled);
+
 final youTubeMusicApiServiceProvider = Provider<YouTubeMusicApiService>((ref) {
-  return YouTubeMusicApiService(authService: ref.watch(youTubeMusicAuthProvider));
+  return YouTubeMusicApiService(
+      authService: ref.watch(youTubeMusicAuthProvider));
 });
 
 // --- Connection state ---
@@ -97,6 +188,11 @@ class MusicServiceConnection {
         return AppleMusicConfig.isConfigured;
       case MusicProviderService.youtubeMusic:
         return YouTubeMusicConfig.oauth.isConfigured;
+      case MusicProviderService.device:
+        // Not a thing that can be connected — it is what plays when nothing
+        // is. It never reaches the connect sheet, so this only answers a
+        // stray lookup.
+        return false;
     }
   }
 
@@ -111,6 +207,9 @@ class MusicServiceConnection {
       case MusicProviderService.youtubeMusic:
         return 'YouTube Music needs a Google OAuth client ID before it can be '
             'connected.';
+      case MusicProviderService.device:
+        return 'Music playing on this phone is read through Android, not '
+            'connected to an account.';
     }
   }
 
@@ -168,7 +267,7 @@ class MusicConnectionsState {
   static MusicConnectionsState initial() {
     return MusicConnectionsState(
       services: {
-        for (final service in MusicProviderService.values)
+        for (final service in MusicProviderService.connectable)
           service: MusicServiceConnection(service: service),
       },
     );
@@ -188,7 +287,8 @@ class MusicConnectionsState {
 
 /// Owns sign-in and sign-out for all three services.
 class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
-  MusicConnectionsController(this._ref) : super(MusicConnectionsState.initial()) {
+  MusicConnectionsController(this._ref)
+      : super(MusicConnectionsState.initial()) {
     _restore();
   }
 
@@ -196,7 +296,11 @@ class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
 
   /// Rehydrates previously connected accounts on app start.
   Future<void> _restore() async {
-    for (final service in MusicProviderService.values) {
+    // Nothing to rehydrate while accounts are off, and asking anyway would mean
+    // a secure-storage read per service on every cold start for an answer
+    // nothing is allowed to act on.
+    if (!_ref.read(musicAccountsEnabledProvider)) return;
+    for (final service in MusicProviderService.connectable) {
       // Each iteration resumes after an await, by which point the container
       // may be gone — and _authFor reads from it. Without this guard a sign-out
       // (or a torn-down test) mid-restore throws from a future nobody awaits.
@@ -214,6 +318,9 @@ class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
     // A paused service must not reach its auth flow even if something calls
     // this directly — the shade in the sheet is presentation, not the gate.
     if (state[service].isComingSoon) return;
+    // `device` has no auth flow to reach. Refused here rather than in the
+    // switch below so it can never be marked connected on the way through.
+    if (service == MusicProviderService.device) return;
 
     _update(service, (c) => c.copyWith(isBusy: true, clearError: true));
     try {
@@ -227,6 +334,9 @@ class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
         case MusicProviderService.appleMusic:
           await _ref.read(appleMusicAuthProvider).connect();
           break;
+        case MusicProviderService.device:
+          // Unreachable: guarded above.
+          return;
       }
       if (!mounted) return;
       _update(service, (c) => c.copyWith(isConnected: true, isBusy: false));
@@ -234,7 +344,8 @@ class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
       await _loadAccount(service);
     } on MusicAuthException catch (e) {
       if (!mounted) return;
-      _update(service, (c) => c.copyWith(isBusy: false, errorMessage: e.message));
+      _update(
+          service, (c) => c.copyWith(isBusy: false, errorMessage: e.message));
     } catch (e) {
       if (!mounted) return;
       _update(
@@ -287,6 +398,12 @@ class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
         return _ref.read(youTubeMusicAuthProvider);
       case MusicProviderService.appleMusic:
         return _ref.read(appleMusicAuthProvider);
+      case MusicProviderService.device:
+        // A real invariant, not a gap: there is no token store behind the
+        // phone's own media session, so anything asking this one for an
+        // account has walked `values` where it meant `connectable`.
+        throw StateError('MusicProviderService.device has no account to '
+            'authenticate — iterate MusicProviderService.connectable.');
     }
   }
 
@@ -296,7 +413,8 @@ class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
     try {
       switch (service) {
         case MusicProviderService.spotify:
-          final profile = await _ref.read(spotifyApiServiceProvider).fetchProfile();
+          final profile =
+              await _ref.read(spotifyApiServiceProvider).fetchProfile();
           if (!mounted) return;
           _update(
             service,
@@ -323,6 +441,9 @@ class MusicConnectionsController extends StateNotifier<MusicConnectionsState> {
           // Reading the Apple Music account needs the developer token that
           // only the auth bridge holds, so there is nothing to fetch here.
           _update(service, (c) => c.copyWith(accountName: 'Apple Music'));
+          break;
+        case MusicProviderService.device:
+          // No account behind it, so nothing to name.
           break;
       }
     } catch (_) {

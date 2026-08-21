@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/music/application/music_player_controller.dart';
 import 'package:fitsocial_app/features/music/application/music_providers.dart';
+import 'package:fitsocial_app/features/music/data/media_session_service.dart';
 import 'package:fitsocial_app/features/music/data/pkce_oauth_client.dart';
 import 'package:fitsocial_app/features/music/data/spotify_api_service.dart';
 import 'package:fitsocial_app/features/music/data/spotify_app_remote_service.dart';
@@ -162,14 +163,50 @@ const _track = NowPlayingTrack(
   position: Duration(seconds: 40),
 );
 
+/// Stands in for the platform bridge, so the sheet can be driven without one.
+class _FakeMediaSession extends MediaSessionService {
+  _FakeMediaSession({this.granted = false, this.canOpenSettings = true});
+
+  final bool granted;
+
+  /// A handful of OEM builds have no notification-access screen to open.
+  final bool canOpenSettings;
+
+  int settingsOpened = 0;
+
+  @override
+  Future<bool> hasPermission() async => granted;
+
+  @override
+  Future<bool> openPermissionSettings() async {
+    settingsOpened++;
+    return canOpenSettings;
+  }
+
+  @override
+  Stream<MediaSessionState> states() => const Stream.empty();
+}
+
 Widget _host({
   required Widget child,
   MusicConnectionsState? connections,
   _FakeSpotify? spotify,
   SpotifyAppRemoteService? appRemote,
+  MediaSessionService? session,
+  bool accountsEnabled = true,
 }) {
   return ProviderScope(
     overrides: [
+      // The account half of the music feature is off in the shipped app, and
+      // most of these exercise exactly that half. Turning it on by default
+      // keeps the OAuth, Web API and App Remote paths under test rather than
+      // deleting their coverage along with the UI that reaches them; the group
+      // at the bottom of this file turns it back off to cover what ships.
+      musicAccountsEnabledProvider.overrideWithValue(accountsEnabled),
+      // Defaults to "notification access not granted", which is every test
+      // below that is not specifically about the media session.
+      mediaSessionServiceProvider
+          .overrideWithValue(session ?? _FakeMediaSession()),
       if (connections != null)
         musicConnectionsProvider
             .overrideWith((ref) => _SeededConnections(ref, connections)),
@@ -208,6 +245,106 @@ void main() {
     );
   });
 
+  group('phone music', () {
+    /// Opens the sheet and returns the fake behind it.
+    Future<_FakeMediaSession> openSheet(
+      WidgetTester tester, {
+      bool granted = false,
+      bool canOpenSettings = true,
+      bool accountsEnabled = true,
+    }) async {
+      final session = _FakeMediaSession(
+        granted: granted,
+        canOpenSettings: canOpenSettings,
+      );
+      await tester.pumpWidget(
+        _host(
+          accountsEnabled: accountsEnabled,
+          connections: MusicConnectionsState.initial(),
+          session: session,
+          child: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showConnectMusicSheet(context),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      return session;
+    }
+
+    testWidgets('offers the phone itself before any account', (tester) async {
+      await openSheet(tester);
+
+      // The whole point of the feature: this row needs no sign-in, so it leads
+      // and the three services follow under their own heading.
+      expect(find.text('Your music'), findsOneWidget);
+      expect(find.text('Or connect an account'), findsOneWidget);
+      expect(
+        find.text('Show and control what is playing, in any app'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sends the user to settings to grant access', (tester) async {
+      final session = await openSheet(tester);
+
+      await tester.tap(find.text('Your music'));
+      await tester.pumpAndSettle();
+
+      // Notification access has no runtime dialog — the system screen is the
+      // only way to grant it.
+      expect(session.settingsOpened, 1);
+    });
+
+    testWidgets('says where to look when there is no settings screen',
+        (tester) async {
+      final session = await openSheet(tester, canOpenSettings: false);
+
+      await tester.tap(find.text('Your music'));
+      await tester.pumpAndSettle();
+
+      expect(session.settingsOpened, 1);
+      // A button that visibly does nothing is worse than instructions.
+      expect(find.textContaining('Notification access'), findsOneWidget);
+    });
+
+    testWidgets('says what the scary screen is really asking for',
+        (tester) async {
+      await openSheet(tester);
+
+      // The system grant screen warns about reading every notification on the
+      // phone. Left unanswered, that is where a reasonable person quits — so
+      // the answer goes in front of it, not after.
+      expect(find.textContaining('It never reads one'), findsOneWidget);
+    });
+
+    testWidgets('drops the reassurance once there is nothing to reassure',
+        (tester) async {
+      await openSheet(tester, granted: true);
+
+      expect(find.textContaining('It never reads one'), findsNothing);
+    });
+
+    testWidgets('stops asking once access is granted', (tester) async {
+      final session = await openSheet(tester, granted: true);
+
+      expect(
+        find.text('On \u00b7 controlling whatever this phone plays'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Your music'));
+      await tester.pumpAndSettle();
+
+      // Sending someone back to stare at a switch they already flipped is not
+      // an action, so the tile goes inert rather than staying tappable.
+      expect(session.settingsOpened, 0);
+    });
+  });
+
   group('connect sheet', () {
     testWidgets('offers all three services, each with its own mark',
         (tester) async {
@@ -226,14 +363,22 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Which are you connecting to?'), findsOneWidget);
+      expect(find.text('How should we find your music?'), findsOneWidget);
       expect(find.text('Spotify'), findsOneWidget);
       expect(find.text('Apple Music'), findsOneWidget);
       expect(find.text('YouTube Music'), findsOneWidget);
 
+      // The phone's own music leads, because it is the only row here that
+      // works without an account.
+      expect(find.text('Your music'), findsOneWidget);
+
       // Each button carries the mark twice: once at readable size, once as the
       // oversized watermark behind the label.
-      for (final service in MusicProviderService.values) {
+      //
+      // Walks connectable rather than values: MusicProviderService.device is
+      // what the phone media session reports when it cannot name the player,
+      // and it has no button here because there is no account behind it.
+      for (final service in MusicProviderService.connectable) {
         expect(
           find.byWidgetPredicate(
             (widget) =>
@@ -272,7 +417,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          find.text('Which are you connecting to?'),
+          find.text('How should we find your music?'),
           findsOneWidget,
           reason: 'tapping $name should not dismiss or navigate',
         );
@@ -438,7 +583,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Connect your music app'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Which are you connecting to?'), findsOneWidget);
+      expect(find.text('How should we find your music?'), findsOneWidget);
       expect(find.text('Coming soon'), findsNWidgets(2));
     });
 
@@ -673,6 +818,7 @@ void main() {
     test('a seek past the end is clamped to the track length', () async {
       final container = ProviderContainer(
         overrides: [
+          musicAccountsEnabledProvider.overrideWithValue(true),
           musicConnectionsProvider.overrideWith(
             (ref) => _SeededConnections(
               ref,
@@ -771,6 +917,108 @@ void main() {
     });
   });
 
+  /// What actually ships: notification access, and no accounts anywhere.
+  ///
+  /// Every other group here turns accounts back on, because that is the code
+  /// they are about. This one is the shipped configuration, and it exists
+  /// because the interesting failure is silent — a music feature that is fully
+  /// built, fully tested, and reaches nothing on a real phone.
+  group('accounts off', () {
+    testWidgets('notification access alone puts the player on screen',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(
+          accountsEnabled: false,
+          connections: MusicConnectionsState.initial(),
+          session: _FakeMediaSession(granted: true),
+          child: const MusicPlayerCard(),
+        ),
+      );
+      // The permission is read over a channel, so the first frame still says
+      // no; the answer lands on the next one.
+      await tester.pump();
+      await tester.pump();
+
+      // Nothing is connected and nothing ever will be, and the card is still
+      // here. Gating this on an account is what used to hide the whole feature
+      // from everyone who took the route that needs no account.
+      expect(find.byIcon(Icons.skip_next_rounded), findsOneWidget);
+    });
+
+    testWidgets('without notification access there is still nothing to show',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(
+          accountsEnabled: false,
+          connections: MusicConnectionsState.initial(),
+          session: _FakeMediaSession(),
+          child: const MusicPlayerCard(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byIcon(Icons.skip_next_rounded), findsNothing);
+    });
+
+    testWidgets('the sheet offers the phone and nothing else', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          accountsEnabled: false,
+          connections: MusicConnectionsState.initial(),
+          session: _FakeMediaSession(),
+          child: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showConnectMusicSheet(context),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Your music'), findsOneWidget);
+      // No sign-in on offer, so no heading promising one and no service
+      // buttons under it.
+      expect(find.text('Or connect an account'), findsNothing);
+      expect(find.text('Spotify'), findsNothing);
+      expect(find.text('Apple Music'), findsNothing);
+      expect(find.text('YouTube Music'), findsNothing);
+    });
+
+    test('the player never reaches for Spotify, even if a token survived',
+        () async {
+      final appRemote = _FakeAppRemote();
+      final container = ProviderContainer(
+        overrides: [
+          musicAccountsEnabledProvider.overrideWithValue(false),
+          // A connection left over from a build that had accounts on. The
+          // switch has to hold even then, or turning the feature off would
+          // leave old installs still driving an account nobody can renew.
+          musicConnectionsProvider.overrideWith(
+            (ref) => _SeededConnections(
+              ref,
+              _connectedTo(MusicProviderService.spotify),
+            ),
+          ),
+          spotifyAppRemoteServiceProvider.overrideWithValue(appRemote),
+          mediaSessionServiceProvider.overrideWithValue(_FakeMediaSession()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(musicPlayerControllerProvider);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(
+        container.read(musicPlayerControllerProvider).transport,
+        MusicPlaybackTransport.none,
+      );
+      expect(appRemote.calls, isEmpty);
+    });
+  });
+
   group('app remote', () {
     ProviderContainer containerWith({
       required SpotifyAppRemoteService appRemote,
@@ -778,6 +1026,7 @@ void main() {
     }) {
       final container = ProviderContainer(
         overrides: [
+          musicAccountsEnabledProvider.overrideWithValue(true),
           musicConnectionsProvider.overrideWith(
             (ref) => _SeededConnections(
               ref,

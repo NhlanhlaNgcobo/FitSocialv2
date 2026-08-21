@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_palette.dart';
-import '../../../shared/widgets/dark_card.dart';
+import '../../main/domain/app_models.dart';
 import '../application/music_player_controller.dart';
 import '../application/music_providers.dart';
 import '../domain/music_brand.dart';
 import 'music_library_sheet.dart';
+import 'widgets/album_art_glass.dart';
 import 'widgets/music_album_art.dart';
 
 /// A one-line player for screens where music is not the point.
@@ -26,18 +27,31 @@ class MusicMiniPlayer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final connections = ref.watch(musicConnectionsProvider);
-    if (!connections.hasAnyConnection) return const SizedBox.shrink();
+    // A linked account *or* notification access — either is enough to have
+    // something to show. Gating on connections alone is what left this widget
+    // rendering nothing for users on the account-free path, including inside
+    // the music island's own expanded card.
+    if (!ref.watch(hasMusicSourceProvider)) return const SizedBox.shrink();
 
     final player = ref.watch(musicPlayerControllerProvider);
-    final service = player.service ?? connections.connectedServices.first;
+    // Whatever is playing names itself. A linked account stands in before the
+    // first snapshot lands, and `device` stands in for that — the media-session
+    // path has no account behind it, so reaching for one here would throw.
+    final connected = ref.watch(musicConnectionsProvider).connectedServices;
+    final service = player.service ??
+        (connected.isEmpty ? MusicProviderService.device : connected.first);
     final brand = MusicBrand.of(service);
     final controller = ref.read(musicPlayerControllerProvider.notifier);
     final track = player.snapshot?.track;
 
     final canControl = player.canControl;
 
-    return DarkCard(
+    // Same glass as the full player, so the two read as one component seen at
+    // two sizes. Mid-run this is also the card's only cue at a glance: the
+    // colour changing is how you know the track did, without reading a word.
+    return AlbumArtGlass(
+      imageUrl: track?.albumArtUrl,
+      imageBytes: track?.albumArtBytes,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
@@ -134,8 +148,7 @@ class _MiniButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final color =
-        enabled ? palette.text : palette.muted.withValues(alpha: 0.4);
+    final color = enabled ? palette.text : palette.muted.withValues(alpha: 0.4);
 
     return IconButton(
       tooltip: tooltip,

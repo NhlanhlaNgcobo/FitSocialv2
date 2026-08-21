@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../main/domain/app_models.dart';
+import '../data/media_session_service.dart';
 import '../data/spotify_app_remote_service.dart';
+import '../domain/music_feature_flags.dart';
 import '../domain/music_presence.dart';
 import 'music_providers.dart';
 
@@ -22,32 +24,73 @@ const Duration kPresencePollInterval = Duration(seconds: 20);
 /// Root-scoped on purpose, unlike [musicPlayerControllerProvider]: the island
 /// sits above every screen, so this has to outlive all of them.
 ///
-/// The cost of that is why this exists at all. App Remote is push-based —
-/// Spotify emits on every play, pause, skip and seek — so the common path
-/// costs no polling whatsoever. Only a Web-API-only session falls back to
-/// asking, and then at [kPresencePollInterval] rather than at 1 Hz.
+/// The cost of that is why the source order matters. Both push-based paths —
+/// the phone's media session and Spotify's App Remote — emit on every play,
+/// pause, skip and seek, so the common path costs no polling whatsoever. Only
+/// a Web-API-only session falls back to asking, and then at
+/// [kPresencePollInterval] rather than at 1 Hz.
+///
+/// The media session is tried first because it is the only source that needs
+/// no account: it reads whatever the phone is playing, in any app, for any
+/// user. App Remote is kept behind it for the Spotify accounts that are on the
+/// developer allowlist, where it can do more.
 class MusicPresenceController extends StateNotifier<MusicPresence> {
   MusicPresenceController({
+    required MediaSessionService session,
     required SpotifyAppRemoteService appRemote,
     required MusicConnectionsState connections,
+    required bool mediaSessionGranted,
+    required bool accountsEnabled,
     required this.readWebApiSnapshot,
-  })  : _appRemote = appRemote,
+  })  : _session = session,
+        _appRemote = appRemote,
+        _accountsEnabled = accountsEnabled,
         super(MusicPresence.none) {
-    _start(connections);
+    _start(connections, mediaSessionGranted);
   }
 
+  final MediaSessionService _session;
   final SpotifyAppRemoteService _appRemote;
+
+  /// Whether the Spotify fallbacks are part of the product. See
+  /// [kMusicAccountsEnabled].
+  final bool _accountsEnabled;
 
   /// Injected rather than reached for, so the fallback path can be exercised
   /// without a Spotify account.
   final Future<MusicPresence> Function() readWebApiSnapshot;
 
   StreamSubscription<void>? _remoteStates;
+  StreamSubscription<MediaSessionState>? _sessionStates;
   Timer? _poll;
 
-  Future<void> _start(MusicConnectionsState connections) async {
+  Future<void> _start(
+    MusicConnectionsState connections,
+    bool mediaSessionGranted,
+  ) async {
+    // No account, no quota, works with every music app on the phone — so this
+    // comes first, and when it is available nothing else is needed.
+    //
+    // Handed in rather than read here. This controller is root-scoped and
+    // built once; asking the channel itself meant the answer was frozen at
+    // whatever it was on the first frame, so a user who granted notification
+    // access got nothing until the next cold start. Watching the permission
+    // provider rebuilds this the moment the switch flips.
+    if (mediaSessionGranted) {
+      debugPrint('Music island: watching the phone media session.');
+      _listenToMediaSession();
+      return;
+    }
+
+    if (!_accountsEnabled) {
+      debugPrint('Music island: no media-session permission, and accounts are '
+          'off — island stays hidden until notification access is granted.');
+      return;
+    }
+
     if (!connections.isConnected(MusicProviderService.spotify)) {
-      debugPrint('Music island: no Spotify connection — island stays hidden.');
+      debugPrint('Music island: no media-session permission and no Spotify '
+          'connection — island stays hidden.');
       return;
     }
 
@@ -63,6 +106,21 @@ class MusicPresenceController extends StateNotifier<MusicPresence> {
       // device elsewhere. Fall back to asking, slowly.
       if (mounted) _startPolling();
     }
+  }
+
+  void _listenToMediaSession() {
+    _poll?.cancel();
+    _poll = null;
+    _sessionStates?.cancel();
+    _sessionStates = _session.states().listen(
+      (event) => _emit(MusicPresence.fromSnapshot(event.snapshot)),
+      onError: (Object error) {
+        // The channel dropped. Nothing to fall back to that would not need an
+        // account, so the island goes rather than showing a stale track.
+        debugPrint('Music island: media session stream failed ($error).');
+        _emit(MusicPresence.none);
+      },
+    );
   }
 
   void _listenToAppRemote() {
@@ -113,6 +171,7 @@ class MusicPresenceController extends StateNotifier<MusicPresence> {
   @override
   void dispose() {
     _remoteStates?.cancel();
+    _sessionStates?.cancel();
     _poll?.cancel();
     super.dispose();
   }
@@ -124,8 +183,11 @@ final musicPresenceControllerProvider =
   final api = ref.watch(spotifyApiServiceProvider);
 
   return MusicPresenceController(
+    session: ref.watch(mediaSessionServiceProvider),
     appRemote: ref.watch(spotifyAppRemoteServiceProvider),
     connections: connections,
+    mediaSessionGranted: ref.watch(mediaSessionPermissionProvider),
+    accountsEnabled: ref.watch(musicAccountsEnabledProvider),
     readWebApiSnapshot: () async =>
         MusicPresence.fromSnapshot(await api.fetchPlayerState()),
   );

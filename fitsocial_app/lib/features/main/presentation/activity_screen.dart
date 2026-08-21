@@ -13,6 +13,7 @@ import '../application/music_integration_controller.dart';
 import '../domain/app_models.dart';
 import 'progress_section.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 
 class ActivityScreen extends ConsumerWidget {
   const ActivityScreen({super.key});
@@ -80,14 +81,17 @@ class _MusicSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connections = ref.watch(musicConnectionsProvider);
+    // Any music source at all, not just a linked account: notification access
+    // alone is enough to drive the player, and it is the route most users take.
+    final hasMusicSource = ref.watch(hasMusicSourceProvider);
 
     return Column(
       children: [
-        // The hero card is the pitch for connecting an account. Once one is
-        // linked it has made its case, so the player replaces it rather than
-        // stacking underneath and pushing the controls down the page.
-        if (connections.hasAnyConnection)
+        // The hero card is the pitch for setting music up. Once there is a way
+        // in — an account, or access to the phone's own session — it has made
+        // its case, so the player replaces it rather than stacking underneath
+        // and pushing the controls down the page.
+        if (hasMusicSource)
           const MusicPlayerCard()
         else
           const _MusicHeroCard(),
@@ -110,42 +114,46 @@ class _ActivitySectionPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Row(
-        children: ActivitySection.values
-            .map(
-              (section) => Expanded(
-                child: GestureDetector(
-                  onTap: () => onSelected(section),
-                  child: Container(
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: selectedSection == section
-                          ? palette.brandSoft
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      section.label,
-                      style: TextStyle(
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane
+      // over the app backdrop, like every other card.
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: ActivitySection.values
+              .map(
+                (section) => Expanded(
+                  child: GestureDetector(
+                    onTap: () => onSelected(section),
+                    child: Container(
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
                         color: selectedSection == section
-                            ? palette.brandText
-                            : palette.muted,
-                        fontWeight: FontWeight.w700,
+                            ? palette.brandSoft
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        section.label,
+                        style: TextStyle(
+                          color: selectedSection == section
+                              ? palette.brandText
+                              : palette.muted,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            )
-            .toList(),
+              )
+              .toList(),
+        ),
       ),
     );
   }
@@ -217,7 +225,8 @@ class _MusicHeroCard extends StatelessWidget {
                 // maxLines guards the fixed-height card against overflow at
                 // larger system font scales.
                 Text(
-                  'Preview provider-aware playlists, create your own gym mixes, and keep users inside the flow without mid-set app switching.',
+                  'Play from any music app and control it right here — see the '
+                  'track, skip it, scrub it, without leaving your workout.',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: palette.muted, height: 1.45),
@@ -262,5 +271,3 @@ class _MusicBadge extends StatelessWidget {
     );
   }
 }
-
-

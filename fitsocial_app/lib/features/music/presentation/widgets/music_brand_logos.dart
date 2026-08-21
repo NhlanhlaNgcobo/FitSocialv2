@@ -60,6 +60,16 @@ class MusicBrandArtwork {
       ' 6.228S8.568 18.228 12 18.228s6.228-2.796 6.228-6.228S15.432 5.772 12 5.'
       '772zM9.684 15.54V8.46L15.816 12l-6.132 3.54z';
 
+  /// A plain music note, for a player we have no mark for.
+  ///
+  /// Not a brand: this is drawn by us, so unlike the three above it can be
+  /// recoloured and scaled freely. It stands in whenever the media session
+  /// belongs to an app outside the three services — a local-files player, a
+  /// podcast app, a radio stream — which the media-session bridge reports as
+  /// [MusicProviderService.device].
+  static const _devicePath =
+      'M12 3v10.55A4 4 0 1014 17V7h4V3h-6zm0 14a2 2 0 11-2-2 2 2 0 012 2z';
+
   static String pathData(MusicProviderService service) {
     switch (service) {
       case MusicProviderService.spotify:
@@ -68,6 +78,8 @@ class MusicBrandArtwork {
         return _appleMusicPath;
       case MusicProviderService.youtubeMusic:
         return _youTubeMusicPath;
+      case MusicProviderService.device:
+        return _devicePath;
     }
   }
 
@@ -99,6 +111,13 @@ class MusicBrandArtwork {
         return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
             '<circle cx="12" cy="12" r="12" fill="#FFFFFF"/>'
             '<path fill="#FF0000" d="$_youTubeMusicPath"/>'
+            '</svg>';
+      case MusicProviderService.device:
+        // No backing shape: an unbranded note sits directly on whatever
+        // surface it is drawn over, so it reads as an icon rather than as a
+        // logo we are pretending to own.
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<path fill="#E5E5EA" d="$_devicePath"/>'
             '</svg>';
     }
   }

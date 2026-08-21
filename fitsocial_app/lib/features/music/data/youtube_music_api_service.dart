@@ -104,18 +104,22 @@ class YouTubeMusicApiService {
     final items = json['items'] as List<dynamic>?;
     if (items == null) return const [];
 
-    return items.whereType<Map<String, dynamic>>().map((item) {
-      final snippet = item['snippet'] as Map<String, dynamic>?;
-      final details = item['contentDetails'] as Map<String, dynamic>?;
-      final thumbnails = snippet?['thumbnails'] as Map<String, dynamic>?;
-      final medium = thumbnails?['medium'] as Map<String, dynamic>?;
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map((item) {
+          final snippet = item['snippet'] as Map<String, dynamic>?;
+          final details = item['contentDetails'] as Map<String, dynamic>?;
+          final thumbnails = snippet?['thumbnails'] as Map<String, dynamic>?;
+          final medium = thumbnails?['medium'] as Map<String, dynamic>?;
 
-      return YouTubeMusicPlaylist(
-        id: (item['id'] as String?) ?? '',
-        title: (snippet?['title'] as String?) ?? 'Untitled',
-        itemCount: (details?['itemCount'] as num?)?.toInt() ?? 0,
-        thumbnailUrl: medium?['url'] as String?,
-      );
-    }).where((p) => p.id.isNotEmpty).toList(growable: false);
+          return YouTubeMusicPlaylist(
+            id: (item['id'] as String?) ?? '',
+            title: (snippet?['title'] as String?) ?? 'Untitled',
+            itemCount: (details?['itemCount'] as num?)?.toInt() ?? 0,
+            thumbnailUrl: medium?['url'] as String?,
+          );
+        })
+        .where((p) => p.id.isNotEmpty)
+        .toList(growable: false);
   }
 }

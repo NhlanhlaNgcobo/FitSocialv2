@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../main/domain/app_models.dart';
+import '../data/media_session_service.dart';
 import '../data/spotify_api_service.dart';
 import '../data/spotify_app_remote_service.dart';
+import '../domain/music_feature_flags.dart';
 import '../domain/music_playback.dart';
 import 'music_providers.dart';
 
@@ -16,6 +18,12 @@ import 'music_providers.dart';
 enum MusicPlaybackTransport {
   /// Nothing connected, or a service with no remote-control API at all.
   none,
+
+  /// Android's own media session, driving whatever music app the phone is
+  /// already playing. Needs no account, so it is preferred over both Spotify
+  /// paths — it is the only one that works for a user who has connected
+  /// nothing. It cannot *start* a chosen track, only steer what is running.
+  mediaSession,
 
   /// Spotify's App Remote bridge to the installed Spotify app. Playback
   /// starts here.
@@ -55,9 +63,18 @@ class MusicPlayerState {
   bool get canControl =>
       transport != MusicPlaybackTransport.none && snapshot != null;
 
+  /// Whether the shuffle and repeat buttons can do anything.
+  bool get canSetShuffleRepeat => snapshot?.canSetShuffleRepeat ?? true;
+
   /// Whether picking a playlist can actually start it. App Remote always can;
   /// the Web API needs a live device, which it discovers when asked.
-  bool get canStartPlayback => transport != MusicPlaybackTransport.none;
+  ///
+  /// The media session never can. Android hands out a controller for a session
+  /// another app has already opened — there is no call on it that means "play
+  /// this track", so a library UI has nothing to hand it.
+  bool get canStartPlayback =>
+      transport != MusicPlaybackTransport.none &&
+      transport != MusicPlaybackTransport.mediaSession;
 
   MusicPlayerState copyWith({
     MusicProviderService? service,
@@ -93,21 +110,38 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   MusicPlayerController({
     required SpotifyApiService spotify,
     required SpotifyAppRemoteService appRemote,
+    required MediaSessionService session,
     required MusicConnectionsState connections,
+    required bool mediaSessionGranted,
+    required bool accountsEnabled,
   })  : _spotify = spotify,
         _appRemote = appRemote,
+        _session = session,
         _connections = connections,
+        _mediaSessionGranted = mediaSessionGranted,
+        _accountsEnabled = accountsEnabled,
         super(const MusicPlayerState()) {
     _start();
   }
 
   final SpotifyApiService _spotify;
   final SpotifyAppRemoteService _appRemote;
+  final MediaSessionService _session;
   final MusicConnectionsState _connections;
+
+  /// Whether notification access is granted, as of this build of the
+  /// controller. Handed in rather than read from the channel: the provider
+  /// watches the permission, so a grant rebuilds this with the new answer.
+  final bool _mediaSessionGranted;
+
+  /// Whether the Spotify transports are part of the product. See
+  /// [kMusicAccountsEnabled].
+  final bool _accountsEnabled;
 
   Timer? _ticker;
   int _ticksSincePoll = 0;
   StreamSubscription<MusicPlayerSnapshot>? _remoteStates;
+  StreamSubscription<MediaSessionState>? _sessionStates;
 
   /// The artwork reference the last fetch was issued for, so the same track
   /// does not re-request its cover on every state push.
@@ -129,6 +163,18 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   static const _holdAfterCommand = Duration(seconds: 3);
 
   void _start() {
+    // Tried first and unconditionally, because it is the only transport that
+    // does not need an account: a user who has connected nothing still gets a
+    // working player if they have granted notification access. It takes over
+    // whenever it reports a session, which is why it starts before the
+    // connection check below rather than as a fallback after it.
+    if (_mediaSessionGranted) _listenToMediaSession();
+
+    // With accounts off the media session is the entire transport: no App
+    // Remote bridge to wake, no Web API to poll, and no ticker but the one it
+    // starts for itself.
+    if (!_accountsEnabled) return;
+
     final active = _connections.activeConnection;
     if (active == null) {
       state = const MusicPlayerState();
@@ -160,12 +206,67 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
+  /// Subscribes to the phone's media session.
+  ///
+  /// Only reached when permission is granted, and silent when it is not: the
+  /// user is asked for notification access from the music screen, deliberately
+  /// and in context, not by a player card that quietly failed to fill itself
+  /// in.
+  void _listenToMediaSession() {
+    _sessionStates?.cancel();
+    _sessionStates = _session.states().listen(
+      (event) {
+        if (!mounted) return;
+        final snapshot = event.snapshot;
+        if (snapshot == null) {
+          // Permission is granted but nothing is playing. Leave any Spotify
+          // transport that is already working alone rather than claiming a
+          // session we do not have.
+          if (state.transport != MusicPlaybackTransport.mediaSession) return;
+          state = state.copyWith(clearSnapshot: true, clearMessage: true);
+          return;
+        }
+
+        // The media session wins once it has something, including over a live
+        // App Remote bridge: both would be reporting the same Spotify app, and
+        // only one of them survives the user not being on the allowlist.
+        _remoteStates?.cancel();
+        _remoteStates = null;
+        state = state.copyWith(
+          service: snapshot.service,
+          snapshot: _keepLocalEdits(snapshot),
+          transport: MusicPlaybackTransport.mediaSession,
+          clearMessage: true,
+        );
+        // The ticker may not be running: the Spotify branch of _start() is
+        // what starts it, and that branch is skipped when nothing is
+        // connected — which is the whole case this transport exists for.
+        _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        if (state.transport != MusicPlaybackTransport.mediaSession) return;
+        state = state.copyWith(
+          transport: MusicPlaybackTransport.none,
+          message: error is MediaSessionException
+              ? error.message
+              : 'Lost track of what is playing on this phone.',
+        );
+      },
+    );
+  }
+
   /// Brings up the App Remote bridge in the background and hands it the
   /// transport once it is live.
   Future<void> _upgradeToAppRemote() async {
     try {
       await _appRemote.ensureConnected();
       if (!mounted) return;
+      // The media session got there first and needs no account. Bringing the
+      // bridge up was still worth doing — it is what keeps the allowlisted
+      // accounts able to start a chosen playlist — but it does not take the
+      // transport back.
+      if (state.transport == MusicPlaybackTransport.mediaSession) return;
       _listenToAppRemote();
       state = state.copyWith(
         transport: MusicPlaybackTransport.appRemote,
@@ -218,6 +319,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   void dispose() {
     _ticker?.cancel();
     _remoteStates?.cancel();
+    _sessionStates?.cancel();
     // Deliberately does *not* disconnect App Remote: the user leaving this
     // screen is not a reason to stop their music. The bridge is owned by a
     // root-scoped provider and torn down on sign-out instead.
@@ -311,6 +413,10 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   Future<void> refresh() async {
     if (state.service != MusicProviderService.spotify) return;
     if (state.transport == MusicPlaybackTransport.appRemote) return;
+    // A recognised Spotify package on the media-session path still reports
+    // service == spotify, so without this the ticker would poll the Web API
+    // for a session it is already being pushed.
+    if (state.transport == MusicPlaybackTransport.mediaSession) return;
     try {
       final snapshot = await _spotify.fetchPlayerState();
       if (!mounted) return;
@@ -409,6 +515,18 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
     try {
       switch (state.transport) {
+        case MusicPlaybackTransport.mediaSession:
+          // Android hands out a controller for a session another app already
+          // opened; there is no call on it that means "play this". Say so
+          // rather than failing silently — the library sheet gates on
+          // [MusicPlayerState.canStartPlayback], so reaching here means
+          // something called this directly.
+          state = state.copyWith(
+            isLoading: false,
+            message: 'Start this in your music app — FitSocial can control '
+                'what is playing, but cannot pick the track.',
+          );
+          return;
         case MusicPlaybackTransport.appRemote:
           await _appRemote.play(contextUri);
         case MusicPlaybackTransport.webApi:
@@ -471,10 +589,15 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
     await _command(
       () async {
-        if (state.transport == MusicPlaybackTransport.appRemote) {
-          return wantsPlay ? _appRemote.resume() : _appRemote.pause();
+        switch (state.transport) {
+          case MusicPlaybackTransport.mediaSession:
+            return wantsPlay ? _session.play() : _session.pause();
+          case MusicPlaybackTransport.appRemote:
+            return wantsPlay ? _appRemote.resume() : _appRemote.pause();
+          case MusicPlaybackTransport.webApi:
+          case MusicPlaybackTransport.none:
+            return wantsPlay ? _spotify.play() : _spotify.pause();
         }
-        return wantsPlay ? _spotify.play() : _spotify.pause();
       },
       onFailure: () => snapshot,
     );
@@ -504,10 +627,15 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
     await _command(
       () {
-        if (state.transport == MusicPlaybackTransport.appRemote) {
-          return forward ? _appRemote.skipNext() : _appRemote.skipPrevious();
+        switch (state.transport) {
+          case MusicPlaybackTransport.mediaSession:
+            return forward ? _session.skipNext() : _session.skipPrevious();
+          case MusicPlaybackTransport.appRemote:
+            return forward ? _appRemote.skipNext() : _appRemote.skipPrevious();
+          case MusicPlaybackTransport.webApi:
+          case MusicPlaybackTransport.none:
+            return forward ? _spotify.nextTrack() : _spotify.previousTrack();
         }
-        return forward ? _spotify.nextTrack() : _spotify.previousTrack();
       },
       onFailure: () => snapshot,
     );
@@ -517,6 +645,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   Future<void> toggleShuffle() async {
     final snapshot = state.snapshot;
     if (snapshot == null) return;
+    if (!snapshot.canSetShuffleRepeat) return;
 
     final wanted = !snapshot.shuffleEnabled;
     state = state.copyWith(
@@ -535,6 +664,7 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   Future<void> cycleRepeat() async {
     final snapshot = state.snapshot;
     if (snapshot == null) return;
+    if (!snapshot.canSetShuffleRepeat) return;
 
     final wanted = snapshot.repeatMode.next;
     state = state.copyWith(
@@ -567,9 +697,17 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     _holdPositionUntil = DateTime.now().add(_holdAfterCommand);
 
     await _command(
-      () => state.transport == MusicPlaybackTransport.appRemote
-          ? _appRemote.seek(target)
-          : _spotify.seek(target),
+      () {
+        switch (state.transport) {
+          case MusicPlaybackTransport.mediaSession:
+            return _session.seek(target);
+          case MusicPlaybackTransport.appRemote:
+            return _appRemote.seek(target);
+          case MusicPlaybackTransport.webApi:
+          case MusicPlaybackTransport.none:
+            return _spotify.seek(target);
+        }
+      },
       onFailure: () {
         _holdPositionUntil = null;
         return snapshot;
@@ -579,8 +717,10 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 
   /// Sets output volume on the active device, 0-100.
   ///
-  /// Web API only: App Remote has no volume channel, because on the phone
-  /// itself that is the hardware media stream's job.
+  /// Not available on App Remote, which has no volume channel — on the phone
+  /// itself that is the hardware media stream's job. The media session does
+  /// carry one, but only for a session that says it will accept a change,
+  /// which [MusicPlayerSnapshot.canSetVolume] already gates on.
   Future<void> setVolume(int percent) async {
     final snapshot = state.snapshot;
     if (snapshot == null || !snapshot.canSetVolume) return;
@@ -593,7 +733,9 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
     _holdVolumeUntil = DateTime.now().add(_holdAfterCommand);
 
     await _command(
-      () => _spotify.setVolume(target),
+      () => state.transport == MusicPlaybackTransport.mediaSession
+          ? _session.setVolume(target)
+          : _spotify.setVolume(target),
       onFailure: () {
         _holdVolumeUntil = null;
         return snapshot;
@@ -609,6 +751,10 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
   }) async {
     try {
       await action();
+    } on MediaSessionException catch (e) {
+      if (mounted) {
+        state = state.copyWith(snapshot: onFailure(), message: e.message);
+      }
     } on SpotifyRemoteException catch (e) {
       if (mounted) {
         state = state.copyWith(snapshot: onFailure(), message: e.message);
@@ -628,11 +774,15 @@ class MusicPlayerController extends StateNotifier<MusicPlayerState> {
 /// Auto-disposed so the ticker stops the moment the player leaves the tree.
 /// The App Remote bridge itself is root-scoped and survives, so music keeps
 /// playing when the user navigates away.
-final musicPlayerControllerProvider = StateNotifierProvider.autoDispose<
-    MusicPlayerController, MusicPlayerState>((ref) {
+final musicPlayerControllerProvider =
+    StateNotifierProvider.autoDispose<MusicPlayerController, MusicPlayerState>(
+        (ref) {
   return MusicPlayerController(
     spotify: ref.watch(spotifyApiServiceProvider),
     appRemote: ref.watch(spotifyAppRemoteServiceProvider),
+    session: ref.watch(mediaSessionServiceProvider),
     connections: ref.watch(musicConnectionsProvider),
+    mediaSessionGranted: ref.watch(mediaSessionPermissionProvider),
+    accountsEnabled: ref.watch(musicAccountsEnabledProvider),
   );
 });
