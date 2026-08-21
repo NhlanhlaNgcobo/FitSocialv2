@@ -92,6 +92,21 @@ class MediaSessionBridge(
     private var controller: MediaController? = null
 
     /**
+     * Every session on the phone, not just the one being mirrored.
+     *
+     * A callback registered only on the chosen session cannot see a *different*
+     * session wake up, and the session-list listener does not help: it fires
+     * when sessions are added or removed, not when one that already exists
+     * starts playing. Music apps hold a session open for as long as they are
+     * running — Spotify publishes one with null metadata the moment it is
+     * launched — so "user pressed play" is almost always a change to a session
+     * that already existed, which is a callback on that session and nothing
+     * else. Watching all of them is what makes starting a song while FitSocial
+     * is already open work at all.
+     */
+    private var watched = emptyList<MediaController>()
+
+    /**
      * Identity of the last track artwork was sent for.
      *
      * Cover art is a few hundred KB and sessions fire on every seek tick;
@@ -145,9 +160,15 @@ class MediaSessionBridge(
 
     // --- Session discovery ---
 
+    /**
+     * Fires when a session is added or removed — never when one that already
+     * exists starts or stops playing. That is why it re-watches rather than
+     * simply choosing from the list it is handed.
+     */
     private val sessionsChanged =
-        MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
-            attachTo(pick(controllers))
+        MediaSessionManager.OnActiveSessionsChangedListener {
+            refreshWatched()
+            reselect()
         }
 
     /**
@@ -157,29 +178,49 @@ class MediaSessionBridge(
      * head is usually right. A session that is actually playing wins over one
      * that is merely recent, which is what stops a paused podcast from
      * shadowing music started after it.
+     *
+     * Missing metadata is a preference here, not a filter. It used to be a
+     * filter, and that was the bug: a session with nothing loaded yet was
+     * dropped from the list entirely, so nothing was ever attached to it and
+     * the moment it *gained* a track went unheard. It now sorts last instead,
+     * which keeps a dormant player from shadowing a live one without making it
+     * invisible.
      */
     private fun pick(controllers: List<MediaController>?): MediaController? {
         val candidates = controllers.orEmpty().filter {
-            // Our own sessions would be a feedback loop, and a session with no
-            // metadata has nothing to show.
-            it.packageName != context.packageName && it.metadata != null
+            // Our own sessions would be a feedback loop.
+            it.packageName != context.packageName
         }
         return candidates.firstOrNull {
-            it.playbackState?.state == PlaybackState.STATE_PLAYING
-        } ?: candidates.firstOrNull()
+            it.playbackState?.state == PlaybackState.STATE_PLAYING &&
+                it.metadata != null
+        }
+            ?: candidates.firstOrNull { it.metadata != null }
+            ?: candidates.firstOrNull()
     }
 
+    /**
+     * Registered on every session in [watched].
+     *
+     * Each of these re-runs the choice rather than merely re-emitting, because
+     * the event may be coming from a session that is not the current one — a
+     * second music app starting, or the dormant session this bridge is parked
+     * on finally loading a track. Deciding again is the only way that becomes
+     * the mirrored session.
+     */
     private val controllerCallback = object : MediaController.Callback() {
-        override fun onPlaybackStateChanged(state: PlaybackState?) = emit()
+        override fun onPlaybackStateChanged(state: PlaybackState?) = reselect()
 
-        override fun onMetadataChanged(metadata: MediaMetadata?) = emit()
+        override fun onMetadataChanged(metadata: MediaMetadata?) = reselect()
 
-        override fun onAudioInfoChanged(info: MediaController.PlaybackInfo) = emit()
+        override fun onAudioInfoChanged(info: MediaController.PlaybackInfo) =
+            reselect()
 
         override fun onSessionDestroyed() {
             // The app that was playing went away. Re-poll rather than blanking
             // outright: another session is often already waiting behind it.
-            attachTo(pick(activeSessions()))
+            refreshWatched()
+            reselect()
         }
     }
 
@@ -192,19 +233,36 @@ class MediaSessionBridge(
         }
     }
 
-    private fun attachTo(next: MediaController?) {
-        val current = controller
-        if (current != null && next != null &&
-            current.sessionToken == next.sessionToken
-        ) {
-            // Same session — its changed state is why this was called.
-            emit()
-            return
+    /**
+     * Re-subscribes to the full set of sessions on the phone.
+     *
+     * The manager hands back fresh [MediaController] instances each call, so the
+     * old ones are unregistered wholesale rather than diffed — registering twice
+     * on the same session would double every callback, and a controller we no
+     * longer hold cannot be unregistered later.
+     */
+    private fun refreshWatched() {
+        watched.forEach {
+            try {
+                it.unregisterCallback(controllerCallback)
+            } catch (e: Exception) {
+                // The session died between listing and unregistering. Nothing
+                // to detach from, and nothing worth failing over.
+            }
         }
-        current?.unregisterCallback(controllerCallback)
-        controller = next
-        lastArtKey = null
-        next?.registerCallback(controllerCallback, main)
+        watched = activeSessions().filter { it.packageName != context.packageName }
+        watched.forEach { it.registerCallback(controllerCallback, main) }
+    }
+
+    /** Decides which watched session to mirror, then pushes the result. */
+    private fun reselect() {
+        val next = pick(watched)
+        if (controller?.sessionToken != next?.sessionToken) {
+            controller = next
+            // A different session means different artwork, whatever the cache
+            // last held.
+            lastArtKey = null
+        }
         emit()
     }
 
@@ -224,7 +282,8 @@ class MediaSessionBridge(
                 return false
             }
         }
-        attachTo(pick(activeSessions()))
+        refreshWatched()
+        reselect()
         return true
     }
 
@@ -233,7 +292,14 @@ class MediaSessionBridge(
             sessionManager?.removeOnActiveSessionsChangedListener(sessionsChanged)
             listeningToSessions = false
         }
-        controller?.unregisterCallback(controllerCallback)
+        watched.forEach {
+            try {
+                it.unregisterCallback(controllerCallback)
+            } catch (e: Exception) {
+                // Already gone; nothing to detach.
+            }
+        }
+        watched = emptyList()
         controller = null
         lastArtKey = null
     }
@@ -567,7 +633,10 @@ class MediaSessionBridge(
             result.error("no_permission", "Notification access is not granted.", null)
             return
         }
-        val active = controller ?: pick(activeSessions())?.also { attachTo(it) }
+        val active = controller ?: run {
+            refreshWatched()
+            pick(watched)?.also { controller = it }
+        }
         if (active == null) {
             result.error("no_session", "Nothing is playing.", null)
             return
