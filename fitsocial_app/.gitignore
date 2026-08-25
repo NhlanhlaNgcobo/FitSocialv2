@@ -52,3 +52,10 @@ firebase-debug.log
 *.png
 !assets/**/*.png
 !assets/**/*.jpg
+
+# Generated launcher icons. The *.png rule above (for adb screencaps) also
+# swallowed these, so a fresh clone was missing ic_launcher_foreground.png and
+# failed at resource linking with "resource drawable/ic_launcher_foreground not
+# found". Regenerating them needs flutter_launcher_icons; committing them means
+# a clone just builds.
+!android/app/src/main/res/**/*.png
