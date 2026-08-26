@@ -8,6 +8,8 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/avatar.dart';
+import '../../../shared/widgets/dark_card.dart';
+import '../../../shared/widgets/glass.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/post_summary_tile.dart';
 import '../application/content_providers.dart';
@@ -104,15 +106,15 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 filled: true,
                 fillColor: palette.surface,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppRadius.field),
                   borderSide: BorderSide(color: palette.stroke),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppRadius.field),
                   borderSide: BorderSide(color: palette.stroke),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppRadius.field),
                   borderSide: BorderSide(color: palette.brand),
                 ),
               ),
@@ -159,13 +161,11 @@ class _RaceCalendarBanner extends ConsumerWidget {
         // Somebody with a goal race is checking on that race; somebody without
         // one is still looking for it.
         onTap: () => context.push(next == null ? '/races' : '/races/saved'),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: palette.brandSoft,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: palette.brandSoftStroke),
-          ),
+        child: DarkCard(
+          margin: EdgeInsets.zero,
+          // A promo band using colour to mean something, so the colour goes
+          // under the lens and arrives bent like every other card here.
+          backdrop: GlassBloom(colors: [palette.brand]),
           child: Row(
             children: [
               Icon(
@@ -270,16 +270,16 @@ class _UserResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       onTap: () => context.push('/user/${user.id}'),
       child: LiquidGlass(
         // Painted by the lens rather than by a fill of its own: a pane
         // over the app backdrop, like every other card.
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: palette.stroke),
           ),
           child: Row(
@@ -550,7 +550,7 @@ class _TrendingTile extends StatelessWidget {
     return GestureDetector(
       onTap: () => showPostDetailSheet(context, post),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.nested),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -707,7 +707,7 @@ class _ExploreMessage extends StatelessWidget {
                     vertical: 14,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(AppRadius.field),
                   ),
                 ),
                 onPressed: onRetry,

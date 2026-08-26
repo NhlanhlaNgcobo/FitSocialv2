@@ -309,8 +309,10 @@ class _DateRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
+    // A picker row is a form control, so it takes the field radius and sits
+    // level with the text inputs above it rather than at a shape of its own.
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.field),
       onTap: () async {
         final current = parseDayKey(dayKey);
         final first = earliest != null ? parseDayKey(earliest!) : null;
@@ -326,7 +328,7 @@ class _DateRow extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: palette.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.field),
           border: Border.all(color: palette.stroke),
         ),
         child: Row(

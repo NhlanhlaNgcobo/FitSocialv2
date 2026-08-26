@@ -601,45 +601,109 @@ class _MacroChips extends StatelessWidget {
   }
 }
 
+/// The meal's photo, at the head of its row.
+///
+/// A plate shrunk to a row-sized square is the only picture on this screen, so
+/// it gets the treatment a photograph deserves rather than a bare crop: a warm
+/// bed to sit on while it downloads, a lit rim so the crop doesn't dissolve
+/// into the card behind it, and a fade rather than a pop when the pixels land.
 class _MealThumbnail extends StatelessWidget {
   const _MealThumbnail({required this.imageUrl});
 
   final String? imageUrl;
 
+  /// Big enough for the food to be recognisable — at the old 46 a plate was a
+  /// smear of colour — without outgrowing the three lines of text beside it.
+  static const double _size = 52;
+
+  /// Softer than the 12 it replaces. A near-square photo reads as a *print* at
+  /// this radius and as a UI chip below it.
+  static const double _radius = 16;
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    const size = 46.0;
-
-    Widget placeholder() => Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            color: palette.surfaceHigh,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            Icons.restaurant_rounded,
-            size: 20,
-            color: palette.muted,
-          ),
-        );
-
+    final shadow = palette.paneShadow;
     final url = imageUrl;
-    if (url == null || url.isEmpty) return placeholder();
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        url,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        // A thumbnail that will not load must not cost the row its macros.
-        errorBuilder: (context, error, stackTrace) => placeholder(),
+    return Container(
+      width: _size,
+      height: _size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(_radius),
+        // The bed. Shows through until the photo lands, and stands in for good
+        // when there is no photo at all — warm rather than the flat grey well
+        // it replaces, so an unloaded row still looks deliberate.
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [palette.brandSoft, palette.surfaceHigh],
+        ),
+        boxShadow: [
+          // Only the light theme has a shadow to cast; see
+          // [AppPalette.paneShadow].
+          if (shadow.a != 0)
+            BoxShadow(color: shadow, blurRadius: 8, offset: const Offset(0, 3)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_radius),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Center(
+              child: Icon(
+                Icons.restaurant_rounded,
+                size: 20,
+                color: palette.brandText.withValues(alpha: 0.55),
+              ),
+            ),
+            if (url != null && url.isNotEmpty) _photo(url),
+            // A hairline of light down the top-left, as on the app's glass. A
+            // photo cropped to a square otherwise meets the card with nothing
+            // marking the seam, which is what made the old thumbnail read as a
+            // hole punched in the row.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(_radius),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.14),
+                    Colors.transparent,
+                  ],
+                  stops: const [0, 0.55],
+                ),
+                border: Border.all(
+                  color: palette.overlay.withValues(alpha: 0.10),
+                  width: 0.5,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  Widget _photo(String url) => Image.network(
+        url,
+        fit: BoxFit.cover,
+        // A thumbnail that will not load must not cost the row its macros. The
+        // bed underneath is left showing, so the row keeps its shape either
+        // way instead of swapping one square for another.
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded) return child;
+          return AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOut,
+            child: child,
+          );
+        },
+      );
 }
 
 class _LogAnotherMealButton extends StatelessWidget {

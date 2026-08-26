@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/confirm_destructive_sheet.dart';
+import '../../../shared/widgets/dark_card.dart';
+import '../../../shared/widgets/glass.dart';
 import '../../main/application/content_providers.dart'
     show currentUserIdProvider;
 import '../application/running_challenge_providers.dart';
@@ -131,13 +133,7 @@ class _Header extends StatelessWidget {
     final ended = challenge.hasEnded() ||
         challenge.status != RunningChallengeStatus.active;
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.stroke),
-      ),
+    return DarkCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -204,13 +200,7 @@ class _MyProgress extends StatelessWidget {
     final streak =
         participant.currentStreakAsOf(challenge.clock.today());
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.stroke),
-      ),
+    return DarkCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -378,13 +368,12 @@ class _InviteDecision extends ConsumerWidget {
     final palette = context.palette;
     final actions = ref.read(runningChallengeActionsProvider);
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.brandSoft,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: palette.brandSoftStroke),
-      ),
+    // The one card here using colour to mean something rather than to decorate,
+    // so the colour goes *under* the lens as a bloom and arrives bent along
+    // with everything else -- a flat brand fill on top of the pane would be the
+    // one surface on the screen that is not glass.
+    return DarkCard(
+      backdrop: GlassBloom(colors: [palette.brand]),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

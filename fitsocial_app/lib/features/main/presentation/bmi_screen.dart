@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../auth/application/body_metrics_providers.dart';
 import '../../auth/data/user_profile_repository.dart';
@@ -96,20 +97,25 @@ class BmiFootnote extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.info_outline_rounded, size: 18, color: palette.muted),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(
-            'BMI is a rough screen, not a diagnosis. It cannot tell muscle from '
-            'fat, so athletes often read high. Talk to a professional before '
-            'acting on it.',
-            style: TextStyle(color: palette.muted, fontSize: 13, height: 1.4),
+    // A pane rather than loose text under the button. The caveat matters more
+    // than its position in the scroll suggests, and on a page whose fields are
+    // already glass, bare text was the one thing that read as unfinished.
+    return DarkCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 18, color: palette.muted),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'BMI is a rough screen, not a diagnosis. It cannot tell muscle '
+              'from fat, so athletes often read high. Talk to a professional '
+              'before acting on it.',
+              style: TextStyle(color: palette.muted, fontSize: 13, height: 1.4),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

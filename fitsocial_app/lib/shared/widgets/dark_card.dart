@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_palette.dart';
+import '../../app/theme/app_spacing.dart';
 import 'glass.dart';
 import 'liquid_glass.dart';
 
@@ -17,7 +18,8 @@ import 'liquid_glass.dart';
 class DarkCard extends StatelessWidget {
   const DarkCard({
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(AppSpacing.md),
+    this.margin,
     this.onTap,
     this.semanticLabel,
     this.backdrop,
@@ -26,6 +28,11 @@ class DarkCard extends StatelessWidget {
 
   final Widget child;
   final EdgeInsetsGeometry padding;
+
+  /// Space *outside* the pane. Null takes the Card default, which is 4 on every
+  /// side — right for a card in a list, and 8 of unwanted height for a card
+  /// that is one band in a column someone else is measuring.
+  final EdgeInsetsGeometry? margin;
 
   /// Makes the whole card a target. Null leaves it inert, which is what most
   /// cards want.
@@ -46,7 +53,7 @@ class DarkCard extends StatelessWidget {
 
   /// Matches the radius on the card shape in the theme, so the clip, the ripple
   /// and the shader's distance field all agree on where the card ends.
-  static const double radius = 24;
+  static const double radius = AppRadius.card;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +73,7 @@ class DarkCard extends StatelessWidget {
     }
 
     return Card(
+      margin: margin,
       // The lens supplies the surface now. An opaque fill here would be the one
       // thing standing between the glass and anything worth bending.
       color: Colors.transparent,

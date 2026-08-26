@@ -335,7 +335,10 @@ class _NotificationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final route = notification.route;
-    final radius = BorderRadius.circular(20);
+    // A row in a list, not a pane on the page: the tighter of the two radii,
+    // so a highlighted row reads as nested inside the list rather than as a
+    // card that happens to be the width of one.
+    final radius = BorderRadius.circular(AppRadius.nested);
     final fill = _rowFill(palette, isNew: isNew);
 
     return Padding(

@@ -471,6 +471,42 @@ class _MediaGrid extends ConsumerWidget {
   }
 }
 
+/// A centred empty-or-error state for one of the grid tabs.
+///
+/// Two things the plain `Center` + `Padding` it replaces got wrong. It cleared
+/// nothing at the bottom, so its last line sat behind the floating nav -- the
+/// grid beside it has always padded by [FitSocialBottomNav.clearance] and these
+/// never did. And it could not give way: a Column of a fixed size inside a tab
+/// of a fixed size overflows the moment the second is the smaller, which on a
+/// short screen it was, by a pixel and a half.
+///
+/// Centred while there is room, scrolling once there is not.
+class _GridState extends StatelessWidget {
+  const _GridState({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xl + FitSocialBottomNav.clearance(context),
+            ),
+            child: Center(child: child),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ErrorGrid extends StatelessWidget {
   const _ErrorGrid({required this.onRetry});
 
@@ -479,37 +515,34 @@ class _ErrorGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_off_rounded,
-              color: palette.muted,
-              size: 42,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              "Couldn't load your posts.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: palette.muted, fontSize: 15),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: palette.text,
-                side: BorderSide(color: palette.stroke),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
+    return _GridState(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.cloud_off_rounded,
+            color: palette.muted,
+            size: 42,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            "Couldn't load your posts.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.muted, fontSize: 15),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: palette.text,
+              side: BorderSide(color: palette.stroke),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
-              onPressed: onRetry,
-              child: const Text('Retry'),
             ),
-          ],
-        ),
+            onPressed: onRetry,
+            child: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }
@@ -550,41 +583,38 @@ class _EmptyGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: palette.surfaceHigh,
-              ),
-              child: Icon(
-                Icons.camera_alt_outlined,
-                color: palette.brand,
-                size: 48,
-              ),
+    return _GridState(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: palette.surfaceHigh,
             ),
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              'No posts yet',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: palette.text,
-              ),
+            child: Icon(
+              Icons.camera_alt_outlined,
+              color: palette.brand,
+              size: 48,
             ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: palette.muted, fontSize: 16),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'No posts yet',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: palette.text,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.muted, fontSize: 16),
+          ),
+        ],
       ),
     );
   }

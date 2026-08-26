@@ -287,7 +287,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             child: Stack(
               children: [
                 // A fixed 4:5 frame — the crop step's default and most-used
@@ -433,45 +433,54 @@ class _AnalyzingOverlay extends StatelessWidget {
         tween: Tween(begin: 0, end: 1),
         duration: const Duration(milliseconds: 260),
         curve: Curves.easeOut,
-        builder: (context, t, child) => Opacity(opacity: t, child: child),
-        // Absorbs everything: the page underneath must not be touchable while
-        // its photo is being uploaded.
-        child: AbsorbPointer(
+        // The blur ramps in; nothing fades over it.
+        //
+        // Fading the whole overlay meant the BackdropFilter spent its entrance
+        // inside an opacity buffer, where there is no backdrop to read -- so
+        // the frost drew nothing for 260ms and then snapped on at the end.
+        // Ramping sigma and the fill together is the effect that was wanted
+        // anyway: the page behind actually goes out of focus.
+        builder: (context, t, child) => AbsorbPointer(
           child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            filter: ui.ImageFilter.blur(sigmaX: 14 * t, sigmaY: 14 * t),
             child: Container(
-              color: palette.background.withValues(alpha: 0.86),
-              child: Material(
-                type: MaterialType.transparency,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const FitSocialPulseMark(width: 148),
-                      const SizedBox(height: AppSpacing.xl),
-                      // Swapped rather than rewritten, so the caption changing
-                      // reads as progress instead of a flicker.
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 240),
-                        child: Text(
-                          stage.caption,
-                          key: ValueKey(stage),
-                          style: TextStyle(
-                            color: palette.text,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+              color: palette.background.withValues(alpha: 0.86 * t),
+              // Inside the filter, so the content can still fade without
+              // taking the backdrop away from it.
+              child: Opacity(
+                opacity: t,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const FitSocialPulseMark(width: 148),
+                        const SizedBox(height: AppSpacing.xl),
+                        // Swapped rather than rewritten, so the caption changing
+                        // reads as progress instead of a flicker.
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 240),
+                          child: Text(
+                            stage.caption,
+                            key: ValueKey(stage),
+                            style: TextStyle(
+                              color: palette.text,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        'Hang tight — this takes a few seconds.',
-                        style: TextStyle(
-                          color: palette.muted,
-                          fontSize: 13,
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'Hang tight — this takes a few seconds.',
+                          style: TextStyle(
+                            color: palette.muted,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

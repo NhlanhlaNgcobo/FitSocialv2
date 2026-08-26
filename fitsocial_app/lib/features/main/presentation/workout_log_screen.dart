@@ -1,3 +1,7 @@
+import '../../../shared/widgets/dark_card.dart';
+import '../../../shared/widgets/form_section_header.dart';
+import '../../../shared/widgets/glass.dart';
+import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import 'dart:io';
 
@@ -204,7 +208,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _SectionHeader(
+                const FormSectionHeader(
                   icon: Icons.repeat_rounded,
                   label: 'Sets & reps',
                   hint: 'Optional',
@@ -319,7 +323,7 @@ class _BackgroundSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(
+        const FormSectionHeader(
           icon: Icons.image_outlined,
           label: 'Background',
           hint: 'Optional',
@@ -328,11 +332,11 @@ class _BackgroundSection extends StatelessWidget {
           LiquidGlass(
             // Painted by the lens rather than by a fill of its own: a pane
             // over the app backdrop, like every other card.
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             child: Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadius.card),
                 border: Border.all(color: palette.stroke),
               ),
               child: Column(
@@ -355,7 +359,7 @@ class _BackgroundSection extends StatelessWidget {
           )
         else
           ClipRRect(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             child: Stack(
               children: [
                 AspectRatio(
@@ -429,80 +433,6 @@ class _BackgroundPreview extends StatelessWidget {
   }
 }
 
-/// Icon disc + label that opens each block of the form.
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.icon,
-    required this.label,
-    this.hint,
-  });
-
-  final IconData icon;
-  final String label;
-  final String? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    // The icon disc keeps its place at the leading edge and the hint at the
-    // trailing one; the label is stacked over both so it centres on the field
-    // below rather than on whatever space is left between them.
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SizedBox(
-        width: double.infinity,
-        height: 30,
-        child: Stack(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: palette.brandSoft,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 16, color: palette.brand),
-              ),
-            ),
-            Align(
-              alignment: Alignment.center,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: palette.text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            if (hint != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  hint!,
-                  style: TextStyle(color: palette.muted, fontSize: 12),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The rounded well every input sits in — one border radius and one fill for
-/// the whole form, so the fields read as a single surface instead of five.
-BoxDecoration _wellDecoration(BuildContext context) {
-  final palette = context.palette;
-  return BoxDecoration(
-    color: palette.surface,
-    borderRadius: BorderRadius.circular(18),
-    border: Border.all(color: palette.stroke),
-  );
-}
-
 class _TitleSection extends StatelessWidget {
   const _TitleSection({
     required this.controller,
@@ -519,13 +449,12 @@ class _TitleSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(
+        const FormSectionHeader(
           icon: Icons.fitness_center_rounded,
           label: 'Workout title',
         ),
-        Container(
+        GlassWell(
           padding: const EdgeInsets.symmetric(horizontal: 18),
-          decoration: _wellDecoration(context),
           child: TextField(
             controller: controller,
             textCapitalization: TextCapitalization.words,
@@ -585,10 +514,9 @@ class _NumberWellSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(icon: icon, label: label, hint: hint),
-        Container(
+        FormSectionHeader(icon: icon, label: label, hint: hint),
+        GlassWell(
           padding: const EdgeInsets.symmetric(horizontal: 18),
-          decoration: _wellDecoration(context),
           child: Row(
             children: [
               Expanded(
@@ -643,14 +571,13 @@ class _NotesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(
+        const FormSectionHeader(
           icon: Icons.edit_note_rounded,
           label: 'Notes',
           hint: 'Optional',
         ),
-        Container(
+        GlassWell(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-          decoration: _wellDecoration(context),
           child: TextField(
             controller: controller,
             maxLines: 4,
@@ -690,47 +617,47 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
+    // Revealed by height alone, with no fade over it.
+    //
+    // A fade is an opacity layer, and a pane of liquid glass inside one has no
+    // backdrop left to bend -- it would hollow out for the whole 240ms and then
+    // snap, which is the same defect the page transitions were carrying. The
+    // size animation says everything the fade was saying.
     return AnimatedSize(
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOut,
       alignment: Alignment.topCenter,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 240),
-        opacity: visible ? 1 : 0,
-        child: visible
-            ? Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: palette.brandSoft,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: palette.brandSoftStroke),
-                ),
-                child: Row(
-                  children: [
-                    _SummaryStat(
-                      label: 'Duration',
-                      value: minutes > 0 ? '$minutes min' : '--',
-                    ),
-                    const _SummaryDivider(),
-                    _SummaryStat(
-                      label: 'Sets × reps',
-                      value: totalReps > 0 ? '$sets × $reps' : '--',
-                    ),
-                    const _SummaryDivider(),
-                    _SummaryStat(
-                      label: 'Total reps',
-                      value: totalReps > 0 ? '$totalReps' : '--',
-                    ),
-                  ],
-                ),
-              )
-            : const SizedBox(width: double.infinity),
-      ),
+      child: visible
+          ? DarkCard(
+              margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 14,
+              ),
+              // Its brand wash goes *under* the lens and arrives bent, the
+              // way the invite card on the challenge board does, rather than
+              // sitting on top as the one flat surface in the form.
+              backdrop: GlassBloom(colors: [palette.brand]),
+              child: Row(
+                children: [
+                  _SummaryStat(
+                    label: 'Duration',
+                    value: minutes > 0 ? '$minutes min' : '--',
+                  ),
+                  const _SummaryDivider(),
+                  _SummaryStat(
+                    label: 'Sets × reps',
+                    value: totalReps > 0 ? '$sets × $reps' : '--',
+                  ),
+                  const _SummaryDivider(),
+                  _SummaryStat(
+                    label: 'Total reps',
+                    value: totalReps > 0 ? '$totalReps' : '--',
+                  ),
+                ],
+              ),
+            )
+          : const SizedBox(width: double.infinity),
     );
   }
 }
@@ -802,7 +729,7 @@ class _ErrorBanner extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: palette.danger.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadius.field),
                   border: Border.all(
                     color: palette.danger.withValues(alpha: 0.4),
                   ),

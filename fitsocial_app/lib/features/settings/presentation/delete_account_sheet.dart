@@ -179,7 +179,7 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                     padding: const EdgeInsets.all(AppSpacing.sm),
                     decoration: BoxDecoration(
                       color: palette.background,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.nested),
                       border: Border.all(color: palette.stroke),
                     ),
                     child: Row(
@@ -229,18 +229,18 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
                           ? kDeleteConfirmationFallback
                           : formatHandle(phrase),
                       hintStyle: TextStyle(color: palette.muted),
-                      filled: true,
-                      fillColor: palette.background,
+                      // No fill: inside the sheet's pane the lens supplies the
+                      // surface, and the outline below still says "field".
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.nested),
                         borderSide: BorderSide(color: palette.stroke),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.nested),
                         borderSide: BorderSide(color: palette.danger),
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppRadius.nested),
                       ),
                     ),
                     onChanged: (_) => setState(() {}),

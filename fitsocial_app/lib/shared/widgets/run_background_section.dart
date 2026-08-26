@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/app_models.dart';
 import 'background_picker.dart';
+import 'form_section_header.dart';
 import 'run_summary_card.dart';
 
 /// Chooses the photo behind a run, previewing the actual card the whole time.
@@ -42,44 +42,15 @@ class RunBackgroundSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final path = imagePath;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: palette.brandSoft,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.image_outlined,
-                  size: 16,
-                  color: palette.brand,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Background',
-                style: TextStyle(
-                  color: palette.text,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Optional',
-                style: TextStyle(color: palette.muted, fontSize: 12),
-              ),
-            ],
-          ),
+        const FormSectionHeader(
+          icon: Icons.image_outlined,
+          label: 'Background',
+          hint: 'Optional',
         ),
         RunSummaryCard(
           route: route,

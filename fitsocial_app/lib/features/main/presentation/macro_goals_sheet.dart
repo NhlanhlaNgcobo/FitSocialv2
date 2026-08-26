@@ -170,14 +170,16 @@ class _GoalField extends StatelessWidget {
             decoration: InputDecoration(
               suffixText: unit,
               isDense: true,
-              filled: true,
-              fillColor: palette.surfaceHigh,
+              // No fill: this field is inside the sheet's own pane, and an
+              // opaque one here is a box inside a box. The pane drops it for
+              // everything under it -- setting it explicitly would override
+              // that and put the slab back.
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.nested),
                 borderSide: BorderSide(color: palette.stroke),
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadius.nested),
                 borderSide: BorderSide(color: palette.stroke),
               ),
             ),

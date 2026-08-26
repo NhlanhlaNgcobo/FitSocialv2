@@ -19,12 +19,32 @@ class BadgeShelf extends StatelessWidget {
   final List<UserBadge> badges;
   final ValueChanged<UserBadge>? onTap;
 
+  /// The parts of a tile that do not care what size the reader's text is: the
+  /// 54pt disc, and the 6pt gap under it.
+  static const double _tileFixed = 54 + 6;
+
+  /// The label's own box at text scale 1 — two lines of 10pt at 1.2 line
+  /// height — plus a little slack so a descender never sits on the edge.
+  static const double _tileLabel = 10 * 1.2 * 2;
+  static const double _tileSlack = 8;
+
+  /// How tall the strip has to be for the tallest tile to fit.
+  ///
+  /// Only the label is scaled. Scaling the whole 92 would grow the disc too and
+  /// leave a strip half full of empty space; pinning it, which is what this did
+  /// before, overflowed the moment anyone turned their font size up — 4 pixels
+  /// at 1.5x, 16 at 2x.
+  static double heightFor(BuildContext context) =>
+      _tileFixed +
+      MediaQuery.textScalerOf(context).scale(_tileLabel) +
+      _tileSlack;
+
   @override
   Widget build(BuildContext context) {
     if (badges.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
-      height: 92,
+      height: heightFor(context),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),

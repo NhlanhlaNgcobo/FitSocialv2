@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../router/page_transitions.dart';
 import 'app_colors.dart';
 import 'app_palette.dart';
+import 'app_spacing.dart';
 
 abstract final class AppTheme {
   static ThemeData get darkTheme => _build(AppPalette.dark);
@@ -81,7 +82,7 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           side: BorderSide(color: palette.stroke),
         ),
       ),
@@ -109,15 +110,15 @@ abstract final class AppTheme {
           vertical: 16,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.field),
           borderSide: BorderSide(color: palette.stroke),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.field),
           borderSide: BorderSide(color: palette.stroke),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.field),
           borderSide: const BorderSide(color: AppColors.orange),
         ),
       ),

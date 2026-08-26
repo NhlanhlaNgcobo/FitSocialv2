@@ -17,6 +17,8 @@ import '../application/tracking_providers.dart';
 import '../data/treadmill_run_service.dart';
 import 'finish_run_sheet.dart';
 import 'run_session_widgets.dart';
+import '../../../shared/widgets/form_section_header.dart';
+import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// Timer-based run tracking for a treadmill.
@@ -352,88 +354,66 @@ class _DistanceWell extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(color: palette.stroke),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.straighten_rounded, size: 16, color: palette.muted),
-                const SizedBox(width: 6),
-                Text(
-                  'Distance on the display',
-                  style: TextStyle(
-                    color: palette.text,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+            const FormSectionHeader(
+              icon: Icons.straighten_rounded,
+              label: 'Distance on the display',
             ),
-            const SizedBox(height: AppSpacing.sm),
-            LiquidGlass(
-              // Painted by the lens rather than by a fill of its own: a pane
-              // over the app backdrop, like every other card.
-              borderRadius: BorderRadius.circular(18),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: invalid ? palette.danger : palette.stroke,
-                    width: invalid ? 1.4 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    // Balances the unit on the right so the number stays optically
-                    // centred in the well.
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: TextField(
-                        controller: controller,
-                        onChanged: onChanged,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        textAlign: TextAlign.center,
-                        cursorColor: palette.brand,
-                        style: TextStyle(
-                          color: palette.text,
+            // The same well the two logging forms use, so a distance typed on
+            // a treadmill sits in the same material as one typed anywhere else.
+            GlassWell(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              borderColor: invalid ? palette.danger : null,
+              child: Row(
+                children: [
+                  // Balances the unit on the right so the number stays optically
+                  // centred in the well.
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      onChanged: onChanged,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      textAlign: TextAlign.center,
+                      cursorColor: palette.brand,
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 18),
+                        border: InputBorder.none,
+                        hintText: '0.00',
+                        hintStyle: TextStyle(
+                          color: palette.muted.withValues(alpha: 0.5),
                           fontSize: 32,
                           fontWeight: FontWeight.w800,
                         ),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 18),
-                          border: InputBorder.none,
-                          hintText: '0.00',
-                          hintStyle: TextStyle(
-                            color: palette.muted.withValues(alpha: 0.5),
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
                       ),
                     ),
-                    SizedBox(
-                      width: 24,
-                      child: Text(
-                        'km',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          color: palette.muted,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  ),
+                  SizedBox(
+                    width: 24,
+                    child: Text(
+                      'km',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: AppSpacing.sm),

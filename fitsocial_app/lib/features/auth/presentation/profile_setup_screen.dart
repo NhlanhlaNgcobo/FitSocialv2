@@ -517,8 +517,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
     );
   }
 
-  /// Fields sit *inside* cards here, and the theme fills them with the card's
-  /// own colour — so they take the raised fill instead and read as wells.
+  /// Fields sit *inside* cards here, so they carry no fill at all.
+  ///
+  /// They used to take the *raised* fill: back when a card was an opaque slab
+  /// the theme's own fill matched it exactly and a field vanished into the
+  /// card. A card is a pane of glass now, and the fix has become the problem —
+  /// an opaque well inside a lens is a box in a box. The pane drops the fill
+  /// for everything under it and the outline is what still says "field".
   InputDecoration _fieldDecoration(
     AppPalette palette, {
     required String hint,
@@ -527,8 +532,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(color: palette.muted.withValues(alpha: 0.7)),
-      filled: true,
-      fillColor: palette.surfaceHigh,
       // Our own counters live in the labels; the built-in one adds a line of
       // grey under every field whether it is near the limit or not.
       counterText: '',

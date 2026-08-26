@@ -7,6 +7,10 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/widgets/dark_card.dart';
+import '../../../shared/widgets/form_section_header.dart';
+import '../../../shared/widgets/glass_well.dart';
+import '../../../shared/widgets/glass.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_background_section.dart';
@@ -210,11 +214,11 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             child: LiquidGlass(
               // Painted by the lens rather than by a fill of its own: a pane
               // over the app backdrop, like every other card.
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               child: Container(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
                   border: Border.all(color: palette.stroke),
                 ),
                 child: Column(
@@ -258,20 +262,19 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOut,
             alignment: Alignment.topCenter,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 240),
-              opacity: _isComplete ? 1 : 0,
-              child: _isComplete
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.md),
-                      child: _RunSummary(
-                        distance: '${_formatDistance(_distanceKm)} km',
-                        duration: _durationLabel,
-                        pace: _paceLabel,
-                      ),
-                    )
-                  : const SizedBox(width: double.infinity),
-            ),
+            // Height alone, no fade over it: a pane of glass inside an
+            // opacity buffer has no backdrop left to bend, so it would hollow
+            // out for the whole reveal and then snap.
+            child: _isComplete
+                ? Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: _RunSummary(
+                      distance: '${_formatDistance(_distanceKm)} km',
+                      duration: _durationLabel,
+                      pace: _paceLabel,
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
           ),
           const SizedBox(height: AppSpacing.lg),
           StaggeredFadeIn(
@@ -340,7 +343,7 @@ class _GpsHeroCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [
           BoxShadow(
             color: palette.brand.withValues(alpha: 0.28),
@@ -351,11 +354,11 @@ class _GpsHeroCard extends StatelessWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         clipBehavior: Clip.antiAlias,
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -442,16 +445,16 @@ class _TreadmillCard extends StatelessWidget {
       // Material stays for the ink splash and gives up its colour:
       // an opaque fill in there would sit between the glass and
       // everything it is meant to bend.
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(AppRadius.card),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppRadius.card),
               border: Border.all(color: palette.stroke),
             ),
             padding: const EdgeInsets.all(AppSpacing.md),
@@ -570,82 +573,57 @@ class _MetricField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: palette.muted),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: palette.text,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        LiquidGlass(
-          // Painted by the lens rather than by a fill of its own: a pane
-          // over the app backdrop, like every other card.
-          borderRadius: BorderRadius.circular(18),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: invalid ? palette.danger : palette.stroke,
-                width: invalid ? 1.4 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                // Balances the unit on the right so the number stays optically
-                // centred in the well.
-                SizedBox(width: _suffixWidth(suffix)),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    onChanged: onChanged,
-                    keyboardType: decimal
-                        ? const TextInputType.numberWithOptions(decimal: true)
-                        : TextInputType.number,
-                    textAlign: TextAlign.center,
-                    cursorColor: palette.brand,
-                    style: TextStyle(
-                      color: palette.text,
+        FormSectionHeader(icon: icon, label: label),
+        // The same well the workout form uses, so a number typed on one screen
+        // sits in the same material as a number typed on the other.
+        GlassWell(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          borderColor: invalid ? palette.danger : null,
+          child: Row(
+            children: [
+              // Balances the unit on the right so the number stays optically
+              // centred in the well.
+              SizedBox(width: _suffixWidth(suffix)),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  onChanged: onChanged,
+                  keyboardType: decimal
+                      ? const TextInputType.numberWithOptions(decimal: true)
+                      : TextInputType.number,
+                  textAlign: TextAlign.center,
+                  cursorColor: palette.brand,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                    border: InputBorder.none,
+                    hintText: hint,
+                    hintStyle: TextStyle(
+                      color: palette.muted.withValues(alpha: 0.5),
                       fontSize: 32,
                       fontWeight: FontWeight.w800,
                     ),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 18),
-                      border: InputBorder.none,
-                      hintText: hint,
-                      hintStyle: TextStyle(
-                        color: palette.muted.withValues(alpha: 0.5),
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
                   ),
                 ),
-                SizedBox(
-                  width: _suffixWidth(suffix),
-                  child: Text(
-                    suffix,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: palette.muted,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
+              ),
+              SizedBox(
+                width: _suffixWidth(suffix),
+                child: Text(
+                  suffix,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -672,14 +650,12 @@ class _RunSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return Container(
-      width: double.infinity,
+    return DarkCard(
+      margin: EdgeInsets.zero,
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.brandSoft,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.brandSoftStroke),
-      ),
+      // The brand wash goes under the lens and arrives bent, rather than
+      // sitting on top as the one flat surface on the page.
+      backdrop: GlassBloom(colors: [palette.brand]),
       child: Row(
         children: [
           Expanded(child: _SummaryStat(label: 'Distance', value: distance)),
@@ -755,7 +731,7 @@ class _ErrorBanner extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: palette.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.field),
         border: Border.all(color: palette.danger.withValues(alpha: 0.45)),
       ),
       child: Row(

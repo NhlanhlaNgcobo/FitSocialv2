@@ -5,6 +5,7 @@ import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/domain/app_models.dart';
+import 'dark_card.dart';
 
 /// Followers / Following for one profile, centred as a pair.
 ///
@@ -26,22 +27,34 @@ class ProfileStatsBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(profileStatsProvider(userId));
 
+    // A pane, like the summary blocks on the home page. This is the profile's
+    // headline figure and it was the one piece of it with no surface under it
+    // at all -- bare numbers between an avatar and a photo grid, which read as
+    // a gap rather than as a block.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var i = 0; i < _labels.length; i++) ...[
-            if (i > 0) const _StatDivider(),
-            SizedBox(
-              width: _columnWidth,
-              child: _StatColumn(
-                label: _labels[i],
-                value: _value(stats, _labels[i]),
+      child: DarkCard(
+        // Tight, and with no margin of its own. The profile stacks this into a
+        // fixed column that also has to fit a grid, so every pixel the pane
+        // adds comes straight off the photos -- and past a certain text size,
+        // off the bottom of the screen.
+        margin: EdgeInsets.zero,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < _labels.length; i++) ...[
+              if (i > 0) const _StatDivider(),
+              SizedBox(
+                width: _columnWidth,
+                child: _StatColumn(
+                  label: _labels[i],
+                  value: _value(stats, _labels[i]),
+                ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
