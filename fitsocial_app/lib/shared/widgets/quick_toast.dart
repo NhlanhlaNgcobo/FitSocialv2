@@ -175,6 +175,13 @@ class _QuickToastState extends State<_QuickToast>
     if (_leaving) return;
     _leaving = true;
     _holdTimer?.cancel();
+    // The stale toast a new one dismisses may belong to an overlay that has
+    // already gone — a screen torn down while the message was still up, which
+    // disposes this state without anybody clearing `_currentToast`. There is no
+    // exit to animate in that case, and reversing a disposed controller throws.
+    // The entry is left alone: it went with its overlay, and the caller is
+    // about to overwrite the handle pointing at it.
+    if (!mounted) return;
     await _controller.reverse();
     if (mounted) widget.onFinished();
   }
