@@ -155,6 +155,38 @@ void main() {
       );
     });
 
+    testWidgets('does not redraw itself on every frame', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: LiquidBackdrop())),
+      );
+      await tester.pump();
+
+      CustomPainter ground() {
+        return tester
+            .widget<CustomPaint>(
+              find
+                  .descendant(
+                    of: find.byType(LiquidBackdrop),
+                    matching: find.byType(CustomPaint),
+                  )
+                  .first,
+            )
+            .painter!;
+      }
+
+      final before = ground();
+
+      // Three full-screen radial gradients sit under every other pixel in the
+      // app. On a 72-second cycle a frame's worth of drift is a fraction of a
+      // pixel, and the fill rate is worth more to whatever is moving on top.
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(ground().shouldRepaint(before), isFalse);
+
+      // It still has to actually drift.
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(ground().shouldRepaint(before), isTrue);
+    });
+
     testWidgets('holds still when the system asks for less motion', (
       tester,
     ) async {

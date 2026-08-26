@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme/app_palette.dart';
 import 'glass.dart';
+import 'glass_motion.dart';
 
 /// The compiled lens, loaded once for the whole app.
 ///
@@ -159,6 +160,11 @@ class _LiquidGlassState extends State<LiquidGlass> {
   ui.FragmentShader? _shader;
   ui.ImageFilter? _filter;
 
+  /// Whether the app is standing still. A backdrop filter inside a screen
+  /// transition has no backdrop to read — see [GlassMotion] — so while one runs
+  /// the pane paints itself instead.
+  bool _settled = GlassMotion.settled.value;
+
   /// What the filter currently on hand was built from. The engine can only
   /// reuse a backdrop layer while the filter keeps one identity, so it is
   /// rebuilt when a uniform actually changes and never merely because the
@@ -169,6 +175,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
   void initState() {
     super.initState();
     LiquidGlassProgram.ready.addListener(_onProgramReady);
+    GlassMotion.settled.addListener(_onMotion);
     LiquidGlassProgram.warmUp();
   }
 
@@ -187,12 +194,22 @@ class _LiquidGlassState extends State<LiquidGlass> {
   @override
   void dispose() {
     LiquidGlassProgram.ready.removeListener(_onProgramReady);
+    GlassMotion.settled.removeListener(_onMotion);
     _shader?.dispose();
     super.dispose();
   }
 
   void _onProgramReady() {
     if (mounted) setState(_sync);
+  }
+
+  /// Twice per screen change, and never per frame: the flag is a bool, so the
+  /// pane rebuilds when the filter goes away and when it comes back, not while
+  /// the transition runs.
+  void _onMotion() {
+    final settled = GlassMotion.settled.value;
+    if (settled == _settled || !mounted) return;
+    setState(() => _settled = settled);
   }
 
   void _sync() {
@@ -262,11 +279,47 @@ class _LiquidGlassState extends State<LiquidGlass> {
     _builtFrom = signature;
   }
 
+  /// The child, with any form field beneath it told to stop painting a surface
+  /// of its own.
+  ///
+  /// The app's `inputDecorationTheme` fills every input with an opaque
+  /// `palette.surface`. That is right for a field standing on the page and
+  /// wrong for one inside a lens: `InputBorder.none` removes a field's outline
+  /// but not its fill, so the field goes on painting an opaque slab in the
+  /// middle of the pane -- a box inside a box, and the one opaque thing on a
+  /// surface whose whole point is that it is transparent.
+  ///
+  /// Only the fill is taken. The outline stays, so a field sitting in a glass
+  /// *sheet* -- a comment box, a search bar -- keeps the shape that says it is
+  /// a field. A GlassWell, which supplies that outline itself, drops it from
+  /// closer in.
+  ///
+  /// [InputDecorationTheme.of] does not merge, so the ambient data is copied
+  /// rather than replaced: a bare `InputDecorationTheme(filled: false)` would
+  /// reset padding, borders and hint styling to Material's defaults.
+  Widget _content(BuildContext context) {
+    return InputDecorationTheme(
+      data: InputDecorationTheme.of(context).copyWith(
+        filled: false,
+        fillColor: Colors.transparent,
+      ),
+      child: widget.child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filter = _filter;
     final shape = widget.borderRadius;
     final palette = context.palette;
+
+    // A screen change is in flight. Nothing that reads the backdrop can work
+    // from inside a transition's buffer, so the pane drops its filter and
+    // paints the rest of the material by hand until the app stands still.
+    if (!_settled) {
+      return _shaped(_held(context, palette, shape, frosted: filter == null),
+          shape, palette);
+    }
 
     // No lens on this device, or not compiled yet. The frosted pane is the
     // honest fallback: it needs nothing behind it to look deliberate, and it
@@ -288,7 +341,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
           child: Stack(
             children: [
               const Positioned.fill(child: GlassPane()),
-              widget.child,
+              _content(context),
             ],
           ),
         ),
@@ -298,10 +351,55 @@ class _LiquidGlassState extends State<LiquidGlass> {
 
     final glass = BackdropFilter(
       filter: filter,
-      child: widget.child,
+      child: _content(context),
     );
 
     return _shaped(glass, shape, palette);
+  }
+
+  /// The same material with its filter switched off — everything the live pane
+  /// draws except the part that reads the screen behind it.
+  ///
+  /// Deliberately built from the live pane's own ingredients rather than from
+  /// something cheaper that merely looks like glass. What is left out is the
+  /// bend and the softening, both of which are about *what is behind* the pane;
+  /// the tint, the sheen and the rim are the pane itself, and keeping them
+  /// means the surface never changes weight when the filter comes and goes.
+  Widget _held(BuildContext context, AppPalette palette, BorderRadius shape,
+      {required bool frosted}) {
+    final tint = palette.liquidTint;
+
+    return CustomPaint(
+      foregroundPainter: GlassRim(
+        radius: shape.topLeft.x,
+        highlight: palette.glassRimHigh,
+        soft: palette.glassRimSoft,
+      ),
+      child: Stack(
+        // Whatever this stands in for has to hand the child the same
+        // constraints, or the pane relays out the moment a transition starts.
+        // A BackdropFilter is a plain proxy and passes its own through; the
+        // frosted path's Stack loosens them, and is matched rather than
+        // corrected here so neither device sees the layout move.
+        fit: frosted ? StackFit.loose : StackFit.passthrough,
+        children: [
+          Positioned.fill(
+            // The frosted fallback's surface *is* the pane; the lens paints its
+            // tint inside the shader, so standing in for it means painting that
+            // tint here and nothing heavier.
+            child: frosted
+                ? const GlassPane()
+                : DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: tint.withValues(alpha: tint.a * widget.tintScale),
+                    ),
+                    child: const GlassSheen(),
+                  ),
+          ),
+          _content(context),
+        ],
+      ),
+    );
   }
 
   /// Clips the pane to its own shape, and drops it onto the page.

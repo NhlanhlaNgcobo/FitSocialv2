@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/glass_motion.dart';
+
 /// Moves between the shell's five branches when a nav destination is tapped.
 ///
 /// The default `StatefulShellRoute.indexedStack` cuts straight from one branch
@@ -22,6 +24,19 @@ import 'package:flutter/material.dart';
 /// text and in-flight requests survive a tab switch, exactly as they did under
 /// the IndexedStack. Branches that are neither arriving nor leaving are held
 /// [Offstage], so they cost nothing to paint and their tickers are stopped.
+///
+/// ## What it costs to fade a screen full of glass
+///
+/// A fade is an opacity layer, and a pane of liquid glass inside one has no
+/// backdrop left to bend — see [GlassMotion]. So the fade is declared there and
+/// every glass surface in the app holds still until it is over, which is also
+/// what keeps two branches' worth of backdrop filters off the same frame.
+///
+/// The arriving branch is opaque before it has finished scaling, so the lens
+/// comes back while the branch is still moving rather than on a still frame.
+/// The [RepaintBoundary] around each branch is the other half of that bargain:
+/// it lets the opacity and the scale composite a raster the branch already has
+/// instead of repainting a whole screen on every frame of the change.
 class BranchTransition extends StatefulWidget {
   const BranchTransition({
     required this.currentIndex,
@@ -45,7 +60,13 @@ class _BranchTransitionState extends State<BranchTransition>
   /// The outgoing third and the incoming two thirds do not overlap — that gap
   /// is what separates a fade-through from a muddy dissolve.
   static const Interval _outInterval = Interval(0, 0.3, curve: Curves.easeOut);
-  static const Interval _inInterval = Interval(0.3, 1, curve: Curves.easeOut);
+  static const Interval _inInterval = Interval(0.3, 0.8, curve: Curves.easeOut);
+
+  /// The scale outlasts the fade. The branch is fully legible for the last
+  /// fifth of the change and only still settling, which is where the glass gets
+  /// its filter back unnoticed.
+  static const Interval _scaleInterval =
+      Interval(0.3, 1, curve: Curves.easeOut);
 
   /// How small the arriving branch starts. Barely perceptible on its own; what
   /// registers is that the screen resolves into place rather than blinking on.
@@ -61,6 +82,15 @@ class _BranchTransitionState extends State<BranchTransition>
   /// The branch being left behind, painted only while the transition runs.
   late int _outgoing = widget.currentIndex;
 
+  /// Whether this transition is currently counted against [GlassMotion].
+  bool _holding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_syncMotion);
+  }
+
   @override
   void didUpdateWidget(BranchTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -74,8 +104,30 @@ class _BranchTransitionState extends State<BranchTransition>
 
   @override
   void dispose() {
+    _controller.removeListener(_syncMotion);
     _controller.dispose();
+    // Torn down mid-change, this still owes its [GlassMotion.begin].
+    if (_holding) {
+      _holding = false;
+      GlassMotion.end();
+    }
     super.dispose();
+  }
+
+  /// Whether an opacity of [value] costs an offscreen buffer.
+  ///
+  /// Flutter paints straight through at both ends — a fully opaque branch needs
+  /// no layer, and a fully transparent one is never painted — so only the span
+  /// strictly between them is a fade the glass has to sit out.
+  static bool _buffered(double value) => value > 0 && value < 1;
+
+  void _syncMotion() {
+    final t = _controller.value;
+    final holding = _buffered(_inInterval.transform(t)) ||
+        _buffered(1 - _outInterval.transform(t));
+    if (holding == _holding) return;
+    _holding = holding;
+    holding ? GlassMotion.begin() : GlassMotion.end();
   }
 
   @override
@@ -116,8 +168,8 @@ class _BranchTransitionState extends State<BranchTransition>
     var scale = 1.0;
 
     if (isCurrent) {
-      final arrival = settled ? 1.0 : _inInterval.transform(t);
-      opacity = arrival;
+      opacity = settled ? 1.0 : _inInterval.transform(t);
+      final arrival = settled ? 1.0 : _scaleInterval.transform(t);
       scale = _arrivalScale + (1 - _arrivalScale) * arrival;
     } else if (isLeaving) {
       opacity = 1 - _outInterval.transform(t);
@@ -140,7 +192,10 @@ class _BranchTransitionState extends State<BranchTransition>
             opacity: opacity,
             child: Transform.scale(
               scale: scale,
-              child: widget.children[index],
+              // The branch keeps its own raster, so the fade and the scale
+              // above composite a picture that already exists rather than
+              // dragging a whole screen through a repaint every frame.
+              child: RepaintBoundary(child: widget.children[index]),
             ),
           ),
         ),

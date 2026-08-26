@@ -24,6 +24,19 @@ class LiquidBackdrop extends StatefulWidget {
   /// looking at, which is the only speed that survives being on screen all day.
   static const Duration period = Duration(seconds: 72);
 
+  /// How often the drift is actually redrawn.
+  ///
+  /// Three full-screen radial gradients is the one piece of painting under
+  /// every other pixel in the app, and at [period] there is nothing in it worth
+  /// a fresh one on every vsync: a frame's worth of drift is a fraction of a
+  /// pixel. Quantising the phase holds it to this many repaints a second, which
+  /// cannot be seen at this speed and hands the fill rate back to whatever is
+  /// moving on top — a page transition, most of all.
+  static const int fps = 12;
+
+  /// Distinct phases in one cycle.
+  static const int _steps = 72 * fps;
+
   @override
   State<LiquidBackdrop> createState() => _LiquidBackdropState();
 }
@@ -63,10 +76,18 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
     return RepaintBoundary(
       child: AnimatedBuilder(
         animation: _controller,
-        builder: (context, _) => CustomPaint(
-          size: Size.infinite,
-          painter: _BackdropPainter(t: _controller.value, palette: palette),
-        ),
+        builder: (context, _) {
+          // Snapped to the drift's own clock, not the display's. The painter
+          // compares this in shouldRepaint, so between two steps the ground is
+          // simply not redrawn.
+          final t = (_controller.value * LiquidBackdrop._steps).floorToDouble() /
+              LiquidBackdrop._steps;
+
+          return CustomPaint(
+            size: Size.infinite,
+            painter: _BackdropPainter(t: t, palette: palette),
+          );
+        },
       ),
     );
   }
