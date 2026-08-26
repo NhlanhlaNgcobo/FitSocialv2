@@ -142,6 +142,28 @@ class RaceActions {
     return !saved;
   }
 
+  /// Drops [eventId] from the user's saved races.
+  ///
+  /// Deliberately not [toggleSaved]. That infers the current state from
+  /// [savedRaceIdsProvider], which only holds an answer once something on
+  /// screen has watched it long enough for the stream to emit — otherwise it
+  /// reads as "not saved" and the toggle *saves* the race again. My Races
+  /// watches the saved events rather than their ids, so a visitor who lands
+  /// there straight from Explore was tapping a bookmark that did nothing.
+  ///
+  /// A list that knows every race on it is saved does not need to ask.
+  Future<void> unsave(String eventId) async {
+    final userId = _ref.read(currentUserIdProvider);
+    if (userId == null) {
+      throw StateError('Sign in to save a race.');
+    }
+    await _ref.read(raceRepositoryProvider).setSaved(
+          userId: userId,
+          eventId: eventId,
+          saved: false,
+        );
+  }
+
   /// Notes that the user tapped through to enter [event].
   ///
   /// Deliberately swallows every failure. This is measurement the user did not

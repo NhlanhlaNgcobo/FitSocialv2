@@ -14,6 +14,7 @@ import 'package:fitsocial_app/features/races/presentation/race_artwork.dart';
 import 'package:fitsocial_app/features/races/presentation/race_detail_screen.dart';
 import 'package:fitsocial_app/features/races/presentation/race_widgets.dart';
 import 'package:fitsocial_app/features/races/presentation/races_screen.dart';
+import 'package:fitsocial_app/features/races/presentation/saved_races_screen.dart';
 
 /// Pinned so a timeframe filter and a countdown never depend on the day the
 /// suite runs.
@@ -97,7 +98,10 @@ class _FakeRaceRepository implements RaceRepository {
 
   @override
   Stream<List<RaceEvent>> watchSavedEvents(String userId) => Stream.value(
-        events.where((event) => saved.contains(event.id)).toList(),
+        events.where((event) => saved.contains(event.id)).toList()
+          // Soonest first, as the Firestore repository promises and as the
+          // saved screen relies on to pick the race it counts down to.
+          ..sort((a, b) => a.startAt.compareTo(b.startAt)),
       );
 
   @override
@@ -368,6 +372,94 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('from R90'), findsOneWidget);
+    });
+  });
+
+  group('SavedRacesScreen', () {
+    final lastAutumn = _event(
+      id: 'autumn-ten',
+      name: 'Autumn Ten',
+      startAt: DateTime(2025, 4, 12, 7),
+    );
+
+    Future<void> pumpSaved(
+      WidgetTester tester,
+      _FakeRaceRepository repository, {
+      String? userId = 'me',
+    }) async {
+      _tallSurface(tester);
+      await tester.pumpWidget(
+        _app(
+          child: const SavedRacesScreen(),
+          repository: repository,
+          userId: userId,
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('counts down to the soonest race and shows it once',
+        (tester) async {
+      final repository = _FakeRaceRepository([thisWeek, nextMonth])
+        ..saved.addAll({'weekend-10k', 'gun-run'});
+      await pumpSaved(tester, repository);
+
+      expect(find.text('NEXT RACE'), findsOneWidget);
+      // 22 August to 23 August, in the singular.
+      expect(find.text('DAY'), findsOneWidget);
+      expect(find.text('TO GO'), findsOneWidget);
+      // The header race is dropped from the list under it rather than printed
+      // twice a centimetre apart.
+      expect(find.text('Weekend Warrior 10'), findsOneWidget);
+      expect(find.text('ALSO COMING UP'), findsOneWidget);
+      expect(find.text('Peninsula Half'), findsOneWidget);
+    });
+
+    testWidgets('a race that has been run keeps its place, with its year',
+        (tester) async {
+      final repository = _FakeRaceRepository([lastAutumn, thisWeek])
+        ..saved.addAll({'autumn-ten', 'weekend-10k'});
+      await pumpSaved(tester, repository);
+
+      expect(find.text('BEEN AND GONE'), findsOneWidget);
+      expect(find.text('Autumn Ten'), findsOneWidget);
+      expect(find.text('2025'), findsOneWidget);
+    });
+
+    testWidgets('nothing coming up points back at the calendar',
+        (tester) async {
+      final repository = _FakeRaceRepository([lastAutumn])
+        ..saved.add('autumn-ten');
+      await pumpSaved(tester, repository);
+
+      expect(find.text('Nothing coming up'), findsOneWidget);
+      expect(find.text('NEXT RACE'), findsNothing);
+    });
+
+    testWidgets('the bookmark on the header unsaves the race', (tester) async {
+      final repository = _FakeRaceRepository([thisWeek])
+        ..saved.add('weekend-10k');
+      await pumpSaved(tester, repository);
+
+      await tester.tap(find.byTooltip('Remove from my races'));
+      await tester.pumpAndSettle();
+
+      expect(repository.saved, isEmpty);
+    });
+
+    testWidgets('a signed-out visitor is asked to sign in', (tester) async {
+      final repository = _FakeRaceRepository([thisWeek]);
+      await pumpSaved(tester, repository, userId: null);
+
+      expect(find.text('Sign in to save races'), findsOneWidget);
+    });
+
+    testWidgets('an empty shelf invites a browse', (tester) async {
+      final repository = _FakeRaceRepository([thisWeek]);
+      await pumpSaved(tester, repository);
+
+      expect(find.text('No saved races yet'), findsOneWidget);
+      expect(find.text('Browse the calendar'), findsOneWidget);
     });
   });
 

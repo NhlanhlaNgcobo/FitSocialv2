@@ -206,11 +206,11 @@ class RaceCard extends StatelessWidget {
       child: LiquidGlass(
         // Painted by the lens now rather than by a fill of its own:
         // a pane over the app backdrop, like every other card.
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: palette.stroke),
           ),
           child: Column(
