@@ -578,7 +578,7 @@ class _SessionRow extends ConsumerWidget {
     final time = '${when.hour.toString().padLeft(2, '0')}:'
         '${when.minute.toString().padLeft(2, '0')}';
 
-    final difference = today.difference(day).inDays;
+    final difference = ActivityCalendar.daysBetween(day, today);
     final date = switch (difference) {
       0 => 'Today',
       1 => 'Yesterday',

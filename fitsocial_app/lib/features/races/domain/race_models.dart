@@ -394,9 +394,16 @@ class RaceEvent {
   bool isPast(DateTime now) => (endAt ?? startAt).isBefore(now);
 
   /// Whole days until the start, from [now]. Negative once it is past.
+  ///
+  /// Counted in UTC, though both dates are local ones. Two local midnights
+  /// with a clock change between them are not a whole number of 24-hour days
+  /// apart, and `inDays` truncates the remainder -- which is a countdown
+  /// reading a day short for half the year. What is being compared is the
+  /// calendar fields, so projecting both onto UTC midnight is the exact form
+  /// of the question.
   int daysUntil(DateTime now) {
-    final start = DateTime(startAt.year, startAt.month, startAt.day);
-    final today = DateTime(now.year, now.month, now.day);
+    final start = DateTime.utc(startAt.year, startAt.month, startAt.day);
+    final today = DateTime.utc(now.year, now.month, now.day);
     return start.difference(today).inDays;
   }
 }
@@ -427,8 +434,10 @@ enum RaceTimeframe {
   /// month" to month end: somebody asking what is on this weekend means this
   /// weekend, not the next 168 hours.
   DateTime? endFrom(DateTime now) => switch (this) {
-        thisWeek => DateTime(now.year, now.month, now.day)
-            .add(Duration(days: 8 - now.weekday)),
+        // Built as a date rather than by adding days of elapsed time: a week
+        // containing a clock change is not seven 24-hour days, and the window
+        // would end on the Saturday night.
+        thisWeek => DateTime(now.year, now.month, now.day + (8 - now.weekday)),
         thisMonth => DateTime(now.year, now.month + 1, 1),
         threeMonths => DateTime(now.year, now.month + 3, now.day),
         sixMonths => DateTime(now.year, now.month + 6, now.day),

@@ -146,13 +146,18 @@ class _DailyStepsSyncState extends ConsumerState<DailyStepsSync>
     // could still change, and the server would drop it anyway.
     if (!clock.isOpen(dayKey, now)) return;
 
-    // Yesterday in local wall-clock terms: the midnight that just passed, back
-    // one day. Health Connect is asked for its own de-duplicated total over
-    // that window rather than for a summary, because the day is over — there
-    // is no "so far today" left to read.
+    // Yesterday in local wall-clock terms: the midnight that just passed, and
+    // the one before it. Both are built as dates rather than by stepping back
+    // 24 hours, because the day a zone shifts its clocks is 23 hours long or
+    // 25 — and a window measured in elapsed time then either misses an hour of
+    // yesterday's steps or reaches back into the day before.
+    //
+    // Health Connect is asked for its own de-duplicated total over that window
+    // rather than for a summary, because the day is over — there is no "so far
+    // today" left to read.
     final midnight = DateTime(now.year, now.month, now.day);
     final steps = await ref.read(healthServiceProvider).readStepsBetween(
-          midnight.subtract(const Duration(days: 1)),
+          DateTime(now.year, now.month, now.day - 1),
           midnight,
         );
 

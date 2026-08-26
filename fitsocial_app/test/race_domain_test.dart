@@ -119,6 +119,14 @@ void main() {
       );
     });
 
+    test('daysUntil is not shortened by a clock change in the way', () {
+      // Egypt starts summer time on 24 April 2026, so the run-up to a race on
+      // the 26th is an hour short of nineteen 24-hour days -- and a countdown
+      // measuring elapsed time reads 18 for the whole fortnight before it.
+      final race = _event(startAt: DateTime(2026, 4, 26, 7));
+      expect(race.daysUntil(DateTime(2026, 4, 7, 20)), 19);
+    });
+
     test('daysUntil counts calendar days, not elapsed hours', () {
       // 18:00 today to 06:00 tomorrow is twelve hours but one day, and a
       // countdown that called it zero would say "Today" on the wrong morning.

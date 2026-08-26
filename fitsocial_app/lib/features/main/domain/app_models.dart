@@ -1031,7 +1031,7 @@ class ActivityCalendar {
     final days = <ActivityDay>[];
     for (var cursor = start;
         !cursor.isAfter(end);
-        cursor = cursor.add(const Duration(days: 1))) {
+        cursor = addDays(cursor, 1)) {
       days.add(byDate[cursor] ?? ActivityDay(date: cursor));
     }
     return ActivityCalendar(range: range, days: days, today: now);
@@ -1080,7 +1080,7 @@ class ActivityCalendar {
     // The week view is anchored to the Monday just gone rather than to a
     // rolling seven days, so the first square is always the start of the week.
     if (range == ActivityRange.week) return mondayOf(now);
-    return mondayOf(now.subtract(Duration(days: range.lookbackDays - 1)));
+    return mondayOf(addDays(now, -(range.lookbackDays - 1)));
   }
 
   /// The last day the window covers.
@@ -1090,7 +1090,7 @@ class ActivityCalendar {
   static DateTime endOfWindow(ActivityRange range, DateTime today) {
     final now = dateOnly(today);
     if (range == ActivityRange.week) {
-      return mondayOf(now).add(const Duration(days: 6));
+      return addDays(mondayOf(now), 6);
     }
     return now;
   }
@@ -1100,12 +1100,39 @@ class ActivityCalendar {
     final day = dateOnly(date);
     // DateTime.weekday is 1 (Mon) to 7 (Sun), so subtracting weekday - 1
     // always lands on that week's Monday.
-    return day.subtract(Duration(days: day.weekday - DateTime.monday));
+    return addDays(day, -(day.weekday - DateTime.monday));
   }
 
   /// Strips the time component so days compare and hash by calendar date.
   static DateTime dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
+
+  /// Local midnight [days] calendar days after [date]. Negative walks back.
+  ///
+  /// Deliberately not `date.add(Duration(days: days))`. A Duration is elapsed
+  /// time, and a local day is not always 24 hours of it: on the two days a
+  /// zone shifts its clocks a day is 23 hours or 25. Adding a week's worth of
+  /// milliseconds across one of those lands at 23:00 the evening before, and
+  /// every reader downstream -- the Monday a week is anchored to, a grid
+  /// cursor, the `.day` a label prints -- is then a date out.
+  ///
+  /// The DateTime constructor is defined to normalise an out-of-range field,
+  /// so day 0 is the last of the previous month and day 32 the first or second
+  /// of the next. That is the whole fix.
+  static DateTime addDays(DateTime date, int days) =>
+      DateTime(date.year, date.month, date.day + days);
+
+  /// Calendar days from [from] to [to]. Negative when [to] is the earlier.
+  ///
+  /// Counted in UTC for the same reason [addDays] does its own arithmetic: a
+  /// week that contains a clock change is 167 or 169 hours, and
+  /// `difference().inDays` truncates that to 6 or 7 rather than the 7 days the
+  /// calendar shows. Projecting both dates onto UTC midnight drops the hours
+  /// that are not there.
+  static int daysBetween(DateTime from, DateTime to) =>
+      DateTime.utc(to.year, to.month, to.day)
+          .difference(DateTime.utc(from.year, from.month, from.day))
+          .inDays;
 }
 
 enum WorkoutType {

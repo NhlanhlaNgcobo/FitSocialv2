@@ -1733,7 +1733,7 @@ class FirestoreContentRepository implements ContentRepository {
   /// it to today's single day.
   static int _nextStreak(Map<String, dynamic> data, DateTime now) {
     final today = _dayStamp(now);
-    final yesterday = _dayStamp(now.subtract(const Duration(days: 1)));
+    final yesterday = _dayStamp(ActivityCalendar.addDays(now, -1));
     final lastActivityDay = data['lastActivityDay'] as String?;
     final storedStreak = (data['currentStreak'] as num?)?.toInt() ?? 0;
 
@@ -1895,7 +1895,7 @@ class FirestoreContentRepository implements ContentRepository {
     final now = DateTime.now();
     final lastActivityDay = data['lastActivityDay'] as String?;
     final isStreakLive = lastActivityDay == _dayStamp(now) ||
-        lastActivityDay == _dayStamp(now.subtract(const Duration(days: 1)));
+        lastActivityDay == _dayStamp(ActivityCalendar.addDays(now, -1));
     final currentStreak =
         isStreakLive ? (data['currentStreak'] as num?)?.toInt() ?? 0 : 0;
 

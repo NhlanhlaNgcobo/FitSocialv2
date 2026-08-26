@@ -45,6 +45,19 @@ void main() {
       expect(window.dayCount, 7);
     });
 
+    test('a week containing a clock change is still seven days', () {
+      // 20-26 April 2026, the week Egypt starts summer time in. Fifteen weeks
+      // back from the week of 3 August.
+      final window = ProgressWindow.forOffset(
+        ProgressPeriod.week,
+        -15,
+        today: today,
+      );
+      expect(window.start, DateTime(2026, 4, 20));
+      expect(window.end, DateTime(2026, 4, 26));
+      expect(window.dayCount, 7);
+    });
+
     test('a month covers its own length, leap years included', () {
       // Six months back from August 2026 is February 2026 — 28 days.
       final february = ProgressWindow.forOffset(

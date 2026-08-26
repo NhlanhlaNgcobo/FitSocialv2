@@ -133,13 +133,15 @@ class ProgressWindow {
 
     final (DateTime start, DateTime end) = switch (period) {
       ProgressPeriod.day => (
-          now.add(Duration(days: steps)),
-          now.add(Duration(days: steps)),
+          ActivityCalendar.addDays(now, steps),
+          ActivityCalendar.addDays(now, steps),
         ),
       ProgressPeriod.week => () {
-          final monday =
-              ActivityCalendar.mondayOf(now).add(Duration(days: steps * 7));
-          return (monday, monday.add(const Duration(days: 6)));
+          final monday = ActivityCalendar.addDays(
+            ActivityCalendar.mondayOf(now),
+            steps * 7,
+          );
+          return (monday, ActivityCalendar.addDays(monday, 6));
         }(),
       // Day 0 of the following month is the last day of this one, which is
       // what keeps February honest without a leap-year branch.
@@ -189,7 +191,7 @@ class ProgressWindow {
   }
 
   /// Days in the window, counting both ends.
-  int get dayCount => end.difference(start).inDays + 1;
+  int get dayCount => ActivityCalendar.daysBetween(start, end) + 1;
 
   /// How the date navigator reads, e.g. "2 – 8 May 2026".
   String get label {

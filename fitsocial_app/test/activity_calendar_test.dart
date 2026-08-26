@@ -10,6 +10,69 @@ void main() {
   // A Wednesday, so week alignment has something to actually move.
   final today = DateTime(2026, 8, 5);
 
+  group('ActivityCalendar date arithmetic', () {
+    // Every case here is a date a clock change falls between. On a machine in
+    // a zone that does not observe one they are ordinary arithmetic and pass
+    // either way; on a machine that does, each one is a day out before the
+    // fix, because a Duration is elapsed time and a local day is 23 hours or
+    // 25 on the two days a zone shifts.
+
+    test('a week back from a date is the same weekday', () {
+      // Egypt starts summer time on Friday 24 April 2026, which is the week
+      // this steps across.
+      final monday = DateTime(2026, 4, 27);
+      final before = ActivityCalendar.addDays(monday, -7);
+
+      expect(before, DateTime(2026, 4, 20));
+      expect(before.weekday, DateTime.monday);
+    });
+
+    test('stepping walks whole days, not 24-hour blocks', () {
+      var cursor = DateTime(2026, 4, 20);
+      final walked = <DateTime>[];
+      for (var i = 0; i < 7; i++) {
+        walked.add(cursor);
+        cursor = ActivityCalendar.addDays(cursor, 1);
+      }
+
+      expect(walked, [
+        for (var day = 20; day <= 26; day++) DateTime(2026, 4, day),
+      ]);
+      // No repeats and no gaps: a 23-hour day makes an elapsed-time cursor
+      // land twice on the same date.
+      expect(walked.toSet(), hasLength(7));
+    });
+
+    test('addDays normalises across month and year ends', () {
+      expect(ActivityCalendar.addDays(DateTime(2026, 1, 1), -1),
+          DateTime(2025, 12, 31));
+      expect(ActivityCalendar.addDays(DateTime(2026, 2, 27), 2),
+          DateTime(2026, 3, 1));
+    });
+
+    test('daysBetween counts calendar days over a clock change', () {
+      expect(
+        ActivityCalendar.daysBetween(DateTime(2026, 4, 20), DateTime(2026, 4, 26)),
+        6,
+      );
+      expect(
+        ActivityCalendar.daysBetween(DateTime(2026, 4, 26), DateTime(2026, 4, 20)),
+        -6,
+      );
+    });
+
+    test('the Monday of a week containing a clock change is still its Monday',
+        () {
+      for (var day = 20; day <= 26; day++) {
+        expect(
+          ActivityCalendar.mondayOf(DateTime(2026, 4, day)),
+          DateTime(2026, 4, 20),
+          reason: '20-26 April 2026 all belong to the week of the 20th',
+        );
+      }
+    });
+  });
+
   group('ActivityCalendar window', () {
     test('the 7-day range is this Monday to Sunday, whatever day it is', () {
       // Every day of one week must produce the same Mon-Sun window.
