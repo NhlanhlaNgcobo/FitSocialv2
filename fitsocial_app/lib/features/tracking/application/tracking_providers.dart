@@ -94,3 +94,13 @@ final sessionStepsProvider = StreamProvider<int>((ref) {
     ),
   );
 });
+
+/// Per-type Health Connect probe backing the diagnostics card on `/health`.
+///
+/// autoDispose so each visit re-probes: the value of this is that it reflects
+/// the store as it is now, and a cached result from before the user changed a
+/// permission would be worse than none.
+final healthDiagnosticsProvider =
+    FutureProvider.autoDispose<List<HealthTypeDiagnostic>>((ref) {
+  return ref.watch(healthServiceProvider).diagnose();
+});
