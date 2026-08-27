@@ -56,7 +56,9 @@ final healthSummaryProvider = FutureProvider<HealthSummary>((ref) async {
   return service.readTodaySummary();
 });
 
-final bleHeartRateServiceProvider = Provider<BleHeartRateService>((ref) {
+/// Typed to the interface rather than the implementation, so a test can put a
+/// fake strap behind it — the plugin refuses to load off-device at all.
+final bleHeartRateServiceProvider = Provider<HeartRateLink>((ref) {
   final service = BleHeartRateService();
   ref.onDispose(service.dispose);
   return service;

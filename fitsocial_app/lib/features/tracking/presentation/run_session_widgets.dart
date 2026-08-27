@@ -538,11 +538,17 @@ class RunHeartRateAction extends StatelessWidget {
   const RunHeartRateAction({
     required this.bpm,
     required this.onPressed,
+    this.isReconnecting = false,
     super.key,
   });
 
   final int? bpm;
   final VoidCallback onPressed;
+
+  /// A remembered strap being reached for. Rendered differently from "no
+  /// strap": one is worth waiting on, the other needs the runner to go and
+  /// pair something.
+  final bool isReconnecting;
 
   @override
   Widget build(BuildContext context) {
@@ -550,9 +556,15 @@ class RunHeartRateAction extends StatelessWidget {
     final isLive = bpm != null;
 
     return Tooltip(
-      message: isLive ? 'Heart-rate device' : 'Connect heart-rate device',
+      message: isLive
+          ? 'Heart-rate device'
+          : isReconnecting
+              ? 'Reconnecting to your heart-rate device'
+              : 'Connect heart-rate device',
       child: Material(
-        color: isLive ? palette.brandSoft : Colors.transparent,
+        color: isLive || isReconnecting
+            ? palette.brandSoft
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(99),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -560,9 +572,13 @@ class RunHeartRateAction extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Icon(
-              isLive ? Icons.favorite_rounded : Icons.monitor_heart_outlined,
+              isLive
+                  ? Icons.favorite_rounded
+                  : isReconnecting
+                      ? Icons.bluetooth_searching_rounded
+                      : Icons.monitor_heart_outlined,
               size: 20,
-              color: isLive ? palette.brand : palette.text,
+              color: isLive || isReconnecting ? palette.brand : palette.text,
             ),
           ),
         ),

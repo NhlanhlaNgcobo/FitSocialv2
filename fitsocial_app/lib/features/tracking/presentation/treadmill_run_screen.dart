@@ -13,7 +13,9 @@ import '../../music/application/music_providers.dart';
 import '../../music/presentation/connect_music_action.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../music/presentation/music_mini_player.dart';
+import '../application/heart_rate_connection_controller.dart';
 import '../application/tracking_providers.dart';
+import '../domain/heart_rate_models.dart';
 import '../data/treadmill_run_service.dart';
 import 'finish_run_sheet.dart';
 import 'run_session_widgets.dart';
@@ -181,7 +183,15 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
         recorder.pause();
       }
     });
-    final liveBpm = ref.watch(liveHeartRateProvider).valueOrNull;
+    // Gated on the connection being live, not merely on a reading having
+    // arrived once. A dropped strap emits nothing further, so the stream's last
+    // value would otherwise sit on screen looking like a current heart rate for
+    // the rest of the run.
+    final connection = ref.watch(heartRateConnectionProvider);
+    final liveBpm =
+        connection.isLive ? ref.watch(liveHeartRateProvider).valueOrNull : null;
+    final isReconnecting =
+        connection.status == HeartRateConnectionStatus.reconnecting;
     // Notification access counts as much as a linked account here: both give
     // the mini player something to drive.
     final hasMusicSource = ref.watch(hasMusicSourceProvider);
@@ -202,6 +212,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
           const MusicIslandAction(),
           RunHeartRateAction(
             bpm: liveBpm,
+            isReconnecting: isReconnecting,
             onPressed: () => context.push('/health'),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -248,8 +259,10 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
                     RunMetric(
                       icon: liveBpm != null
                           ? Icons.favorite_rounded
-                          : Icons.monitor_heart_outlined,
-                      label: 'BPM',
+                          : isReconnecting
+                              ? Icons.bluetooth_searching_rounded
+                              : Icons.monitor_heart_outlined,
+                      label: isReconnecting ? 'RECONNECTING' : 'BPM',
                       value: liveBpm?.toString() ?? '--',
                       accent: liveBpm != null,
                     ),

@@ -10,6 +10,8 @@ import 'package:fitsocial_app/app/theme/app_theme.dart';
 import 'package:fitsocial_app/features/main/application/activity_actions.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/tracking/data/ble_heart_rate_service.dart';
+import 'package:fitsocial_app/features/tracking/data/heart_rate_device_store.dart';
+import 'package:fitsocial_app/features/tracking/domain/heart_rate_models.dart';
 import 'package:fitsocial_app/features/music/application/music_presence_provider.dart';
 import 'package:fitsocial_app/features/music/application/music_providers.dart';
 import 'package:fitsocial_app/features/music/domain/music_presence.dart';
@@ -42,6 +44,8 @@ void main() {
       ProviderScope(
         overrides: [
           treadmillRunServiceProvider.overrideWithValue(service),
+          bleHeartRateServiceProvider.overrideWithValue(_FakeStrap()),
+          heartRateDeviceStoreProvider.overrideWithValue(_NoRememberedDevice()),
           liveHeartRateProvider.overrideWith((ref) => const Stream<int>.empty()),
           musicPresenceProvider.overrideWithValue(MusicPresence.none),
           musicConnectionsProvider.overrideWith(_NoMusic.new),
@@ -59,7 +63,7 @@ void main() {
   /// afterwards, a strap the test feeds, and a stand-in for the save itself.
   Future<void> pumpSaveableScreen(
     WidgetTester tester, {
-    required BleHeartRateService strap,
+    required HeartRateLink strap,
     required ActivityActions actions,
   }) async {
     tester.view.physicalSize = const Size(440, 1400);
@@ -86,6 +90,7 @@ void main() {
         overrides: [
           treadmillRunServiceProvider.overrideWithValue(service),
           bleHeartRateServiceProvider.overrideWithValue(strap),
+          heartRateDeviceStoreProvider.overrideWithValue(_NoRememberedDevice()),
           liveHeartRateProvider.overrideWith((ref) => strap.heartRateStream),
           activityActionsProvider.overrideWithValue(actions),
           musicPresenceProvider.overrideWithValue(MusicPresence.none),
@@ -260,9 +265,13 @@ void main() {
   });
 }
 
-/// A strap whose readings the test supplies directly. Subclassed rather than
-/// mocked, the way this repo fakes everything else.
-class _FakeStrap extends BleHeartRateService {
+/// A strap whose readings the test supplies directly.
+///
+/// Implements the interface rather than subclassing the real service: the
+/// plugin refuses to load off-device at all, so anything touching it — even the
+/// adapter-state stream the connection controller opens on construction —
+/// throws before a single frame is drawn.
+class _FakeStrap implements HeartRateLink {
   final _controller = StreamController<int>.broadcast();
 
   @override
@@ -271,7 +280,51 @@ class _FakeStrap extends BleHeartRateService {
   void report(int bpm) => _controller.add(bpm);
 
   @override
+  Stream<bool> get adapterOn => Stream<bool>.value(true);
+
+  @override
+  Stream<bool> connectedChanges(String remoteId) =>
+      const Stream<bool>.empty();
+
+  @override
+  Future<bool> isSupported() async => true;
+
+  @override
+  Future<bool> requestPermissions() async => true;
+
+  @override
+  Stream<List<DiscoveredHeartRateDevice>> scan({Duration? timeout}) =>
+      const Stream<List<DiscoveredHeartRateDevice>>.empty();
+
+  @override
+  Future<void> stopScan() async {}
+
+  @override
+  Future<void> connectById(String remoteId, {bool autoConnect = false}) async {}
+
+  @override
+  Future<void> subscribeNotifications(String remoteId) async {}
+
+  @override
+  Future<void> disconnect() async {}
+
+  @override
   void dispose() => _controller.close();
+}
+
+/// Nothing paired, so nothing is reconnected during a test.
+class _NoRememberedDevice implements HeartRateDeviceStore {
+  @override
+  Future<RememberedHeartRateDevice?> read() async => null;
+
+  @override
+  Future<void> save(RememberedHeartRateDevice device) async {}
+
+  @override
+  Future<void> clear() async {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Captures the draft the screen saves instead of reaching Firestore.
