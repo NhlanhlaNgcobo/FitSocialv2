@@ -241,6 +241,7 @@ class _FakeLink implements HeartRateLink {
 
   Future<void> endScan() async => _scan?.close();
 
+  @override
   void dispose() {
     _hr.close();
     _adapter.close();
