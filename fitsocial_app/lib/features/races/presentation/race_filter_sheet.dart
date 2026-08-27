@@ -44,6 +44,8 @@ class _RaceFilterSheet extends ConsumerWidget {
       expand: false,
       builder: (context, scrollController) {
         return LiquidGlass(
+          // Over the screen it was opened from, so there is real content to bend.
+          lens: true,
           // A sheet always has a page behind it, which makes it the one
           // surface in the app guaranteed something worth bending.
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),

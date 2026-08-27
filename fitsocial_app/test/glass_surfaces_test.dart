@@ -7,6 +7,7 @@ import 'package:fitsocial_app/app/theme/app_palette.dart';
 import 'package:fitsocial_app/app/theme/app_theme.dart';
 import 'package:fitsocial_app/shared/widgets/dark_card.dart';
 import 'package:fitsocial_app/shared/widgets/glass.dart';
+import 'package:fitsocial_app/shared/widgets/glass_motion.dart';
 import 'package:fitsocial_app/shared/widgets/liquid_backdrop.dart';
 import 'package:fitsocial_app/shared/widgets/liquid_glass.dart';
 
@@ -79,13 +80,33 @@ void main() {
 
   group('liquid glass fallback', () {
     testWidgets('is frosted, not merely tinted', (tester) async {
-      await pumpCard(tester);
+      // Asked for explicitly: a lens is what has a fallback. An ordinary card
+      // is painted either way and has nothing to fall back from.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(
+            body: LiquidGlass(lens: true, child: Text('body')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
       // A flat tinted capsule is not a second material. Where the lens cannot
       // run the glass still has to blur what is behind it.
       final blur = tester.widget<BackdropFilter>(find.byType(BackdropFilter));
       expect(blur.filter, same(LiquidGlass.fallbackBlur));
       expect(find.byType(GlassPane), findsOneWidget);
+    });
+
+    testWidgets('is not what an ordinary card gets', (tester) async {
+      await pumpCard(tester);
+
+      // A card sits on [LiquidBackdrop], and blurring three soft radial pools
+      // returns three soft radial pools. It paid a full render pass for a
+      // difference nobody could see; now it paints the material instead.
+      expect(find.byType(BackdropFilter), findsNothing);
+      expect(find.byType(GlassPane), findsNothing);
     });
 
     testWidgets('draws the rim the shader would have drawn', (tester) async {
@@ -201,6 +222,31 @@ void main() {
       // If the drift were still running this would time out rather than
       // reporting a clean frame.
       expect(tester.hasRunningAnimations, isFalse);
+    });
+
+    testWidgets('holds still for the length of a screen change', (
+      tester,
+    ) async {
+      addTearDown(GlassMotion.resetForTest);
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: LiquidBackdrop())),
+      );
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isTrue);
+
+      GlassMotion.begin();
+      await tester.pump();
+
+      // The widest surface in the app, under every other one. A tick of the
+      // drift is a full-screen repaint that the nav's lens then has to re-read
+      // -- and a screen change is the worst frame in the app to spend that on.
+      // Nobody has ever seen a pool of colour creep under a 300ms transition.
+      expect(tester.hasRunningAnimations, isFalse);
+
+      GlassMotion.end();
+      await tester.pump();
+      expect(tester.hasRunningAnimations, isTrue);
     });
 
     test('no theme paints a ground that would cover it', () {

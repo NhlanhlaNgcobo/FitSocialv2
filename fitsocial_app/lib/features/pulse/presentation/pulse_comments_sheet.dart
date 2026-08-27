@@ -42,6 +42,8 @@ class PulseCommentsSheet extends ConsumerWidget {
     final comments = ref.watch(pulseCommentsProvider(pulseId));
 
     return LiquidGlass(
+      // Over the screen it was opened from, so there is real content to bend.
+      lens: true,
       // A sheet always has a page behind it, which makes it the
       // one surface guaranteed something worth bending.
       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),

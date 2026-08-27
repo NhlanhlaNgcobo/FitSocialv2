@@ -6,12 +6,15 @@ import 'package:fitsocial_app/shared/widgets/glass.dart';
 import 'package:fitsocial_app/shared/widgets/glass_motion.dart';
 import 'package:fitsocial_app/shared/widgets/liquid_glass.dart';
 
+/// A pane that actually reads the backdrop, which is the only kind
+/// [GlassMotion] has anything to say about — an ordinary painted pane has no
+/// filter to drop and never subscribes. See [LiquidGlass.lens].
 Future<void> pumpGlass(WidgetTester tester) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.darkTheme,
       home: const Scaffold(
-        body: LiquidGlass(child: SizedBox(width: 200, height: 80)),
+        body: LiquidGlass(lens: true, child: SizedBox(width: 200, height: 80)),
       ),
     ),
   );
@@ -53,6 +56,58 @@ void main() {
       expect(GlassMotion.settled.value, isFalse);
       GlassMotion.end();
       expect(GlassMotion.settled.value, isTrue);
+    });
+  });
+
+  group('an ordinary pane of glass', () {
+    testWidgets('never reads the backdrop at all', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(
+            body: LiquidGlass(child: SizedBox(width: 200, height: 80)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The default, and the reason the app holds its frame rate: a second
+      // render pass per card is not something a feed can afford. What it draws
+      // instead is the same material by hand.
+      expect(find.byType(BackdropFilter), findsNothing);
+      final rim = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .map((paint) => paint.foregroundPainter)
+          .whereType<GlassRim>();
+      expect(rim, isNotEmpty);
+    });
+
+    testWidgets('does not flinch when a screen change runs', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 300,
+                height: 100,
+                child: LiquidGlass(child: Text('body')),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final before = tester.getRect(find.text('body'));
+
+      GlassMotion.begin();
+      await tester.pump();
+
+      // Nothing to suspend, so nothing moves. This is the other half of what
+      // the default buys: a transition no longer rebuilds every surface in the
+      // app twice on its way past.
+      expect(tester.getRect(find.text('body')), before);
+      expect(find.byType(BackdropFilter), findsNothing);
     });
   });
 
@@ -100,7 +155,7 @@ void main() {
               child: SizedBox(
                 width: 300,
                 height: 100,
-                child: LiquidGlass(child: Text('body')),
+                child: LiquidGlass(lens: true, child: Text('body')),
               ),
             ),
           ),

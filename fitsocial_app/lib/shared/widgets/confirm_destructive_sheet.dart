@@ -63,6 +63,8 @@ class _ConfirmSheet extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: LiquidGlass(
+          // Over the screen it was opened from, so there is real content to bend.
+          lens: true,
           // Painted by the lens rather than by a fill of its own: a pane
           // over the app backdrop, like every other card.
           borderRadius: BorderRadius.circular(28),

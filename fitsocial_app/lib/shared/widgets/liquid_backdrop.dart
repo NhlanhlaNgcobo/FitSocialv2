@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_palette.dart';
+import 'glass_motion.dart';
 
 /// The ground the glass looks through.
 ///
@@ -48,23 +49,62 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
     duration: LiquidBackdrop.period,
   );
 
+  /// Whether the system has been asked for less motion, read once per
+  /// dependency change rather than on every frame of a transition.
+  bool _stilled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    GlassMotion.settled.addListener(_onMotion);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Someone who has asked the system for less motion gets a still backdrop
     // rather than a slower one. The colour is the point; the drift is a bonus.
-    if (MediaQuery.disableAnimationsOf(context)) {
+    _stilled = MediaQuery.disableAnimationsOf(context);
+    if (_stilled) {
       _controller.stop();
       _controller.value = 0.18;
-    } else if (!_controller.isAnimating) {
-      _controller.repeat();
+    } else if (GlassMotion.settled.value) {
+      // Only if nothing is moving. A dependency change landing mid-transition
+      // -- a keyboard, a rotation -- would otherwise start the drift back up
+      // underneath the very frames it is meant to stay out of.
+      _resume();
     }
   }
 
   @override
   void dispose() {
+    GlassMotion.settled.removeListener(_onMotion);
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Holds the ground still for the length of a screen change.
+  ///
+  /// This is the widest surface in the app and it sits under every other one,
+  /// so a single tick of the drift is a full-screen repaint — and one the
+  /// bottom nav's lens then has to re-read, since its backdrop just moved.
+  /// Spending that on a screen change is the worst possible moment for it: it
+  /// lands on exactly the frames already carrying two branches at once.
+  ///
+  /// And there is nothing to lose. A transition is three hundred milliseconds
+  /// of two screens sliding over the ground; nobody has ever seen a pool of
+  /// colour creep a few pixels underneath that. The drift picks up where it
+  /// left off the moment the app stands still.
+  void _onMotion() {
+    if (!mounted || _stilled) return;
+    GlassMotion.settled.value ? _resume() : _controller.stop();
+  }
+
+  void _resume() {
+    if (_controller.isAnimating) return;
+    // From where it stopped, not from zero: restarting the cycle would make the
+    // ground jump at the end of every navigation.
+    _controller.repeat(min: 0, max: 1, period: LiquidBackdrop.period);
   }
 
   @override
@@ -158,12 +198,32 @@ class _BackdropPainter extends CustomPainter {
       final radius = shortest * pool.radius;
       final colour = hues[i].withValues(alpha: _strength);
 
-      canvas.drawCircle(
-        centre,
-        radius,
-        Paint()
+      // Drawn at the origin and moved by the canvas rather than built around a
+      // centre that shifts every tick. A gradient anchored to [centre] is a
+      // different shader on every frame of the drift and has to be compiled and
+      // uploaded as one; anchored at zero it is the same three shaders for the
+      // life of the app, and the movement costs a translate.
+      canvas.save();
+      canvas.translate(centre.dx, centre.dy);
+      canvas.drawCircle(Offset.zero, radius, _paintFor(colour, radius));
+      canvas.restore();
+    }
+  }
+
+  /// The three pool shaders, kept between frames.
+  ///
+  /// Keyed by what actually defines one — its colour and its radius. Both are
+  /// fixed by the theme and the screen, so this fills up once and is read from
+  /// thereafter; a rotation or a theme change adds another few entries and that
+  /// is the whole of its growth.
+  static final Map<(Color, double), Paint> _paints = {};
+
+  static Paint _paintFor(Color colour, double radius) =>
+      _paints.putIfAbsent(
+        (colour, radius),
+        () => Paint()
           ..shader = ui.Gradient.radial(
-            centre,
+            Offset.zero,
             radius,
             [colour, colour.withValues(alpha: 0)],
             // Held near full strength through the middle so each pool has a
@@ -171,8 +231,6 @@ class _BackdropPainter extends CustomPainter {
             const [0.0, 1.0],
           ),
       );
-    }
-  }
 
   @override
   bool shouldRepaint(_BackdropPainter old) =>

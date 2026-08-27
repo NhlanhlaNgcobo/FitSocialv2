@@ -102,6 +102,8 @@ class _TagPeopleSheetState extends ConsumerState<_TagPeopleSheet> {
         bottom: math.max(media.viewInsets.bottom, media.viewPadding.bottom),
       ),
       child: LiquidGlass(
+        // Over the screen it was opened from, so there is real content to bend.
+        lens: true,
         // A sheet always has a page behind it, which makes it the
         // one surface guaranteed something worth bending.
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),

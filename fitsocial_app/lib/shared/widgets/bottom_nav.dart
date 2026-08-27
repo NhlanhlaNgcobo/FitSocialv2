@@ -223,6 +223,9 @@ class _FitSocialBottomNavState extends State<FitSocialBottomNav>
           edge: FitSocialBottomNav._bendDepth,
           // Already clipped, just above.
           clip: false,
+          // The surface the whole effect exists for, and the reason the cost is
+          // worth paying exactly here: the feed really is moving behind it.
+          lens: true,
           child: SizedBox(
             height: FitSocialBottomNav._barHeight,
             child: _NavRow(

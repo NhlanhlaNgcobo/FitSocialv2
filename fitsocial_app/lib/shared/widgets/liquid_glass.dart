@@ -84,6 +84,7 @@ class LiquidGlass extends StatefulWidget {
     this.light = const Offset(-0.55, -0.78),
     this.clip = true,
     this.tintScale = 1,
+    this.lens = false,
     super.key,
   });
 
@@ -121,6 +122,34 @@ class LiquidGlass extends StatefulWidget {
   /// theme is where this bites: its fill is 78% white, so a bloom beneath it
   /// arrives at roughly a fifth of the weight it has on dark.
   final double tintScale;
+
+  /// Whether this pane actually reads the backdrop.
+  ///
+  /// Off by default, and that default is the difference between an app that
+  /// holds sixty frames and one that does not.
+  ///
+  /// A [BackdropFilter] is not a decoration with a price — it is a second
+  /// render pass. It breaks the frame in two, reads the finished pixels back,
+  /// runs `liquid_glass.frag` and a gaussian over them, and paints the result.
+  /// Two panes cost two passes; a feed of thirty cards costs thirty. Nothing
+  /// batches them, because each one has to sample everything painted before it.
+  ///
+  /// What the app gets back for that is *displacement* — the backdrop bent
+  /// around the rim — and displacement is only visible where the backdrop has
+  /// detail to displace. Over [LiquidBackdrop], three soft radial pools, it has
+  /// none: bending a smooth gradient yields the same smooth gradient. Every
+  /// ordinary card in this app was paying for a lens aimed at a blank wall.
+  ///
+  /// So the pane defaults to painting its material by hand — the tint, the
+  /// sheen and the rim, exactly what [_held] has always drawn while a screen is
+  /// changing. That material is not a downgrade nobody has seen; it is the one
+  /// on screen during every transition the app has ever run.
+  ///
+  /// Turn this on for the surfaces that genuinely have something behind them:
+  /// the bottom nav, fixed while the feed scrolls under it, and a modal sheet
+  /// over the screen it came from. There the bend is the whole point, and there
+  /// is only ever one of them on screen at a time.
+  final bool lens;
 
   /// A gentle softening applied *under* the refraction. Liquid glass wants
   /// almost none — enough to take the aliasing off displaced text, not enough
@@ -174,6 +203,12 @@ class _LiquidGlassState extends State<LiquidGlass> {
   @override
   void initState() {
     super.initState();
+    // A painted pane has nothing to warm up and nothing to hold still for: it
+    // does not read the backdrop, so a screen change cannot spoil it. Staying
+    // off both notifiers is most of the point -- [GlassMotion] would otherwise
+    // rebuild every surface in the app twice per navigation for no visible
+    // change.
+    if (!widget.lens) return;
     LiquidGlassProgram.ready.addListener(_onProgramReady);
     GlassMotion.settled.addListener(_onMotion);
     LiquidGlassProgram.warmUp();
@@ -188,11 +223,27 @@ class _LiquidGlassState extends State<LiquidGlass> {
   @override
   void didUpdateWidget(LiquidGlass oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Every call site passes a constant, so this is defensive rather than
+    // load-bearing -- but a pane that became a lens without subscribing would
+    // simply never draw one, which is a bug nobody would think to look for.
+    if (widget.lens != oldWidget.lens) {
+      if (widget.lens) {
+        LiquidGlassProgram.ready.addListener(_onProgramReady);
+        GlassMotion.settled.addListener(_onMotion);
+        LiquidGlassProgram.warmUp();
+        _settled = GlassMotion.settled.value;
+      } else {
+        LiquidGlassProgram.ready.removeListener(_onProgramReady);
+        GlassMotion.settled.removeListener(_onMotion);
+      }
+    }
     _sync();
   }
 
   @override
   void dispose() {
+    // Unconditional: removing a listener that was never added is a no-op, and
+    // this way a pane that changed its mind about being a lens still lets go.
     LiquidGlassProgram.ready.removeListener(_onProgramReady);
     GlassMotion.settled.removeListener(_onMotion);
     _shader?.dispose();
@@ -213,6 +264,10 @@ class _LiquidGlassState extends State<LiquidGlass> {
   }
 
   void _sync() {
+    // Never allocate a `FragmentShader` for a pane that will not sample
+    // anything. One per instance is cheap; one per card in a feed is not.
+    if (!widget.lens) return;
+
     final program = LiquidGlassProgram.program;
     if (program == null) return;
 
@@ -312,6 +367,13 @@ class _LiquidGlassState extends State<LiquidGlass> {
     final filter = _filter;
     final shape = widget.borderRadius;
     final palette = context.palette;
+
+    // The ordinary case: the material, painted. No second render pass, no
+    // backdrop read, nothing for a transition to spoil -- see [LiquidGlass.lens].
+    if (!widget.lens) {
+      return _shaped(_held(context, palette, shape, frosted: false), shape,
+          palette);
+    }
 
     // A screen change is in flight. Nothing that reads the backdrop can work
     // from inside a transition's buffer, so the pane drops its filter and

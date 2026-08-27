@@ -690,6 +690,8 @@ class PostMenuButton extends ConsumerWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         builder: (sheetContext) => LiquidGlass(
+          // Over the screen it was opened from, so there is real content to bend.
+          lens: true,
               // A sheet always has a page behind it, which makes it the one
               // surface in the app guaranteed something worth bending.
               borderRadius:

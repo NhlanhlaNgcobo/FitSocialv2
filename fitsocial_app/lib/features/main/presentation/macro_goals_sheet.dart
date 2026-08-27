@@ -79,6 +79,8 @@ class _MacroGoalsSheetState extends State<_MacroGoalsSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: LiquidGlass(
+        // Over the screen it was opened from, so there is real content to bend.
+        lens: true,
         // A sheet always has a page behind it, which makes it the one
         // surface in the app guaranteed something worth bending.
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),

@@ -120,6 +120,8 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
         child: SafeArea(
           top: false,
           child: LiquidGlass(
+            // Over the screen it was opened from, so there is real content to bend.
+            lens: true,
             // A sheet always has a page behind it, which makes it the one
             // surface in the app guaranteed something worth bending.
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),

@@ -24,6 +24,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final posts = ref.watch(feedPostsProvider);
+    final rows = _rows(posts, ref);
 
     return Scaffold(
       appBar: AppBar(
@@ -49,7 +50,7 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: ListView(
+      body: ListView.builder(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.md,
           AppSpacing.sm,
@@ -58,54 +59,64 @@ class HomeScreen extends ConsumerWidget {
           // sitting below it.
           AppSpacing.md + FitSocialBottomNav.clearance(context),
         ),
-        children: [
-          const PulseTray(),
-          const SizedBox(height: AppSpacing.sm),
-          // The current Mon-Sun week, pinned: the feed is somewhere to glance
-          // at the streak, not somewhere to change the window.
-          const ActivityGridCard(fixedRange: ActivityRange.week),
-          const SizedBox(height: AppSpacing.sm),
-          posts.when(
-            data: (feed) => _buildFeed(feed, ref),
-            loading: () => const _SectionPlaceholder(label: 'Loading feed...'),
-            error: (_, __) =>
-                const _SectionPlaceholder(label: 'Feed unavailable'),
-          ),
-        ],
+        itemCount: rows.length,
+        itemBuilder: (context, index) => rows[index],
       ),
     );
   }
 
-  Widget _buildFeed(HomeFeed feed, WidgetRef ref) {
-    if (feed.isEmpty) return const _NothingPostedYet();
+  /// Every row of the page, flat.
+  ///
+  /// Flat is the whole point. A sliver culls at the granularity of its own
+  /// children, and nothing below one: the feed used to arrive as a single
+  /// [Column] holding every post, which made it *one* child, taller than the
+  /// screen, laid out and painted whole on every frame. Thirty posts scrolled
+  /// like thirty posts even though three were visible.
+  ///
+  /// Handed the rows separately, the list builds and paints the handful in
+  /// view and leaves the rest as data.
+  List<Widget> _rows(AsyncValue<HomeFeed> posts, WidgetRef ref) {
+    return [
+      const PulseTray(),
+      const SizedBox(height: AppSpacing.sm),
+      // The current Mon-Sun week, pinned: the feed is somewhere to glance
+      // at the streak, not somewhere to change the window.
+      const ActivityGridCard(fixedRange: ActivityRange.week),
+      const SizedBox(height: AppSpacing.sm),
+      ...posts.when(
+        data: (feed) => _buildFeed(feed, ref),
+        loading: () => const [_SectionPlaceholder(label: 'Loading feed...')],
+        error: (_, __) => const [_SectionPlaceholder(label: 'Feed unavailable')],
+      ),
+    ];
+  }
+
+  List<Widget> _buildFeed(HomeFeed feed, WidgetRef ref) {
+    if (feed.isEmpty) return const [_NothingPostedYet()];
 
     // Blended: the people they follow first, then a line, then the top-up.
     // The line is not decoration — without it a stranger's post reads as
     // somebody they followed and forgot about.
     if (feed.source == FeedSource.blended) {
-      return Column(
-        children: [
-          ..._buildPosts(feed.followedPosts, ref),
-          const SizedBox(height: AppSpacing.sm),
-          const _SuggestedHeader(isTopUp: true),
-          const SizedBox(height: AppSpacing.sm),
-          ..._buildPosts(feed.suggestedPosts, ref),
-        ],
-      );
+      return [
+        ..._buildPosts(feed.followedPosts, ref),
+        const SizedBox(height: AppSpacing.sm),
+        const _SuggestedHeader(isTopUp: true),
+        const SizedBox(height: AppSpacing.sm),
+        ..._buildPosts(feed.suggestedPosts, ref),
+      ];
     }
 
-    return Column(
-      children: [
-        // Said out loud when these are not the people you follow, so a quiet
-        // feed is never mistaken for a quiet community — or the other way
-        // round.
-        if (feed.source == FeedSource.suggested) ...[
-          const _SuggestedHeader(),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-        ..._buildPosts(feed.posts, ref),
+    return [
+      // Said out loud when these are not the people you follow, so a quiet
+      // feed is never mistaken for a quiet community — or the other way
+      // round.
+      if (feed.source == FeedSource.suggested) ...[
+        const _SuggestedHeader(),
+        const SizedBox(height: AppSpacing.sm),
       ],
-    );
+      ..._buildPosts(feed.posts, ref),
+    ];
   }
 
   List<Widget> _buildPosts(List<FeedPost> posts, WidgetRef ref) {
