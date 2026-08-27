@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fitsocial_app/features/main/data/activity_session_parsing.dart';
+import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/main/domain/progress_models.dart';
 
 void main() {
@@ -311,6 +312,61 @@ void main() {
       );
 
       expect(merged.map((s) => s.id), ['b', 'a', 'c']);
+    });
+  });
+
+  // Heart rate arrived long after these collections did, so every run already
+  // stored carries no such field at all. Reading one back has to land on "no
+  // strap" rather than on a throw — the failure mode this file exists to
+  // prevent, where a single unreadable document blanked the whole Progress tab.
+  group('heart-rate summaries out of stored documents', () {
+    test('a run with no heart-rate field reads as no heart rate', () {
+      expect(HeartRateSummary.fromMap(null), isNull);
+    });
+
+    test('a value of the wrong shape reads as no heart rate', () {
+      expect(HeartRateSummary.fromMap('142 bpm'), isNull);
+      expect(HeartRateSummary.fromMap(const [142]), isNull);
+      expect(HeartRateSummary.fromMap(142), isNull);
+    });
+
+    test('a zero average is the absence of a reading, not a reading', () {
+      expect(
+        HeartRateSummary.fromMap(const {'avgBpm': 0, 'maxBpm': 0}),
+        isNull,
+      );
+    });
+
+    test('a missing maximum reads as the average rather than throwing', () {
+      final summary = HeartRateSummary.fromMap(const {'avgBpm': 142});
+      expect(summary, isNotNull);
+      expect(summary!.averageBpm, 142);
+      expect(summary.maxBpm, 142);
+      expect(summary.coverage, Duration.zero);
+    });
+
+    test('a maximum below the average is corrupt, so the average wins', () {
+      final summary =
+          HeartRateSummary.fromMap(const {'avgBpm': 150, 'maxBpm': 90});
+      expect(summary!.maxBpm, 150);
+    });
+
+    test('round-trips through the map it is stored as', () {
+      const written = HeartRateSummary(
+        averageBpm: 148,
+        maxBpm: 171,
+        coverage: Duration(minutes: 31),
+      );
+
+      final read = HeartRateSummary.fromMap(written.toMap());
+      expect(read!.averageBpm, 148);
+      expect(read.maxBpm, 171);
+      expect(read.coverage, const Duration(minutes: 31));
+    });
+
+    test('the empty summary reports no data, which is what gates the write',
+        () {
+      expect(HeartRateSummary.none.hasData, isFalse);
     });
   });
 }

@@ -21,6 +21,7 @@ class ActivitySession {
     this.exerciseCount,
     this.sharedToFeed = false,
     this.postId,
+    this.heartRate,
   });
 
   final String id;
@@ -54,6 +55,12 @@ class ActivitySession {
   /// sessions and for anything logged before the id was recorded — in both
   /// cases there is no post to open.
   final String? postId;
+
+  /// Heart rate across the session, when a Bluetooth strap recorded it. Null
+  /// for every session logged before straps were recorded, for anyone training
+  /// without one, and for workouts — which are filled in from a form after the
+  /// fact and so have no window to sample across.
+  final HeartRateSummary? heartRate;
 
   /// Local midnight of the day this session belongs to.
   DateTime get day => ActivityCalendar.dateOnly(startedAt);
