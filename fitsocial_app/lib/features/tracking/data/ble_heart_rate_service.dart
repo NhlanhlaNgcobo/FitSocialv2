@@ -41,23 +41,85 @@ class BleHeartRateService {
 
   Future<bool> isSupported() => FlutterBluePlus.isSupported;
 
-  /// Scans for devices advertising the Heart Rate service.
-  /// Emits the accumulated result list as devices are found.
-  Stream<List<HeartRateDevice>> scan(
-      {Duration timeout = const Duration(seconds: 10)}) async* {
+  /// Scans for devices advertising the Heart Rate service, emitting the
+  /// accumulated results as they are found and closing when the scan stops.
+  ///
+  /// Completion is driven by [FlutterBluePlus.isScanning] rather than by the
+  /// result stream. A scan that times out having found nothing emits no
+  /// results at all — so a loop waiting on `scanResults` for its exit signal
+  /// waits forever, which is what used to leave the button stuck on
+  /// "Scanning…" with no list and no message. The scanning flag always flips.
+  Stream<List<HeartRateDevice>> scan({
+    Duration timeout = const Duration(seconds: 10),
+  }) {
     final found = <String, HeartRateDevice>{};
-    await FlutterBluePlus.startScan(
-      withServices: [_heartRateService],
-      timeout: timeout,
-    );
-    await for (final results in FlutterBluePlus.scanResults) {
-      for (final r in results) {
-        found[r.device.remoteId.str] =
-            HeartRateDevice(device: r.device, rssi: r.rssi);
-      }
-      yield found.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
-      if (!FlutterBluePlus.isScanningNow) break;
+    final controller = StreamController<List<HeartRateDevice>>();
+    StreamSubscription<List<ScanResult>>? resultsSub;
+    StreamSubscription<bool>? scanningSub;
+
+    Future<void> release() async {
+      await resultsSub?.cancel();
+      await scanningSub?.cancel();
+      resultsSub = null;
+      scanningSub = null;
     }
+
+    Future<void> finish() async {
+      await release();
+      if (!controller.isClosed) await controller.close();
+    }
+
+    controller.onListen = () async {
+      try {
+        await FlutterBluePlus.startScan(
+          withServices: [_heartRateService],
+          timeout: timeout,
+        );
+      } catch (error, stack) {
+        if (!controller.isClosed) controller.addError(error, stack);
+        await finish();
+        return;
+      }
+
+      // Subscribed only once the scan is up: both of these re-emit their
+      // latest value on listen, and beforehand that value is "not scanning",
+      // which would close the stream the moment anybody listened to it.
+      if (!FlutterBluePlus.isScanningNow) {
+        await finish();
+        return;
+      }
+
+      scanningSub =
+          FlutterBluePlus.isScanning.where((scanning) => !scanning).listen(
+                (_) => finish(),
+              );
+
+      resultsSub = FlutterBluePlus.onScanResults.listen(
+        (results) {
+          for (final result in results) {
+            found[result.device.remoteId.str] =
+                HeartRateDevice(device: result.device, rssi: result.rssi);
+          }
+          if (controller.isClosed) return;
+          controller.add(
+            found.values.toList()..sort((a, b) => b.rssi.compareTo(a.rssi)),
+          );
+        },
+        onError: (Object error, StackTrace stack) {
+          if (!controller.isClosed) controller.addError(error, stack);
+          finish();
+        },
+      );
+    };
+
+    // Backing out of the screen cancels the subscription, and without this the
+    // radio kept scanning until its own timeout fired.
+    controller.onCancel = () async {
+      await release();
+      await stopScan();
+    };
+
+    return controller.stream;
   }
 
   Future<void> stopScan() => FlutterBluePlus.stopScan();
@@ -81,6 +143,11 @@ class BleHeartRateService {
         return;
       }
     }
+
+    // The link is already open by this point, so throwing straight out of here
+    // left a connected device with nothing listening to it — and the next
+    // connect attempt had to fight that stale link.
+    await disconnect();
     throw Exception('This device does not expose heart-rate measurements.');
   }
 
