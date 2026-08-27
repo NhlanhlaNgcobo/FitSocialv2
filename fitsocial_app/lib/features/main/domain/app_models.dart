@@ -513,6 +513,61 @@ class RoutePoint {
   }
 }
 
+/// Heart rate across one session, as recorded from a Bluetooth strap.
+///
+/// Free of any `flutter_blue_plus` types for the same reason [RoutePoint] is
+/// free of the map plugin's: this is the shape that crosses the domain and
+/// Firestore boundaries, and where it came from is a tracking concern.
+class HeartRateSummary {
+  const HeartRateSummary({
+    required this.averageBpm,
+    required this.maxBpm,
+    required this.coverage,
+  });
+
+  static const none =
+      HeartRateSummary(averageBpm: 0, maxBpm: 0, coverage: Duration.zero);
+
+  /// Mean BPM over the time the strap was actually reporting.
+  final int averageBpm;
+
+  final int maxBpm;
+
+  /// How much of the session the strap actually covered. A run can be
+  /// forty minutes long and carry four minutes of coverage — the strap slipped,
+  /// the phone locked, the battery went. Without this an average taken from a
+  /// handful of seconds is indistinguishable from one taken from the whole run.
+  final Duration coverage;
+
+  bool get hasData => averageBpm > 0;
+
+  Map<String, dynamic> toMap() => {
+        'avgBpm': averageBpm,
+        'maxBpm': maxBpm,
+        'coverageSeconds': coverage.inSeconds,
+      };
+
+  /// Returns null when [value] isn't a usable summary, so a run logged before
+  /// straps were recorded — or one with a garbled field — reads as "no heart
+  /// rate" instead of failing the document. Same contract as
+  /// [RoutePoint.fromMap], and for the same hard-won reason.
+  static HeartRateSummary? fromMap(Object? value) {
+    if (value is! Map) return null;
+    final average = (value['avgBpm'] as num?)?.round();
+    // A zero average is not a reading, it is the absence of one.
+    if (average == null || average <= 0) return null;
+    final max = (value['maxBpm'] as num?)?.round() ?? 0;
+    final seconds = (value['coverageSeconds'] as num?)?.round() ?? 0;
+    return HeartRateSummary(
+      averageBpm: average,
+      // A max below the average is a corrupt pair; the average is the figure
+      // with more evidence behind it, so it wins.
+      maxBpm: max < average ? average : max,
+      coverage: Duration(seconds: seconds < 0 ? 0 : seconds),
+    );
+  }
+}
+
 class RunLogDraft {
   const RunLogDraft({
     required this.distanceKm,
@@ -522,6 +577,7 @@ class RunLogDraft {
     this.routePoints = const [],
     this.startedAt,
     this.backgroundImagePath,
+    this.heartRate,
   });
 
   final double distanceKm;
@@ -541,6 +597,12 @@ class RunLogDraft {
   /// every run looked like before this existed. Same contract as
   /// [WorkoutLogDraft.backgroundImagePath].
   final String? backgroundImagePath;
+
+  /// Heart rate across the run, when a Bluetooth strap was connected for it.
+  /// Null for every manually entered run and for anyone running without a
+  /// strap, which the save path must treat as "nothing to record" rather than
+  /// as a zero.
+  final HeartRateSummary? heartRate;
 }
 
 /// Where a food item's macros came from.
