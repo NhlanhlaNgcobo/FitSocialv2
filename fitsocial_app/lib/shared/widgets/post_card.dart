@@ -21,7 +21,6 @@ import 'reaction_bar.dart';
 import 'run_summary_card.dart';
 import 'share_sheet.dart';
 import 'workout_summary_card.dart';
-import '../../shared/widgets/liquid_glass.dart';
 
 class PostCard extends StatelessWidget {
   const PostCard({

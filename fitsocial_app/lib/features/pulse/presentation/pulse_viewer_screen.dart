@@ -117,8 +117,9 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
   PulseSegment? get _currentSegment {
     final entry = _currentEntry;
     if (entry == null) return null;
-    if (_segmentIndex < 0 || _segmentIndex >= entry.segments.length)
+    if (_segmentIndex < 0 || _segmentIndex >= entry.segments.length) {
       return null;
+    }
     return entry.segments[_segmentIndex];
   }
 

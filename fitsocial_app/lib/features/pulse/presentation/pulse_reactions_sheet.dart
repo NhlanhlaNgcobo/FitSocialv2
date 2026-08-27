@@ -35,7 +35,6 @@ class _FitReactionsSheetState extends ConsumerState<FitReactionsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
     final reactions = ref.watch(pulseReactionsProvider(widget.pulseId));
 
     return DraggableScrollableSheet(
