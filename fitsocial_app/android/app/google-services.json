@@ -46,16 +46,24 @@
           }
         },
         {
-          "client_id": "801328750075-4op9ti8k5ijei6p529vmbifqs44i2eiu.apps.googleusercontent.com",
-          "client_type": 3
-        },
-        {
           "client_id": "801328750075-j6rtf4avgf9p3vfulshcl65o4k378fls.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.fitsocial.fitsocial_app",
             "certificate_hash": "28ed3801b5b56b546b0880f0981d1279c6a07cce"
           }
+        },
+        {
+          "client_id": "801328750075-rt6fvegqhg7m7gh3ghqme52k2q3qseq3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitsocial.fitsocial_app",
+            "certificate_hash": "37b4d7c37b5982104e118f60a05a6012c8f81075"
+          }
+        },
+        {
+          "client_id": "801328750075-4op9ti8k5ijei6p529vmbifqs44i2eiu.apps.googleusercontent.com",
+          "client_type": 3
         }
       ],
       "api_key": [
