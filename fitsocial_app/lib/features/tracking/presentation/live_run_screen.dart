@@ -58,6 +58,9 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     setState(() => _errorMessage = null);
     try {
       await ref.read(liveRunServiceProvider).start();
+      ref
+          .read(heartRateRecorderProvider)
+          .start(ref.read(bleHeartRateServiceProvider).heartRateStream);
     } on LocationPermissionException catch (e) {
       setState(() => _errorMessage = e.message);
     } catch (e) {
@@ -68,6 +71,11 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
   Future<void> _stopAndSave() async {
     final service = ref.read(liveRunServiceProvider);
     final result = service.stop();
+    // Stopped here rather than after the finish sheet: that sheet stays open
+    // for as long as the runner spends choosing a backdrop, and the strap keeps
+    // reporting the whole time. Recording through it would fold the cool-down
+    // into the run's average.
+    final heartRate = ref.read(heartRateRecorderProvider).stop();
 
     if (result.distanceKm < 0.05) {
       setState(() {
@@ -107,6 +115,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
               startedAt: result.startedAt,
               routePoints: route,
               backgroundImagePath: choice.backgroundImagePath,
+              heartRate: heartRate.hasData ? heartRate : null,
             ),
           );
       if (!mounted) return;
@@ -132,6 +141,20 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     final palette = context.palette;
     final runState =
         ref.watch(liveRunStateProvider).valueOrNull ?? LiveRunState.idle;
+
+    // Driven off the run state rather than the pause button so the GPS
+    // auto-pause counts too — it is decided inside the service, and a runner
+    // waiting at a crossing should not have the wait averaged into their run.
+    ref.listen(liveRunStateProvider, (_, next) {
+      final state = next.valueOrNull;
+      if (state == null) return;
+      final recorder = ref.read(heartRateRecorderProvider);
+      if (state.isTracking && !state.isPaused && !state.isAutoPaused) {
+        recorder.resume();
+      } else {
+        recorder.pause();
+      }
+    });
     final liveBpm = ref.watch(liveHeartRateProvider).valueOrNull;
     // Notification access counts as much as a linked account here: both give
     // the mini player something to drive.

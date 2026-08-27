@@ -58,10 +58,14 @@ class HeartRateRecorder {
   /// The summary as it stands, including the interval still open.
   HeartRateSummary get summary {
     final covered = _covered + _openInterval(_now());
-    if (covered <= Duration.zero) return HeartRateSummary.none;
+    // Microseconds throughout: readings that land less than a millisecond apart
+    // are still real coverage, and rounding them to zero here would divide by
+    // it. Straps never report that fast, but stop() landing in the same
+    // millisecond as the last reading does.
+    if (covered.inMicroseconds <= 0) return HeartRateSummary.none;
     final weighted = _weightedSum + _openWeight(_now());
     return HeartRateSummary(
-      averageBpm: (weighted / covered.inMilliseconds * 1000).round(),
+      averageBpm: (weighted / covered.inMicroseconds * 1000000).round(),
       maxBpm: _maxBpm,
       coverage: covered,
     );
@@ -127,7 +131,7 @@ class HeartRateRecorder {
   void _close(DateTime at) {
     final interval = _openInterval(at);
     if (interval > Duration.zero) {
-      _weightedSum += _openBpm! * interval.inMilliseconds / 1000;
+      _weightedSum += _openBpm! * interval.inMicroseconds / 1000000;
       _covered += interval;
     }
     _openBpm = null;
@@ -145,7 +149,7 @@ class HeartRateRecorder {
   double _openWeight(DateTime at) {
     final bpm = _openBpm;
     if (bpm == null) return 0;
-    return bpm * _openInterval(at).inMilliseconds / 1000;
+    return bpm * _openInterval(at).inMicroseconds / 1000000;
   }
 
   void _reset() {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/ble_heart_rate_service.dart';
 import '../data/health_service.dart';
+import '../data/heart_rate_recorder.dart';
 import '../data/live_run_service.dart';
 import '../data/step_tracker_service.dart';
 import '../data/treadmill_run_service.dart';
@@ -64,6 +65,16 @@ final bleHeartRateServiceProvider = Provider<BleHeartRateService>((ref) {
 /// Live BPM from the connected BLE heart-rate device.
 final liveHeartRateProvider = StreamProvider<int>((ref) {
   return ref.watch(bleHeartRateServiceProvider).heartRateStream;
+});
+
+/// Accumulates a run's heart rate while it is being tracked.
+///
+/// Not tied to either run service: both drive it, and a run that never sees a
+/// strap simply finishes with nothing recorded.
+final heartRateRecorderProvider = Provider<HeartRateRecorder>((ref) {
+  final recorder = HeartRateRecorder();
+  ref.onDispose(recorder.dispose);
+  return recorder;
 });
 
 /// Live session steps from the phone's hardware step counter.

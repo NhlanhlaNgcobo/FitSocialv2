@@ -73,6 +73,9 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
   void _start() {
     setState(() => _errorMessage = null);
     ref.read(treadmillRunServiceProvider).start();
+    ref
+        .read(heartRateRecorderProvider)
+        .start(ref.read(bleHeartRateServiceProvider).heartRateStream);
     // start() resets the run, and with it the distance the field is showing.
     _distanceController.clear();
   }
@@ -111,6 +114,9 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     }
 
     final result = service.stop();
+    // Stopped before the finish sheet opens, for the same reason the GPS screen
+    // does it here: the sheet waits on the runner and the strap does not.
+    final heartRate = ref.read(heartRateRecorderProvider).stop();
     final distanceKm = double.parse(result.distanceKm.toStringAsFixed(2));
 
     // Every exit from the sheet saves — the run is over by the time it opens.
@@ -136,6 +142,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
               startedAt: result.startedAt,
               // No trace to record: the run happened on the spot.
               backgroundImagePath: choice.backgroundImagePath,
+              heartRate: heartRate.hasData ? heartRate : null,
             ),
           );
       if (!mounted) return;
@@ -161,6 +168,19 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     final palette = context.palette;
     final runState = ref.watch(treadmillRunStateProvider).valueOrNull ??
         TreadmillRunState.idle;
+
+    // A treadmill run has no auto-pause, but the recorder is driven from the
+    // state here too so both screens read the same way.
+    ref.listen(treadmillRunStateProvider, (_, next) {
+      final state = next.valueOrNull;
+      if (state == null) return;
+      final recorder = ref.read(heartRateRecorderProvider);
+      if (state.isTracking && !state.isPaused) {
+        recorder.resume();
+      } else {
+        recorder.pause();
+      }
+    });
     final liveBpm = ref.watch(liveHeartRateProvider).valueOrNull;
     // Notification access counts as much as a linked account here: both give
     // the mini player something to drive.

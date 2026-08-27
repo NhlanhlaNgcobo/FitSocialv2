@@ -1,8 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:go_router/go_router.dart';
+
 import 'package:fitsocial_app/app/theme/app_theme.dart';
+import 'package:fitsocial_app/features/main/application/activity_actions.dart';
+import 'package:fitsocial_app/features/main/domain/app_models.dart';
+import 'package:fitsocial_app/features/tracking/data/ble_heart_rate_service.dart';
 import 'package:fitsocial_app/features/music/application/music_presence_provider.dart';
 import 'package:fitsocial_app/features/music/application/music_providers.dart';
 import 'package:fitsocial_app/features/music/domain/music_presence.dart';
@@ -42,6 +49,51 @@ void main() {
         child: MaterialApp(
           theme: AppTheme.darkTheme,
           home: const TreadmillRunScreen(),
+        ),
+      ),
+    );
+    await tester.pump();
+  }
+
+  /// The screen wired for a run that is actually saved: a router to land on
+  /// afterwards, a strap the test feeds, and a stand-in for the save itself.
+  Future<void> pumpSaveableScreen(
+    WidgetTester tester, {
+    required BleHeartRateService strap,
+    required ActivityActions actions,
+  }) async {
+    tester.view.physicalSize = const Size(440, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final router = GoRouter(
+      initialLocation: '/treadmill-run',
+      routes: [
+        GoRoute(
+          path: '/treadmill-run',
+          builder: (_, __) => const TreadmillRunScreen(),
+        ),
+        GoRoute(
+          path: '/home',
+          builder: (_, __) => const Scaffold(body: Text('HOME')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          treadmillRunServiceProvider.overrideWithValue(service),
+          bleHeartRateServiceProvider.overrideWithValue(strap),
+          liveHeartRateProvider.overrideWith((ref) => strap.heartRateStream),
+          activityActionsProvider.overrideWithValue(actions),
+          musicPresenceProvider.overrideWithValue(MusicPresence.none),
+          musicConnectionsProvider.overrideWith(_NoMusic.new),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.darkTheme,
+          routerConfig: router,
         ),
       ),
     );
@@ -143,6 +195,98 @@ void main() {
 
     await finishTicker(tester);
   });
+
+  // The save path, which is the only place a run's heart rate becomes durable.
+  // Driven through the real finish sheet so what is asserted is the draft the
+  // screen actually hands over, not a summary read back off the recorder.
+  testWidgets('a finished run carries the heart rate its strap reported',
+      (tester) async {
+    final strap = _FakeStrap();
+    addTearDown(strap.dispose);
+    final actions = _CapturingActions();
+
+    await pumpSaveableScreen(tester, strap: strap, actions: actions);
+
+    await tester.tap(find.text('Start Treadmill Run'));
+    await tester.pump();
+
+    // A strap reporting steadily across the run.
+    for (var i = 0; i < 30; i++) {
+      strap.report(150);
+      advance(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    await tester.enterText(find.byType(TextField), '5');
+    await tester.pump();
+
+    await tester.tap(find.text('Finish'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Save Run'));
+    await tester.pumpAndSettle();
+
+    final draft = actions.captured;
+    expect(draft, isNotNull);
+    expect(draft!.heartRate, isNotNull);
+    expect(draft.heartRate!.averageBpm, 150);
+    expect(draft.heartRate!.maxBpm, 150);
+  });
+
+  testWidgets('a run with no strap saves with no heart rate at all',
+      (tester) async {
+    final strap = _FakeStrap();
+    addTearDown(strap.dispose);
+    final actions = _CapturingActions();
+
+    await pumpSaveableScreen(tester, strap: strap, actions: actions);
+
+    await tester.tap(find.text('Start Treadmill Run'));
+    await tester.pump();
+    advance(const Duration(minutes: 30));
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.enterText(find.byType(TextField), '5');
+    await tester.pump();
+
+    await tester.tap(find.text('Finish'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Save Run'));
+    await tester.pumpAndSettle();
+
+    // Null rather than a summary of zeros: nothing was measured, and the
+    // document must come out shaped like every run logged before straps.
+    expect(actions.captured, isNotNull);
+    expect(actions.captured!.heartRate, isNull);
+  });
+}
+
+/// A strap whose readings the test supplies directly. Subclassed rather than
+/// mocked, the way this repo fakes everything else.
+class _FakeStrap extends BleHeartRateService {
+  final _controller = StreamController<int>.broadcast();
+
+  @override
+  Stream<int> get heartRateStream => _controller.stream;
+
+  void report(int bpm) => _controller.add(bpm);
+
+  @override
+  void dispose() => _controller.close();
+}
+
+/// Captures the draft the screen saves instead of reaching Firestore.
+class _CapturingActions implements ActivityActions {
+  RunLogDraft? captured;
+
+  @override
+  Future<ActivitySaveResult> saveRun(RunLogDraft draft) async {
+    captured = draft;
+    return const ActivitySaveResult(message: 'Run saved');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
 }
 
 /// A runner with no music account linked — the state the screen shows a connect
