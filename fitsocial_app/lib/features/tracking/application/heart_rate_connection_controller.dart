@@ -134,7 +134,7 @@ class HeartRateConnectionController
         state = state.copyWith(
           status: HeartRateConnectionStatus.disconnected,
           message: state.discovered.isEmpty
-              ? 'No heart-rate straps found. Check the strap is on and worn.'
+              ? 'No heart-rate monitors found. Check yours is on and worn.'
               : null,
         );
       },
@@ -304,7 +304,7 @@ class HeartRateConnectionController
       if (!mounted || _forgotten) return;
       state = state.copyWith(
         status: HeartRateConnectionStatus.failed,
-        message: 'Could not reach the strap. Check it is on and worn.',
+        message: 'Could not reach your heart-rate monitor. Check it is on and worn.',
       );
     } finally {
       _attemptInFlight = false;

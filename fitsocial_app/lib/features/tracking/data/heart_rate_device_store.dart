@@ -42,7 +42,7 @@ class HeartRateDeviceStore {
       final name = await _storage.read(key: _nameKey);
       return RememberedHeartRateDevice(
         remoteId: id,
-        name: (name == null || name.isEmpty) ? 'Heart-rate strap' : name,
+        name: (name == null || name.isEmpty) ? 'Heart-rate monitor' : name,
       );
     } catch (_) {
       return null;
