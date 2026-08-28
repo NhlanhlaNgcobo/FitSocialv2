@@ -36,7 +36,10 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   final FocusNode _captionFocus = FocusNode();
 
   // A Pulse is a camera format first and a writing format second, so the
-  // composer opens on the lens: photo mode, with the camera already coming up.
+  // composer opens on photo mode — but on the capture screen, with the shutter
+  // waiting, not in the camera itself. Throwing the OS camera up on arrival
+  // takes the screen over before anyone has said they want a photo, and
+  // dismissing it reads as leaving the composer rather than landing in it.
   PulseMediaType _mode = PulseMediaType.photo;
   String _gradientKey = PulseGradient.ember.key;
   String? _mediaPath;
@@ -44,17 +47,6 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   double? _videoAspectRatio;
   VideoPlayerController? _videoController;
   bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // After the first frame, so the capture screen is already painted behind
-    // the camera and is what the user lands on if they back out of it.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _pickPhoto(ImageSource.camera);
-    });
-  }
 
   @override
   void dispose() {
@@ -510,8 +502,8 @@ class _ControlScrim extends StatelessWidget {
   }
 }
 
-/// What sits behind the camera when it opens, and what the user lands on if
-/// they back out of it: a shutter, and the gallery as the way round it.
+/// Where the composer opens, and what the user comes back to after cancelling
+/// a shot: a shutter, and the gallery as the way round it.
 ///
 /// Dark rather than gradient-filled on purpose — this is the lens, not a
 /// canvas, and a lit orange backdrop would swallow the orange shutter.
@@ -967,10 +959,15 @@ class _ShareButtonState extends State<_ShareButton> {
               ),
               boxShadow: enabled
                   ? [
+                      // Cast in the deep orange rather than the lit one, and
+                      // kept tight. A wide halo in the bright tone reads as a
+                      // second light source over a coloured canvas and washes
+                      // the bottom of the screen out; this just lifts the
+                      // button off whatever is behind it.
                       BoxShadow(
-                        color: AppColors.orangeBright.withValues(alpha: 0.38),
-                        blurRadius: 22,
-                        offset: const Offset(0, 8),
+                        color: AppColors.orange.withValues(alpha: 0.28),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
                       ),
                     ]
                   : null,
@@ -1042,19 +1039,21 @@ class _ModeSelector extends StatelessWidget {
                   width: tabWidth,
                   top: 0,
                   bottom: 0,
-                  child: DecoratedBox(
+                  child: const DecoratedBox(
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppColors.orangeBright, AppColors.orange],
-                      ),
-                      borderRadius: BorderRadius.circular(14),
+                      // Flat deep orange, no lit gradient and no coloured
+                      // glow. This pill sits directly under the Share button:
+                      // two lit orange slabs stacked over a coloured canvas
+                      // read as one bright blob, and the place switch ends up
+                      // shouting as loudly as the thing it is switching to.
+                      // Deep and unlit, it stays legible and lets Share lead.
+                      color: AppColors.orange,
+                      borderRadius: BorderRadius.all(Radius.circular(14)),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.orangeBright.withValues(alpha: 0.28),
-                          blurRadius: 14,
-                          offset: const Offset(0, 4),
+                          color: Color(0x45000000),
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
                         ),
                       ],
                     ),
