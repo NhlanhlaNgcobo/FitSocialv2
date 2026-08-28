@@ -12,8 +12,9 @@ import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/glass.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
+import '../application/heart_rate_connection_controller.dart';
 import '../application/tracking_providers.dart';
-import '../data/ble_heart_rate_service.dart';
+import '../domain/heart_rate_models.dart';
 import '../data/health_service.dart';
 import '../../music/presentation/music_island_action.dart';
 
@@ -42,12 +43,6 @@ class HealthDashboardScreen extends ConsumerStatefulWidget {
 
 class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
     with SingleTickerProviderStateMixin {
-  List<HeartRateDevice> _devices = [];
-  bool _isScanning = false;
-  bool _isConnecting = false;
-  String? _connectedName;
-  String? _bleMessage;
-  StreamSubscription<List<HeartRateDevice>>? _scanSub;
 
   /// Drives the entrance stagger. Runs once, on open — the sections below are
   /// fed by streams that rebuild constantly, and re-running this on every
@@ -58,55 +53,21 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
   )..forward();
 
   @override
+  void initState() {
+    super.initState();
+    // Reconnects the remembered strap on the way in, rather than at app start:
+    // waking a chest strap's radio because somebody opened the feed would burn
+    // its battery for a screen that never shows a heart rate.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(heartRateConnectionProvider.notifier).restoreIfRemembered();
+    });
+  }
+
+  @override
   void dispose() {
     _entrance.dispose();
-    _scanSub?.cancel();
     super.dispose();
-  }
-
-  Future<void> _scan() async {
-    final ble = ref.read(bleHeartRateServiceProvider);
-    setState(() {
-      _bleMessage = null;
-      _devices = [];
-    });
-
-    if (!await ble.isSupported()) {
-      setState(() => _bleMessage = 'Bluetooth LE is not available here.');
-      return;
-    }
-    if (!await ble.requestPermissions()) {
-      setState(() => _bleMessage = 'Bluetooth permission denied.');
-      return;
-    }
-
-    setState(() => _isScanning = true);
-    _scanSub?.cancel();
-    _scanSub = ble.scan().listen(
-          (devices) => setState(() => _devices = devices),
-          onError: (Object e) => setState(() {
-            _bleMessage = 'Scan failed: $e';
-            _isScanning = false;
-          }),
-          onDone: () => setState(() => _isScanning = false),
-        );
-  }
-
-  Future<void> _connect(HeartRateDevice device) async {
-    final ble = ref.read(bleHeartRateServiceProvider);
-    setState(() {
-      _isConnecting = true;
-      _bleMessage = null;
-    });
-    try {
-      await ble.stopScan();
-      await ble.connect(device.device);
-      setState(() => _connectedName = device.name);
-    } catch (e) {
-      setState(() => _bleMessage = 'Connection failed: $e');
-    } finally {
-      if (mounted) setState(() => _isConnecting = false);
-    }
   }
 
   /// Pull-to-refresh, which is the gesture somebody reaches for when the count
@@ -256,28 +217,49 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
   }
 
   Widget _devicesSection(AppPalette palette, int? liveBpm) {
+    final connection = ref.watch(heartRateConnectionProvider);
+    final controller = ref.read(heartRateConnectionProvider.notifier);
+    final isScanning =
+        connection.status == HeartRateConnectionStatus.scanning;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionHeading('Devices · Bluetooth heart rate'),
-        if (_connectedName case final name?) ...[
-          _ConnectedCard(name: name, bpm: liveBpm),
+        if (connection.deviceName case final name?) ...[
+          _ConnectedCard(
+            name: name,
+            bpm: connection.isLive ? liveBpm : null,
+            status: connection.status,
+            onForget: controller.forget,
+          ),
           const SizedBox(height: AppSpacing.md),
         ],
         PrimaryButton(
-          label: _isScanning ? 'Scanning…' : 'Scan for Devices',
+          label: isScanning ? 'Scanning…' : 'Scan for Devices',
           icon: Icons.bluetooth_searching_rounded,
-          onPressed: _isScanning ? null : _scan,
+          onPressed: isScanning ? null : controller.scan,
         ),
-        if (_bleMessage case final message?) ...[
+        if (connection.status == HeartRateConnectionStatus.failed &&
+            connection.remoteId != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          TextButton.icon(
+            onPressed: controller.retry,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Try reconnecting'),
+          ),
+        ],
+        if (connection.message case final message?) ...[
           const SizedBox(height: AppSpacing.md),
           _NoticeCard(
-            icon: Icons.bluetooth_disabled_rounded,
+            icon: connection.status == HeartRateConnectionStatus.adapterOff
+                ? Icons.bluetooth_disabled_rounded
+                : Icons.error_outline_rounded,
             color: palette.danger,
             text: message,
           ),
         ],
-        if (_devices.isNotEmpty) ...[
+        if (connection.discovered.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
           DarkCard(
             // Rows band together in one card, the way a grouped list is set,
@@ -285,7 +267,7 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
-                for (var i = 0; i < _devices.length; i++) ...[
+                for (var i = 0; i < connection.discovered.length; i++) ...[
                   if (i > 0)
                     Divider(
                       height: 1,
@@ -294,18 +276,20 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
                       color: palette.stroke,
                     ),
                   _DeviceRow(
-                    device: _devices[i],
-                    isConnecting: _isConnecting,
-                    onConnect: () => _connect(_devices[i]),
+                    device: connection.discovered[i],
+                    isConnecting:
+                        connection.status == HeartRateConnectionStatus.connecting,
+                    onConnect: () =>
+                        controller.connect(connection.discovered[i]),
                   ),
                 ],
               ],
             ),
           ),
         ],
-        if (_devices.isEmpty) ...[
+        if (connection.discovered.isEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          if (_isScanning)
+          if (isScanning)
             const _HintPanel(
               icon: Icons.bluetooth_searching_rounded,
               text: 'Looking for nearby heart-rate devices. Make sure yours is '
@@ -988,17 +972,44 @@ class _HintPanel extends StatelessWidget {
   }
 }
 
-/// The strap or watch currently feeding the live BPM tile.
+/// The strap this phone is paired with, and what it is currently doing.
+///
+/// Shows the state rather than just a name: a strap that has dropped looks
+/// exactly like a connected one if all you render is the last reading, which is
+/// the confusion this card exists to end.
 class _ConnectedCard extends StatelessWidget {
-  const _ConnectedCard({required this.name, required this.bpm});
+  const _ConnectedCard({
+    required this.name,
+    required this.bpm,
+    required this.status,
+    required this.onForget,
+  });
 
   final String name;
   final int? bpm;
+  final HeartRateConnectionStatus status;
+  final VoidCallback onForget;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final success = palette.success;
+    final live = status == HeartRateConnectionStatus.connected;
+    final busy = status == HeartRateConnectionStatus.reconnecting ||
+        status == HeartRateConnectionStatus.connecting;
+    final success = live
+        ? palette.success
+        : busy
+            ? palette.accent(_kDeviceHue)
+            : palette.muted;
+
+    final label = switch (status) {
+      HeartRateConnectionStatus.connected => 'CONNECTED',
+      HeartRateConnectionStatus.connecting => 'CONNECTING',
+      HeartRateConnectionStatus.reconnecting => 'RECONNECTING',
+      HeartRateConnectionStatus.adapterOff => 'BLUETOOTH OFF',
+      HeartRateConnectionStatus.failed => 'NOT CONNECTED',
+      _ => 'REMEMBERED',
+    };
 
     return DarkCard(
       child: Row(
@@ -1015,7 +1026,11 @@ class _ConnectedCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(
-              Icons.bluetooth_connected_rounded,
+              live
+                  ? Icons.bluetooth_connected_rounded
+                  : busy
+                      ? Icons.bluetooth_searching_rounded
+                      : Icons.bluetooth_disabled_rounded,
               color: success,
               size: 21,
             ),
@@ -1027,8 +1042,22 @@ class _ConnectedCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _Pulse(
-                      child: Container(
+                    // The dot breathes only while readings are actually
+                    // arriving. A reconnecting strap that still pulsed would be
+                    // making the same promise a frozen BPM used to.
+                    if (live)
+                      _Pulse(
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: success,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
                         width: 7,
                         height: 7,
                         decoration: BoxDecoration(
@@ -1036,10 +1065,9 @@ class _ConnectedCard extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                       ),
-                    ),
                     const SizedBox(width: 6),
                     Text(
-                      'CONNECTED',
+                      label,
                       style: TextStyle(
                         color: success,
                         fontSize: 10.5,
@@ -1090,6 +1118,12 @@ class _ConnectedCard extends StatelessWidget {
               ],
             ),
           ],
+          // Pairing survives a relaunch now, so there has to be a way out of it.
+          IconButton(
+            tooltip: 'Forget this device',
+            onPressed: onForget,
+            icon: Icon(Icons.link_off_rounded, size: 19, color: palette.muted),
+          ),
         ],
       ),
     );
@@ -1104,7 +1138,7 @@ class _DeviceRow extends StatelessWidget {
     required this.onConnect,
   });
 
-  final HeartRateDevice device;
+  final DiscoveredHeartRateDevice device;
   final bool isConnecting;
   final VoidCallback onConnect;
 
@@ -1153,7 +1187,7 @@ class _DeviceRow extends StatelessWidget {
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        '${device.rssi} dBm · ${device.id}',
+                        '${device.rssi} dBm · ${device.remoteId}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: palette.muted, fontSize: 11.5),

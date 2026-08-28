@@ -943,6 +943,7 @@ class FirestoreContentRepository implements ContentRepository {
       distanceKm: distanceKm,
       sharedToFeed: boolFromStoredValue(data['sharedToFeed']),
       postId: _text(data['postId']),
+      heartRate: HeartRateSummary.fromMap(data['heartRate']),
     );
   }
 
@@ -978,6 +979,10 @@ class FirestoreContentRepository implements ContentRepository {
           : null,
       sharedToFeed: boolFromStoredValue(data['sharedToFeed']),
       postId: _text(data['postId']),
+      // Always null today — nothing writes it. Read anyway so a session carries
+      // one meaning whichever collection it came out of, and any display code
+      // is written once.
+      heartRate: HeartRateSummary.fromMap(data['heartRate']),
     );
   }
 
@@ -1410,6 +1415,10 @@ class FirestoreContentRepository implements ContentRepository {
       'pointCount': route.length,
       'sharedToFeed': draft.shareToFeed,
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
+      // Omitted rather than written as zeros when no strap was connected, so a
+      // run without one is shaped exactly like every run logged before straps
+      // were recorded and nothing needs migrating.
+      if (draft.heartRate case final hr? when hr.hasData) 'heartRate': hr.toMap(),
       if (draft.startedAt != null)
         'startedAt': Timestamp.fromDate(draft.startedAt!),
       'createdAt': FieldValue.serverTimestamp(),

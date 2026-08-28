@@ -13,7 +13,9 @@ import '../../music/application/music_providers.dart';
 import '../../music/presentation/connect_music_action.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../music/presentation/music_mini_player.dart';
+import '../application/heart_rate_connection_controller.dart';
 import '../application/tracking_providers.dart';
+import '../domain/heart_rate_models.dart';
 import '../data/treadmill_run_service.dart';
 import 'finish_run_sheet.dart';
 import 'run_session_widgets.dart';
@@ -73,6 +75,9 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
   void _start() {
     setState(() => _errorMessage = null);
     ref.read(treadmillRunServiceProvider).start();
+    ref
+        .read(heartRateRecorderProvider)
+        .start(ref.read(bleHeartRateServiceProvider).heartRateStream);
     // start() resets the run, and with it the distance the field is showing.
     _distanceController.clear();
   }
@@ -111,6 +116,9 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     }
 
     final result = service.stop();
+    // Stopped before the finish sheet opens, for the same reason the GPS screen
+    // does it here: the sheet waits on the runner and the strap does not.
+    final heartRate = ref.read(heartRateRecorderProvider).stop();
     final distanceKm = double.parse(result.distanceKm.toStringAsFixed(2));
 
     // Every exit from the sheet saves — the run is over by the time it opens.
@@ -136,6 +144,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
               startedAt: result.startedAt,
               // No trace to record: the run happened on the spot.
               backgroundImagePath: choice.backgroundImagePath,
+              heartRate: heartRate.hasData ? heartRate : null,
             ),
           );
       if (!mounted) return;
@@ -161,7 +170,28 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     final palette = context.palette;
     final runState = ref.watch(treadmillRunStateProvider).valueOrNull ??
         TreadmillRunState.idle;
-    final liveBpm = ref.watch(liveHeartRateProvider).valueOrNull;
+
+    // A treadmill run has no auto-pause, but the recorder is driven from the
+    // state here too so both screens read the same way.
+    ref.listen(treadmillRunStateProvider, (_, next) {
+      final state = next.valueOrNull;
+      if (state == null) return;
+      final recorder = ref.read(heartRateRecorderProvider);
+      if (state.isTracking && !state.isPaused) {
+        recorder.resume();
+      } else {
+        recorder.pause();
+      }
+    });
+    // Gated on the connection being live, not merely on a reading having
+    // arrived once. A dropped strap emits nothing further, so the stream's last
+    // value would otherwise sit on screen looking like a current heart rate for
+    // the rest of the run.
+    final connection = ref.watch(heartRateConnectionProvider);
+    final liveBpm =
+        connection.isLive ? ref.watch(liveHeartRateProvider).valueOrNull : null;
+    final isReconnecting =
+        connection.status == HeartRateConnectionStatus.reconnecting;
     // Notification access counts as much as a linked account here: both give
     // the mini player something to drive.
     final hasMusicSource = ref.watch(hasMusicSourceProvider);
@@ -182,6 +212,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
           const MusicIslandAction(),
           RunHeartRateAction(
             bpm: liveBpm,
+            isReconnecting: isReconnecting,
             onPressed: () => context.push('/health'),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -228,8 +259,10 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
                     RunMetric(
                       icon: liveBpm != null
                           ? Icons.favorite_rounded
-                          : Icons.monitor_heart_outlined,
-                      label: 'BPM',
+                          : isReconnecting
+                              ? Icons.bluetooth_searching_rounded
+                              : Icons.monitor_heart_outlined,
+                      label: isReconnecting ? 'RECONNECTING' : 'BPM',
                       value: liveBpm?.toString() ?? '--',
                       accent: liveBpm != null,
                     ),

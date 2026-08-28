@@ -46,6 +46,10 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<!-- A tracked run already keeps counting with the screen off, so without
+		     this the strap would stop reporting the moment the phone locked and
+		     the saved average would come from the first thirty seconds. -->
+		<string>bluetooth-central</string>
 	</array>
 	<!-- Step counting and workout data for run stats. -->
 	<key>NSMotionUsageDescription</key>
@@ -56,9 +60,9 @@
 	<string>FitSocial saves your completed runs and workouts to Apple Health.</string>
 	<!-- Bluetooth heart-rate monitors and smartwatches. -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>FitSocial connects to Bluetooth heart-rate monitors to show your live BPM.</string>
+	<string>FitSocial connects to Bluetooth heart-rate monitors to show your live BPM and record it against your runs, including while the screen is off.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>FitSocial connects to Bluetooth heart-rate monitors to show your live BPM.</string>
+	<string>FitSocial connects to Bluetooth heart-rate monitors to show your live BPM and record it against your runs, including while the screen is off.</string>
 	<!-- Post photos. -->
 	<key>NSCameraUsageDescription</key>
 	<string>FitSocial uses your camera to take photos for your posts and meal logs.</string>

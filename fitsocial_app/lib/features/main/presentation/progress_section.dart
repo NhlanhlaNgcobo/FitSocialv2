@@ -386,6 +386,10 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
+/// The heart hue the Health & Devices grid uses, so a heart rate reads as the
+/// same measurement wherever it appears.
+const _kHeartRateHue = Color(0xFFFF4D6D);
+
 /// Every session inside the window, newest first.
 class _SessionList extends ConsumerWidget {
   const _SessionList({required this.window});
@@ -547,6 +551,17 @@ class _SessionRow extends ConsumerWidget {
                           ? 'Estimated from distance'
                           : null,
                     ),
+                    // Only for sessions a strap actually recorded. Average on
+                    // the face because that is the figure that describes a run;
+                    // the peak is a detail, and the row has room for one more
+                    // stat rather than two.
+                    if (session.heartRate case final heartRate?)
+                      _SessionStat(
+                        icon: Icons.monitor_heart_rounded,
+                        iconColor: _kHeartRateHue,
+                        label: '${heartRate.averageBpm} bpm',
+                        tooltip: 'Max ${heartRate.maxBpm} bpm',
+                      ),
                   ],
                 ),
               ],

@@ -85,6 +85,12 @@ enum PulseMediaType {
 ///
 /// Only [key] is persisted — the colours live in the app so the palette can be
 /// restyled without rewriting stored documents.
+///
+/// Every pair is built the same way: a lit but unsaturated top corner falling
+/// to a near-black base. That shape is what keeps white text readable across
+/// the whole card, keeps the seven reading as one family in the swatch row,
+/// and leaves the foot of the screen dark enough for the orange Share button
+/// to sit on it as a control rather than as more background.
 class PulseGradient {
   const PulseGradient(this.key, this.label, this.colors);
 
@@ -93,19 +99,19 @@ class PulseGradient {
   final List<Color> colors;
 
   static const ember =
-      PulseGradient('ember', 'Ember', [Color(0xFFFF8A3D), Color(0xFFD33F00)]);
+      PulseGradient('ember', 'Ember', [Color(0xFFD35F22), Color(0xFF3B1206)]);
   static const midnight = PulseGradient(
-      'midnight', 'Midnight', [Color(0xFF2B3A67), Color(0xFF0B0F1F)]);
+      'midnight', 'Midnight', [Color(0xFF2E3A5C), Color(0xFF0A0E1A)]);
   static const forest =
-      PulseGradient('forest', 'Forest', [Color(0xFF1F8A4C), Color(0xFF06301A)]);
+      PulseGradient('forest', 'Forest', [Color(0xFF25714A), Color(0xFF062516)]);
   static const blood =
-      PulseGradient('blood', 'Blood', [Color(0xFFB3123C), Color(0xFF3A0111)]);
+      PulseGradient('blood', 'Blood', [Color(0xFF8E1B36), Color(0xFF2C040F)]);
   static const violet =
-      PulseGradient('violet', 'Violet', [Color(0xFF7B2FF7), Color(0xFF2B0A57)]);
+      PulseGradient('violet', 'Violet', [Color(0xFF5E3AA8), Color(0xFF1E0F3C)]);
   static const graphite = PulseGradient(
       'graphite', 'Graphite', [Color(0xFF3A3A3A), Color(0xFF0B0B0B)]);
   static const ice =
-      PulseGradient('ice', 'Ice', [Color(0xFF3AA9C9), Color(0xFF0B2E3A)]);
+      PulseGradient('ice', 'Ice', [Color(0xFF2F7E99), Color(0xFF08202B)]);
 
   /// Order is the order of swatches in the composer.
   static const all = <PulseGradient>[
