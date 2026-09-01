@@ -487,12 +487,28 @@ class RunBanner extends StatelessWidget {
     required this.icon,
     required this.message,
     required this.tone,
+    this.actionLabel,
+    this.onAction,
     super.key,
-  });
+  }) : assert(
+          (actionLabel == null) == (onAction == null),
+          'A banner action needs both a label and something to run: a label '
+          'on its own is a dead button, and a callback with no label is '
+          'unreachable.',
+        );
 
   final IconData icon;
   final String message;
   final RunBannerTone tone;
+
+  /// Optional call to action, shown under the message.
+  ///
+  /// For the banners whose whole point is that the runner can do something
+  /// about them — telling someone their GPS is being throttled and leaving
+  /// them to find the setting is how the same warning comes back run after
+  /// run.
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -501,6 +517,8 @@ class RunBanner extends StatelessWidget {
       RunBannerTone.brand => palette.brandText,
       RunBannerTone.danger => palette.danger,
     };
+
+    final action = actionLabel;
 
     return Container(
       width: double.infinity,
@@ -516,14 +534,52 @@ class RunBanner extends StatelessWidget {
           Icon(icon, size: 18, color: color),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                height: 1.35,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+                if (action != null) ...[
+                  const SizedBox(height: 4),
+                  // Aligned with the message rather than trailing it, and
+                  // given the full tap target a TextButton carries: this is
+                  // pressed mid-run, by someone who is out of breath.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: onAction,
+                      style: TextButton.styleFrom(
+                        foregroundColor: color,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        backgroundColor: color.withValues(alpha: 0.14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: Text(
+                        action,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

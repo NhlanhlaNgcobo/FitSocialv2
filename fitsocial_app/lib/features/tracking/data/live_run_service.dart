@@ -9,6 +9,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'run_checkpoint_store.dart';
+import 'step_tracker_service.dart';
+import 'stride_calibrator.dart';
 
 /// A single GPS fix recorded during a live run.
 class RunPoint {
@@ -31,11 +33,13 @@ class LiveRunState {
     required this.isAutoPaused,
     required this.distanceKm,
     required this.elapsed,
+    required this.movingElapsed,
     required this.currentPaceMinPerKm,
     required this.points,
     required this.routePoints,
     this.startedAt,
     this.fixStats = RunFixStats.empty,
+    this.fusion = RunFusionStats.empty,
   });
 
   static const idle = LiveRunState(
@@ -44,6 +48,7 @@ class LiveRunState {
     isAutoPaused: false,
     distanceKm: 0,
     elapsed: Duration.zero,
+    movingElapsed: Duration.zero,
     currentPaceMinPerKm: 0,
     points: [],
     routePoints: [],
@@ -60,8 +65,19 @@ class LiveRunState {
 
   final double distanceKm;
 
-  /// Moving time — excludes both manual and auto pauses.
+  /// How long the run has been going: wall-clock time since it started, less
+  /// whatever the runner manually paused out of it.
+  ///
+  /// This is the headline clock and the duration saved with the run, because
+  /// it is what every other running app means by duration. [movingElapsed]
+  /// cannot be that number: it quietly subtracts every traffic light and every
+  /// stretch the GPS was too starved to prove movement through, so the same
+  /// run reads minutes shorter here than on the watch next to it.
   final Duration elapsed;
+
+  /// Moving time — [elapsed] less the stretches spent standing still, manual
+  /// pauses included. A stat of its own, never the clock.
+  final Duration movingElapsed;
 
   /// Rolling pace over the last ~200m; 0 when unknown.
   final double currentPaceMinPerKm;
@@ -79,6 +95,9 @@ class LiveRunState {
   /// What the position stream delivered, for telling a throttled phone apart
   /// from an over-eager filter. Diagnostic only — nothing is saved from it.
   final RunFixStats fixStats;
+
+  /// What the step counter contributed, and what it learned doing it.
+  final RunFusionStats fusion;
 
   String get formattedPace {
     if (currentPaceMinPerKm <= 0 || currentPaceMinPerKm.isInfinite) {
@@ -299,6 +318,50 @@ class RunFixStats {
       'accuracy=${lastAccuracyMeters?.toStringAsFixed(1) ?? "?"}m';
 }
 
+/// What the phone's own motion sensors contributed to a run.
+///
+/// Exists for the same reason [RunFixStats] does: when the distance comes from
+/// two sources it has to be possible to see which one it came from, or a run
+/// that reads oddly is unfalsifiable. Diagnostic — nothing here is saved.
+class RunFusionStats {
+  const RunFusionStats({
+    this.steps = 0,
+    this.strideMeters = StrideCalibrator.defaultSeedMeters,
+    this.isCalibrated = false,
+    this.metersFromSteps = 0,
+    this.hasStepSensor = false,
+  });
+
+  static const empty = RunFusionStats();
+
+  /// Steps taken during the run, pauses excluded.
+  final int steps;
+
+  /// Metres per step currently being used — measured if [isCalibrated], the
+  /// opening estimate otherwise.
+  final double strideMeters;
+
+  /// Whether [strideMeters] has been measured off this runner's own GPS yet.
+  final bool isCalibrated;
+
+  /// How much of the distance came from steps rather than from GPS chords:
+  /// the corners that would otherwise have been cut. Not the whole of the
+  /// step-derived distance — only the part above what the GPS already proved.
+  final double metersFromSteps;
+
+  /// Whether the phone has produced a single step. False on a device with no
+  /// hardware counter, and for the first stride or two of every run.
+  final bool hasStepSensor;
+
+  /// Whether steps are currently making up for what the GPS is missing.
+  bool get isFillingGaps => metersFromSteps >= 1;
+
+  String get debugLine => 'steps=$steps stride='
+      '${strideMeters.toStringAsFixed(2)}m'
+      '${isCalibrated ? "" : " (seed)"} '
+      'filled=${metersFromSteps.round()}m';
+}
+
 /// GPS-based live run tracking built on geolocator. Accumulates distance
 /// from successive position fixes (with basic jitter filtering) and exposes
 /// a state stream for the UI.
@@ -306,8 +369,31 @@ class LiveRunService {
   LiveRunService({
     RunCheckpointStore? checkpointStore,
     Stream<Position> Function(LocationSettings)? openPositionStream,
+    Stream<int> Function()? openStepStream,
+    Stream<double> Function()? openMotionStream,
+    DateTime Function()? now,
   })  : _checkpoints = checkpointStore ?? const NoopRunCheckpointStore(),
-        _openPositionStream = openPositionStream ?? _geolocatorPositions;
+        _openPositionStream = openPositionStream ?? _geolocatorPositions,
+        _openStepStream = openStepStream,
+        _openMotionStream = openMotionStream,
+        _now = now ?? DateTime.now;
+
+  /// The phone's hardware step counter, as a since-boot cumulative count, or
+  /// null where there is nothing to fuse with — the web build, and any test
+  /// that has no interest in steps. A run without it behaves exactly as it did
+  /// before fusion existed.
+  final Stream<int> Function()? _openStepStream;
+
+  /// Raw accelerometer magnitude, or null for the same reasons. Opened only on
+  /// a device that turns out to have no step counter — see
+  /// [_openMotionFallback].
+  final Stream<double> Function()? _openMotionStream;
+
+  /// The run's source of wall-clock time. Injectable for the same reason
+  /// [MovingTimeClock]'s is: the duration and the auto-pause are both decided
+  /// off it, and neither is testable against a clock that only moves forwards
+  /// in real time.
+  final DateTime Function() _now;
 
   static Stream<Position> _geolocatorPositions(LocationSettings settings) =>
       Geolocator.getPositionStream(locationSettings: settings);
@@ -328,9 +414,17 @@ class LiveRunService {
   // than any real walk, so it only catches standing-still GPS drift.
   static const _movingSpeedThreshold = 0.6;
   // A GPS segment is only counted if it exceeds this many metres AND the
-  // reported accuracy — this rejects the metre-scale wander a stationary
+  // drift floor below — this rejects the metre-scale wander a stationary
   // phone reports.
   static const _minSegmentMeters = 4.0;
+  // The widest that floor is ever set. It used to be the reported accuracy
+  // itself, unbounded, which quietly cost real distance: at 25 m accuracy a
+  // runner had to cover 25 m before a single metre counted, so the route
+  // became a handful of long chords and every bend between them was cut
+  // straight across. Half the accuracy radius still clears stationary wander
+  // — drift is a fraction of the radius, not the whole of it — and the speed
+  // test below is the real filter for standing still.
+  static const _maxDriftFloorMeters = 10.0;
   // After this long without movement, auto-pause kicks in — when fixes are
   // arriving at the ~1 Hz asked for. See [_retuneGrace] for the slow case.
   static const _autoPauseAfter = Duration(seconds: 3);
@@ -344,6 +438,22 @@ class LiveRunService {
   // enough to ride out a couple of missed fixes without lagging a real change
   // in delivery rate by more than a few seconds at 1 Hz.
   static const _cadenceWindow = 10;
+  // A fix at this accuracy or better, arriving no later than
+  // [RunFixStats.starvedAbove] after the last one, is a fix whose chord is
+  // worth believing on its own: at 1 Hz there is no room between two fixes for
+  // a bend to hide in. Those are the stretches the stride is learned from, and
+  // the only ones where GPS is taken at face value.
+  static const _trustedAccuracyMeters = 20.0;
+  // The most a step count may inflate a GPS segment. Steps fill in the bends a
+  // long chord cut across, and a real path is not more than twice its own
+  // straight line over the seconds involved here — beyond that the step count
+  // is measuring something other than running.
+  static const _maxStepTopUp = 2.0;
+  // How long a run waits for its first step before deciding this phone has no
+  // step counter and falling back to the accelerometer. Long enough that a
+  // slow first stride or a late sensor start does not trip it, short enough
+  // that a device without the sensor is not left with nothing for a whole run.
+  static const _stepSensorGrace = Duration(seconds: 20);
   // How often the run in progress is mirrored to disk. Deliberately not on the
   // 1 Hz ticker: that runs _settleClock and _emit and has to stay cheap, and a
   // run is not worth a file write every second. Twenty seconds caps what a
@@ -387,7 +497,52 @@ class LiveRunService {
   /// joining up to the one the pause interrupted.
   bool _rebaseNextFix = false;
 
-  final _clock = MovingTimeClock(idleGrace: _autoPauseAfter);
+  late final _clock = MovingTimeClock(idleGrace: _autoPauseAfter, now: _now);
+
+  // --- Sensor fusion ---
+  // GPS answers "how far" well and "am I moving right now" badly; the step
+  // counter is the other way round. Each is used for what it is good at: the
+  // step counter drives the moving-time decision and fills in the ground a
+  // starved GPS chord cut the corner off, and the GPS teaches it how long this
+  // runner's stride is while it is behaving well enough to be believed.
+  StreamSubscription<int>? _stepSub;
+  StreamSubscription<double>? _motionSub;
+  Timer? _motionFallbackTimer;
+  final _stepCounter = SessionStepCounter();
+  final _motion = MotionDetector();
+  final _calibrator = StrideCalibrator();
+
+  /// An opening stride from the runner's height, when the profile has one.
+  double? _seedStride;
+
+  /// Session total from [SessionStepCounter], including any steps taken while
+  /// the run was paused — the raw reading the deltas are taken from.
+  int _lastSessionSteps = 0;
+
+  /// Steps taken during the run itself. Pauses excluded.
+  int _runSteps = 0;
+
+  /// Steps since the last segment that counted, waiting to be spent on the
+  /// next one. Zeroed wherever the distance anchor is: a new leg after a
+  /// resume must not be paid for with the steps taken during the pause.
+  int _stepsSinceSegment = 0;
+
+  /// How much distance came from steps rather than GPS chords. Diagnostic.
+  double _metersFromSteps = 0;
+
+  bool _hasStepSensor = false;
+
+  /// Duration banked before the current stretch: earlier legs of the run, or
+  /// what a recovered checkpoint had already counted.
+  Duration _durationAccrued = Duration.zero;
+
+  /// When the running stretch of the duration clock opened, or null while the
+  /// run is paused, finished, or not yet started.
+  ///
+  /// Read off the wall clock rather than counted in ticks, for the same reason
+  /// [MovingTimeClock] is: the OS throttles timers behind a locked screen, and
+  /// a clock that counts ticks loses however long the screen was off.
+  DateTime? _countingSince;
 
   DateTime? _startedAt;
   bool _isTracking = false;
@@ -395,6 +550,33 @@ class LiveRunService {
 
   Stream<LiveRunState> get stream => _controller.stream;
   LiveRunState get current => _snapshot();
+
+  /// Gives the stride estimate somewhere better than average to start from,
+  /// for the stretch of a run before any of it has been measured.
+  ///
+  /// Only the opening seconds ride on this — the first believable GPS stretch
+  /// replaces it with the runner's own stride — so a profile with no height in
+  /// it costs very little. Call before [start].
+  void seedStrideFromHeight(double heightCm) {
+    if (heightCm <= 0) return;
+    _seedStride = StrideCalibrator.strideForHeight(heightCm);
+    _calibrator.reset(seedMeters: _seedStride);
+  }
+
+  /// Wall-clock duration of the run so far, manual pauses excluded.
+  Duration get _totalElapsed {
+    final since = _countingSince;
+    if (since == null) return _durationAccrued;
+    final open = _now().difference(since);
+    // A clock the user wound backwards must not run the duration backwards.
+    return open.isNegative ? _durationAccrued : _durationAccrued + open;
+  }
+
+  /// Banks the open stretch and stops the duration clock.
+  void _holdDuration() {
+    _durationAccrued = _totalElapsed;
+    _countingSince = null;
+  }
 
   /// Ensures location services are on and permission is granted.
   /// Throws [LocationPermissionException] with a user-readable reason.
@@ -422,13 +604,17 @@ class LiveRunService {
     // lock-screen readout.
     if (defaultTargetPlatform == TargetPlatform.android) {
       await Permission.notification.request();
+      // Unlocks the hardware step counter, which is what fills in for the GPS
+      // when the OS starves it. Asked for on the same terms as the
+      // notification: a refusal costs the fusion, never the run.
+      await Permission.activityRecognition.request();
     }
   }
 
   Future<void> start() async {
     await ensurePermission();
     _reset();
-    beginTracking(startedAt: DateTime.now());
+    beginTracking(startedAt: _now());
   }
 
   /// Opens the position stream and starts the timers for an already-reset run.
@@ -441,6 +627,10 @@ class LiveRunService {
   void beginTracking({required DateTime startedAt}) {
     _isTracking = true;
     _startedAt = startedAt;
+    // Now, not [startedAt]: for a fresh run the two are the same instant, and
+    // for one recovered from disk they are not — the run began an hour ago but
+    // the process was dead for part of it, and dead time is nobody's duration.
+    _countingSince = _now();
 
     _positionSub = _openPositionStream(_locationSettings()).listen(
       _onPosition,
@@ -452,6 +642,7 @@ class LiveRunService {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     _checkpointTimer =
         Timer.periodic(_checkpointEvery, (_) => _saveCheckpoint());
+    _openSteps();
     _watchLifecycle();
     _emit();
   }
@@ -465,6 +656,7 @@ class LiveRunService {
   Future<void> resumeFrom(RunCheckpoint checkpoint) async {
     await ensurePermission();
     _reset(accrued: checkpoint.movingElapsed);
+    _durationAccrued = checkpoint.totalElapsed;
     _points.addAll(checkpoint.points);
     _distanceMeters = checkpoint.distanceMeters;
     beginTracking(startedAt: checkpoint.startedAt);
@@ -478,6 +670,7 @@ class LiveRunService {
   /// there is nothing left to track.
   void restoreForFinish(RunCheckpoint checkpoint) {
     _reset(accrued: checkpoint.movingElapsed);
+    _durationAccrued = checkpoint.totalElapsed;
     _points.addAll(checkpoint.points);
     _distanceMeters = checkpoint.distanceMeters;
     _startedAt = checkpoint.startedAt;
@@ -493,10 +686,11 @@ class LiveRunService {
     if (!_isTracking || _isCheckpointing) return;
     _isCheckpointing = true;
     final checkpoint = RunCheckpoint(
-      startedAt: _startedAt ?? DateTime.now(),
-      savedAt: DateTime.now(),
+      startedAt: _startedAt ?? _now(),
+      savedAt: _now(),
       distanceMeters: _distanceMeters,
       movingElapsed: _clock.elapsed,
+      totalElapsed: _totalElapsed,
       isPaused: _isPaused,
       points: List.of(_points),
     );
@@ -567,6 +761,7 @@ class LiveRunService {
     if (!_isTracking || _isPaused) return;
     _isPaused = true;
     _clock.hold();
+    _holdDuration();
     _positionSub?.pause();
     _emit();
   }
@@ -575,6 +770,7 @@ class LiveRunService {
     if (!_isTracking || !_isPaused) return;
     _isPaused = false;
     _clock.release();
+    _countingSince = _now();
     // Everything the platform produced during the pause is still queued behind
     // the subscription. Pausing a subscription does not stop an EventChannel
     // broadcast stream — it only buffers what the stream keeps sending — so
@@ -582,12 +778,21 @@ class LiveRunService {
     // _isPaused is false again and the guard at the top of _onPosition waves
     // them through. A runner who paused and walked to a water point would have
     // every metre of that walk added back the instant they pressed resume.
-    _resumedAt = DateTime.now();
+    _resumedAt = _now();
     // The first fix that does count opens a new leg instead of joining up to
     // the old one, so the ground covered while paused is not swallowed as a
     // single long segment. Distance stops at the pause and picks up wherever
     // the runner actually is.
     _rebaseNextFix = true;
+    // A pause is not a gap in delivery, so it is not evidence about the
+    // cadence either. Left in place, the last fix before the pause pairs with
+    // the first one after it and files the whole pause as a single inter-fix
+    // gap — minutes wide on a real water stop — which drags the median towards
+    // [RunFixStats.starvedAbove] and can put the weak-GPS warning on a stream
+    // that is keeping up perfectly well.
+    _lastFixAt = null;
+    // The pause's steps are no more part of the run than the pause's ground is.
+    _stepsSinceSegment = 0;
     _positionSub?.resume();
     _emit();
   }
@@ -595,6 +800,7 @@ class LiveRunService {
   /// Stops tracking and returns the final state for saving.
   LiveRunState stop() {
     _clock.hold();
+    _holdDuration();
     final result = _snapshot();
     _positionSub?.cancel();
     _positionSub = null;
@@ -602,6 +808,7 @@ class LiveRunService {
     _ticker = null;
     _checkpointTimer?.cancel();
     _checkpointTimer = null;
+    _closeSensors();
     _unwatchLifecycle();
     _isTracking = false;
     _isPaused = false;
@@ -640,6 +847,61 @@ class LiveRunService {
     _lifecycleWatcher = null;
   }
 
+  /// Opens the step counter, and arms the accelerometer fallback in case this
+  /// phone turns out not to have one.
+  void _openSteps() {
+    final open = _openStepStream;
+    if (open == null) return;
+    _stepSub = open().listen(
+      _onSteps,
+      // A device with no step sensor errors before it emits anything, and a
+      // sensor that dies mid-run has not un-run the run. Either way the GPS is
+      // still tracking, so this is not the run's problem to report.
+      onError: (Object _) {},
+    );
+    _motionFallbackTimer = Timer(_stepSensorGrace, _openMotionFallback);
+  }
+
+  /// Falls back to raw accelerometer motion on a phone that has produced no
+  /// steps by now — almost always one with no hardware step counter.
+  ///
+  /// Subscribed late and only when needed, because a run already holds a wake
+  /// lock and a 1 Hz GPS stream, and a permanently-on accelerometer on top of
+  /// that is a battery cost worth avoiding on the phones that never need it.
+  /// It informs moving time only: acceleration says whether the phone is being
+  /// carried, and nothing whatever about how far.
+  void _openMotionFallback() {
+    _motionFallbackTimer = null;
+    if (_hasStepSensor || !_isTracking) return;
+    final open = _openMotionStream;
+    if (open == null) return;
+    _motionSub = open().listen(
+      (magnitude) {
+        _motion.accept(magnitude, _now());
+        if (!_isPaused && _motion.isMoving) _clock.markMovement();
+      },
+      onError: (Object _) {},
+    );
+  }
+
+  void _onSteps(int cumulative) {
+    _hasStepSensor = true;
+    final total = _stepCounter.accept(cumulative);
+    final delta = total - _lastSessionSteps;
+    _lastSessionSteps = total;
+    if (delta <= 0 || !_isTracking || _isPaused) return;
+    _runSteps += delta;
+    _stepsSinceSegment += delta;
+    // The step counter is the better answer to "is this runner moving right
+    // now" by some distance: it is right within one stride, where GPS needs
+    // several seconds of displacement to build up and cannot answer at all
+    // while the OS is starving it. This is what stops a run losing minutes of
+    // moving time to a slow location stream.
+    _clock.markMovement();
+    // Deliberately no _emit(): steps arrive one per stride and the 1 Hz
+    // heartbeat is already repainting the screen.
+  }
+
   void _onPosition(Position position) {
     if (_isPaused) return;
 
@@ -656,7 +918,8 @@ class LiveRunService {
     _lastAccuracyMeters = position.accuracy;
     _noteFixInterval(position.timestamp);
     if (_fixesReceived % 25 == 0) {
-      debugPrint('[live-run] ${_fixStats.debugLine}');
+      debugPrint('[live-run] ${_fixStats.debugLine} '
+          '${_fusionStats.debugLine}');
     }
 
     // Moving time is decided here, off the fix's own speed, and deliberately
@@ -694,6 +957,7 @@ class LiveRunService {
     if (_rebaseNextFix) {
       _rebaseNextFix = false;
       _points.add(point);
+      _stepsSinceSegment = 0;
       _emit();
       return;
     }
@@ -702,6 +966,7 @@ class LiveRunService {
       // First fix: record position but don't start the "moving" clock until
       // we see real displacement.
       _points.add(point);
+      _stepsSinceSegment = 0;
       _emit();
       return;
     }
@@ -734,12 +999,12 @@ class LiveRunService {
     // Stationary-drift rejection: a real step must clear both a minimum
     // distance and the GPS accuracy radius, and imply at least a slow walk.
     // Otherwise the phone is standing still and the "movement" is noise.
-    final movementFloor = math.max(_minSegmentMeters, position.accuracy);
-    final isRealMovement =
-        segment >= movementFloor && speed >= _movingSpeedThreshold;
+    final isRealMovement = segment >= _driftFloorFor(position) &&
+        speed >= _movingSpeedThreshold;
 
     if (isRealMovement) {
-      _distanceMeters += segment;
+      _distanceMeters += _creditFor(segment, dt, position);
+      _stepsSinceSegment = 0;
       _clock.markMovement();
       _points.add(point);
     } else {
@@ -774,6 +1039,55 @@ class LiveRunService {
     if (seconds <= 0) return 0;
     final minutesPerKm = (seconds / 60.0) / (meters / 1000.0);
     return math.min(minutesPerKm, 59.9);
+  }
+
+  /// How much ground a segment the filters accepted is worth — the GPS chord,
+  /// topped up from the step counter where the chord is known to be short.
+  ///
+  /// A chord is a straight line between two fixes, so it is a *lower bound* on
+  /// the path actually run: whatever the runner did between them, it was at
+  /// least that far. When fixes arrive at 1 Hz the bound is tight and the
+  /// chord is the answer. When the OS is delivering one fix every thirty
+  /// seconds, the chord cuts every bend in half a minute of running, and it is
+  /// the reason the same run reads short here and right on the watch next to
+  /// it. That is the gap the steps fill.
+  ///
+  /// Two rules keep this honest. Steps only ever *top up* a segment the GPS
+  /// has already agreed was real travel — they can never originate distance,
+  /// so a phone shuffled on the spot for a minute still records nothing. And
+  /// the top-up is capped at [_maxStepTopUp] times the chord, because a path
+  /// that wanders more than twice its own straight line is not a runner going
+  /// somewhere.
+  double _creditFor(double segment, int dtMillis, Position position) {
+    final trusted = dtMillis <= RunFixStats.starvedAbove.inMilliseconds &&
+        position.accuracy <= _trustedAccuracyMeters;
+    if (trusted) {
+      // Both numbers describe the same stretch of running and the GPS one is
+      // reliable here, so this is where the runner's stride is learned.
+      _calibrator.observe(meters: segment, steps: _stepsSinceSegment);
+      return segment;
+    }
+    if (_stepsSinceSegment <= 0) return segment;
+    final fromSteps = _stepsSinceSegment * _calibrator.strideMeters;
+    final credited = fromSteps.clamp(segment, segment * _maxStepTopUp);
+    _metersFromSteps += credited - segment;
+    return credited;
+  }
+
+  /// How far this fix has to have moved before the displacement counts as
+  /// running rather than a stationary phone's wander.
+  ///
+  /// A phone that has told us it is moving gets the bare minimum: the drift
+  /// this floor exists to reject is what a *standing* phone reports, and the
+  /// speed sensor has just ruled that out. Everything else is judged against
+  /// half the accuracy radius, capped — see [_maxDriftFloorMeters] for why the
+  /// full radius was costing real distance.
+  static double _driftFloorFor(Position position) {
+    if (_reportsMotion(position)) return _minSegmentMeters;
+    return math.max(
+      _minSegmentMeters,
+      math.min(position.accuracy / 2, _maxDriftFloorMeters),
+    );
   }
 
   /// Whether the platform put a real speed reading on this fix.
@@ -845,12 +1159,21 @@ class LiveRunService {
         medianFixInterval: _medianFixInterval,
       );
 
+  RunFusionStats get _fusionStats => RunFusionStats(
+        steps: _runSteps,
+        strideMeters: _calibrator.strideMeters,
+        isCalibrated: _calibrator.isCalibrated,
+        metersFromSteps: _metersFromSteps,
+        hasStepSensor: _hasStepSensor,
+      );
+
   LiveRunState _snapshot() => LiveRunState(
         isTracking: _isTracking,
         isPaused: _isPaused,
         isAutoPaused: _isTracking && _clock.isIdle && !_isPaused,
         distanceKm: _distanceMeters / 1000.0,
-        elapsed: _clock.elapsed,
+        elapsed: _totalElapsed,
+        movingElapsed: _clock.elapsed,
         currentPaceMinPerKm: _rollingPace,
         points: List.unmodifiable(_points),
         routePoints: List.unmodifiable(
@@ -858,6 +1181,7 @@ class LiveRunService {
         ),
         startedAt: _startedAt,
         fixStats: _fixStats,
+        fusion: _fusionStats,
       );
 
   void _emit() {
@@ -868,6 +1192,18 @@ class LiveRunService {
     _points.clear();
     _distanceMeters = 0;
     _clock.reset(accrued: accrued);
+    _durationAccrued = Duration.zero;
+    _countingSince = null;
+    // The seed survives a reset — it came from the runner's profile, not from
+    // the run — but everything measured during the last one does not.
+    _calibrator.reset(seedMeters: _seedStride);
+    _stepCounter.reset();
+    _motion.reset();
+    _lastSessionSteps = 0;
+    _runSteps = 0;
+    _stepsSinceSegment = 0;
+    _metersFromSteps = 0;
+    _hasStepSensor = false;
     // The cadence is a property of the run, not of the phone: a resumed run
     // re-measures it rather than inheriting a stale grace from the last one.
     _clock.idleGrace = _autoPauseAfter;
@@ -885,8 +1221,20 @@ class LiveRunService {
     _isPaused = false;
   }
 
+  /// Lets go of the motion sensors. Their subscriptions outlive nothing: a
+  /// step stream left running after a run is a wake-up per stride, forever.
+  void _closeSensors() {
+    _stepSub?.cancel();
+    _stepSub = null;
+    _motionSub?.cancel();
+    _motionSub = null;
+    _motionFallbackTimer?.cancel();
+    _motionFallbackTimer = null;
+  }
+
   void dispose() {
     _positionSub?.cancel();
+    _closeSensors();
     _ticker?.cancel();
     // liveRunServiceProvider is not autoDispose and outlives every screen, so
     // a checkpoint timer left running here would keep writing forever.

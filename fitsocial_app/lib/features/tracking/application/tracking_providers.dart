@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'run_draft_providers.dart';
+import '../data/battery_optimization.dart';
 import '../data/ble_heart_rate_service.dart';
 import '../data/health_service.dart';
 import '../data/heart_rate_recorder.dart';
@@ -14,12 +15,22 @@ final stepTrackerServiceProvider = Provider<StepTrackerService>((ref) {
   return StepTrackerService();
 });
 
+/// Behind a provider so a widget test can put a stub in front of the platform
+/// channel permission_handler talks to, which throws off-device.
+final batteryOptimizationProvider = Provider<BatteryOptimization>((ref) {
+  return const BatteryOptimization();
+});
+
 final liveRunServiceProvider = Provider<LiveRunService>((ref) {
-  // Given the checkpoint store so a run in progress is mirrored to disk. The
-  // service keeps working without one — that is what the web build and the
-  // tests get.
+  final sensors = ref.watch(stepTrackerServiceProvider);
+  // Given the checkpoint store so a run in progress is mirrored to disk, and
+  // the phone's motion sensors so the distance is not GPS alone. The service
+  // keeps working without any of the three — that is what the web build and
+  // the tests get, and a run there behaves as it did before fusion existed.
   final service = LiveRunService(
     checkpointStore: ref.watch(runCheckpointStoreProvider),
+    openStepStream: () => sensors.stepCountStream,
+    openMotionStream: () => sensors.movementMagnitudeStream,
   );
   ref.onDispose(service.dispose);
   return service;
@@ -90,20 +101,10 @@ final heartRateRecorderProvider = Provider<HeartRateRecorder>((ref) {
 /// Devices without a step sensor (e.g. emulators) emit 0.
 final sessionStepsProvider = StreamProvider<int>((ref) {
   final service = ref.watch(stepTrackerServiceProvider);
-  // The sensor counts from boot, so a counter reset underneath us drops the
-  // reading below the baseline. Bank what was already counted and re-anchor,
-  // rather than letting the session total go negative.
-  int? baseline;
-  int carried = 0;
-  int sinceAnchor = 0;
+  final counter = SessionStepCounter();
   int emitted = 0;
   return service.stepCountStream.map((cumulative) {
-    if (baseline == null || cumulative < baseline!) {
-      carried += sinceAnchor;
-      baseline = cumulative;
-    }
-    sinceAnchor = cumulative - baseline!;
-    return emitted = carried + sinceAnchor;
+    return emitted = counter.accept(cumulative);
   }).transform(
     StreamTransformer.fromHandlers(
       // Hold the last good count. A sensor that errors part-way through has not

@@ -144,6 +144,44 @@ void main() {
     expect(service.current.isPaused, isTrue);
   });
 
+  /// The cadence estimate answers one question — how fast is this phone
+  /// handing over location — and a pause is no evidence either way. The gap
+  /// spanning one used to be filed as a single inter-fix interval as wide as
+  /// the pause itself, and that estimate is what the weak-GPS warning and the
+  /// idle grace are both read off.
+  ///
+  /// A median over ten intervals shrugs off one bad entry, so this is a slow
+  /// poison rather than an instant one: it takes a runner who uses the pause
+  /// button repeatedly — intervals, or a stop-start route through town — for
+  /// the bogus gaps to outnumber the real ones. Which is exactly why it needs
+  /// a test: the failure is invisible until it is a majority.
+  test('pauses are not counted as gaps in delivery', () async {
+    Future<void> pauseThenFixAt(int second) async {
+      service.pause();
+      service.resume();
+      await Future<void>.delayed(Duration.zero);
+      await deliver(second.toDouble(), origin.add(Duration(seconds: second)));
+    }
+
+    await deliver(0, origin);
+    // Five pauses of five minutes each, one fix taken after every one.
+    for (final second in [300, 600, 900, 1200, 1500]) {
+      await pauseThenFixAt(second);
+    }
+    // Then the runner settles down and the phone delivers every two seconds.
+    for (final second in [1502, 1504, 1506]) {
+      await deliver(second.toDouble(), origin.add(Duration(seconds: second)));
+    }
+
+    // Only the three real gaps are on record. Counting the pauses would make
+    // five of the eight intervals five minutes wide, and the median with them.
+    expect(
+      service.current.fixStats.medianFixInterval,
+      const Duration(seconds: 2),
+    );
+    expect(service.current.fixStats.isStarved, isFalse);
+  });
+
   test('a run that is paused before its first fix still starts cleanly',
       () async {
     service.pause();

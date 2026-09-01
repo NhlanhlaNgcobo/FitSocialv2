@@ -28,7 +28,8 @@ class RunCheckpoint {
     required this.movingElapsed,
     required this.isPaused,
     required this.points,
-  });
+    Duration? totalElapsed,
+  }) : totalElapsed = totalElapsed ?? movingElapsed;
 
   static const int schemaVersion = 1;
 
@@ -39,6 +40,13 @@ class RunCheckpoint {
 
   final double distanceMeters;
   final Duration movingElapsed;
+
+  /// The run's duration — wall time since the start, manual pauses taken out.
+  /// The number on the headline clock, so it has to survive a kill just as
+  /// [movingElapsed] does. Defaults to [movingElapsed] for checkpoints written
+  /// before the two came apart.
+  final Duration totalElapsed;
+
   final bool isPaused;
   final List<RunPoint> points;
 
@@ -58,6 +66,7 @@ class RunCheckpoint {
       'savedAt': savedAt.toIso8601String(),
       'distanceMeters': distanceMeters,
       'movingSeconds': movingElapsed.inSeconds,
+      'totalSeconds': totalElapsed.inSeconds,
       'isPaused': isPaused,
       // Triples rather than {lat, lng, ts} maps: this file is rewritten every
       // twenty seconds, and a four-thousand-point run is about 130 KB this way
@@ -86,12 +95,19 @@ class RunCheckpoint {
     final distance = (value['distanceMeters'] as num?)?.toDouble();
     final seconds = (value['movingSeconds'] as num?)?.toInt();
     if (distance == null || seconds == null || seconds < 0) return null;
+    // Absent in files written before the duration clock existed, and in that
+    // case moving time is the best answer available — never null, so a good
+    // checkpoint is never thrown away over a field it predates.
+    final totalSeconds = (value['totalSeconds'] as num?)?.toInt();
 
     return RunCheckpoint(
       startedAt: startedAt,
       savedAt: savedAt,
       distanceMeters: distance,
       movingElapsed: Duration(seconds: seconds),
+      totalElapsed: totalSeconds == null || totalSeconds < 0
+          ? null
+          : Duration(seconds: totalSeconds),
       isPaused: value['isPaused'] as bool? ?? false,
       points: _pointsFrom(value['points']),
     );

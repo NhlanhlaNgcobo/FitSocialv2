@@ -14,6 +14,7 @@ import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_route_map.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
+import '../../auth/application/body_metrics_providers.dart';
 import '../../main/application/activity_actions.dart';
 import '../../main/domain/app_models.dart';
 import '../../music/application/music_providers.dart';
@@ -42,13 +43,20 @@ class LiveRunScreen extends ConsumerStatefulWidget {
 }
 
 class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const int _sectionCount = 4;
 
   late final AnimationController _entranceController;
 
   bool _isSaving = false;
   String? _errorMessage;
+
+  /// Whether Android is already letting this app off battery optimisation.
+  ///
+  /// Starts true so the starvation banner never opens by accusing the runner
+  /// of a setting that has not been read yet — the offer appears a frame later
+  /// if it is really needed. Non-Android platforms stay true forever.
+  bool _isBatteryExempt = true;
 
   @override
   void initState() {
@@ -57,8 +65,35 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
+    // Watched so returning from the Settings app re-reads the exemption: the
+    // fallback path in BatteryOptimization.requestExemption hands the runner
+    // off to a screen it cannot see the outcome of.
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_refreshBatteryExemption());
     // After the first frame, so the sheet has a laid-out screen to open over.
     WidgetsBinding.instance.addPostFrameCallback((_) => _offerRecovery());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshBatteryExemption());
+    }
+  }
+
+  Future<void> _refreshBatteryExemption() async {
+    final exempt = await ref.read(batteryOptimizationProvider).isExempt();
+    if (mounted && exempt != _isBatteryExempt) {
+      setState(() => _isBatteryExempt = exempt);
+    }
+  }
+
+  /// The banner's one tap. Asks Android for the exemption, then re-reads it
+  /// rather than believing the answer: the fallback route only launches a
+  /// settings screen, and the lifecycle hook above catches the way back.
+  Future<void> _allowUnrestrictedBattery() async {
+    await ref.read(batteryOptimizationProvider).requestExemption();
+    await _refreshBatteryExemption();
   }
 
   /// Offers back a run the app died in the middle of.
@@ -116,6 +151,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _entranceController.dispose();
     super.dispose();
   }
@@ -123,7 +159,14 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
   Future<void> _start() async {
     setState(() => _errorMessage = null);
     try {
-      await ref.read(liveRunServiceProvider).start();
+      final service = ref.read(liveRunServiceProvider);
+      // Gives the stride estimate a starting point from the runner's own
+      // height rather than the average of everybody, for the stretch before
+      // the GPS has measured one. Absent profile, absent height, unloaded
+      // provider: all fine, the estimate just opens on the default.
+      final heightCm = ref.read(bodyMetricsProvider).valueOrNull?.heightCm;
+      if (heightCm != null) service.seedStrideFromHeight(heightCm);
+      await service.start();
       ref
           .read(heartRateRecorderProvider)
           .start(ref.read(bleHeartRateServiceProvider).heartRateStream);
@@ -334,15 +377,17 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     // the mini player something to drive.
     final hasMusicSource = ref.watch(hasMusicSourceProvider);
 
-    // "Running right now" — the one condition that lights the screen up. A
-    // paused or auto-paused run keeps the numbers but drops the glow, so a
-    // glance from arm's length tells you whether the clock is still counting.
+    // "Covering ground right now" — the one condition that lights the screen
+    // up. Standing still drops the glow, so a glance from arm's length tells
+    // you whether the distance is still moving. The clock is not what it
+    // reports: duration runs through a wait at a crossing, the same way it
+    // does on every other running app.
     final isRunning =
         runState.isTracking && !runState.isPaused && !runState.isAutoPaused;
 
     final (String statusLabel, bool statusAccent) = switch (runState) {
       _ when isRunning => ('LIVE', true),
-      _ when runState.isAutoPaused => ('AUTO-PAUSED', true),
+      _ when runState.isAutoPaused => ('STANDING STILL', true),
       _ when runState.isPaused => ('PAUSED', false),
       // Also the state a stopped-but-unsaved run lands in, which reads
       // correctly: the screen is ready to start another one.
@@ -421,32 +466,74 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                   ],
                 ),
               ),
-              // Status, not an error: it explains why the clock stopped on its
-              // own, so it belongs against the numbers it is explaining.
+              // Status, not an error: it explains why the distance stopped
+              // climbing, so it belongs against the numbers it is explaining.
+              // It is careful not to say "paused" — the duration is still
+              // running, and a runner told otherwise would come back to a
+              // clock that had counted the whole wait anyway.
               if (runState.isAutoPaused) ...[
                 const SizedBox(height: AppSpacing.md),
                 const RunBanner(
                   icon: Icons.motion_photos_paused_rounded,
-                  message: 'Auto-paused — start moving to resume',
+                  message: 'Standing still — distance is holding',
                   tone: RunBannerTone.brand,
                 ),
               ],
-              // The one condition the runner can do something about, and the
-              // one that quietly ruins a run: when the phone delivers location
-              // this slowly the route is a handful of straight lines between
-              // distant fixes, so every bend is cut and the distance reads
-              // short. Said here, during the run, because afterwards the only
-              // evidence is a number that looks merely disappointing.
+              // The one condition that quietly ruins a run: when the phone
+              // delivers location this slowly the route is a handful of
+              // straight lines between distant fixes, so every bend is cut and
+              // the distance reads short. Said here, during the run, because
+              // afterwards the only evidence is a number that looks merely
+              // disappointing.
+              //
+              // Which of the two messages depends on whether there is still
+              // something to change. Battery optimisation is the usual cause
+              // and the banner carries the fix rather than describing where to
+              // find it. Once the app is already exempt, repeating that
+              // instruction is worse than saying nothing — the runner has done
+              // it, the warning came back anyway, and the remaining cause is
+              // reception, which no setting will help.
               if (runState.isTracking && runState.fixStats.isStarved) ...[
                 const SizedBox(height: AppSpacing.md),
-                const RunBanner(
-                  icon: Icons.satellite_alt_rounded,
-                  message: 'Weak GPS updates — this phone is reporting '
-                      'location far slower than usual, so distance will read '
-                      'short. Set FitSocial to Unrestricted in your battery '
-                      'settings.',
-                  tone: RunBannerTone.danger,
-                ),
+                // Steps covering the gap changes what is true to say here, so
+                // it changes what is said. The distance is no longer reading
+                // short, and telling a runner otherwise would send them into
+                // Settings to fix something that is already handled — but the
+                // GPS is still starved, the route is still coarse, and the
+                // battery setting is still worth having, so the banner stays
+                // and keeps its action.
+                if (runState.fusion.isFillingGaps)
+                  RunBanner(
+                    icon: Icons.directions_run_rounded,
+                    message: 'Weak GPS updates — filling the gaps from your '
+                        'step counter, so the distance holds up. The route '
+                        'itself will still look rough.',
+                    tone: RunBannerTone.brand,
+                    actionLabel:
+                        _isBatteryExempt ? null : 'Allow unrestricted battery',
+                    onAction:
+                        _isBatteryExempt ? null : _allowUnrestrictedBattery,
+                  )
+                else if (!_isBatteryExempt)
+                  RunBanner(
+                    icon: Icons.satellite_alt_rounded,
+                    message: 'Weak GPS updates — this phone is reporting '
+                        'location far slower than usual, so distance will read '
+                        'short. Android is holding FitSocial back to save '
+                        'battery.',
+                    tone: RunBannerTone.danger,
+                    actionLabel: 'Allow unrestricted battery',
+                    onAction: _allowUnrestrictedBattery,
+                  )
+                else
+                  const RunBanner(
+                    icon: Icons.satellite_alt_rounded,
+                    message: 'Weak GPS updates — this phone is finding '
+                        'satellites slowly, so distance will read short. '
+                        'Battery is already unrestricted, so this is signal: '
+                        'open sky helps, tall buildings and tunnels do not.',
+                    tone: RunBannerTone.danger,
+                  ),
               ],
               const SizedBox(height: AppSpacing.lg),
               StaggeredFadeIn(
