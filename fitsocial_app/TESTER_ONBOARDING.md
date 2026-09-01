@@ -42,6 +42,64 @@ not pasting addresses one at a time.
 
 ---
 
+## The release signing certificate
+
+Debug builds are signed with your machine's Android debug key. Everything that
+goes to a tester is signed with the keystore named in `android/key.properties`,
+which is a different certificate — so anything that authorises by signing
+fingerprint has to know about both, or it works when you run from Android
+Studio and fails for every tester.
+
+The release fingerprint:
+
+```
+A9:FD:B1:A3:95:DE:68:C1:B8:14:0C:EF:AE:0A:6C:68:5E:50:2E:C2
+```
+
+Re-derive it from a build you have already made:
+
+```
+apksigner verify --print-certs dist/FitSocial-<version>.apk
+```
+
+or straight from the keystore, at the path `android/key.properties` points to:
+
+```
+keytool -list -v -keystore <storeFile> -alias fitsocial
+```
+
+**There are two separate allowlists, and they drift.** Registering a
+fingerprint with Firebase does not register it with the Maps API key, and
+nothing warns you.
+
+- **Firebase** — `firebase apps:android:sha:list <appId> --project fitsocialv2`.
+  This is what Google Sign-In authorises against.
+- **The Maps API key** — Google Cloud console, Credentials > Maps Key >
+  Android restrictions. This is what the map authorises against.
+
+On 2026-09-01 the tester build showed an empty map: a cream rectangle with the
+Google watermark and nothing else, on every device. The key was in the APK and
+the package name matched. Firebase had all six fingerprints, the Maps key had
+five — the release one was missing, because that list had been seeded from
+Firebase before the release keystore existed and never re-synced.
+
+Worth knowing for next time: a Maps *authorisation* failure does not look like
+an error. There is no dialog and nothing on screen. The map simply renders its
+unstyled base colour, which reads as "tiles are still loading" or "no signal"
+and sends you looking in the wrong place. `adb logcat` is where it actually
+says so — the SDK logs an authorisation failure with the key it tried.
+
+Two things that make this cheap to fix once diagnosed: it is a console change,
+so no rebuild and no redistribution — the build already on testers' phones
+starts working on its own. But allow about five minutes for the change to
+propagate, and force-stop the app rather than backgrounding it, because the
+Maps SDK caches the failure for the life of the process.
+
+**If you ever replace the keystore**, the new fingerprint has to be added to
+both lists before the next build goes out.
+
+---
+
 ## Send them this
 
 > **Installing the FitSocial test build**
