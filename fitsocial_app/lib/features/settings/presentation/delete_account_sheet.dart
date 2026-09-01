@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../auth/application/app_session.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 import '../../auth/presentation/account_switcher_sheet.dart' show formatHandle;
+import '../../tracking/application/run_draft_providers.dart';
 
 /// What a user has to type to confirm when their account has no handle yet.
 ///
@@ -82,8 +83,21 @@ class _DeleteAccountSheetState extends ConsumerState<_DeleteAccountSheet> {
       _error = null;
     });
 
+    // Read before the account goes, while the store still resolves to this
+    // user's directory. Unsent runs live only on this phone, so the Cloud
+    // Function that sweeps everything server-side cannot reach them — without
+    // this they would outlive the account and greet the next person to sign in
+    // on this device.
+    final drafts = ref.read(runDraftStoreProvider);
+
     final session = ref.read(appSessionProvider);
     final deleted = await session.deleteAccount();
+
+    if (deleted) {
+      // After the account, not before: a deletion that fails must not have
+      // already thrown the runs away.
+      await drafts.clearAll();
+    }
 
     if (!mounted) return;
 

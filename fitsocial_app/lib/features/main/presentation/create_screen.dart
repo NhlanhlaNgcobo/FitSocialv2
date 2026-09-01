@@ -7,6 +7,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/dark_card.dart';
+import '../../tracking/presentation/run_drafts_section.dart';
 import '../application/create_flow_controller.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -97,6 +98,10 @@ class CreateScreen extends ConsumerWidget {
               style: TextStyle(color: palette.muted, fontSize: 14),
             ),
             const SizedBox(height: AppSpacing.lg),
+            // Above the resume card: a run that is already finished and only
+            // waiting on a connection is more urgent than a form somebody
+            // stopped filling in. Renders nothing when there are none.
+            const RunDraftsSection(),
             if (flowState.hasDraft) ...[
               _DraftResumeCard(
                 destination: flowState.activeDestination,

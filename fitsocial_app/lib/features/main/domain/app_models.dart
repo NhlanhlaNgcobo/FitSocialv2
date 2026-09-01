@@ -497,6 +497,12 @@ class RoutePoint {
   /// entry can be skipped instead of failing the whole document read.
   static RoutePoint? fromMap(Object? value) {
     if (value is! Map) return null;
+    // Typed with `is` rather than cast with `as`: a coordinate that came back
+    // as something other than a number — a hand-edited document, a draft file
+    // damaged on disk — has to be skippable like any other bad entry. A cast
+    // throws instead, which took the whole route down with it and made a liar
+    // of the line above.
+    if (value['lat'] is! num || value['lng'] is! num) return null;
     final lat = (value['lat'] as num?)?.toDouble();
     final lng = (value['lng'] as num?)?.toDouble();
     if (lat == null || lng == null) return null;
@@ -553,11 +559,17 @@ class HeartRateSummary {
   /// [RoutePoint.fromMap], and for the same hard-won reason.
   static HeartRateSummary? fromMap(Object? value) {
     if (value is! Map) return null;
-    final average = (value['avgBpm'] as num?)?.round();
+    // See RoutePoint.fromMap: skippable means skippable for a wrong type too,
+    // not just for a missing key.
+    final average = (value['avgBpm'] is num)
+        ? (value['avgBpm'] as num).round()
+        : null;
     // A zero average is not a reading, it is the absence of one.
     if (average == null || average <= 0) return null;
-    final max = (value['maxBpm'] as num?)?.round() ?? 0;
-    final seconds = (value['coverageSeconds'] as num?)?.round() ?? 0;
+    final max = (value['maxBpm'] is num) ? (value['maxBpm'] as num).round() : 0;
+    final seconds = (value['coverageSeconds'] is num)
+        ? (value['coverageSeconds'] as num).round()
+        : 0;
     return HeartRateSummary(
       averageBpm: average,
       // A max below the average is a corrupt pair; the average is the figure

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'run_draft_providers.dart';
 import '../data/ble_heart_rate_service.dart';
 import '../data/health_service.dart';
 import '../data/heart_rate_recorder.dart';
@@ -14,7 +15,12 @@ final stepTrackerServiceProvider = Provider<StepTrackerService>((ref) {
 });
 
 final liveRunServiceProvider = Provider<LiveRunService>((ref) {
-  final service = LiveRunService();
+  // Given the checkpoint store so a run in progress is mirrored to disk. The
+  // service keeps working without one — that is what the web build and the
+  // tests get.
+  final service = LiveRunService(
+    checkpointStore: ref.watch(runCheckpointStoreProvider),
+  );
   ref.onDispose(service.dispose);
   return service;
 });

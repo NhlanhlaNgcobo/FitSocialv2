@@ -1286,7 +1286,12 @@ class FirestoreContentRepository implements ContentRepository {
   ) async {
     if (logRef == null) return;
     try {
-      await logRef.update({'postId': postId});
+      // Bounded for the same reason every other write here is: an update
+      // completes on *server* acknowledgement, so offline this never returns
+      // and never throws either. Awaiting it unguarded hung the whole save
+      // after the post had already been created — spinner on screen, no toast,
+      // no navigation, and the run looking lost when it was only unsent.
+      await _settleWrite(logRef.update({'postId': postId}));
     } on FirebaseException catch (error) {
       debugPrint('Could not link ${logRef.path} to post $postId: '
           '${error.code}');
@@ -1364,7 +1369,16 @@ class FirestoreContentRepository implements ContentRepository {
     if (path == null) return null;
 
     try {
-      return await uploadPostImage(path);
+      final user = _requireCurrentUser();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      return await _uploadJpeg(
+        'posts/${user.uid}/$timestamp.jpg',
+        path,
+        // Its own, shorter bound rather than uploadPostImage's: the result is
+        // discarded on failure, so there is nothing to be gained by waiting a
+        // full minute for it.
+        timeout: _backgroundUploadTimeout,
+      );
     } catch (error, stackTrace) {
       debugPrint('Background upload failed: $error\n$stackTrace');
       return null;
@@ -1730,7 +1744,11 @@ class FirestoreContentRepository implements ContentRepository {
           ),
         );
       }
-      await batch.commit();
+      // Bounded like every other write: a commit lands on server
+      // acknowledgement, so offline it neither completes nor errors and this
+      // catch never runs. The batch is in the cache and goes out with
+      // everything else — waiting on it only held the post up.
+      await _settleWrite(batch.commit());
     } catch (error) {
       debugPrint('Post $postId saved, but its mentions were not sent: $error');
     }
@@ -2275,52 +2293,74 @@ class FirestoreContentRepository implements ContentRepository {
             ));
   }
 
-  @override
-  Future<String> uploadMealImage(String localFilePath) async {
-    final user = _requireCurrentUser();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('meals/${user.uid}/$timestamp.jpg');
+  /// How long an image the user is actually posting gets to upload.
+  ///
+  /// Generous, because in a photo post the photo *is* the content — there is
+  /// nothing worth saving without it, so waiting beats failing.
+  static const Duration _imageUploadTimeout = Duration(seconds: 60);
 
+  /// How long a session's backdrop gets.
+  ///
+  /// Much shorter, because the caller is [_tryUploadBackground] and it throws
+  /// the result away on failure anyway. A 1080x1350 q80 JPEG is a few hundred
+  /// kilobytes; twenty seconds without finishing it means the connection is
+  /// not working, and every second past that is a spinner in front of someone
+  /// who has already finished their run.
+  static const Duration _backgroundUploadTimeout = Duration(seconds: 20);
+
+  /// Uploads [localFilePath] as a JPEG to [path], giving up after [timeout].
+  ///
+  /// Shared by both public upload entry points so the byte-reading and the
+  /// give-up behaviour are written once.
+  Future<String> _uploadJpeg(
+    String path,
+    String localFilePath, {
+    required Duration timeout,
+  }) async {
     // Bytes rather than a dart:io File, so this works on every platform: on
     // mobile XFile reads the picked file, on web it fetches the blob: URL that
     // image_picker returns instead of a real path.
     final bytes = await XFile(localFilePath).readAsBytes();
-    final uploadTask = ref.putData(
-      bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
+    final uploadTask = FirebaseStorage.instance.ref().child(path).putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
     final snapshot = await uploadTask.timeout(
-      const Duration(seconds: 60),
-      onTimeout: () => throw const TimeoutException(
-        'Image upload timed out after 60 seconds.',
-      ),
+      timeout,
+      onTimeout: () {
+        // `timeout` abandons the future, it does not stop the work behind it.
+        // Without this the Storage SDK keeps retrying an upload nobody is
+        // waiting for, holding a connection while the user is on the next
+        // screen.
+        unawaited(uploadTask.cancel().catchError((Object _) => false));
+        throw TimeoutException(
+          'Image upload timed out after ${timeout.inSeconds} seconds.',
+        );
+      },
     );
     return await snapshot.ref.getDownloadURL();
   }
 
   @override
-  Future<String> uploadPostImage(String localFilePath) async {
+  Future<String> uploadMealImage(String localFilePath) {
     final user = _requireCurrentUser();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('posts/${user.uid}/$timestamp.jpg');
+    return _uploadJpeg(
+      'meals/${user.uid}/$timestamp.jpg',
+      localFilePath,
+      timeout: _imageUploadTimeout,
+    );
+  }
 
-    // See uploadMealImage: bytes keep this working on mobile and web alike.
-    final bytes = await XFile(localFilePath).readAsBytes();
-    final uploadTask = ref.putData(
-      bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
+  @override
+  Future<String> uploadPostImage(String localFilePath) {
+    final user = _requireCurrentUser();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return _uploadJpeg(
+      'posts/${user.uid}/$timestamp.jpg',
+      localFilePath,
+      timeout: _imageUploadTimeout,
     );
-    final snapshot = await uploadTask.timeout(
-      const Duration(seconds: 60),
-      onTimeout: () => throw const TimeoutException(
-        'Image upload timed out after 60 seconds.',
-      ),
-    );
-    return await snapshot.ref.getDownloadURL();
   }
 
   @override

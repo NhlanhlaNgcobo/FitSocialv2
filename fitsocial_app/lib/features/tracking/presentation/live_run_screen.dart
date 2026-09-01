@@ -1,10 +1,16 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
+import 'package:uuid/uuid.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/connectivity/backend_reachability.dart';
+import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_route_map.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
@@ -14,10 +20,13 @@ import '../../music/application/music_providers.dart';
 import '../../music/presentation/connect_music_action.dart';
 import '../../music/presentation/music_mini_player.dart';
 import '../application/heart_rate_connection_controller.dart';
+import '../application/run_draft_providers.dart';
 import '../application/tracking_providers.dart';
 import '../domain/heart_rate_models.dart';
+import '../domain/run_draft.dart';
 import '../data/live_run_service.dart';
 import 'finish_run_sheet.dart';
+import 'recover_run_sheet.dart';
 import 'run_session_widgets.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -48,6 +57,61 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
+    // After the first frame, so the sheet has a laid-out screen to open over.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _offerRecovery());
+  }
+
+  /// Offers back a run the app died in the middle of.
+  ///
+  /// Asked here rather than on launch because this is the screen the answer
+  /// belongs on — and because a runner who never opens it is not interrupted
+  /// about a run they have already forgotten.
+  Future<void> _offerRecovery() async {
+    final service = ref.read(liveRunServiceProvider);
+    // Never over the top of a run that is actually happening.
+    if (service.current.isTracking) return;
+
+    final checkpoint = await ref.read(recoverableRunProvider.future);
+    if (checkpoint == null || !mounted) return;
+    if (service.current.isTracking) return;
+
+    final choice = await showRecoverRunSheet(
+      context: context,
+      checkpoint: checkpoint,
+    );
+    if (!mounted) return;
+
+    switch (choice) {
+      case RecoverRunChoice.resume:
+        try {
+          await service.resumeFrom(checkpoint);
+        } on LocationPermissionException catch (e) {
+          if (mounted) setState(() => _errorMessage = e.message);
+        } catch (e) {
+          if (mounted) {
+            setState(() => _errorMessage = 'Could not resume the run: $e');
+          }
+        }
+      case RecoverRunChoice.finishNow:
+        // Put back, then taken through the ordinary finish — the same sheet,
+        // the same save, the same drafts branch if there is still no signal.
+        service.restoreForFinish(checkpoint);
+        await _stopAndSave();
+      case RecoverRunChoice.discard:
+        final confirmed = await confirmDestructiveAction(
+          context,
+          title: 'Discard this run?',
+          message: '${checkpoint.distanceKm.toStringAsFixed(2)} km was '
+              'recorded before the app closed. This cannot be undone.',
+          confirmLabel: 'Discard',
+        );
+        if (confirmed) {
+          await ref.read(runCheckpointStoreProvider).clear();
+        }
+      // Dismissed. The checkpoint stays and the offer comes back next time.
+      case RecoverRunChoice.later:
+        break;
+    }
   }
 
   @override
@@ -79,7 +143,15 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     // into the run's average.
     final heartRate = ref.read(heartRateRecorderProvider).stop();
 
+    // Read once, here, and not again. The sheet below can stay open for a
+    // minute while the runner crops a photo; branching on a fresh read
+    // afterwards would mean the button said one thing and the app did another.
+    final saveToDrafts = !kIsWeb && ref.read(isOfflineProvider);
+
     if (result.distanceKm < 0.05) {
+      // The checkpoint goes too. Without this a discarded twenty-metre run
+      // offers itself back for recovery on every launch.
+      unawaited(ref.read(runCheckpointStoreProvider).clear());
       setState(() {
         _errorMessage =
             'Run too short to save (${(result.distanceKm * 1000).round()} m).';
@@ -100,6 +172,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       route: route,
       distanceLabel: '${distanceKm.toStringAsFixed(2)} km',
       durationLabel: _formatElapsed(result.elapsed),
+      saveToDrafts: saveToDrafts,
     );
     if (!mounted) return;
 
@@ -107,6 +180,18 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       _isSaving = true;
       _errorMessage = null;
     });
+
+    if (saveToDrafts) {
+      await _saveToDrafts(
+        choice: choice,
+        distanceKm: distanceKm,
+        result: result,
+        route: route,
+        heartRate: heartRate,
+      );
+      return;
+    }
+
     try {
       final saved = await ref.read(activityActionsProvider).saveRun(
             RunLogDraft(
@@ -120,12 +205,74 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
               heartRate: heartRate.hasData ? heartRate : null,
             ),
           );
+      // Only now: if the app dies between stop() and here, the run is still
+      // recoverable from disk.
+      unawaited(ref.read(runCheckpointStoreProvider).clear());
       if (!mounted) return;
       showQuickToast(context, saved.message, tone: ToastTone.success);
       context.go('/home');
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  /// Files the finished run on this phone because there is no connection to
+  /// send it over.
+  ///
+  /// Nothing is handed to Firestore here, deliberately. Letting its cache queue
+  /// the run *and* keeping a draft would post the same run twice — once when
+  /// signal returns and again when the runner taps Post. The draft is the only
+  /// copy until they say otherwise.
+  Future<void> _saveToDrafts({
+    required FinishRunChoice choice,
+    required double distanceKm,
+    required LiveRunState result,
+    required List<RoutePoint> route,
+    required HeartRateSummary heartRate,
+  }) async {
+    try {
+      await ref.read(runDraftsProvider.notifier).saveFromRun(
+            RunDraft(
+              id: const Uuid().v4(),
+              savedAt: DateTime.now(),
+              distanceKm: distanceKm,
+              elapsed: result.elapsed,
+              averagePace: result.formattedAveragePace,
+              shareToFeed: choice.shareToFeed,
+              routePoints: route,
+              startedAt: result.startedAt,
+              heartRate: heartRate.hasData ? heartRate : null,
+            ),
+            sourcePhotoPath: choice.backgroundImagePath,
+          );
+      // The run is on disk twice over until this lands, which is the right way
+      // round: clearing first would leave a window with no copy at all.
+      await ref.read(runCheckpointStoreProvider).clear();
+      if (!mounted) return;
+
+      showQuickToast(
+        context,
+        "Saved to Drafts. Post it from Create when you're back online.",
+        icon: Icons.cloud_off_rounded,
+        tone: ToastTone.success,
+        // Longer than the default: this one tells the runner where their run
+        // went, and it is the only time they are told.
+        visibleFor: const Duration(seconds: 5),
+        actionLabel: 'View',
+        onAction: () => context.go('/create'),
+      );
+      context.go('/create');
+    } catch (e) {
+      // Deliberately does not navigate. The run is still in memory and its
+      // checkpoint is still on disk, so Finish can simply be pressed again —
+      // walking away from the screen is what would lose it.
+      if (!mounted) return;
+      setState(() => _errorMessage =
+          'Could not save this run to your phone: $e. Tap Finish to try '
+          'again.');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/connectivity/backend_reachability.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
@@ -14,8 +17,10 @@ import '../../music/presentation/connect_music_action.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../music/presentation/music_mini_player.dart';
 import '../application/heart_rate_connection_controller.dart';
+import '../application/run_draft_providers.dart';
 import '../application/tracking_providers.dart';
 import '../domain/heart_rate_models.dart';
+import '../domain/run_draft.dart';
 import '../data/treadmill_run_service.dart';
 import 'finish_run_sheet.dart';
 import 'run_session_widgets.dart';
@@ -121,12 +126,17 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     final heartRate = ref.read(heartRateRecorderProvider).stop();
     final distanceKm = double.parse(result.distanceKm.toStringAsFixed(2));
 
+    // Read once, before the sheet — see the GPS screen for why it is not read
+    // again afterwards.
+    final saveToDrafts = !kIsWeb && ref.read(isOfflineProvider);
+
     // Every exit from the sheet saves — the run is over by the time it opens.
     final choice = await showFinishRunSheet(
       context: context,
       route: const [],
       distanceLabel: '${distanceKm.toStringAsFixed(2)} km',
       durationLabel: _formatElapsed(result.elapsed),
+      saveToDrafts: saveToDrafts,
     );
     if (!mounted) return;
 
@@ -134,6 +144,17 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
       _isSaving = true;
       _errorMessage = null;
     });
+
+    if (saveToDrafts) {
+      await _saveToDrafts(
+        choice: choice,
+        distanceKm: distanceKm,
+        result: result,
+        heartRate: heartRate,
+      );
+      return;
+    }
+
     try {
       final saved = await ref.read(activityActionsProvider).saveRun(
             RunLogDraft(
@@ -153,6 +174,52 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.toString());
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  /// Files the treadmill run on this phone, exactly as the GPS screen does —
+  /// minus the route, which a run on the spot never had.
+  Future<void> _saveToDrafts({
+    required FinishRunChoice choice,
+    required double distanceKm,
+    required TreadmillRunState result,
+    required HeartRateSummary heartRate,
+  }) async {
+    try {
+      await ref.read(runDraftsProvider.notifier).saveFromRun(
+            RunDraft(
+              id: const Uuid().v4(),
+              savedAt: DateTime.now(),
+              distanceKm: distanceKm,
+              elapsed: result.elapsed,
+              averagePace: result.formattedAveragePace,
+              shareToFeed: choice.shareToFeed,
+              startedAt: result.startedAt,
+              heartRate: heartRate.hasData ? heartRate : null,
+            ),
+            sourcePhotoPath: choice.backgroundImagePath,
+          );
+      if (!mounted) return;
+
+      showQuickToast(
+        context,
+        "Saved to Drafts. Post it from Create when you're back online.",
+        icon: Icons.cloud_off_rounded,
+        tone: ToastTone.success,
+        visibleFor: const Duration(seconds: 5),
+        actionLabel: 'View',
+        onAction: () => context.go('/create'),
+      );
+      context.go('/create');
+    } catch (e) {
+      // Does not navigate: the run is still in memory, so Finish can be
+      // pressed again.
+      if (!mounted) return;
+      setState(() => _errorMessage =
+          'Could not save this run to your phone: $e. Tap Finish to try '
+          'again.');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

@@ -34,11 +34,16 @@ class FinishRunChoice {
 ///
 /// The run is already over and already recorded when this opens, so the sheet
 /// cannot be cancelled into losing it — every way out saves.
+///
+/// [saveToDrafts] only changes what the sheet *says*. Where the run actually
+/// goes is the caller's decision, made before this opened and not revisited
+/// while it is up.
 Future<FinishRunChoice> showFinishRunSheet({
   required BuildContext context,
   required List<RoutePoint> route,
   required String distanceLabel,
   required String durationLabel,
+  bool saveToDrafts = false,
 }) async {
   final choice = await showModalBottomSheet<FinishRunChoice>(
     context: context,
@@ -50,6 +55,7 @@ Future<FinishRunChoice> showFinishRunSheet({
       route: route,
       distanceLabel: distanceLabel,
       durationLabel: durationLabel,
+      saveToDrafts: saveToDrafts,
     ),
   );
   return choice ?? FinishRunChoice.dismissed;
@@ -60,11 +66,13 @@ class _FinishRunSheet extends StatefulWidget {
     required this.route,
     required this.distanceLabel,
     required this.durationLabel,
+    required this.saveToDrafts,
   });
 
   final List<RoutePoint> route;
   final String distanceLabel;
   final String durationLabel;
+  final bool saveToDrafts;
 
   @override
   State<_FinishRunSheet> createState() => _FinishRunSheetState();
@@ -133,8 +141,11 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'This is the card that goes out. Put a photo behind it if you '
-                  'like.',
+                  widget.saveToDrafts
+                      ? "You're offline. This run is saved on your phone — "
+                          'post it from Create when you\'re back.'
+                      : 'This is the card that goes out. Put a photo behind it '
+                          'if you like.',
                   style: TextStyle(
                     color: palette.muted,
                     fontSize: 13,
@@ -153,13 +164,28 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                 const SizedBox(height: AppSpacing.lg),
                 ShareToFeedToggle(
                   value: _shareToFeed,
-                  subtitle: 'Post this run to your profile activity',
+                  // The choice still stands offline, it just takes effect
+                  // later. Saying so keeps the toggle from promising something
+                  // that will not happen for hours.
+                  subtitle: widget.saveToDrafts
+                      ? 'Post this run to your profile activity when you '
+                          'publish it'
+                      : 'Post this run to your profile activity',
                   onChanged: (value) => setState(() => _shareToFeed = value),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 PrimaryButton(
-                  icon: Icons.check_rounded,
-                  label: _shareToFeed ? 'Save Run & Share' : 'Save Run',
+                  icon: widget.saveToDrafts
+                      ? Icons.cloud_off_rounded
+                      : Icons.check_rounded,
+                  // One label either way when it is going to drafts: sharing
+                  // is not what this button does now, so offering "& Share"
+                  // would be describing the wrong step.
+                  label: widget.saveToDrafts
+                      ? 'Save to Drafts'
+                      : _shareToFeed
+                          ? 'Save Run & Share'
+                          : 'Save Run',
                   onPressed: () => Navigator.of(context).pop(
                     FinishRunChoice(
                       shareToFeed: _shareToFeed,

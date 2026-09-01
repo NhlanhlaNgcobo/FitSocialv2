@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'run_checkpoint_store.dart';
+
 /// A single GPS fix recorded during a live run.
 class RunPoint {
   const RunPoint({
@@ -106,15 +108,19 @@ class LiveRunState {
 /// A runner who stops, locks the phone, and stands around for five minutes
 /// therefore banks the grace period and nothing more.
 class MovingTimeClock {
-  MovingTimeClock({required this.idleGrace, DateTime Function()? now})
-      : _now = now ?? DateTime.now;
+  MovingTimeClock({
+    required this.idleGrace,
+    DateTime Function()? now,
+    Duration accrued = Duration.zero,
+  })  : _now = now ?? DateTime.now,
+        _accrued = accrued;
 
   /// How long movement may lapse before the clock stops counting.
   final Duration idleGrace;
   final DateTime Function() _now;
 
   /// Time banked by stretches that have already closed.
-  Duration _accrued = Duration.zero;
+  Duration _accrued;
 
   /// Start of the stretch still running, or null when the clock is stopped.
   DateTime? _movingSince;
@@ -174,8 +180,16 @@ class MovingTimeClock {
     _movingSince ??= at;
   }
 
-  void reset() {
-    _accrued = Duration.zero;
+  /// Returns the clock to zero, or to [accrued] when a run is being restored
+  /// from a checkpoint.
+  ///
+  /// A restored clock deliberately comes back with no open stretch and no last
+  /// movement, so the first [settle] closes nothing and the run reads as
+  /// auto-paused until a real fix arrives. Nothing was moving while the
+  /// process was dead, and this is how the run says so without inventing a
+  /// second kind of pause.
+  void reset({Duration accrued = Duration.zero}) {
+    _accrued = accrued;
     _movingSince = null;
     _lastMovementAt = null;
     _isIdle = true;
@@ -195,6 +209,14 @@ class MovingTimeClock {
 /// from successive position fixes (with basic jitter filtering) and exposes
 /// a state stream for the UI.
 class LiveRunService {
+  LiveRunService({RunCheckpointStore? checkpointStore})
+      : _checkpoints = checkpointStore ?? const NoopRunCheckpointStore();
+
+  /// Where the run in progress is mirrored so an OS kill costs seconds rather
+  /// than the whole thing. Defaults to a no-op so a test — or the web build —
+  /// can run the service with nothing behind it.
+  final RunCheckpointStore _checkpoints;
+
   // --- Tuning constants ---
   // Below this speed (m/s) the runner is treated as stationary: the clock
   // auto-pauses and distance stops accumulating. ~0.6 m/s ≈ 2.2 km/h, slower
@@ -206,16 +228,27 @@ class LiveRunService {
   static const _minSegmentMeters = 4.0;
   // After this long without movement, auto-pause kicks in.
   static const _autoPauseAfter = Duration(seconds: 3);
+  // How often the run in progress is mirrored to disk. Deliberately not on the
+  // 1 Hz ticker: that runs _settleClock and _emit and has to stay cheap, and a
+  // run is not worth a file write every second. Twenty seconds caps what a
+  // sudden kill can cost, and the lifecycle write below covers the ordinary
+  // case, since the OS reaping a backgrounded app is always preceded by
+  // `paused`.
+  static const _checkpointEvery = Duration(seconds: 20);
 
   final _controller = StreamController<LiveRunState>.broadcast();
   StreamSubscription<Position>? _positionSub;
   Timer? _ticker;
+  Timer? _checkpointTimer;
+  /// Guards against a slow write queueing behind itself on a busy disk.
+  bool _isCheckpointing = false;
   _LifecycleWatcher? _lifecycleWatcher;
 
   final List<RunPoint> _points = [];
   double _distanceMeters = 0;
 
   final _clock = MovingTimeClock(idleGrace: _autoPauseAfter);
+
   DateTime? _startedAt;
   bool _isTracking = false;
   bool _isPaused = false;
@@ -268,8 +301,74 @@ class LiveRunService {
     // own the clock (see [MovingTimeClock]), so a tick the OS drops while the
     // phone is locked costs a frame, not a second of the run.
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
+    _checkpointTimer =
+        Timer.periodic(_checkpointEvery, (_) => _saveCheckpoint());
     _watchLifecycle();
     _emit();
+  }
+
+  /// Restarts a run from the copy left on disk by a process that died.
+  ///
+  /// Everything the checkpoint holds is put back before the ordinary start
+  /// machinery runs, so the resumed run keeps its distance, its trace and the
+  /// moving time it had banked — and comes back auto-paused, because nothing
+  /// was moving while the app was gone.
+  Future<void> resumeFrom(RunCheckpoint checkpoint) async {
+    await ensurePermission();
+    _reset(accrued: checkpoint.movingElapsed);
+    _points.addAll(checkpoint.points);
+    _distanceMeters = checkpoint.distanceMeters;
+    _isTracking = true;
+    _startedAt = checkpoint.startedAt;
+
+    _positionSub =
+        Geolocator.getPositionStream(locationSettings: _locationSettings())
+            .listen(
+      _onPosition,
+      onError: (Object e) => _controller.addError(e),
+    );
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
+    _checkpointTimer =
+        Timer.periodic(_checkpointEvery, (_) => _saveCheckpoint());
+    _watchLifecycle();
+    _emit();
+  }
+
+  /// Puts a checkpoint back without starting anything.
+  ///
+  /// For the runner who wants the run rather than more of it: [stop] can then
+  /// be called straight away and will return the recovered run as its final
+  /// state. Deliberately opens no position stream and asks for no permission —
+  /// there is nothing left to track.
+  void restoreForFinish(RunCheckpoint checkpoint) {
+    _reset(accrued: checkpoint.movingElapsed);
+    _points.addAll(checkpoint.points);
+    _distanceMeters = checkpoint.distanceMeters;
+    _startedAt = checkpoint.startedAt;
+    _isTracking = true;
+    _emit();
+  }
+
+  /// Mirrors the run in progress to disk.
+  ///
+  /// The points are copied synchronously, before anything is awaited, so the
+  /// position stream cannot mutate the list half way through encoding it.
+  void _saveCheckpoint() {
+    if (!_isTracking || _isCheckpointing) return;
+    _isCheckpointing = true;
+    final checkpoint = RunCheckpoint(
+      startedAt: _startedAt ?? DateTime.now(),
+      savedAt: DateTime.now(),
+      distanceMeters: _distanceMeters,
+      movingElapsed: _clock.elapsed,
+      isPaused: _isPaused,
+      points: List.of(_points),
+    );
+    unawaited(
+      _checkpoints
+          .write(checkpoint)
+          .whenComplete(() => _isCheckpointing = false),
+    );
   }
 
   /// Location settings that survive the screen turning off.
@@ -352,6 +451,8 @@ class LiveRunService {
     _positionSub = null;
     _ticker?.cancel();
     _ticker = null;
+    _checkpointTimer?.cancel();
+    _checkpointTimer = null;
     _unwatchLifecycle();
     _isTracking = false;
     _isPaused = false;
@@ -374,7 +475,11 @@ class LiveRunService {
 
   void _watchLifecycle() {
     if (_lifecycleWatcher != null) return;
-    final watcher = _LifecycleWatcher(syncFromBackground);
+    final watcher = _LifecycleWatcher(
+      onResumed: syncFromBackground,
+      // The last chance to write before the OS is free to reap the process.
+      onPaused: _saveCheckpoint,
+    );
     WidgetsBinding.instance.addObserver(watcher);
     _lifecycleWatcher = watcher;
   }
@@ -487,32 +592,40 @@ class LiveRunService {
     if (!_controller.isClosed) _controller.add(_snapshot());
   }
 
-  void _reset() {
+  void _reset({Duration accrued = Duration.zero}) {
     _points.clear();
     _distanceMeters = 0;
-    _clock.reset();
+    _clock.reset(accrued: accrued);
     _isPaused = false;
   }
 
   void dispose() {
     _positionSub?.cancel();
     _ticker?.cancel();
+    // liveRunServiceProvider is not autoDispose and outlives every screen, so
+    // a checkpoint timer left running here would keep writing forever.
+    _checkpointTimer?.cancel();
     _unwatchLifecycle();
     _controller.close();
   }
 }
 
-/// Pings [onResumed] when the app returns to the foreground. Kept as its own
-/// object so [LiveRunService] does not have to expose the whole
-/// [WidgetsBindingObserver] surface as public API.
+/// Pings [onResumed] when the app returns to the foreground and [onPaused] as
+/// it leaves. Kept as its own object so [LiveRunService] does not have to
+/// expose the whole [WidgetsBindingObserver] surface as public API.
 class _LifecycleWatcher extends WidgetsBindingObserver {
-  _LifecycleWatcher(this.onResumed);
+  _LifecycleWatcher({required this.onResumed, required this.onPaused});
 
   final VoidCallback onResumed;
+  final VoidCallback onPaused;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) onResumed();
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      onPaused();
+    }
   }
 }
 
