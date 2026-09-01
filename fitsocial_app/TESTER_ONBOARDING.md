@@ -31,6 +31,31 @@ notify them, and re-uploading an unchanged release does not either — that
 combination silently sends nothing, which is exactly what happened on the
 first run of this setup.
 
+**`--group-alias` is the whole command.** Without it the tester is added to the
+*project* and to no group, and `distribute.ps1 -Groups testers` distributes to
+the group — so that person can never see a release, and because they can never
+see one, they are never emailed either. Nothing anywhere says so. The command
+prints success, the person appears in `testers:list`, and the only visible
+symptom is silence from someone who is waiting for an invitation.
+
+Check membership rather than assuming it, because the list is where it shows:
+
+```
+firebase appdistribution:testers:list --project fitsocialv2
+```
+
+An empty **Groups** column is the bug. On 2026-09-01 five of eight testers had
+one; they had been added correctly in every respect except the flag. The repair
+is the same command with the flag, and it takes several emails at once:
+
+```
+firebase appdistribution:testers:add a@b.com c@d.com --group-alias testers --project fitsocialv2
+```
+
+Re-adding someone already in the project is safe — it only fills in the group.
+Then push a build: the release becoming visible to them is what finally sends
+the invitation.
+
 If you have already shipped the build and only want to add one person, you do
 not have to rebuild. Send them the release link directly from the Firebase
 console (Release & Monitor > App Distribution > the release > Share). It works
