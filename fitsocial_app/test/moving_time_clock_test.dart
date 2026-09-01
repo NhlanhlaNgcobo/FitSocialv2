@@ -158,6 +158,72 @@ void main() {
     expect(clock.isIdle, isFalse);
   });
 
+  group('the grace has to outlast the gap between movement reports', () {
+    // The field report this group exists for: a 10.11 km run that Samsung
+    // Health clocked at 1:15:56 came back from FitSocial reading 8.72 km and
+    // three minutes four seconds of moving time, off 68 kept fixes. The clock
+    // was not broken so much as starved — and the arithmetic below is exactly
+    // how three minutes comes out of seventy-six.
+
+    test('an hour reported once a minute banks only the grace, per report',
+        () {
+      final clock = build();
+      clock.markMovement();
+
+      // Sixty minutes of genuine running, but movement is only reported once
+      // a minute — every gap is longer than the 3s grace, so settle() reads
+      // each one as a stop and closes the stretch it just opened.
+      for (var i = 0; i < 60; i++) {
+        advance(const Duration(minutes: 1));
+        clock.settle();
+        clock.markMovement();
+      }
+
+      // Three minutes for an hour of running.
+      expect(clock.elapsed, grace * 60);
+    });
+
+    test('widening the grace past the gap counts the hour that was run', () {
+      final clock = build();
+      // What LiveRunService._retuneGrace does once it has seen the cadence.
+      clock.idleGrace = const Duration(seconds: 90);
+      clock.markMovement();
+
+      for (var i = 0; i < 60; i++) {
+        advance(const Duration(minutes: 1));
+        clock.settle();
+        clock.markMovement();
+      }
+
+      expect(clock.elapsed, const Duration(minutes: 60));
+    });
+
+    test('a widened grace still stops for a stop that outlasts it', () {
+      final clock = build();
+      clock.idleGrace = const Duration(seconds: 90);
+
+      runFor(clock, const Duration(minutes: 1));
+      advance(const Duration(minutes: 10));
+      clock.settle();
+
+      // The widened grace is credited and not one second of the ten minutes
+      // beyond it — the point is to survive a slow stream, not to invent time.
+      expect(clock.elapsed, const Duration(minutes: 1) + const Duration(seconds: 90));
+      expect(clock.isIdle, isTrue);
+    });
+
+    test('widening mid-run does not disturb time already banked', () {
+      final clock = build();
+      runFor(clock, const Duration(minutes: 2));
+      clock.hold();
+      final banked = clock.elapsed;
+
+      clock.idleGrace = const Duration(seconds: 90);
+
+      expect(clock.elapsed, banked);
+    });
+  });
+
   test('reset clears a run so the next one starts from zero', () {
     final clock = build();
     clock.markMovement();

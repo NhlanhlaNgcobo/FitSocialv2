@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show debugPrint, defaultTargetPlatform;
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -34,6 +34,7 @@ class LiveRunState {
     required this.points,
     required this.routePoints,
     this.startedAt,
+    this.fixStats = RunFixStats.empty,
   });
 
   static const idle = LiveRunState(
@@ -73,6 +74,10 @@ class LiveRunState {
   /// Wall-clock start of the run; null before tracking begins. Recorded on the
   /// saved run log so the route can be placed on a timeline later.
   final DateTime? startedAt;
+
+  /// What the position stream delivered, for telling a throttled phone apart
+  /// from an over-eager filter. Diagnostic only — nothing is saved from it.
+  final RunFixStats fixStats;
 
   String get formattedPace {
     if (currentPaceMinPerKm <= 0 || currentPaceMinPerKm.isInfinite) {
@@ -116,7 +121,14 @@ class MovingTimeClock {
         _accrued = accrued;
 
   /// How long movement may lapse before the clock stops counting.
-  final Duration idleGrace;
+  ///
+  /// Not final, because the right value depends on how often the position
+  /// stream is actually reporting. A grace shorter than the gap between
+  /// movement reports makes [settle] close every stretch almost as soon as it
+  /// opens, so the run banks the grace period per report instead of the time
+  /// it really ran — an hour of running arriving one fix a minute comes out as
+  /// three minutes. [LiveRunService] widens it to match the observed cadence.
+  Duration idleGrace;
   final DateTime Function() _now;
 
   /// Time banked by stretches that have already closed.
@@ -205,6 +217,81 @@ class MovingTimeClock {
   }
 }
 
+/// What the position stream actually delivered during a run, as opposed to
+/// what survived the filters.
+///
+/// Exists because those two numbers came apart in the field and nothing on the
+/// screen could tell them apart. A run reported "68 location fixes recorded"
+/// where the counter meant *kept* points, so there was no way to know whether
+/// the OS had delivered 68 fixes or 4,500 of which the filters dropped all but
+/// 68 — and those two have entirely different causes and entirely different
+/// fixes. The run now reports both, plus why the dropped ones were dropped.
+class RunFixStats {
+  const RunFixStats({
+    this.received = 0,
+    this.kept = 0,
+    this.rejectedForAccuracy = 0,
+    this.rejectedAsDrift = 0,
+    this.rejectedAsTeleport = 0,
+    this.duplicates = 0,
+    this.lastAccuracyMeters,
+    this.medianFixInterval,
+  });
+
+  static const empty = RunFixStats();
+
+  /// Fixes handed over by the platform, before any of this file's filtering.
+  final int received;
+
+  /// Fixes that survived everything: these are the route and the distance.
+  final int kept;
+
+  /// Dropped for a reported accuracy worse than the ceiling.
+  final int rejectedForAccuracy;
+
+  /// Dropped as stationary drift — inside the accuracy radius, or too slow.
+  final int rejectedAsDrift;
+
+  /// Dropped as a GPS teleport, implying a speed nothing on foot reaches.
+  final int rejectedAsTeleport;
+
+  /// Re-deliveries of the previous fix, byte for byte.
+  final int duplicates;
+
+  /// Reported accuracy of the most recent fix, in metres.
+  final double? lastAccuracyMeters;
+
+  /// Typical gap between delivered fixes; null until a few have arrived.
+  final Duration? medianFixInterval;
+
+  /// Beyond this, the stream is not keeping up with the 1 Hz that was asked
+  /// for by anything like enough to trust the distance: the route becomes a
+  /// handful of long straight chords and every bend between them is cut.
+  static const starvedAbove = Duration(seconds: 5);
+
+  bool get isStarved {
+    final median = medianFixInterval;
+    return median != null && median > starvedAbove;
+  }
+
+  /// The delivery rate, phrased whichever way round reads better.
+  String get cadenceLabel {
+    final median = medianFixInterval;
+    if (median == null) return 'measuring rate';
+    final seconds = median.inMilliseconds / 1000.0;
+    if (seconds <= 0) return 'measuring rate';
+    if (seconds < 1.5) return '${(1 / seconds).toStringAsFixed(1)} fixes/s';
+    return '1 fix / ${seconds.round()} s';
+  }
+
+  /// One line for logcat, so a tester's run can be read back off the device.
+  String get debugLine =>
+      'received=$received kept=$kept dropped(accuracy=$rejectedForAccuracy '
+      'drift=$rejectedAsDrift teleport=$rejectedAsTeleport dup=$duplicates) '
+      'cadence=$cadenceLabel '
+      'accuracy=${lastAccuracyMeters?.toStringAsFixed(1) ?? "?"}m';
+}
+
 /// GPS-based live run tracking built on geolocator. Accumulates distance
 /// from successive position fixes (with basic jitter filtering) and exposes
 /// a state stream for the UI.
@@ -226,8 +313,19 @@ class LiveRunService {
   // reported accuracy — this rejects the metre-scale wander a stationary
   // phone reports.
   static const _minSegmentMeters = 4.0;
-  // After this long without movement, auto-pause kicks in.
+  // After this long without movement, auto-pause kicks in — when fixes are
+  // arriving at the ~1 Hz asked for. See [_retuneGrace] for the slow case.
   static const _autoPauseAfter = Duration(seconds: 3);
+  // The widest the idle grace is ever stretched to. Past here a gap really is
+  // more likely to be a stop than a throttled stream, and crediting it would
+  // hand the runner minutes they spent standing still.
+  static const _maxIdleGrace = Duration(seconds: 90);
+  // Fixes worse than this are treated as unusable jitter.
+  static const _maxAccuracyMeters = 30.0;
+  // How many recent inter-fix gaps the cadence estimate is taken over. Ten is
+  // enough to ride out a couple of missed fixes without lagging a real change
+  // in delivery rate by more than a few seconds at 1 Hz.
+  static const _cadenceWindow = 10;
   // How often the run in progress is mirrored to disk. Deliberately not on the
   // 1 Hz ticker: that runs _settleClock and _emit and has to stay cheap, and a
   // run is not worth a file write every second. Twenty seconds caps what a
@@ -246,6 +344,20 @@ class LiveRunService {
 
   final List<RunPoint> _points = [];
   double _distanceMeters = 0;
+
+  // Diagnostics. Counted for every run, surfaced on the live screen and
+  // logged, so a short run can be told apart from a starved one without
+  // guessing from the shape of the route.
+  int _fixesReceived = 0;
+  int _fixesRejectedForAccuracy = 0;
+  int _fixesRejectedAsDrift = 0;
+  int _fixesRejectedAsTeleport = 0;
+  int _duplicateFixes = 0;
+  double? _lastAccuracyMeters;
+
+  /// Gaps between the last few delivered fixes, oldest first.
+  final List<Duration> _fixIntervals = [];
+  DateTime? _lastFixAt;
 
   final _clock = MovingTimeClock(idleGrace: _autoPauseAfter);
 
@@ -493,8 +605,36 @@ class LiveRunService {
 
   void _onPosition(Position position) {
     if (_isPaused) return;
+
+    _fixesReceived++;
+    _lastAccuracyMeters = position.accuracy;
+    _noteFixInterval(position.timestamp);
+    if (_fixesReceived % 25 == 0) {
+      debugPrint('[live-run] ${_fixStats.debugLine}');
+    }
+
+    // Moving time is decided here, off the fix's own speed, and deliberately
+    // before the distance filter below gets a say — because the two are not
+    // the same question. "Has the runner moved far enough to be worth a point
+    // on the map" needs a displacement bigger than the accuracy radius, which
+    // at running pace takes several seconds to build up. "Is the runner moving
+    // right now" is answered by every single fix. Feeding the clock off the
+    // first question is what reported three minutes of moving time for a
+    // seventy-six minute run: every kept fix landed further apart than the
+    // idle grace, so each one banked the grace and nothing else.
+    //
+    // Additive, never subtractive: a fix the platform calls stationary can
+    // still be marked as movement by the displacement test below, so this
+    // marks the clock at least as often as it used to, never less.
+    if (_reportsMotion(position)) _clock.markMovement();
+
     // Ignore very inaccurate fixes (urban canyon / cold start jitter).
-    if (position.accuracy > 30) return;
+    if (position.accuracy > _maxAccuracyMeters) {
+      _fixesRejectedForAccuracy++;
+      _settleClock();
+      _emit();
+      return;
+    }
 
     final point = RunPoint(
       latitude: position.latitude,
@@ -516,6 +656,7 @@ class LiveRunService {
     // fix repeatedly. Dropping these before any maths keeps the polyline
     // free of zero-length segments (which render as blobs at round caps).
     if (point.latitude == prev.latitude && point.longitude == prev.longitude) {
+      _duplicateFixes++;
       return;
     }
 
@@ -529,7 +670,10 @@ class LiveRunService {
     final speed = dt > 0 ? segment / (dt / 1000.0) : 0.0;
 
     // Reject GPS teleport jumps implying > 12 m/s (~43 km/h).
-    if (speed > 12) return;
+    if (speed > 12) {
+      _fixesRejectedAsTeleport++;
+      return;
+    }
 
     // Stationary-drift rejection: a real step must clear both a minimum
     // distance and the GPS accuracy radius, and imply at least a slow walk.
@@ -542,6 +686,8 @@ class LiveRunService {
       _distanceMeters += segment;
       _clock.markMovement();
       _points.add(point);
+    } else {
+      _fixesRejectedAsDrift++;
     }
     // When it's not real movement we deliberately do NOT add the point or
     // distance — this is what keeps distance flat while standing still.
@@ -574,6 +720,74 @@ class LiveRunService {
     return math.min(minutesPerKm, 59.9);
   }
 
+  /// Whether the platform put a real speed reading on this fix.
+  ///
+  /// Geolocator reports 0 for both fields on a device that cannot supply one,
+  /// so the accuracy is what separates "standing still" from "no idea".
+  static bool _hasPlatformSpeed(Position position) =>
+      position.speedAccuracy > 0;
+
+  /// Whether this fix says, on its own, that the runner is moving.
+  static bool _reportsMotion(Position position) =>
+      _hasPlatformSpeed(position) && position.speed >= _movingSpeedThreshold;
+
+  void _noteFixInterval(DateTime at) {
+    final previous = _lastFixAt;
+    _lastFixAt = at;
+    if (previous == null) return;
+    final gap = at.difference(previous);
+    // Fixes can arrive out of order, and a replayed buffer can carry two on
+    // the same millisecond; neither says anything about the delivery rate.
+    if (gap <= Duration.zero) return;
+    _fixIntervals.add(gap);
+    if (_fixIntervals.length > _cadenceWindow) _fixIntervals.removeAt(0);
+    _retuneGrace();
+  }
+
+  /// Typical gap between delivered fixes, or null until enough have arrived
+  /// to be worth believing. Median rather than mean so one long stall — a
+  /// tunnel, a cold start — does not drag the estimate for the rest of the run.
+  Duration? get _medianFixInterval {
+    if (_fixIntervals.length < 3) return null;
+    final sorted = List.of(_fixIntervals)..sort();
+    return sorted[sorted.length ~/ 2];
+  }
+
+  /// Keeps the idle grace wider than the gap between fixes.
+  ///
+  /// [MovingTimeClock] reads a lapse longer than its grace as a stop. That is
+  /// right when fixes arrive every second, and badly wrong when the OS is only
+  /// delivering one a minute: every ordinary gap then reads as a stop, and the
+  /// run banks one grace period per fix rather than the time it ran.
+  ///
+  /// Tying the grace to the observed cadence leaves the healthy 1 Hz case at
+  /// [_autoPauseAfter] exactly as before — auto-pause stays as sharp as it
+  /// was — and degrades to counting the gaps when the stream is starved, which
+  /// is the least wrong answer available: at one fix a minute there is no
+  /// evidence of a stop to find, and pretending otherwise is what produced the
+  /// three-minute clock. [_maxIdleGrace] stops that reasoning running away.
+  void _retuneGrace() {
+    final median = _medianFixInterval;
+    if (median == null) return;
+    _clock.idleGrace = Duration(
+      microseconds: (median * 2).inMicroseconds.clamp(
+            _autoPauseAfter.inMicroseconds,
+            _maxIdleGrace.inMicroseconds,
+          ),
+    );
+  }
+
+  RunFixStats get _fixStats => RunFixStats(
+        received: _fixesReceived,
+        kept: _points.length,
+        rejectedForAccuracy: _fixesRejectedForAccuracy,
+        rejectedAsDrift: _fixesRejectedAsDrift,
+        rejectedAsTeleport: _fixesRejectedAsTeleport,
+        duplicates: _duplicateFixes,
+        lastAccuracyMeters: _lastAccuracyMeters,
+        medianFixInterval: _medianFixInterval,
+      );
+
   LiveRunState _snapshot() => LiveRunState(
         isTracking: _isTracking,
         isPaused: _isPaused,
@@ -586,6 +800,7 @@ class LiveRunService {
           _points.map((p) => LatLng(p.latitude, p.longitude)),
         ),
         startedAt: _startedAt,
+        fixStats: _fixStats,
       );
 
   void _emit() {
@@ -596,6 +811,17 @@ class LiveRunService {
     _points.clear();
     _distanceMeters = 0;
     _clock.reset(accrued: accrued);
+    // The cadence is a property of the run, not of the phone: a resumed run
+    // re-measures it rather than inheriting a stale grace from the last one.
+    _clock.idleGrace = _autoPauseAfter;
+    _fixesReceived = 0;
+    _fixesRejectedForAccuracy = 0;
+    _fixesRejectedAsDrift = 0;
+    _fixesRejectedAsTeleport = 0;
+    _duplicateFixes = 0;
+    _lastAccuracyMeters = null;
+    _fixIntervals.clear();
+    _lastFixAt = null;
     _isPaused = false;
   }
 

@@ -285,6 +285,23 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     return h > 0 ? '$h:$m:$s' : '$m:$s';
   }
 
+  /// What the GPS is actually doing, in terms a tester can report back.
+  ///
+  /// Kept fixes are given against delivered ones because the two coming apart
+  /// is the whole diagnosis. A healthy stream delivers about one a second and
+  /// keeps one every few; a throttled one delivers so few that the route
+  /// becomes a handful of long chords. The old counter showed only the kept
+  /// number, which reads the same in both cases.
+  static String _gpsStatusLine(LiveRunState state) {
+    final stats = state.fixStats;
+    final accuracy = stats.lastAccuracyMeters;
+    final buffer = StringBuffer(
+      '${stats.kept} of ${stats.received} fixes kept · ${stats.cadenceLabel}',
+    );
+    if (accuracy != null) buffer.write(' · ±${accuracy.round()} m');
+    return buffer.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -414,6 +431,23 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                   tone: RunBannerTone.brand,
                 ),
               ],
+              // The one condition the runner can do something about, and the
+              // one that quietly ruins a run: when the phone delivers location
+              // this slowly the route is a handful of straight lines between
+              // distant fixes, so every bend is cut and the distance reads
+              // short. Said here, during the run, because afterwards the only
+              // evidence is a number that looks merely disappointing.
+              if (runState.isTracking && runState.fixStats.isStarved) ...[
+                const SizedBox(height: AppSpacing.md),
+                const RunBanner(
+                  icon: Icons.satellite_alt_rounded,
+                  message: 'Weak GPS updates — this phone is reporting '
+                      'location far slower than usual, so distance will read '
+                      'short. Set FitSocial to Unrestricted in your battery '
+                      'settings.',
+                  tone: RunBannerTone.danger,
+                ),
+              ],
               const SizedBox(height: AppSpacing.lg),
               StaggeredFadeIn(
                 controller: _entranceController,
@@ -472,7 +506,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                   Flexible(
                     child: Text(
                       runState.isTracking
-                          ? '${runState.points.length} location fixes recorded'
+                          ? _gpsStatusLine(runState)
                           : 'Distance, time and pace are measured live from '
                               'GPS. Keep your phone with you.',
                       textAlign: TextAlign.center,
