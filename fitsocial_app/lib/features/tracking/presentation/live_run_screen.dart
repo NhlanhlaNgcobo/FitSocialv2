@@ -535,6 +535,24 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                     tone: RunBannerTone.danger,
                   ),
               ],
+              // Said before the run rather than during it, because during it
+              // is too late to be read. The starvation banner below only
+              // appears once the stream is already failing, and a runner whose
+              // phone is in a pouch is not looking at the screen then — the
+              // whole reason the throttle bit is that the screen went off.
+              // Here they are still holding it, and the setting is two taps.
+              if (!runState.isTracking && !_isBatteryExempt) ...[
+                const SizedBox(height: AppSpacing.md),
+                RunBanner(
+                  icon: Icons.battery_saver_rounded,
+                  message: 'Android throttles GPS once the screen goes off — '
+                      'which is most of a run in a pocket or a waist pouch. '
+                      'Set FitSocial to Unrestricted and it keeps tracking.',
+                  tone: RunBannerTone.brand,
+                  actionLabel: 'Allow unrestricted battery',
+                  onAction: _allowUnrestrictedBattery,
+                ),
+              ],
               const SizedBox(height: AppSpacing.lg),
               StaggeredFadeIn(
                 controller: _entranceController,

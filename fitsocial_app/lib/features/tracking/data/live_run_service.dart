@@ -432,8 +432,20 @@ class LiveRunService {
   // more likely to be a stop than a throttled stream, and crediting it would
   // hand the runner minutes they spent standing still.
   static const _maxIdleGrace = Duration(seconds: 90);
-  // Fixes worse than this are treated as unusable jitter.
-  static const _maxAccuracyMeters = 30.0;
+  // Fixes worse than this are treated as unusable jitter. Generous on purpose:
+  // it used to be 30 m, which is roughly what a phone reports lying flat in an
+  // open hand and nothing like what one reports in a pocket or a waist pouch.
+  // A body is mostly water and water absorbs the L-band, so a phone worn
+  // against one loses satellites and its reported radius grows to 30–60 m —
+  // every fix of which the old ceiling discarded outright. No point, no
+  // distance, no route: from the outside, indistinguishable from the GPS
+  // dropping out, and reported as exactly that. Past 65 m there really is
+  // nothing left worth keeping.
+  static const _maxAccuracyMeters = 65.0;
+  // The radius below which a fix is good enough to be taken at close to face
+  // value. Above it a fix is kept, but held to a much harder movement test —
+  // see [_driftFloorFor].
+  static const _wellFixedAccuracyMeters = 30.0;
   // How many recent inter-fix gaps the cadence estimate is taken over. Ten is
   // enough to ride out a couple of missed fixes without lagging a real change
   // in delivery rate by more than a few seconds at 1 Hz.
@@ -937,7 +949,9 @@ class LiveRunService {
     // marks the clock at least as often as it used to, never less.
     if (_reportsMotion(position)) _clock.markMovement();
 
-    // Ignore very inaccurate fixes (urban canyon / cold start jitter).
+    // Ignore hopeless fixes (urban canyon / cold start jitter). A merely poor
+    // one is kept and held to a harder movement test instead — throwing it
+    // away is what made a pocket run look like a dropped signal.
     if (position.accuracy > _maxAccuracyMeters) {
       _fixesRejectedForAccuracy++;
       _settleClock();
@@ -1077,12 +1091,24 @@ class LiveRunService {
   /// How far this fix has to have moved before the displacement counts as
   /// running rather than a stationary phone's wander.
   ///
-  /// A phone that has told us it is moving gets the bare minimum: the drift
-  /// this floor exists to reject is what a *standing* phone reports, and the
-  /// speed sensor has just ruled that out. Everything else is judged against
-  /// half the accuracy radius, capped — see [_maxDriftFloorMeters] for why the
-  /// full radius was costing real distance.
+  /// The better the fix, the less of its own uncertainty it has to clear.
+  ///
+  /// A fix worse than [_wellFixedAccuracyMeters] — the pocket and waist-pouch
+  /// case — has to clear its radius outright, and nothing exempts it. Those
+  /// fixes are only kept at all because the step counter can fill in behind
+  /// them, and a phone that unsure of where it is wanders most of its own
+  /// radius while standing perfectly still; anything laxer would credit that
+  /// wander as running, which is a far worse failure than reading short.
+  ///
+  /// Below that, a phone that has told us it is moving gets the bare minimum:
+  /// the drift this floor exists to reject is what a *standing* phone reports,
+  /// and the speed sensor has ruled that out. Doppler speed is measured
+  /// independently of position, so it is worth believing when position is
+  /// merely so-so — but not when position has fallen apart, which is why this
+  /// test comes second. Everything else clears half the radius, capped: see
+  /// [_maxDriftFloorMeters] for why the full radius was costing real distance.
   static double _driftFloorFor(Position position) {
+    if (position.accuracy > _wellFixedAccuracyMeters) return position.accuracy;
     if (_reportsMotion(position)) return _minSegmentMeters;
     return math.max(
       _minSegmentMeters,

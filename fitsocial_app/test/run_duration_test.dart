@@ -190,4 +190,54 @@ void main() {
       expect(metresRun(), closeTo(6, 0.5));
     });
   });
+
+  group('a phone worn against the body', () {
+    // A run in a pocket or a waist pouch is not a run in an open hand. The
+    // body absorbs the L-band the satellites broadcast on, so the phone loses
+    // some of them and its reported radius grows from ~8 m to 30-60 m. Every
+    // one of those fixes used to be discarded on the spot, which left the run
+    // with no points and no distance at all — reported by testers, reasonably,
+    // as the GPS dropping out.
+
+    test('a pocket-grade fix is kept rather than discarded', () async {
+      // 45 m accuracy, and 60 m of running to clear it: real movement, on a
+      // fix the old 30 m ceiling threw away without looking.
+      await deliver(0, accuracy: 45);
+      advance(const Duration(seconds: 20));
+      await deliver(60, accuracy: 45);
+
+      expect(metresRun(), closeTo(60, 1));
+    });
+
+    test('but it has to clear its whole radius, not half of it', () async {
+      // 25 m of wander on a fix that is itself 45 m unsure of where it is.
+      // A well-fixed phone clearing 25 m is running; this one is standing.
+      await deliver(0, accuracy: 45);
+      advance(const Duration(seconds: 20));
+      await deliver(25, accuracy: 45);
+
+      expect(metresRun(), 0);
+    });
+
+    test('and the platform speed does not excuse it either', () async {
+      // Doppler speed is measured independently of position and is worth
+      // believing when position is merely so-so. It is not a reason to trust
+      // a 20 m step from a phone with a 50 m radius: that is the one case
+      // where crediting wander as running is most likely and worst.
+      await deliver(0, accuracy: 50, speed: 3, speedAccuracy: 1);
+      advance(const Duration(seconds: 8));
+      await deliver(20, accuracy: 50, speed: 3, speedAccuracy: 1);
+
+      expect(metresRun(), 0);
+    });
+
+    test('a hopeless fix is still thrown away', () async {
+      // Past 65 m there is nothing left in a fix worth keeping.
+      await deliver(0, accuracy: 80);
+      advance(const Duration(seconds: 20));
+      await deliver(100, accuracy: 80);
+
+      expect(metresRun(), 0);
+    });
+  });
 }
