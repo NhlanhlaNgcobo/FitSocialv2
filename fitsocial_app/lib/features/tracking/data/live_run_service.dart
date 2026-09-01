@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show debugPrint, defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show debugPrint, defaultTargetPlatform, visibleForTesting;
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -233,6 +234,7 @@ class RunFixStats {
     this.rejectedForAccuracy = 0,
     this.rejectedAsDrift = 0,
     this.rejectedAsTeleport = 0,
+    this.staleFromPause = 0,
     this.duplicates = 0,
     this.lastAccuracyMeters,
     this.medianFixInterval,
@@ -254,6 +256,10 @@ class RunFixStats {
 
   /// Dropped as a GPS teleport, implying a speed nothing on foot reaches.
   final int rejectedAsTeleport;
+
+  /// Produced while the run was manually paused and delivered in the burst
+  /// that follows the resume. See [LiveRunService.resume].
+  final int staleFromPause;
 
   /// Re-deliveries of the previous fix, byte for byte.
   final int duplicates;
@@ -287,7 +293,8 @@ class RunFixStats {
   /// One line for logcat, so a tester's run can be read back off the device.
   String get debugLine =>
       'received=$received kept=$kept dropped(accuracy=$rejectedForAccuracy '
-      'drift=$rejectedAsDrift teleport=$rejectedAsTeleport dup=$duplicates) '
+      'drift=$rejectedAsDrift teleport=$rejectedAsTeleport '
+      'paused=$staleFromPause dup=$duplicates) '
       'cadence=$cadenceLabel '
       'accuracy=${lastAccuracyMeters?.toStringAsFixed(1) ?? "?"}m';
 }
@@ -296,8 +303,19 @@ class RunFixStats {
 /// from successive position fixes (with basic jitter filtering) and exposes
 /// a state stream for the UI.
 class LiveRunService {
-  LiveRunService({RunCheckpointStore? checkpointStore})
-      : _checkpoints = checkpointStore ?? const NoopRunCheckpointStore();
+  LiveRunService({
+    RunCheckpointStore? checkpointStore,
+    Stream<Position> Function(LocationSettings)? openPositionStream,
+  })  : _checkpoints = checkpointStore ?? const NoopRunCheckpointStore(),
+        _openPositionStream = openPositionStream ?? _geolocatorPositions;
+
+  static Stream<Position> _geolocatorPositions(LocationSettings settings) =>
+      Geolocator.getPositionStream(locationSettings: settings);
+
+  /// How the run gets its fixes. Injectable so a test can drive the filters,
+  /// the pause handling and the cadence estimate without a device — none of
+  /// which could be covered while this was a direct call to a static.
+  final Stream<Position> Function(LocationSettings) _openPositionStream;
 
   /// Where the run in progress is mirrored so an OS kill costs seconds rather
   /// than the whole thing. Defaults to a no-op so a test — or the web build —
@@ -355,9 +373,19 @@ class LiveRunService {
   int _duplicateFixes = 0;
   double? _lastAccuracyMeters;
 
+  int _fixesStaleFromPause = 0;
+
   /// Gaps between the last few delivered fixes, oldest first.
   final List<Duration> _fixIntervals = [];
   DateTime? _lastFixAt;
+
+  /// When the last manual pause ended. Fixes older than this were produced
+  /// while the run was stopped and are not part of it.
+  DateTime? _resumedAt;
+
+  /// Set by [resume]: the next fix that counts starts a new leg rather than
+  /// joining up to the one the pause interrupted.
+  bool _rebaseNextFix = false;
 
   final _clock = MovingTimeClock(idleGrace: _autoPauseAfter);
 
@@ -400,12 +428,21 @@ class LiveRunService {
   Future<void> start() async {
     await ensurePermission();
     _reset();
-    _isTracking = true;
-    _startedAt = DateTime.now();
+    beginTracking(startedAt: DateTime.now());
+  }
 
-    _positionSub =
-        Geolocator.getPositionStream(locationSettings: _locationSettings())
-            .listen(
+  /// Opens the position stream and starts the timers for an already-reset run.
+  ///
+  /// Split out of [start] so [resumeFrom] shares it, and marked visible for
+  /// testing because it is the one way to drive the position handling without
+  /// a device: [start] cannot run in a test, since [ensurePermission] talks to
+  /// the platform.
+  @visibleForTesting
+  void beginTracking({required DateTime startedAt}) {
+    _isTracking = true;
+    _startedAt = startedAt;
+
+    _positionSub = _openPositionStream(_locationSettings()).listen(
       _onPosition,
       onError: (Object e) => _controller.addError(e),
     );
@@ -430,20 +467,7 @@ class LiveRunService {
     _reset(accrued: checkpoint.movingElapsed);
     _points.addAll(checkpoint.points);
     _distanceMeters = checkpoint.distanceMeters;
-    _isTracking = true;
-    _startedAt = checkpoint.startedAt;
-
-    _positionSub =
-        Geolocator.getPositionStream(locationSettings: _locationSettings())
-            .listen(
-      _onPosition,
-      onError: (Object e) => _controller.addError(e),
-    );
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
-    _checkpointTimer =
-        Timer.periodic(_checkpointEvery, (_) => _saveCheckpoint());
-    _watchLifecycle();
-    _emit();
+    beginTracking(startedAt: checkpoint.startedAt);
   }
 
   /// Puts a checkpoint back without starting anything.
@@ -551,6 +575,19 @@ class LiveRunService {
     if (!_isTracking || !_isPaused) return;
     _isPaused = false;
     _clock.release();
+    // Everything the platform produced during the pause is still queued behind
+    // the subscription. Pausing a subscription does not stop an EventChannel
+    // broadcast stream — it only buffers what the stream keeps sending — so
+    // those fixes arrive in a burst the moment it resumes, by which point
+    // _isPaused is false again and the guard at the top of _onPosition waves
+    // them through. A runner who paused and walked to a water point would have
+    // every metre of that walk added back the instant they pressed resume.
+    _resumedAt = DateTime.now();
+    // The first fix that does count opens a new leg instead of joining up to
+    // the old one, so the ground covered while paused is not swallowed as a
+    // single long segment. Distance stops at the pause and picks up wherever
+    // the runner actually is.
+    _rebaseNextFix = true;
     _positionSub?.resume();
     _emit();
   }
@@ -606,6 +643,15 @@ class LiveRunService {
   void _onPosition(Position position) {
     if (_isPaused) return;
 
+    // Produced while the run was paused and delivered in the burst that
+    // follows the resume — see [resume]. Dropped ahead of the counters below
+    // because these fixes say nothing about how the stream is performing.
+    final resumedAt = _resumedAt;
+    if (resumedAt != null && position.timestamp.isBefore(resumedAt)) {
+      _fixesStaleFromPause++;
+      return;
+    }
+
     _fixesReceived++;
     _lastAccuracyMeters = position.accuracy;
     _noteFixInterval(position.timestamp);
@@ -641,6 +687,16 @@ class LiveRunService {
       longitude: position.longitude,
       timestamp: position.timestamp,
     );
+
+    // First fix of a resumed leg. It becomes the new anchor and contributes
+    // no distance: the runner may be standing where they stopped or a
+    // kilometre away, and neither is ground they ran.
+    if (_rebaseNextFix) {
+      _rebaseNextFix = false;
+      _points.add(point);
+      _emit();
+      return;
+    }
 
     if (_points.isEmpty) {
       // First fix: record position but don't start the "moving" clock until
@@ -783,6 +839,7 @@ class LiveRunService {
         rejectedForAccuracy: _fixesRejectedForAccuracy,
         rejectedAsDrift: _fixesRejectedAsDrift,
         rejectedAsTeleport: _fixesRejectedAsTeleport,
+        staleFromPause: _fixesStaleFromPause,
         duplicates: _duplicateFixes,
         lastAccuracyMeters: _lastAccuracyMeters,
         medianFixInterval: _medianFixInterval,
@@ -819,9 +876,12 @@ class LiveRunService {
     _fixesRejectedAsDrift = 0;
     _fixesRejectedAsTeleport = 0;
     _duplicateFixes = 0;
+    _fixesStaleFromPause = 0;
     _lastAccuracyMeters = null;
     _fixIntervals.clear();
     _lastFixAt = null;
+    _resumedAt = null;
+    _rebaseNextFix = false;
     _isPaused = false;
   }
 

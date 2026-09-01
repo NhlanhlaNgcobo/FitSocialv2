@@ -54,6 +54,7 @@ void main() {
       rejectedForAccuracy: 12,
       rejectedAsDrift: 4020,
       rejectedAsTeleport: 1,
+      staleFromPause: 37,
       duplicates: 1,
       lastAccuracyMeters: 8.4,
       medianFixInterval: Duration(seconds: 1),
@@ -61,9 +62,18 @@ void main() {
 
     expect(
       stats.debugLine,
-      'received=4102 kept=68 dropped(accuracy=12 drift=4020 teleport=1 dup=1) '
-      'cadence=1.0 fixes/s accuracy=8.4m',
+      'received=4102 kept=68 dropped(accuracy=12 drift=4020 teleport=1 '
+      'paused=37 dup=1) cadence=1.0 fixes/s accuracy=8.4m',
     );
+  });
+
+  test('fixes buffered through a pause get their own bucket', () {
+    // Lumping them in with the drift rejections would make a run that was
+    // paused look like a run with bad GPS.
+    const stats = RunFixStats(received: 100, kept: 40, staleFromPause: 37);
+
+    expect(stats.staleFromPause, 37);
+    expect(stats.rejectedAsDrift, 0);
   });
 
   test('an empty run reports nothing rather than zeroes it cannot know', () {
