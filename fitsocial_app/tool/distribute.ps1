@@ -38,6 +38,32 @@ if (-not $Groups -and -not $Testers) {
     throw "Give it someone to send to: -Groups <alias> or -Testers <comma,separated,emails>"
 }
 
+# Gradle will not start unless TEMP points outside AppData\Local.
+#
+# Every JVM on this machine dies at startup with "Unable to establish loopback
+# connection" -- Gradle, and the Firestore emulator too. It is not the network:
+# TCP loopback is fine. Selector.open() builds its wakeup pipe on an AF_UNIX
+# socket, the JDK puts that socket file in the directory named by the TEMP
+# *environment variable*, and binding works but connecting to anything under
+# C:\Users\<user>\AppData\Local fails with "Invalid argument: connect" and the
+# file is then undeletable ("cannot be accessed by the system"). Something in
+# that subtree mishandles the AF_UNIX reparse point. Everywhere else on the
+# disk -- the home directory, this repo, C:\Users\Public -- works.
+#
+# java.io.tmpdir does NOT move it; only TEMP/TMP do.
+#
+# As of 2026-09-07 the user environment sets TEMP to %USERPROFILE%\Temp, which
+# is outside that subtree, so this normally does nothing. It stays as a
+# self-heal: a shell that inherited the old value, or a fresh machine, still
+# builds instead of failing in one second with a message about loopback.
+if ($env:TEMP -like "*\AppData\Local\*") {
+    $socketTmp = Join-Path $env:USERPROFILE "Temp"
+    if (-not (Test-Path $socketTmp)) { New-Item -ItemType Directory -Path $socketTmp | Out-Null }
+    $env:TEMP = $socketTmp
+    $env:TMP  = $socketTmp
+    Write-Output "TEMP     -> moved to $socketTmp so the Gradle daemon can start"
+}
+
 if (-not $SkipBuild) {
     Push-Location $appRoot
     try {
