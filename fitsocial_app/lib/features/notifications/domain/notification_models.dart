@@ -20,6 +20,16 @@ enum FitNotificationType {
   /// Someone wrote `@you` in a post caption or a comment.
   mention,
 
+  /// Someone commented on a post of yours.
+  comment,
+
+  /// Someone replied to a comment of yours.
+  ///
+  /// Separate from [comment] because the two are not the same event: a reply
+  /// is addressed to what you said, and it reaches you on somebody else's post
+  /// as often as on your own.
+  reply,
+
   /// Someone attached you to a post from its composer.
   tag,
 
@@ -48,6 +58,10 @@ enum FitNotificationType {
         return 'like';
       case FitNotificationType.mention:
         return 'mention';
+      case FitNotificationType.comment:
+        return 'comment';
+      case FitNotificationType.reply:
+        return 'reply';
       case FitNotificationType.tag:
         return 'tag';
       case FitNotificationType.challengeInvite:
@@ -67,6 +81,10 @@ enum FitNotificationType {
         return FitNotificationType.like;
       case 'mention':
         return FitNotificationType.mention;
+      case 'comment':
+        return FitNotificationType.comment;
+      case 'reply':
+        return FitNotificationType.reply;
       case 'tag':
         return FitNotificationType.tag;
       case 'challengeInvite':
@@ -101,6 +119,14 @@ abstract final class NotificationIds {
       'mention_${sourceId}_$actorId';
 
   static String tag(String postId, String actorId) => 'tag_${postId}_$actorId';
+
+  /// A comment and a reply are keyed by the comment that was written rather
+  /// than by the post or the actor: every one of them is its own event, and
+  /// two comments on the same post must not collapse into one row the way a
+  /// second like of the same post does.
+  static String comment(String commentId) => 'comment_$commentId';
+
+  static String reply(String commentId) => 'reply_$commentId';
 }
 
 /// One line in the notifications list.
@@ -150,9 +176,12 @@ class FitNotification {
   /// mentions and tags too, for the same sentence-building reason.
   final String? postType;
 
-  /// Set on a mention that was written in a comment rather than in the post's
-  /// own caption. Null on every other kind, and on a caption mention — which
-  /// is what tells the two apart in [message].
+  /// The comment this is about: the one that was written on a [comment] or a
+  /// [reply], and the one the words were in on a [mention].
+  ///
+  /// Null on a mention written in a post's own caption, which is what tells
+  /// those two apart in [message], and on every kind that has no comment
+  /// behind it.
   final String? commentId;
 
   /// Which reaction was given. Null on every other kind, and on a [like]
@@ -186,6 +215,10 @@ class FitNotification {
         return commentId == null
             ? 'mentioned you in a $_likedNoun'
             : 'mentioned you in a comment';
+      case FitNotificationType.comment:
+        return 'commented on your $_likedNoun';
+      case FitNotificationType.reply:
+        return 'replied to your comment';
       case FitNotificationType.tag:
         return 'tagged you in a $_likedNoun';
       case FitNotificationType.challengeInvite:
@@ -234,6 +267,8 @@ class FitNotification {
         return '/user/$actorId';
       case FitNotificationType.like:
       case FitNotificationType.mention:
+      case FitNotificationType.comment:
+      case FitNotificationType.reply:
       case FitNotificationType.tag:
         final id = postId;
         return (id == null || id.isEmpty) ? null : '/post/$id';

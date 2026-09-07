@@ -374,6 +374,7 @@ class Comment {
     required this.text,
     required this.createdAt,
     this.authorAvatarUrl,
+    this.parentId,
   });
 
   final String id;
@@ -385,6 +386,16 @@ class Comment {
   /// Author's profile photo at the time of commenting, denormalised the same
   /// way [authorName] is. Null on comments written before it was recorded.
   final String? authorAvatarUrl;
+
+  /// The comment this one answers, or null when it is the start of a thread.
+  ///
+  /// Threads are one level deep: replying to a reply hangs the new comment off
+  /// the same parent, so a conversation stays a list under the comment it is
+  /// about rather than a staircase running off the side of the screen.
+  final String? parentId;
+
+  /// Whether this comment answers another one.
+  bool get isReply => parentId != null && parentId!.isNotEmpty;
 
   /// The same comment with its author's name and photo replaced — the
   /// counterpart to [FeedPost.withAuthor], and null-writing for the same
@@ -400,6 +411,7 @@ class Comment {
       text: text,
       createdAt: createdAt,
       authorAvatarUrl: authorAvatarUrl,
+      parentId: parentId,
     );
   }
 }

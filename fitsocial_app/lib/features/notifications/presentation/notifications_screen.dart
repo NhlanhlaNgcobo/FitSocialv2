@@ -232,6 +232,11 @@ Color _accentFor(FitNotification notification, AppPalette palette) {
     case FitNotificationType.mention:
     case FitNotificationType.tag:
       return palette.accent(const Color(0xFF3AA9C9));
+    // Words rather than your name: green keeps a comment from reading as one
+    // more row of the same blue @ that a mention already owns.
+    case FitNotificationType.comment:
+    case FitNotificationType.reply:
+      return palette.accent(const Color(0xFF37A66B));
     // The three challenge kinds share the brand orange, which is what the
     // challenge screens are already painted in — a fourth accent would be a
     // colour that means nothing anywhere else in the app.
@@ -489,6 +494,12 @@ class _ActorAvatar extends StatelessWidget {
       case FitNotificationType.mention:
       case FitNotificationType.tag:
         return Icons.alternate_email_rounded;
+      // A reply carries the curved arrow — the same glyph the button that
+      // wrote it has, so the row points back at the action.
+      case FitNotificationType.comment:
+        return Icons.mode_comment_rounded;
+      case FitNotificationType.reply:
+        return Icons.reply_rounded;
       case FitNotificationType.challengeInvite:
         return Icons.emoji_events_outlined;
       case FitNotificationType.challengeAccepted:

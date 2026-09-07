@@ -14,6 +14,7 @@ import '../../auth/domain/username.dart';
 import '../../notifications/data/firestore_notification_repository.dart';
 import '../../notifications/domain/notification_models.dart';
 import '../domain/app_models.dart';
+import '../domain/comment_threads.dart';
 import '../domain/explore_models.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/mentions.dart';
@@ -2117,18 +2118,36 @@ class FirestoreContentRepository implements ContentRepository {
   Future<Comment> addComment(
     UserProfileDraft? profile,
     String postId,
-    String text,
-  ) async {
+    String text, {
+    String? parentCommentId,
+  }) async {
     final user = _requireCurrentUser();
     final authorName = await _resolvePublicAuthorName(profile);
     final authorAvatarUrl = await _resolveAuthorAvatarUrl(profile);
-    final commentRef = postsCollection.doc(postId).collection('comments').doc();
+    final comments = postsCollection.doc(postId).collection('comments');
+    final commentRef = comments.doc();
 
     // Resolved before the batch opens, because turning `@handle` into a uid is
     // a read and a batch may not read. The notifications themselves then ride
     // in the same commit as the comment: a mention nobody was told about is a
     // mention that did not happen.
     final mentioned = await _resolveMentionRecipients(text, user.uid);
+
+    // Everyone the comment itself has to tell, for the same reason and read
+    // the same way up front: the post's author, and — on a reply — the author
+    // of the comment being answered.
+    final postSnapshot = await postsCollection.doc(postId).get();
+    final postData = postSnapshot.data() ?? const <String, dynamic>{};
+    final parentAuthorId = parentCommentId == null
+        ? ''
+        : await _commentAuthorId(comments, parentCommentId);
+
+    final recipients = commentNotificationAudience(
+      actorId: user.uid,
+      postAuthorId: (postData['authorId'] as String?) ?? '',
+      parentAuthorId: parentAuthorId,
+      mentioned: mentioned.toSet(),
+    );
 
     final now = DateTime.now();
 
@@ -2141,6 +2160,10 @@ class FirestoreContentRepository implements ContentRepository {
       'authorName': authorName,
       if (authorAvatarUrl != null) 'authorAvatarUrl': authorAvatarUrl,
       'text': text,
+      // The comment this one answers. Written only when there is one, so a
+      // top-level comment stays exactly the document it has always been.
+      if (parentCommentId != null && parentCommentId.isNotEmpty)
+        'parentCommentId': parentCommentId,
       // Stored as an index for the notifications above, never as the source of
       // truth for what the comment says — the links are re-parsed from `text`
       // on every render, so the two can't drift.
@@ -2162,6 +2185,29 @@ class FirestoreContentRepository implements ContentRepository {
         ),
       );
     }
+    for (final entry in recipients.entries) {
+      final isReply = entry.value;
+      batch.set(
+        _notifications.ref(
+          entry.key,
+          isReply
+              ? NotificationIds.reply(commentRef.id)
+              : NotificationIds.comment(commentRef.id),
+        ),
+        _notifications.commentPayload(
+          actorId: user.uid,
+          actorName: authorName,
+          actorAvatarUrl: authorAvatarUrl,
+          postId: postId,
+          commentId: commentRef.id,
+          isReply: isReply,
+          // Carried onto the row so it can show what was commented on without
+          // reading the post back, exactly as a reaction does.
+          postImageUrl: postData['imageUrl'] as String?,
+          postType: postData['postType'] as String?,
+        ),
+      );
+    }
     batch.update(postsCollection.doc(postId), {
       'commentsCount': FieldValue.increment(1),
     });
@@ -2174,7 +2220,18 @@ class FirestoreContentRepository implements ContentRepository {
       text: text,
       createdAt: now,
       authorAvatarUrl: authorAvatarUrl,
+      parentId: parentCommentId,
     );
+  }
+
+  /// Who wrote [commentId], or empty when the comment has since been removed.
+  Future<String> _commentAuthorId(
+    CollectionReference<Map<String, dynamic>> comments,
+    String commentId,
+  ) async {
+    if (commentId.isEmpty) return '';
+    final snapshot = await comments.doc(commentId).get();
+    return (snapshot.data()?['authorId'] as String?) ?? '';
   }
 
   @override

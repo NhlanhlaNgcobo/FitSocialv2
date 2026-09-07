@@ -22,10 +22,27 @@ import '../../shared/widgets/liquid_glass.dart';
 /// keyboard on its own — a [Scaffold] pins `bottomNavigationBar` to the bottom
 /// of the screen regardless of `viewInsets` — so every host has to pad for
 /// whichever of the keyboard and the system nav bar is taller.
+/// The comment a reply is aimed at.
+///
+/// [commentId] is the thread it joins, which is not always the comment that
+/// was tapped: replying to a reply keeps the same thread and only changes who
+/// is being answered. [authorName] is who that is.
+class CommentReplyTarget {
+  const CommentReplyTarget({
+    required this.commentId,
+    required this.authorName,
+  });
+
+  final String commentId;
+  final String authorName;
+}
+
 class CommentComposer extends ConsumerStatefulWidget {
   const CommentComposer({
     required this.postId,
     this.focusNode,
+    this.replyTo,
+    this.onClearReply,
     super.key,
   });
 
@@ -34,6 +51,17 @@ class CommentComposer extends ConsumerStatefulWidget {
   /// Lets the host put the cursor in the box — the detail page's comment icon
   /// has no sheet to open, so it focuses this instead.
   final FocusNode? focusNode;
+
+  /// What this comment will answer, or null when it starts a thread.
+  ///
+  /// Owned by the host rather than by this widget: the Reply button that sets
+  /// it lives up in the list, and on the detail page the list and the box are
+  /// not even in the same subtree.
+  final CommentReplyTarget? replyTo;
+
+  /// Called when the reply is taken back — by the ✕ on the banner, and by a
+  /// send, which has answered it.
+  final VoidCallback? onClearReply;
 
   @override
   ConsumerState<CommentComposer> createState() => _CommentComposerState();
@@ -68,9 +96,16 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       final repository = ref.read(contentRepositoryProvider);
       // Attribution comes from the public profile, never from auth.
       final profile = ref.read(appSessionProvider).profile;
-      await repository.addComment(profile, widget.postId, text);
+      await repository.addComment(
+        profile,
+        widget.postId,
+        text,
+        parentCommentId: widget.replyTo?.commentId,
+      );
 
       _controller.clear();
+      // The reply has been written, so the banner has nothing left to say.
+      widget.onClearReply?.call();
 
       // Bump the comment count on the feed post card
       ref.read(feedPostsProvider.notifier).incrementCommentCount(widget.postId);
@@ -114,6 +149,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.replyTo != null) _replyBanner(palette, widget.replyTo!),
           // Above the field, not below it: this bar already sits on the
           // keyboard, so there is no room underneath to open into.
           MentionSuggestions(
@@ -121,6 +157,41 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
             focusNode: _focusNode,
           ),
           _inputRow(palette),
+        ],
+      ),
+    );
+  }
+
+  /// Says where this comment is about to go, and offers the one way out of
+  /// it. Without this a reply and a new comment are the same empty box, and
+  /// the difference only shows up after it has been sent.
+  Widget _replyBanner(AppPalette palette, CommentReplyTarget target) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Row(
+        children: [
+          Icon(Icons.reply_rounded, size: 15, color: palette.muted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Replying to ${target.authorName}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: palette.muted, fontSize: 13),
+            ),
+          ),
+          GestureDetector(
+            onTap: widget.onClearReply,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: palette.muted,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -146,7 +217,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                   fontSize: 15,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Add a comment...',
+                  hintText: widget.replyTo == null
+                      ? 'Add a comment...'
+                      : 'Reply to ${widget.replyTo!.authorName}...',
                   hintStyle: TextStyle(color: palette.muted),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(

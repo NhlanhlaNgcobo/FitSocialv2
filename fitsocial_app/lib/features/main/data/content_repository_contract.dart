@@ -178,11 +178,16 @@ abstract class ContentRepository {
   /// Adds a comment attributed to [profile]. The profile is passed in (rather
   /// than read from auth) so the stored author name comes from the user's
   /// public profile and never from their credentials.
+  ///
+  /// [parentCommentId] makes it a reply to that comment rather than a new
+  /// thread, and decides who is told about it — see
+  /// `commentNotificationAudience` in domain/comment_threads.dart.
   Future<Comment> addComment(
     UserProfileDraft? profile,
     String postId,
-    String text,
-  );
+    String text, {
+    String? parentCommentId,
+  });
 
   /// Watches which reaction [userId] has given a post, null when none.
   ///

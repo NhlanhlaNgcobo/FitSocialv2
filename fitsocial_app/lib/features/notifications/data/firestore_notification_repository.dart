@@ -194,6 +194,36 @@ class NotificationWrites {
     );
   }
 
+  /// Someone commented on the recipient's post, or replied to their comment.
+  ///
+  /// One payload for both, because the two rows carry exactly the same facts —
+  /// which comment, on which post — and differ only in who is being told and
+  /// why. [isReply] picks the sentence.
+  Map<String, dynamic> commentPayload({
+    required String actorId,
+    required String actorName,
+    required String postId,
+    required String commentId,
+    bool isReply = false,
+    String? actorAvatarUrl,
+    String? postImageUrl,
+    String? postType,
+  }) {
+    return _payload(
+      type: isReply ? FitNotificationType.reply : FitNotificationType.comment,
+      actorId: actorId,
+      actorName: actorName,
+      actorAvatarUrl: actorAvatarUrl,
+      extra: {
+        'postId': postId,
+        'commentId': commentId,
+        if (postImageUrl != null && postImageUrl.isNotEmpty)
+          'postImageUrl': postImageUrl,
+        if (postType != null && postType.isNotEmpty) 'postType': postType,
+      },
+    );
+  }
+
   /// Someone attached the recipient to a post from its composer.
   Map<String, dynamic> tagPayload({
     required String actorId,

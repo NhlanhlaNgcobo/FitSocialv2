@@ -196,6 +196,7 @@ class FirestoreMapper {
       text: record.text,
       createdAt: record.createdAt ?? DateTime.now(),
       authorAvatarUrl: record.authorAvatarUrl,
+      parentId: record.parentCommentId,
     );
   }
 

@@ -16,6 +16,7 @@ import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
+import '../domain/comment_threads.dart';
 import '../domain/shared_post.dart';
 import 'comments_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
@@ -87,11 +88,27 @@ class _PostPageState extends ConsumerState<_PostPage> {
   final _scrollController = ScrollController();
   final _composerFocus = FocusNode();
 
+  /// The comment the box at the bottom is answering, set by a Reply tap up in
+  /// the list. Null means the next thing written starts a thread of its own.
+  CommentReplyTarget? _replyTo;
+
   @override
   void dispose() {
     _scrollController.dispose();
     _composerFocus.dispose();
     super.dispose();
+  }
+
+  /// Same move as [_startCommenting], with the reply banner set first so the
+  /// box that comes up already says where the words are going.
+  void _startReply(CommentReplyTarget target) {
+    setState(() => _replyTo = target);
+    _startCommenting();
+  }
+
+  void _clearReply() {
+    if (_replyTo == null) return;
+    setState(() => _replyTo = null);
   }
 
   /// The comment icon has nothing to open here — the comments are already on
@@ -143,7 +160,12 @@ class _PostPageState extends ConsumerState<_PostPage> {
       // keyboard — see [KeyboardSafeBottomBar] — so the composer has to lift
       // itself clear of it.
       bottomNavigationBar: KeyboardSafeBottomBar(
-        child: CommentComposer(postId: post.id, focusNode: _composerFocus),
+        child: CommentComposer(
+          postId: post.id,
+          focusNode: _composerFocus,
+          replyTo: _replyTo,
+          onClearReply: _clearReply,
+        ),
       ),
       body: ListView(
         controller: _scrollController,
@@ -183,7 +205,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
           if (media != _MediaKind.none) _Caption(post: post),
           _Timestamp(post: post),
           const _SectionRule(),
-          _CommentList(postId: post.id),
+          _CommentList(postId: post.id, onReply: _startReply),
           const SizedBox(height: AppSpacing.lg),
         ],
       ),
@@ -649,9 +671,12 @@ class _SectionRule extends StatelessWidget {
 /// written in the box at the bottom of this page appears above it without a
 /// refresh — and so does anyone else's.
 class _CommentList extends ConsumerWidget {
-  const _CommentList({required this.postId});
+  const _CommentList({required this.postId, required this.onReply});
 
   final String postId;
+
+  /// Aims the composer at the bottom of the page at one of these comments.
+  final ValueChanged<CommentReplyTarget> onReply;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -715,11 +740,14 @@ class _CommentList extends ConsumerWidget {
                   ),
                 );
               }
+              // Grouped exactly as the sheet groups them, so a reply is
+              // under what it answers on both screens.
+              final threads = threadComments(comments);
               return Column(
                 children: [
-                  for (var i = 0; i < comments.length; i++) ...[
+                  for (var i = 0; i < threads.length; i++) ...[
                     if (i > 0) const SizedBox(height: AppSpacing.md),
-                    CommentTile(comment: comments[i]),
+                    CommentThreadTile(thread: threads[i], onReply: onReply),
                   ],
                 ],
               );

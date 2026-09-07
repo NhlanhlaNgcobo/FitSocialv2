@@ -216,8 +216,9 @@ class UnconfiguredContentRepository implements ContentRepository {
   Future<Comment> addComment(
     UserProfileDraft? profile,
     String postId,
-    String text,
-  ) async {
+    String text, {
+    String? parentCommentId,
+  }) async {
     throw StateError(_firebaseSetupMessage);
   }
 

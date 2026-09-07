@@ -247,6 +247,7 @@ class FirestoreCommentRecord {
       text: (data['text'] as String?) ?? '',
       createdAt: timestamp,
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
+      parentCommentId: data['parentCommentId'] as String?,
     );
   }
   const FirestoreCommentRecord({
@@ -256,6 +257,7 @@ class FirestoreCommentRecord {
     required this.text,
     this.createdAt,
     this.authorAvatarUrl,
+    this.parentCommentId,
   });
 
   final String id;
@@ -266,4 +268,8 @@ class FirestoreCommentRecord {
 
   /// Author's profile photo, denormalised alongside [authorName].
   final String? authorAvatarUrl;
+
+  /// The comment this one replies to. Absent on a top-level comment, and on
+  /// every comment written before threads existed.
+  final String? parentCommentId;
 }

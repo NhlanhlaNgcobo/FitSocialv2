@@ -210,6 +210,24 @@ void main() {
       expect(feed.posts.first.comments, 1);
       expect(feed.posts.last.comments, 0);
     });
+
+    test('a pull-to-refresh reads the feed again', () async {
+      // What the gesture on the home screen is wired to: the feed is a
+      // one-shot read, so without this the only way to see a new post was to
+      // restart the app.
+      final repository = _FakeContentRepository(
+        HomeFeed(posts: [post('a')], source: FeedSource.following),
+      );
+      final notifier = FeedPostsNotifier(repository, null);
+      addTearDown(notifier.dispose);
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.loads, 1);
+
+      await notifier.refresh();
+
+      expect(repository.loads, 2);
+      expect(notifier.state.valueOrNull?.posts.single.id, 'a');
+    });
   });
 
   group('the blended feed', () {

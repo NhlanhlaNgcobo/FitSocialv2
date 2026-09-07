@@ -50,19 +50,39 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: ListView.builder(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.sm,
-          AppSpacing.md,
-          // Clears the floating nav, which overlays this list rather than
-          // sitting below it.
-          AppSpacing.md + FitSocialBottomNav.clearance(context),
+      body: RefreshIndicator(
+        onRefresh: () => _refresh(ref),
+        color: context.palette.brand,
+        backgroundColor: context.palette.surface,
+        child: ListView.builder(
+          // Without this the gesture is only available once the feed is long
+          // enough to scroll — which is exactly when a stale feed is least
+          // worth refreshing, and an empty one could never be recovered.
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.sm,
+            AppSpacing.md,
+            // Clears the floating nav, which overlays this list rather than
+            // sitting below it.
+            AppSpacing.md + FitSocialBottomNav.clearance(context),
+          ),
+          itemCount: rows.length,
+          itemBuilder: (context, index) => rows[index],
         ),
-        itemCount: rows.length,
-        itemBuilder: (context, index) => rows[index],
       ),
     );
+  }
+
+  /// Everything on this page that was read once and would otherwise stay as it
+  /// was until the app is restarted.
+  ///
+  /// The Pulse tray and the bell are live queries and re-render themselves, so
+  /// the pull only re-runs the one-shot reads: the feed itself, and the streak
+  /// grid above it.
+  Future<void> _refresh(WidgetRef ref) async {
+    ref.invalidate(activitySessionsProvider);
+    await ref.read(feedPostsProvider.notifier).refresh();
   }
 
   /// Every row of the page, flat.
