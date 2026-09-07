@@ -5,4 +5,17 @@
          what the access is actually used for rather than repeating the app
          name back at them. -->
     <string name="media_session_listener_label">FitSocial music controls</string>
+
+    <!-- The channel every social push lands on.
+
+         The id is named in AndroidManifest.xml and the channel is created in
+         MainActivity.kt; the two must agree. If they disagree, FCM falls back to
+         a channel of its own making called "Miscellaneous", and that is the name
+         the user finds in Android notification settings when they go looking for
+         a way to quieten this app.
+
+         The id is never shown to anyone. The name and description are. -->
+    <string name="fcm_channel_social_id" translatable="false">fitsocial_social</string>
+    <string name="fcm_channel_social_name">Social</string>
+    <string name="fcm_channel_social_description">Follows, reactions, comments, mentions and challenge updates</string>
 </resources>

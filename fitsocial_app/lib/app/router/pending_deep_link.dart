@@ -30,6 +30,21 @@ class PendingDeepLink {
     _route = location;
   }
 
+  /// Parks the destination of a tapped push notification.
+  ///
+  /// Separate from [remember] only in which routes it will accept — see
+  /// [FitSocialLinks.isPushRoute]. A notification can point at a challenge
+  /// board, which is not a shareable link and so is not somewhere an incoming
+  /// URL may send anyone.
+  ///
+  /// Needed for the cold-start case: tapping a notification for an app that is
+  /// not running starts it at the splash screen, and the destination has to
+  /// survive the session restoring before there is a router able to go there.
+  void rememberPush(String location) {
+    if (!FitSocialLinks.isPushRoute(location)) return;
+    _route = location;
+  }
+
   /// Returns the parked route and clears it, so a link is followed once.
   String? take() {
     final route = _route;

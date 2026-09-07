@@ -26,6 +26,7 @@ import {
 import {
   doc,
   collection,
+  collectionGroup,
   setDoc,
   updateDoc,
   getDoc,
@@ -97,6 +98,18 @@ const standingStart = (userId, challengeId, visibility, status) => ({
   updatedAt: serverTimestamp(),
 });
 
+/**
+ * The invite payload proper: a standing start plus when the ask was sent.
+ *
+ * `invitedAt` is what the engine reads to tell a resend from the rank stamp it
+ * writes on every participant of a challenge, so the sheet sends it on every
+ * invitation and the rules have to accept it.
+ */
+const invitation = (userId, challengeId, visibility) => ({
+  ...standingStart(userId, challengeId, visibility, "invited"),
+  invitedAt: serverTimestamp(),
+});
+
 const as = (uid) => env.authenticatedContext(uid).firestore();
 
 beforeEach(async () => {
@@ -126,6 +139,17 @@ beforeEach(async () => {
     await setDoc(
       doc(db, "challenges", PRIVATE, "participants", INVITEE),
       standingStart(INVITEE, PRIVATE, "private", "invited")
+    );
+
+    // The copies the engine keeps under each person. Seeded by hand here for
+    // the same reason the participant rows are: these tests exercise the rules,
+    // not the trigger that writes them.
+    await setDoc(
+      doc(db, "users", INVITEE, "challengeMemberships", PRIVATE),
+      {
+        ...standingStart(INVITEE, PRIVATE, "private", "invited"),
+        challengeId: PRIVATE,
+      }
     );
   });
 });
@@ -377,6 +401,118 @@ test("only the creator may invite, and only as an invitation", async () => {
     setDoc(
       doc(as(OWNER), "challenges", PRIVATE, "participants", "another-new"),
       standingStart("another-new", PRIVATE, "private", "active")
+    )
+  );
+});
+
+test("a creator may invite the same person again while they are still deciding", async () => {
+  // The sheet writes with set(), so a second tap on Invite is an overwrite of
+  // a document that already exists rather than a create. A tester hit this the
+  // day it shipped: the first invite worked, and every one after it came back
+  // as "that invitation could not be sent".
+  await assertSucceeds(
+    setDoc(
+      doc(as(OWNER), "challenges", PRIVATE, "participants", INVITEE),
+      invitation(INVITEE, PRIVATE, "private")
+    )
+  );
+});
+
+test("re-inviting somebody already on the challenge is refused", async () => {
+  // The write is a whole-document overwrite at a standing start, so allowing it
+  // over an active participant would reset the distance they have run.
+  await assertFails(
+    setDoc(
+      doc(as(OWNER), "challenges", PRIVATE, "participants", MEMBER),
+      invitation(MEMBER, PRIVATE, "private")
+    )
+  );
+});
+
+test("re-inviting somebody who declined is refused", async () => {
+  // Their answer stands until they change it themselves. A creator who could
+  // rewrite a declined row back into an invitation could ask forever.
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), "challenges", PRIVATE, "participants", STRANGER),
+      standingStart(STRANGER, PRIVATE, "private", "declined")
+    );
+  });
+
+  await assertFails(
+    setDoc(
+      doc(as(OWNER), "challenges", PRIVATE, "participants", STRANGER),
+      invitation(STRANGER, PRIVATE, "private")
+    )
+  );
+});
+
+test("a creator joins their own private challenge as they create it", async () => {
+  // createChallenge writes the challenge and then the creator's own row. The
+  // self-join rule is about public challenges and the invite rule is about
+  // other people, so the creator of a private one has to be covered somewhere
+  // or their own challenge is created without them on it.
+  const db = as(OWNER);
+  await assertSucceeds(
+    setDoc(doc(db, "challenges", "brand-new"), {
+      ...challengeDoc("private"),
+      participantCount: 0,
+    })
+  );
+  await assertSucceeds(
+    setDoc(
+      doc(db, "challenges", "brand-new", "participants", OWNER),
+      standingStart(OWNER, "brand-new", "private", "active")
+    )
+  );
+});
+
+// --- Reading your own invitations -------------------------------------------
+//
+// The engine mirrors every participant row to
+// users/{uid}/challengeMemberships/{challengeId}, and the hub reads that rather
+// than sweeping the participants of every challenge. These three tests are the
+// guardrail on that decision: the sweep must stay refused, the copies must be
+// readable only by the person they are about, and no client may write one.
+
+test("a user can list their own challenge memberships", async () => {
+  const snapshot = await assertSucceeds(
+    getDocs(collection(as(INVITEE), "users", INVITEE, "challengeMemberships"))
+  );
+  assert.equal(snapshot.size, 1, "expected the invitation to be listed");
+});
+
+test("nobody may read somebody else's memberships", async () => {
+  await assertFails(
+    getDocs(collection(as(STRANGER), "users", INVITEE, "challengeMemberships"))
+  );
+});
+
+test("nobody may write a membership, not even their own", async () => {
+  // The copy carries the distance, rank and percentage the hub renders. A
+  // member who could write it could list a challenge they were never on and
+  // give themselves a standing on it.
+  await assertFails(
+    setDoc(
+      doc(as(INVITEE), "users", INVITEE, "challengeMemberships", PUBLIC),
+      { ...standingStart(INVITEE, PUBLIC, "public", "active"), challengeId: PUBLIC }
+    )
+  );
+});
+
+test("the collection-group sweep this replaced stays refused", async () => {
+  // Not a curiosity — this is the shape the hub used to ask in, and the reason
+  // it has to stay refused is that no rule can narrow it. On a collection-group
+  // list, rules see neither `resource` nor the path wildcards, so the only rule
+  // that admits this query admits every participant row in the database,
+  // private challenge rosters included. If this test ever starts failing,
+  // somebody has opened that door.
+  await assertFails(
+    getDocs(
+      query(
+        collectionGroup(as(INVITEE), "participants"),
+        where("userId", "==", INVITEE)
+      )
     )
   );
 });

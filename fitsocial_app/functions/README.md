@@ -78,7 +78,7 @@ before it starts.
 `functions/.env`:
 
 ```
-VISION_MODEL="openai/gpt-5.6-luna"
+VISION_MODEL="anthropic/claude-sonnet-5"
 ```
 
 Any vision-capable OpenRouter model id works — they are vendor-prefixed. Changing this needs no code change, which is what makes comparing models on real photos cheap.
@@ -87,12 +87,16 @@ The database changed what the model is for: it no longer recalls nutrition value
 
 Approximate cost per scan assumes ~3,000 input tokens (photo plus prompt) and ~600 output. Measure your own once a model is live.
 
+Prices below are OpenRouter's standard rates, checked 2026-09-07. Do not copy a
+`:batch` price into this table — batch requests queue with no latency guarantee,
+which is the wrong trade for a user standing there holding their phone up.
+
 | Model | $/MTok in / out | ~Cost/scan | Trade-off |
 | --- | --- | --- | --- |
-| `openai/gpt-5.6-luna` | 0.10 / 0.60 | ~$0.0007 | The current default. Roughly 18x cheaper than Sonnet 5 — accuracy on portion estimates still to be validated. |
-| `google/gemini-3.5-flash-lite` | 0.30 / 2.50 | ~$0.0024 | Other budget option. |
-| `openai/gpt-5.6-terra` | 1.00 / 6.00 | ~$0.0066 | Middle tier if Luna proves too rough. |
-| `anthropic/claude-sonnet-5` | 2.00 / 10.00 | ~$0.012 | High-resolution vision (2576px long edge), reliable JSON. The accuracy benchmark to beat. |
+| `qwen/qwen3-vl-32b-instruct` | 0.10 / 0.42 | ~$0.0006 | Cheapest credible option. Trained for visual grounding, which is the portion problem specifically. Unvalidated here. |
+| `openai/gpt-5.6-luna` | 0.20 / 1.20 | ~$0.0013 | Previous default. Cheap, but its gram estimates were never validated against scale weights. |
+| `google/gemini-3.6-flash` | 0.75 / 3.75 | ~$0.0045 | Strong on multi-object scenes like a full plate, ~2.5x cheaper than Sonnet. The first thing to try if Sonnet's cost bites. |
+| `anthropic/claude-sonnet-5` | 2.00 / 10.00 | ~$0.012 | **The current default.** High-resolution vision (2576px long edge), reliable JSON. Chosen for portion accuracy over cost. |
 | `anthropic/claude-opus-5` | 5.00 / 25.00 | ~$0.030 | Best spatial reasoning; gains are largest when the model can crop and re-check its own work, which this single-shot pipeline doesn't do. |
 
 ### Comparing models

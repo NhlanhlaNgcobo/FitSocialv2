@@ -17,6 +17,10 @@ dependencies:
   # in android/app/build.gradle.kts.
   firebase_crashlytics: ^4.3.10
   firebase_core: ^3.6.0
+  # Push notifications. Only the registration token and the tap callbacks are
+  # used from here: the tray entry itself is drawn by Android from the payload,
+  # which is why there is no local-notifications plugin beside this one.
+  firebase_messaging: ^15.1.3
   cloud_firestore: ^5.4.4
   cloud_functions: ^5.6.2
   firebase_storage: ^12.3.3

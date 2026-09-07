@@ -38,6 +38,17 @@ class _InviteSheet extends ConsumerWidget {
     final palette = context.palette;
     final following = ref.watch(followingIdsProvider).valueOrNull;
 
+    // Where everyone already stands on this challenge, so a row can offer the
+    // action that will actually work. Without it the sheet showed one Invite
+    // button per person whatever their state, and tapping it for somebody who
+    // had already joined came back as "that invitation could not be sent".
+    final standings = {
+      for (final p
+          in ref.watch(challengeParticipantsProvider(challenge.id)).valueOrNull ??
+              const <ChallengeParticipant>[])
+        p.userId: p.status,
+    };
+
     return SafeArea(
       child: Container(
         margin: const EdgeInsets.all(AppSpacing.sm),
@@ -88,7 +99,11 @@ class _InviteSheet extends ConsumerWidget {
                   shrinkWrap: true,
                   children: [
                     for (final userId in following)
-                      _InviteRow(challenge: challenge, userId: userId),
+                      _InviteRow(
+                        challenge: challenge,
+                        userId: userId,
+                        standing: standings[userId],
+                      ),
                   ],
                 ),
               ),
@@ -100,22 +115,28 @@ class _InviteSheet extends ConsumerWidget {
 }
 
 class _InviteRow extends ConsumerStatefulWidget {
-  const _InviteRow({required this.challenge, required this.userId});
+  const _InviteRow({
+    required this.challenge,
+    required this.userId,
+    this.standing,
+  });
 
   final RunningChallenge challenge;
   final String userId;
+
+  /// Where this person already stands, or null when they have nothing to do
+  /// with the challenge yet — which is the only state a first invitation makes
+  /// sense in.
+  final ParticipantStatus? standing;
 
   @override
   ConsumerState<_InviteRow> createState() => _InviteRowState();
 }
 
 class _InviteRowState extends ConsumerState<_InviteRow> {
-  /// Latched rather than derived from the participant document.
-  ///
-  /// Watching the invitee's participant record would mean a live query per row,
-  /// and the row only has to say "sent" until the sheet closes. The write itself
-  /// is idempotent — the document id is the invitee's uid — so a second tap
-  /// costs nothing even if this state were lost.
+  /// That this tap worked, which the standing alone cannot say: a resend
+  /// leaves somebody exactly where they were, so the row would flip straight
+  /// back to "Resend" with nothing to show the ask had gone out.
   bool _sent = false;
   bool _sending = false;
 
@@ -157,18 +178,52 @@ class _InviteRowState extends ConsumerState<_InviteRow> {
               ],
             ),
           ),
-          if (_sent)
-            Text(
-              'Invited',
-              style: TextStyle(color: palette.muted, fontSize: 13),
-            )
-          else
-            TextButton(
-              onPressed: _sending ? null : _invite,
-              child: const Text('Invite'),
-            ),
+          _action(palette),
         ],
       ),
+    );
+  }
+
+  /// What this row offers, given where the person already stands.
+  Widget _action(AppPalette palette) {
+    if (_sent) {
+      return Text(
+        'Invited',
+        style: TextStyle(color: palette.muted, fontSize: 13),
+      );
+    }
+
+    switch (widget.standing) {
+      // Nothing yet, or a state that can be asked out of.
+      case null:
+        return _button('Invite');
+      case ParticipantStatus.invited:
+        // Still deciding. Asking again is the one thing the creator could not
+        // do before, and it is what a tester asked for by name.
+        return _button('Resend');
+      case ParticipantStatus.active:
+      case ParticipantStatus.completed:
+        return _standingLabel(palette, 'On the challenge');
+      case ParticipantStatus.declined:
+        return _standingLabel(palette, 'Declined');
+      case ParticipantStatus.left:
+        return _standingLabel(palette, 'Left');
+    }
+  }
+
+  Widget _button(String label) {
+    return TextButton(
+      onPressed: _sending ? null : _invite,
+      child: Text(label),
+    );
+  }
+
+  /// Said rather than offered: these are the states no invitation can move
+  /// somebody out of, and a button that always fails is worse than no button.
+  Widget _standingLabel(AppPalette palette, String label) {
+    return Text(
+      label,
+      style: TextStyle(color: palette.muted, fontSize: 13),
     );
   }
 

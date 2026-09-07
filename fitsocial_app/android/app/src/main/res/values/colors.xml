@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#000000</color>
+    <!-- Small-icon tint on a push notification, named in AndroidManifest.xml as
+         com.google.firebase.messaging.default_notification_color. Sits in the
+         middle of the range the brand mark itself uses (#FF8700 down to
+         #FF4E00), so the tray entry reads as FitSocial without matching any one
+         band of the F exactly. -->
+    <color name="notification_accent">#FF6A00</color>
 </resources>

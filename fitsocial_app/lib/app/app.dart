@@ -1,16 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/notifications/application/push_tap_router.dart';
 import '../shared/widgets/liquid_backdrop.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_mode_controller.dart';
 
-class FitSocialApp extends ConsumerWidget {
+class FitSocialApp extends ConsumerStatefulWidget {
   const FitSocialApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FitSocialApp> createState() => _FitSocialAppState();
+}
+
+class _FitSocialAppState extends ConsumerState<FitSocialApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Started here rather than lazily from a screen, because the case it exists
+    // for is the one where no screen has been built yet: a notification tapped
+    // while the app was not running. `getInitialMessage` has an answer waiting
+    // from the moment the engine starts, and asking late means asking after the
+    // router has already sent the user to the feed.
+    ref.read(pushTapRouterProvider).start();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
 

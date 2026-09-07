@@ -85,11 +85,11 @@ const openrouterApiKey = defineSecret("OPENROUTER_API_KEY");
 const fdcApiKey = () => process.env.FDC_API_KEY || "";
 
 // Any OpenRouter vision-capable model id — they are vendor-prefixed, e.g.
-// "openai/gpt-5.6-luna", "anthropic/claude-sonnet-5", "google/gemini-3.6-flash".
+// "anthropic/claude-sonnet-5", "google/gemini-3.6-flash", "qwen/qwen3-vl-32b-instruct".
 // Override with the VISION_MODEL env var (functions/.env) — no code change
 // needed, which is what makes comparing models on real photos cheap.
 const visionModel = defineString("VISION_MODEL", {
-  default: "openai/gpt-5.6-luna",
+  default: "anthropic/claude-sonnet-5",
 });
 
 /**
@@ -651,6 +651,18 @@ for (const [name, handler] of Object.entries(require("./challenges"))) {
 // editing the one challenges.js already has; both deploy, and neither can see
 // the other fail.
 for (const [name, handler] of Object.entries(require("./running_challenges"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+
+// --- Push -------------------------------------------------------------------
+//
+// One trigger on the notification inbox, turning the rows every other module
+// already writes into notifications the phone actually shows. Required last:
+// push.js pulls `db()` out of ./challenges the way running_challenges.js does,
+// and the region set at the top of this file has to be in force before its
+// trigger is defined.
+for (const [name, handler] of Object.entries(require("./push"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }

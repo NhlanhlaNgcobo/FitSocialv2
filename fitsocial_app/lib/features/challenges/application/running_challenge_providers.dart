@@ -64,6 +64,20 @@ final challengeLeaderboardProvider =
       .watchLeaderboard(challengeId);
 });
 
+/// Everybody on one challenge, in every state.
+///
+/// The board's stream cannot answer this: it is filtered to the people who are
+/// competing, and the invite sheet's whole question is about the ones who are
+/// not — who has already been asked, and who has said no.
+final challengeParticipantsProvider =
+    StreamProvider.family<List<ChallengeParticipant>, String>(
+        (ref, challengeId) {
+  ref.watch(appSessionProvider);
+  return ref
+      .watch(runningChallengeRepositoryProvider)
+      .watchParticipants(challengeId);
+});
+
 /// The signed-in user's own standing on one challenge.
 ///
 /// Read as its own document rather than picked out of the board, which is what

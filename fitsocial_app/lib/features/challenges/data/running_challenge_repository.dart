@@ -45,6 +45,10 @@ class UnconfiguredRunningChallengeRepository
       Stream.value(const []);
 
   @override
+  Stream<List<ChallengeParticipant>> watchParticipants(String challengeId) =>
+      Stream.value(const []);
+
+  @override
   Stream<ChallengeParticipant?> watchParticipant(
     String challengeId,
     String userId,

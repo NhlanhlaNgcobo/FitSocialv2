@@ -13,6 +13,7 @@ import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
 import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../notifications/application/push_providers.dart';
 import 'delete_account_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
@@ -93,11 +94,13 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Notifications'),
+          const _SettingsGroup(children: [_PushNotificationsTile()]),
+          const SizedBox(height: AppSpacing.sm),
           const _SettingsNote(
             icon: Icons.notifications_none_rounded,
             accent: _kNotifyAccent,
-            text: 'Notifications are set per person. Open someone\'s profile '
-                'and tap the bell to hear about what they post.',
+            text: 'Open someone\'s profile and tap the bell to hear about '
+                'what they post.',
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('About'),
@@ -510,6 +513,173 @@ class _SettingsGroup extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The master switch for push.
+///
+/// The switch reflects a choice stored on this device, not on the account:
+/// silencing FitSocial on a phone says nothing about a tablet. Turning it off
+/// deletes this device's registration token, which is what actually stops
+/// anything being sent — the stored preference only remembers the answer for
+/// the next launch.
+class _PushNotificationsTile extends ConsumerStatefulWidget {
+  const _PushNotificationsTile();
+
+  @override
+  ConsumerState<_PushNotificationsTile> createState() =>
+      _PushNotificationsTileState();
+}
+
+class _PushNotificationsTileState
+    extends ConsumerState<_PushNotificationsTile> {
+  /// Held down while the change is in flight, because turning this on can put
+  /// the system permission dialog on screen and a second tap behind it would
+  /// queue a contradictory change.
+  bool _isChanging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // Defaults to on while the stored answer loads, matching what the store
+    // itself falls back to — so the switch never shows the opposite of what it
+    // is a moment away from showing.
+    final isOn = ref.watch(pushEnabledProvider).valueOrNull ?? true;
+
+    return _SettingsSwitchTile(
+      icon: Icons.notifications_active_rounded,
+      accent: _kNotifyAccent,
+      label: 'Push notifications',
+      subtitle: 'Follows, reactions, comments and challenges',
+      value: isOn,
+      onChanged: _isChanging ? null : (next) => _change(enabled: next),
+    );
+  }
+
+  Future<void> _change({required bool enabled}) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    setState(() => _isChanging = true);
+
+    try {
+      final willArrive =
+          await ref.read(pushPreferenceActionsProvider)(enabled: enabled);
+
+      // The operating system has a switch of its own, and it wins. Someone who
+      // refused the permission prompt would otherwise be left looking at a
+      // switch that says on beside a phone that never makes a sound.
+      if (enabled && !willArrive) {
+        showQuickToastOn(
+          overlay,
+          'Android is blocking notifications for FitSocial. Turn them on in '
+          'your phone settings.',
+          icon: Icons.error_outline_rounded,
+          tone: ToastTone.danger,
+        );
+      }
+    } catch (error) {
+      debugPrint('Changing push notifications failed: $error');
+      showQuickToastOn(
+        overlay,
+        "Couldn't change notifications. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
+      );
+    } finally {
+      if (mounted) setState(() => _isChanging = false);
+    }
+  }
+}
+
+/// A row that acts in place, with a switch where [_SettingsTile] has a chevron.
+///
+/// Deliberately a sibling of [_SettingsTile] rather than a flag on it: the two
+/// share a layout and nothing else — this one has no destination, no danger
+/// variant, and a tap that means something different.
+class _SettingsSwitchTile extends StatelessWidget {
+  const _SettingsSwitchTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+    this.accent,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? subtitle;
+
+  /// The hue that identifies this row, unadjusted — resolved for the current
+  /// theme here, as [_SettingsTile] does it.
+  final Color? accent;
+
+  final bool value;
+
+  /// Null while a change is in flight, which greys the switch and refuses the
+  /// tap.
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final hue = accent ?? palette.brand;
+    final glyph = palette.accent(hue);
+    final well = palette.accentFill(hue);
+    final change = onChanged;
+
+    return InkWell(
+      // The whole row, not just the switch: a 40dp target at the far edge of a
+      // phone is the hardest thing on this page to hit.
+      onTap: change == null ? null : () => change(!value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: well,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(icon, color: glyph, size: 21),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 12.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: change,
+              activeTrackColor: glyph,
+            ),
+          ],
         ),
       ),
     );

@@ -50,16 +50,25 @@ class FirestoreRunningChallengeRepository implements RunningChallengeRepository 
 
   @override
   Stream<List<ChallengeParticipant>> watchMyParticipations(String userId) {
-    // A collection-group query: participant records live under every challenge,
-    // and this asks across all of them at once rather than reading challenges
-    // the user has nothing to do with.
+    // Read from the user's own subcollection, which the engine keeps as a copy
+    // of every participant row they hold — see mirrorMembership in
+    // functions/running_challenges.js.
+    //
+    // NOT a collection-group query over `participants`, which is the obvious
+    // shape and the one this used to be. That query cannot be authorised at
+    // all: on a collection-group list, rules see neither the document nor the
+    // path, so the only rule that admits it admits everybody to every
+    // participant row in the database. It was refused for every user, and this
+    // list — the whole "your challenges" section of the hub, invitations
+    // included — came back empty from the day it shipped.
     return _firestore
-        .collectionGroup('participants')
-        .where('userId', isEqualTo: userId)
+        .collection('users')
+        .doc(userId)
+        .collection('challengeMemberships')
         .orderBy('joinedAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => _toParticipant(doc.id, doc.data()))
+            .map((doc) => _toMembership(doc.id, doc.data()))
             .toList(growable: false));
   }
 
@@ -95,6 +104,18 @@ class FirestoreRunningChallengeRepository implements RunningChallengeRepository 
         .map((snapshot) => snapshot.docs
             .map((doc) => _toParticipant(doc.id, doc.data()))
             .toList(growable: false));
+  }
+
+  @override
+  Stream<List<ChallengeParticipant>> watchParticipants(String challengeId) {
+    // Unordered and unfiltered, unlike the board: this is the invite sheet
+    // asking who is already on the challenge and who is still deciding, and
+    // the people it most needs to hear about — invited, declined — are exactly
+    // the ones the board leaves out.
+    return _participants(challengeId).snapshots().map((snapshot) => snapshot
+        .docs
+        .map((doc) => _toParticipant(doc.id, doc.data()))
+        .toList(growable: false));
   }
 
   @override
@@ -206,14 +227,19 @@ class FirestoreRunningChallengeRepository implements RunningChallengeRepository 
   }) {
     // An invitation IS a participant record that has not accepted yet. Same
     // derived id, so inviting the same person twice is inviting them once.
-    return _participant(challenge.id, userId).set(
-      _standingStart(
+    return _participant(challenge.id, userId).set({
+      ..._standingStart(
         challengeId: challenge.id,
         userId: userId,
         visibility: challenge.visibility,
         status: ParticipantStatus.invited,
       ),
-    );
+      // When they were last asked, and the only thing that separates a resend
+      // from every other write this document receives — the engine re-stamps a
+      // rank on it whenever anybody's standing moves, and a resend leaves the
+      // status exactly where it was. See onChallengeParticipantWritten.
+      'invitedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   @override
@@ -312,6 +338,19 @@ class FirestoreRunningChallengeRepository implements RunningChallengeRepository 
       participantCount: _int(data['participantCount']),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
     );
+  }
+
+  /// A mirrored row, where the document id is the CHALLENGE rather than the
+  /// participant — the pair is the same, filed the other way round.
+  ///
+  /// The uid comes off the copy's own field, which the engine pins as it
+  /// writes: nothing but the engine can write here, so the field is as
+  /// trustworthy as the id it was taken from.
+  ChallengeParticipant _toMembership(String id, Map<String, dynamic> data) {
+    return _toParticipant((data['userId'] as String?) ?? '', {
+      ...data,
+      'challengeId': id,
+    });
   }
 
   ChallengeParticipant _toParticipant(String id, Map<String, dynamic> data) {

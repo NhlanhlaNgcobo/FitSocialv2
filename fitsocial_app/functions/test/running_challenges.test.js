@@ -690,6 +690,7 @@ test("participant counts follow status, and only count people on the challenge",
       before: { exists: false, get: () => undefined },
       after: {
         exists: true,
+        data: () => store.get("challenges/c1/participants/invitee"),
         get: (f) => store.get("challenges/c1/participants/invitee")[f],
       },
     },
@@ -704,4 +705,150 @@ test("participant counts follow status, and only count people on the challenge",
   assert.equal(invites.length, 1);
   assert.equal(invites[0][1].type, "challengeInvite");
   assert.equal(invites[0][1].actorId, "creator");
+});
+
+test("every participant write copies the row under the person", async () => {
+  // The index the hub reads. It has to be written on EVERY write, not only on
+  // the ones that change status, because it carries the rank and percentage
+  // the challenge list renders — and because a challenge missing from it is a
+  // challenge the person cannot see they are on.
+  const { engine, store } = loadEngine(
+    world({
+      "challenges/c1/participants/invitee": {
+        ...PARTICIPANT,
+        userId: "invitee",
+        status: "invited",
+      },
+    })
+  );
+
+  const handler = engine.onChallengeParticipantWritten.handler;
+  await handler({
+    params: { challengeId: "c1", userId: "invitee" },
+    data: {
+      before: { exists: false, get: () => undefined },
+      after: {
+        exists: true,
+        data: () => store.get("challenges/c1/participants/invitee"),
+        get: (f) => store.get("challenges/c1/participants/invitee")[f],
+      },
+    },
+  });
+
+  const mirror = store.get("users/invitee/challengeMemberships/c1");
+  assert.ok(mirror, "expected the membership to be copied under the user");
+  assert.equal(mirror.status, "invited");
+  // Both halves of the pair survive being filed the other way round: the id
+  // here is the challenge, so the uid has to be carried as a field.
+  assert.equal(mirror.userId, "invitee");
+  assert.equal(mirror.challengeId, "c1");
+});
+
+test("a rank-only write still refreshes the copy", async () => {
+  // The case the early return would have skipped. Nothing about the status
+  // moves when the ranker runs, but the number the hub shows does.
+  const { engine, store } = loadEngine(
+    world({
+      "challenges/c1/participants/runner": {
+        ...PARTICIPANT,
+        rank: 4,
+        completionPercentage: 40,
+      },
+    })
+  );
+
+  const handler = engine.onChallengeParticipantWritten.handler;
+  const view = {
+    exists: true,
+    data: () => store.get("challenges/c1/participants/runner"),
+    get: (f) => store.get("challenges/c1/participants/runner")[f],
+  };
+
+  await handler({
+    params: { challengeId: "c1", userId: "runner" },
+    data: { before: view, after: view },
+  });
+
+  const mirror = store.get("users/runner/challengeMemberships/c1");
+  assert.ok(mirror, "expected the copy even with no change of status");
+  assert.equal(mirror.rank, 4);
+  assert.equal(mirror.completionPercentage, 40);
+});
+
+test("a resent invitation notifies again, in place", async () => {
+  // What a tester asked for: an invitation nobody has answered can be sent
+  // again, and sending it again has to reach them. The status does not move —
+  // invited to invited — so the resend is carried by its own stamp.
+  const { engine, store } = loadEngine(
+    world({
+      "challenges/c1/participants/invitee": {
+        ...PARTICIPANT,
+        userId: "invitee",
+        status: "invited",
+        invitedAt: stamp("2026-09-06T14:15:00Z"),
+      },
+    })
+  );
+
+  const handler = engine.onChallengeParticipantWritten.handler;
+  const view = (invitedAt) => ({
+    exists: true,
+    data: () => store.get("challenges/c1/participants/invitee"),
+    get: (field) =>
+      field === "invitedAt"
+        ? invitedAt
+        : store.get("challenges/c1/participants/invitee")[field],
+  });
+
+  await handler({
+    params: { challengeId: "c1", userId: "invitee" },
+    data: {
+      before: view(stamp("2026-09-06T14:15:00Z")),
+      after: view(stamp("2026-09-06T16:20:00Z")),
+    },
+  });
+
+  const invites = [...store.entries()].filter(([path]) =>
+    path.startsWith("users/invitee/notifications/")
+  );
+  // One row, not a second copy of the same ask.
+  assert.equal(invites.length, 1);
+  assert.equal(invites[0][1].type, "challengeInvite");
+  assert.equal(invites[0][1].challengeId, "c1");
+});
+
+test("re-ranking a challenge does not re-send anybody's invitation", async () => {
+  // The ranker stamps every participant of a challenge whenever one person's
+  // standing moves, so most writes reaching this trigger carry no change of
+  // status at all. If those counted as resends the trigger would notify on its
+  // own writes, and then re-enter itself.
+  const { engine, store } = loadEngine(
+    world({
+      "challenges/c1/participants/invitee": {
+        ...PARTICIPANT,
+        userId: "invitee",
+        status: "invited",
+        invitedAt: stamp("2026-09-06T14:15:00Z"),
+      },
+    })
+  );
+
+  const handler = engine.onChallengeParticipantWritten.handler;
+  const view = {
+    exists: true,
+    data: () => store.get("challenges/c1/participants/invitee"),
+    get: (field) => store.get("challenges/c1/participants/invitee")[field],
+  };
+
+  await handler({
+    params: { challengeId: "c1", userId: "invitee" },
+    data: { before: view, after: view },
+  });
+
+  assert.equal(
+    [...store.keys()].filter((p) =>
+      p.startsWith("users/invitee/notifications/")
+    ).length,
+    0
+  );
 });

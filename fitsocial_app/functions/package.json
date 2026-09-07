@@ -10,7 +10,9 @@
     "seed:nutrition": "node scripts/seed_nutrition_db.js",
     "seed:races": "node scripts/seed_races.js",
     "check:nutrition": "node scripts/check_nutrition_matching.js",
-    "backfill:usernames": "node scripts/backfill_usernames.js"
+    "backfill:usernames": "node scripts/backfill_usernames.js",
+    "backfill:memberships": "node scripts/backfill_challenge_memberships.js",
+    "check:memberships": "node scripts/check_challenge_memberships.js"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0",

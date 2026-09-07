@@ -113,6 +113,36 @@ abstract final class FitSocialLinks {
         _isSafeId(Uri.decodeComponent(segments[1]));
   }
 
+  /// Whether an in-app route is one a push notification may send somebody to.
+  ///
+  /// A superset of [isShareableRoute], and deliberately a second question
+  /// rather than a widening of the first. That one decides what a *link* may
+  /// replay after a sign-in, where the route arrived from outside and the
+  /// threat is a crafted URL choosing where a new user lands. This one decides
+  /// where a *notification* may open, where the route was written by
+  /// functions/push.js against a document the recipient owns. The sets differ
+  /// because the trust does: a challenge board is not something FitSocial hands
+  /// out as a link, but it is somewhere a challenge invitation must be able to
+  /// take you.
+  ///
+  /// Still a whitelist. The payload is server-written today, and the day
+  /// something else can write one, this is what stops it naming an arbitrary
+  /// screen.
+  static bool isPushRoute(String location) {
+    if (isShareableRoute(location)) return true;
+
+    final path = Uri.tryParse(location)?.path ?? location;
+    final segments = path.split('/').where((s) => s.isNotEmpty).toList();
+
+    // Checked undecoded, unlike [isShareableRoute]: `_isSafeId` rejects `%`
+    // outright, so a percent-escape could never pass anyway, and decoding a
+    // malformed one throws.
+    return segments.length == 3 &&
+        segments[0].toLowerCase() == 'challenge' &&
+        segments[1].toLowerCase() == 'board' &&
+        _isSafeId(segments[2]);
+  }
+
   /// Firestore document ids are alphanumeric, but ids also arrive from
   /// untrusted links — so the shape is checked rather than assumed. Rejects
   /// anything that could re-enter the router as a second path segment.

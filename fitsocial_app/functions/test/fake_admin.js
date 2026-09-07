@@ -354,6 +354,28 @@ function createFakeAdmin(seed = {}) {
   const deletedUsers = [];
   const storageFiles = new Map();
 
+  // Cloud Messaging. Records what was sent, and lets a test declare one token
+  // dead so the pruning path in push.js can be exercised without FCM.
+  const sentMessages = [];
+  const tokenFailures = new Map();
+
+  const messaging = () => ({
+    async sendEachForMulticast(message) {
+      sentMessages.push(message);
+      const responses = (message.tokens ?? []).map((token) => {
+        const code = tokenFailures.get(token);
+        return code
+          ? { success: false, error: { code } }
+          : { success: true, messageId: `msg_${token}` };
+      });
+      return {
+        responses,
+        successCount: responses.filter((r) => r.success).length,
+        failureCount: responses.filter((r) => !r.success).length,
+      };
+    },
+  });
+
   const firestore = () => firestoreInstance;
   firestore.FieldValue = FieldValue;
 
@@ -371,6 +393,7 @@ function createFakeAdmin(seed = {}) {
         deletedUsers.push(uid);
       },
     }),
+    messaging,
     storage: () => ({
       bucket: () => ({
         getFiles: async ({ prefix }) => [
@@ -385,7 +408,14 @@ function createFakeAdmin(seed = {}) {
     }),
   };
 
-  return { admin, store, deletedUsers, storageFiles };
+  return {
+    admin,
+    store,
+    deletedUsers,
+    storageFiles,
+    sentMessages,
+    tokenFailures,
+  };
 }
 
 module.exports = { createFakeAdmin, FieldValue };

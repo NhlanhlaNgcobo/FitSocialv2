@@ -514,8 +514,15 @@ async function attributeRun(runId, runData, ownerId) {
  * Denormalised actor name and avatar, same as a like or a follow, so the
  * notifications list renders from the query it already runs instead of a
  * profile read per row.
+ *
+ * [id] is the document id, and giving one is what makes an event idempotent —
+ * the same deterministic-id discipline NotificationIds keeps on the client, for
+ * the same reason. Writing over a row rather than adding a second one is also
+ * what makes a resent invitation resurface: the payload is rewritten whole, so
+ * createdAt moves and the row lifts back to the top of the recipient's list
+ * instead of the app quietly stacking up five copies of one invitation.
  */
-async function notify(recipientId, actorId, type, extra) {
+async function notify(recipientId, actorId, type, extra, id) {
   if (!recipientId || recipientId === actorId) return;
 
   const actor = await db().collection("users").doc(actorId).get();
@@ -523,28 +530,57 @@ async function notify(recipientId, actorId, type, extra) {
     actor.get("displayName") || actor.get("username") || "Someone";
   const avatar = actor.get("photoUrl") || actor.get("avatarUrl") || "";
 
-  await db()
+  const inbox = db()
     .collection("users")
     .doc(recipientId)
-    .collection("notifications")
-    .add({
-      type,
-      actorId,
-      actorName,
-      ...(avatar ? { actorAvatarUrl: avatar } : {}),
-      ...extra,
-      createdAt: serverTimestamp(),
-      read: false,
-    });
+    .collection("notifications");
+
+  const payload = {
+    type,
+    actorId,
+    actorName,
+    ...(avatar ? { actorAvatarUrl: avatar } : {}),
+    ...extra,
+    createdAt: serverTimestamp(),
+    read: false,
+  };
+
+  await (id ? inbox.doc(id).set(payload) : inbox.add(payload));
 }
 
 async function notifyChallengeCompleted(challengeDoc, userId) {
   // From the challenge's creator, so the row reads as somebody telling you —
   // there is no system actor in this app's notification model.
-  await notify(userId, challengeDoc.get("creatorId"), "challengeCompleted", {
-    challengeId: challengeDoc.id,
-    challengeTitle: challengeDoc.get("title") || "",
-  });
+  await notify(
+    userId,
+    challengeDoc.get("creatorId"),
+    "challengeCompleted",
+    {
+      challengeId: challengeDoc.id,
+      challengeTitle: challengeDoc.get("title") || "",
+    },
+    `challengeCompleted_${challengeDoc.id}`
+  );
+}
+
+/**
+ * Whether two stored timestamps are the same moment.
+ *
+ * Spelled out because these are Timestamp objects, not numbers: `===` compares
+ * identity, and the before and after views of one unchanged field are two
+ * separate objects. Two missing values count as the same moment; one missing
+ * and one present do not, which is what makes the first resend of an
+ * invitation written before `invitedAt` existed still count as a resend.
+ */
+function sameInstant(before, after) {
+  if (!before || !after) return !before && !after;
+  if (typeof before.isEqual === "function") return before.isEqual(after);
+  // Anything that can say when it is, compared by that. Falling back to the
+  // objects themselves would read two different moments as one, because two
+  // plain objects stringify identically.
+  const millis = (value) =>
+    typeof value?.toMillis === "function" ? value.toMillis() : value;
+  return millis(before) === millis(after);
 }
 
 // --- Participant bookkeeping ----------------------------------------------
@@ -567,6 +603,55 @@ async function recountParticipants(challengeRef) {
     { participantCount: counted.data().count, updatedAt: serverTimestamp() },
     { merge: true }
   );
+}
+
+/**
+ * Copies one participant row into `users/{uid}/challengeMemberships/{id}`.
+ *
+ * The index behind "which challenges am I on, and who has invited me?".
+ *
+ * That question used to be asked as a collection-group query across every
+ * challenge's participants, and it could never be authorised: on a
+ * collection-group list, security rules can see neither the document nor the
+ * path wildcards, so the only rule that lets such a query through is one that
+ * lets ANY signed-in caller list EVERY participant row in the database —
+ * private challenge rosters included. The query was therefore refused for
+ * everybody, and the hub's challenge list rendered empty from the day it
+ * shipped. See the collection-group note in firestore.rules.
+ *
+ * Written under the person rather than under the challenge, exactly as their
+ * notifications are, so reading it is an owner-only query on their own
+ * subcollection and the rule has nothing to qualify.
+ *
+ * A copy, and only ever a copy: the participant row under the challenge stays
+ * the record of truth. A mirror that fails to write leaves a challenge missing
+ * from one list until the next write to that row puts it back — which is why
+ * this runs on EVERY write rather than only on the ones that change status.
+ */
+async function mirrorMembership(challengeId, userId, snapshot) {
+  const ref = db()
+    .collection("users")
+    .doc(userId)
+    .collection("challengeMemberships")
+    .doc(challengeId);
+
+  if (!snapshot?.exists) {
+    // Participant rows are never deleted — the rules refuse it — so this is
+    // only reachable if one is removed out of band. Taking the copy with it
+    // beats leaving a membership listed that no longer exists.
+    await ref.delete();
+    return;
+  }
+
+  await ref.set({
+    ...snapshot.data(),
+    // Pinned rather than trusted from the copied data: the id under the
+    // challenge is the uid and the id here is the challenge, so both halves of
+    // the pair have to survive being moved.
+    challengeId,
+    userId,
+    mirroredAt: serverTimestamp(),
+  });
 }
 
 // --- Triggers -------------------------------------------------------------
@@ -612,36 +697,71 @@ exports.onChallengeParticipantWritten = onDocumentWritten(
     const after = event.data?.after;
     const { challengeId, userId } = event.params;
 
+    // Before anything that can return early, and before the challenge is even
+    // read: this copy is how the person's own hub finds the challenge at all,
+    // so it must not depend on which kind of write this turned out to be.
+    await mirrorMembership(challengeId, userId, after);
+
     const challengeRef = db().collection("challenges").doc(challengeId);
     const challengeDoc = await challengeRef.get();
     if (!challengeDoc.exists) return;
 
     const previousStatus = before?.exists ? before.get("status") : null;
     const currentStatus = after?.exists ? after.get("status") : null;
-    if (previousStatus === currentStatus) return;
-
-    await recountParticipants(challengeRef);
-    await rewriteRanks(challengeDoc);
 
     const creatorId = challengeDoc.get("creatorId");
     const title = challengeDoc.get("title") || "";
 
+    const inviteNotification = () =>
+      notify(
+        userId,
+        creatorId,
+        "challengeInvite",
+        { challengeId, challengeTitle: title },
+        // One invitation per challenge per person, however many times it is
+        // sent: a resend rewrites this row and lifts it back to the top rather
+        // than adding a second copy of the same ask.
+        `challengeInvite_${challengeId}`
+      );
+
+    // Nothing moved between the states the board is built from. Almost every
+    // write that lands here is one of those — rewriteRanks stamps a rank on
+    // every participant of a challenge whenever anyone's does change — so this
+    // is also what keeps the trigger from re-entering itself.
+    //
+    // The one exception is a resent invitation, which is deliberately the same
+    // status twice and is told apart by its own stamp. `invitedAt` is written
+    // by the invite sheet and by nothing else, least of all by the ranker, so
+    // it cannot start a loop.
+    if (previousStatus === currentStatus) {
+      const resent =
+        currentStatus === "invited" &&
+        !sameInstant(before?.get("invitedAt"), after?.get("invitedAt"));
+      if (resent) await inviteNotification();
+      return;
+    }
+
+    await recountParticipants(challengeRef);
+    await rewriteRanks(challengeDoc);
+
     // A new invitation: tell the person who was invited.
     if (!previousStatus && currentStatus === "invited") {
-      await notify(userId, creatorId, "challengeInvite", {
-        challengeId,
-        challengeTitle: title,
-      });
+      await inviteNotification();
       return;
     }
 
     // An invitation accepted, or somebody joining a public challenge: tell the
     // creator. `notify` drops it when the creator is the joiner.
     if (currentStatus === "active" && previousStatus !== "active") {
-      await notify(creatorId, userId, "challengeAccepted", {
-        challengeId,
-        challengeTitle: title,
-      });
+      await notify(
+        creatorId,
+        userId,
+        "challengeAccepted",
+        { challengeId, challengeTitle: title },
+        // Keyed by who joined, so leaving and rejoining refreshes one row
+        // instead of telling the creator the same thing twice.
+        `challengeAccepted_${challengeId}_${userId}`
+      );
     }
   }
 );

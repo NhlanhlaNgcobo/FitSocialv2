@@ -404,6 +404,24 @@ service cloud.firestore {
                            && request.auth.uid == userId;
       }
 
+      // This user's push registration tokens, one document per device, the
+      // token itself as the id. Presence is the whole state -- no enabled flag
+      // that could contradict the document existing -- the same shape
+      // /notifyFor uses on the other side of the app.
+      //
+      // Owner-only for READ as well as write, which is the part that matters.
+      // A registration token is an address for somebody's phone: anyone who can
+      // read one can push to that device, and a token is not the kind of thing
+      // a user can rotate once it is out. The Cloud Function that sends on
+      // these reads them through the Admin SDK and so is not subject to this.
+      //
+      // Nothing validates the body, because nothing depends on it -- the id is
+      // the only field the sender uses.
+      match /fcmTokens/{token} {
+        allow read, write: if request.auth != null
+                           && request.auth.uid == userId;
+      }
+
       // Entry-link taps: which races this user has tapped through to enter.
       //
       // Private to its owner, and the only write the client makes for
@@ -474,6 +492,38 @@ service cloud.firestore {
       match /notifyFor/{targetId} {
         allow read, write: if request.auth != null
                            && request.auth.uid == userId;
+      }
+
+      // Your own challenge memberships, kept under you.
+      //
+      // The hub asks one question -- "which challenges am I on, and who has
+      // invited me?" -- and the honest place to answer it is here, in the asker's
+      // own subcollection. The engine writes a copy of each participant row to
+      // users/{uid}/challengeMemberships/{challengeId} on every write; see
+      // mirrorMembership in functions/running_challenges.js.
+      //
+      // It is written that way because the direct question CANNOT BE ASKED
+      // SAFELY. Participant rows live under the challenge, so answering it from
+      // there means a collection-group query across every challenge's
+      // participants -- and on a collection-group list, rules can see neither
+      // `resource` nor the path wildcards. Not the document, not its id: three
+      // rule shapes were tried against the emulator and each one failed with a
+      // Null value error, which denies. The only rule that lets such a query
+      // through is one that tests nothing but `request.auth != null`, and that
+      // one hands any signed-in caller the full membership of every private
+      // challenge in the database.
+      //
+      // So there is no rule to write here, and the query itself is gone. Do not
+      // reintroduce it: the running_challenges rules tests assert that the sweep
+      // stays refused, precisely so this cannot come back by accident.
+      //
+      // Engine-written, never client-written. A member who could write their own
+      // copy could list a challenge they were never on -- and, because the copy
+      // carries the distance and rank the hub renders, award themselves a
+      // standing on it.
+      match /challengeMemberships/{challengeId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
       }
 
       // Badges earned from challenges.
@@ -1209,6 +1259,38 @@ service cloud.firestore {
                       && participantStartsFromZero(request.resource.data)
                       && request.resource.data.status == 'invited';
 
+        // The creator's own row on the challenge they are creating.
+        //
+        // createChallenge writes the challenge and then enrols its creator, and
+        // neither rule above covers that on a PRIVATE challenge: the self-join
+        // rule is written for public ones, and the invite rule is written for
+        // somebody other than the caller. Three private challenges shipped with
+        // no participant rows at all -- not even their creator's -- because of
+        // exactly that gap, which also left them stuck at participantCount 0.
+        allow create: if isChallengeCreator(challengeId)
+                      && request.auth.uid == userId
+                      && request.resource.data.userId == userId
+                      && request.resource.data.challengeId == challengeId
+                      && participantStartsFromZero(request.resource.data)
+                      && request.resource.data.status == 'active';
+
+        // Inviting somebody who is still deciding, again.
+        //
+        // The invite sheet writes the whole document with set(), so the second
+        // tap on Invite is an update rather than a create and was refused --
+        // the creator is not the row's owner, and the transition rule below is
+        // written for the person answering. A resend is only allowed while they
+        // are still deciding and only back into the same state, so it can
+        // neither reset somebody's distance nor drag a person who declined back
+        // into an invitation they already answered.
+        allow update: if isChallengeCreator(challengeId)
+                      && request.auth.uid != userId
+                      && resource.data.status == 'invited'
+                      && request.resource.data.status == 'invited'
+                      && request.resource.data.userId == userId
+                      && request.resource.data.challengeId == challengeId
+                      && participantStartsFromZero(request.resource.data);
+
         // Accepting, declining, leaving. The caller moves their own status and
         // touches nothing else -- every figure the board is ordered by is
         // outside the allowed key set and is refused here.
@@ -1248,5 +1330,6 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+
   }
 }

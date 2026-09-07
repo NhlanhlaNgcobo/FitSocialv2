@@ -50,6 +50,28 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${MAPS_API_KEY}" />
+        <!-- How a push notification looks before the app has had a chance to
+             say anything about it.
+
+             FCM draws the tray entry itself while the app is backgrounded or
+             killed, using these three defaults. Without the icon it falls back
+             to the launcher icon, which the system renders as a grey square;
+             without the channel id it invents one called "Miscellaneous", which
+             is then the name the user finds in Android notification settings.
+
+             The channel named here is created in MainActivity.kt. Declaring a
+             channel that does not exist is not an error and not visible - the
+             notification simply lands on the fallback - so the two have to be
+             changed together. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/fcm_channel_social_id" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_fitsocial" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -173,16 +195,30 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS"/>
             </intent-filter>
         </activity-alias>
-        <!-- Disable the ContentProvider that google-services.json injects to
-             auto-initialize Firebase natively. Flutter's firebase_core Dart
-             plugin calls Firebase.initializeApp() instead, which is required
-             to properly register the default app on the Dart side. -->
-        <provider
-            android:name="com.google.firebase.provider.FirebaseInitProvider"
-            android:authorities="${applicationId}.firebaseinitprovider"
-            android:exported="false"
-            android:initOrder="100"
-            android:enabled="false" />
+        <!-- FirebaseInitProvider is deliberately NOT declared here.
+
+             It used to be, with android:enabled="false", to dodge a duplicate-
+             app crash when the native auto-init and Dart's
+             Firebase.initializeApp() both tried to create [DEFAULT]. Leaving it
+             off breaks push: when the app has been force-stopped, FCM starts a
+             fresh process to show a notification and no Dart ever runs, so
+             nothing initialises Firebase and the notification is dropped. The
+             one case push exists for is the one that failed.
+
+             It is safe to leave enabled now, and that is checked rather than
+             hoped for. firebase_core's Dart side lists the native apps first;
+             finding a default one already there, it does not call the native
+             initializeApp at all — it compares apiKey, databaseURL and
+             storageBucket and returns the existing app when they agree (see
+             method_channel_firebase.dart, "Options are roughly the same").
+             lib/firebase_options.dart and android/app/google-services.json
+             carry byte-identical values for all five fields and neither sets a
+             databaseURL, so that comparison passes.
+
+             If those two files are ever regenerated separately and drift, this
+             comes back as [core/duplicate-app] at launch. Regenerate both from
+             the same project, do not disable this provider again. -->
+
 
         <!-- Reads nothing from notifications. Declared because Android grants
              access to MediaSessionManager.getActiveSessions() per *component*,

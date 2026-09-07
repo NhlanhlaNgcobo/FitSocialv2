@@ -41,6 +41,10 @@ abstract class RunningChallengeRepository {
   /// Read separately from the board so the pinned current-user row costs one
   /// document rather than a scan for somebody who might be in five hundredth
   /// place.
+  /// Everybody on one challenge, in every state — invited and declined
+  /// included, which is what tells the invite sheet who can still be asked.
+  Stream<List<ChallengeParticipant>> watchParticipants(String challengeId);
+
   Stream<ChallengeParticipant?> watchParticipant(
     String challengeId,
     String userId,

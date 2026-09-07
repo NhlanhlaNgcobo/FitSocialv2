@@ -104,6 +104,41 @@ void main() {
         isNull,
       );
     });
+
+    test('a push may open a challenge board, a shared link may not', () {
+      // The two whitelists answer different questions. A challenge board is
+      // not something FitSocial hands out as a link, so an incoming URL must
+      // not reach it — but a challenge invitation has to be able to.
+      expect(FitSocialLinks.isPushRoute('/challenge/board/ch1'), isTrue);
+      expect(FitSocialLinks.isShareableRoute('/challenge/board/ch1'), isFalse);
+    });
+
+    test('everything a shared link may open, a push may open too', () {
+      expect(FitSocialLinks.isPushRoute('/post/p1'), isTrue);
+      expect(FitSocialLinks.isPushRoute('/user/u1'), isTrue);
+    });
+
+    test('a push route is still a whitelist, not anywhere at all', () {
+      for (final route in [
+        '/settings',
+        '/edit-profile',
+        '/home',
+        // The right shape, the wrong middle segment.
+        '/challenge/settings/ch1',
+        // The right prefix, the wrong depth.
+        '/challenge/board',
+        '/challenge/board/ch1/edit',
+        // An id that could re-enter the router as another path segment.
+        '/challenge/board/..%2F..%2Fsettings',
+        '/challenge/board/',
+      ]) {
+        expect(
+          FitSocialLinks.isPushRoute(route),
+          isFalse,
+          reason: 'push should refuse $route',
+        );
+      }
+    });
   });
 
   group('PendingDeepLink', () {
@@ -133,6 +168,22 @@ void main() {
         ..remember('/user/u9');
 
       expect(pending.take(), '/user/u9');
+    });
+
+    test('a tapped notification can park a challenge board', () {
+      // The cold-start case: the app was not running, so there is nowhere to
+      // navigate to until the session has restored.
+      final pending = PendingDeepLink()..rememberPush('/challenge/board/ch1');
+
+      expect(pending.take(), '/challenge/board/ch1');
+    });
+
+    test('a notification cannot park somewhere a push may not open', () {
+      final pending = PendingDeepLink()
+        ..rememberPush('/settings')
+        ..rememberPush('/challenge/board/ch1/edit');
+
+      expect(pending.route, isNull);
     });
   });
 }

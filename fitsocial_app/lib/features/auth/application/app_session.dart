@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/observability/crash_reporter.dart';
+import '../../notifications/application/push_registrar.dart';
 import '../data/auth_repository_contract.dart';
 import '../data/auth_repository.dart';
 import '../data/user_profile_repository_contract.dart';
@@ -23,6 +26,7 @@ class AppSession extends ChangeNotifier {
     required this.authRepository,
     required this.userProfileRepository,
     this.crashReporter = const NoopCrashReporter(),
+    this.pushRegistrar = const NoopPushRegistrar(),
   }) {
     _bootstrap();
   }
@@ -33,6 +37,14 @@ class AppSession extends ChangeNotifier {
   /// Where crashes go. Defaults to a no-op so a test can build a session
   /// without a Firebase app behind it.
   final CrashReporter crashReporter;
+
+  /// This device's push registration, which lives and dies with the session.
+  ///
+  /// It belongs here rather than beside the notification screen because the two
+  /// moments that matter are both this class's: reaching [AuthStage.authenticated],
+  /// and the instant before a sign-out. Defaults to a no-op for the same reason
+  /// [crashReporter] does.
+  final PushRegistrar pushRegistrar;
   AuthStage _stage = AuthStage.initializing;
   bool _isLoading = false;
   String? _email;
@@ -74,7 +86,7 @@ class AppSession extends ChangeNotifier {
     } catch (_) {
       // Profile load failed (offline/permission) but the auth session is
       // valid — keep the user in, let the app retry loading data.
-      _stage = AuthStage.authenticated;
+      _setStage(AuthStage.authenticated);
       notifyListeners();
       return;
     }
@@ -89,7 +101,7 @@ class AppSession extends ChangeNotifier {
       return;
     }
 
-    _stage = AuthStage.authenticated;
+    _setStage(AuthStage.authenticated);
     notifyListeners();
   }
 
@@ -98,6 +110,12 @@ class AppSession extends ChangeNotifier {
   /// present the app as logged out rather than trapping the user.
   Future<void> _discardStaleSession() async {
     try {
+      // Same ordering as signOut below, and for the same reason. The write will
+      // often fail here anyway — the session being discarded is one the server
+      // has already stopped honouring — but deleting the token on the device is
+      // the half that still works, and it is the half that stops this phone
+      // holding an address the dead account was being pushed at.
+      await _unregisterPushQuietly();
       await authRepository.signOut();
     } catch (_) {
       // Ignored on purpose — see above.
@@ -182,8 +200,9 @@ class AppSession extends ChangeNotifier {
       _profile = await userProfileRepository.loadCurrentProfile();
       // No profile means the account exists but was never finished, so setup
       // is where they land rather than the feed.
-      _stage =
-          _profile == null ? AuthStage.profileSetup : AuthStage.authenticated;
+      _setStage(
+        _profile == null ? AuthStage.profileSetup : AuthStage.authenticated,
+      );
     } catch (error) {
       _errorMessage = describeAuthError(error);
     } finally {
@@ -224,7 +243,7 @@ class AppSession extends ChangeNotifier {
         pronouns: pronouns.trim(),
         links: links.trim(),
       );
-      _stage = AuthStage.authenticated;
+      _setStage(AuthStage.authenticated);
       return true;
     } catch (error) {
       _errorMessage = describeAuthError(error);
@@ -265,6 +284,12 @@ class AppSession extends ChangeNotifier {
   Future<void> signOut() async {
     _errorMessage = null;
     try {
+      // BEFORE the sign-out, and awaited. Deleting the token document is a
+      // Firestore write that the rules only permit to its owner, so once the
+      // session is gone it is denied and the registration survives — and the
+      // next person to sign in on this phone starts receiving the previous
+      // user's notifications. The ordering here is the whole safeguard.
+      await _unregisterPushQuietly();
       await authRepository.signOut();
       crashReporter.setUserId(null);
       _email = null;
@@ -290,6 +315,11 @@ class AppSession extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
     try {
+      // The server-side sweep takes the token documents with everything else
+      // under users/{uid}, so this is not what removes them. What it does is
+      // release the token on the device, so this installation is not left
+      // holding an address issued to an account that no longer exists.
+      await _unregisterPushQuietly();
       await authRepository.deleteAccount();
       crashReporter.setUserId(null);
       _email = null;
@@ -311,6 +341,58 @@ class AppSession extends ChangeNotifier {
     crashReporter.setUserId(authRepository.currentUserId());
   }
 
+  /// Moves the session to [stage], and puts this device on the push list the
+  /// moment that stage is a signed-in one.
+  ///
+  /// Every transition goes through here rather than assigning [_stage] directly,
+  /// so that a new way into the app — a third sign-in method, a new post-setup
+  /// path — cannot quietly skip registration and leave that route's users with
+  /// an inbox that fills up and a phone that never makes a sound.
+  ///
+  /// Does not notify. The call sites differ on when they want to, and several
+  /// of them have more to set first.
+  void _setStage(AuthStage stage) {
+    _stage = stage;
+    if (stage == AuthStage.authenticated) _registerForPush();
+  }
+
+  /// Registers this device for push, without waiting for it.
+  ///
+  /// Fire-and-forget on purpose. Registration can raise the system notification
+  /// prompt, and awaiting it would hold the app on a loading spinner until the
+  /// user had answered a dialog. [PushRegistrar] swallows its own failures, so
+  /// there is no error here to lose.
+  void _registerForPush() {
+    final userId = authRepository.currentUserId();
+    if (userId == null) return;
+
+    // Caught here rather than left to the zone. This is deliberately not
+    // awaited, so a throw would arrive as an unhandled async error with no
+    // caller left to attach it to — reported as a crash, on a launch that
+    // otherwise went fine.
+    unawaited(
+      pushRegistrar.register(userId).catchError((Object error) {
+        debugPrint('Registering for push failed: $error');
+        return false;
+      }),
+    );
+  }
+
+  /// Withdraws this device's push registration, swallowing any failure.
+  ///
+  /// Best-effort by design, and it has to be. A token that could not be deleted
+  /// means one more notification may reach a phone whose owner has signed out
+  /// of that account. A withdrawal allowed to throw means somebody offline
+  /// cannot sign out at all — the operation it precedes never runs. The second
+  /// is much the worse of the two, so this can never fail what follows it.
+  Future<void> _unregisterPushQuietly() async {
+    try {
+      await pushRegistrar.unregister();
+    } catch (error) {
+      debugPrint('Withdrawing the push registration failed: $error');
+    }
+  }
+
   void clearError() {
     if (_errorMessage == null) return;
     _errorMessage = null;
@@ -330,5 +412,6 @@ final appSessionProvider = ChangeNotifierProvider<AppSession>((ref) {
     authRepository: ref.watch(authRepositoryProvider),
     userProfileRepository: ref.watch(userProfileRepositoryProvider),
     crashReporter: ref.watch(crashReporterProvider),
+    pushRegistrar: ref.watch(pushRegistrarProvider),
   );
 });
