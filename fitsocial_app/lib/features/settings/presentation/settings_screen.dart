@@ -14,6 +14,7 @@ import '../../auth/presentation/account_switcher_sheet.dart';
 import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../notifications/application/push_providers.dart';
+import '../../tracking/application/run_draft_providers.dart';
 import 'delete_account_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
@@ -90,7 +91,15 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Steps, heart rate and connected devices',
                 onTap: () => context.push('/health'),
               ),
+              const _RunImportTile(),
             ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const _SettingsNote(
+            icon: Icons.directions_run_rounded,
+            accent: _kHealthAccent,
+            text: 'A run your watch recorded turns up on the Create page as a '
+                'draft. It stays on your phone until you post it.',
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Notifications'),
@@ -526,6 +535,32 @@ class _SettingsGroup extends StatelessWidget {
 /// deletes this device's registration token, which is what actually stops
 /// anything being sent — the stored preference only remembers the answer for
 /// the next launch.
+/// The switch for filing runs the app finds in the platform health store.
+///
+/// Sits under Health data and takes its hue, rather than earning one of its
+/// own: it is about the same connection, and the accent list at the top of this
+/// file is short on purpose.
+///
+/// Stateless where [_PushNotificationsTile] is not, because there is no system
+/// dialog behind this one and nothing to hold the switch down for — the store
+/// is written in the background and the switch moves at once.
+class _RunImportTile extends ConsumerWidget {
+  const _RunImportTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _SettingsSwitchTile(
+      icon: Icons.directions_run_rounded,
+      accent: _kHealthAccent,
+      label: 'Find runs I record elsewhere',
+      subtitle: 'Save runs from your watch or health app as drafts',
+      value: ref.watch(runImportEnabledProvider),
+      onChanged: (next) =>
+          ref.read(runImportEnabledProvider.notifier).set(enabled: next),
+    );
+  }
+}
+
 class _PushNotificationsTile extends ConsumerStatefulWidget {
   const _PushNotificationsTile();
 

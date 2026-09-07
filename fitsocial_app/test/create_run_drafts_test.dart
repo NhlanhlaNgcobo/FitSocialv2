@@ -9,6 +9,7 @@ import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/main/presentation/create_screen.dart';
 import 'package:fitsocial_app/features/tracking/application/run_draft_providers.dart';
 import 'package:fitsocial_app/features/tracking/data/run_draft_store.dart';
+import 'package:fitsocial_app/features/tracking/data/run_import_ledger.dart';
 import 'package:fitsocial_app/features/tracking/domain/run_draft.dart';
 
 // Two different things are called a draft on this page, and they have to
@@ -75,6 +76,7 @@ void main() {
           runDraftsProvider.overrideWith(
             (ref) => RunDraftController(
               store: _FakeRunDraftStore([...runDrafts]),
+              ledger: const NoopRunImportLedger(),
               publish: (_) async =>
                   const ActivitySaveResult(message: 'Run saved and shared.'),
             ),

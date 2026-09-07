@@ -6,6 +6,7 @@ import 'package:fitsocial_app/core/connectivity/backend_reachability.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/tracking/application/run_draft_providers.dart';
 import 'package:fitsocial_app/features/tracking/data/run_draft_store.dart';
+import 'package:fitsocial_app/features/tracking/data/run_import_ledger.dart';
 import 'package:fitsocial_app/features/tracking/domain/run_draft.dart';
 import 'package:fitsocial_app/features/tracking/presentation/run_drafts_section.dart';
 
@@ -48,6 +49,8 @@ void main() {
     DateTime? savedAt,
     DateTime? publishAttemptedAt,
     List<RoutePoint> route = const [],
+    RunDraftSource source = RunDraftSource.recorded,
+    String? externalId,
   }) {
     return RunDraft(
       id: id,
@@ -58,6 +61,8 @@ void main() {
       shareToFeed: shareToFeed,
       routePoints: route,
       publishAttemptedAt: publishAttemptedAt,
+      source: source,
+      externalId: externalId,
     );
   }
 
@@ -89,6 +94,7 @@ void main() {
           runDraftsProvider.overrideWith(
             (ref) => RunDraftController(
               store: store,
+              ledger: const NoopRunImportLedger(),
               publish: publish ??
                   (log) async {
                     published.add(log);
@@ -163,7 +169,8 @@ void main() {
     testWidgets('cannot post, and says why', (tester) async {
       await pumpSection(tester, drafts: [draft()], isOffline: true);
 
-      expect(find.textContaining('Offline — reconnect to post'), findsOneWidget);
+      expect(
+          find.textContaining('Offline — reconnect to post'), findsOneWidget);
       final button = tester.widget<FilledButton>(find.byType(FilledButton));
       expect(button.onPressed, isNull);
     });
@@ -229,6 +236,7 @@ void main() {
             runDraftsProvider.overrideWith(
               (ref) => RunDraftController(
                 store: store,
+                ledger: const NoopRunImportLedger(),
                 publish: (log) async {
                   published.add(log);
                   // Slow enough that a second tap lands while the first is
@@ -288,6 +296,96 @@ void main() {
 
       expect(find.textContaining('Discard this run?'), findsOneWidget);
       expect(harness.store.deleted, isEmpty);
+    });
+  });
+
+  // A run FitSocial found rather than recorded reads differently on purpose:
+  // the runner did not save it, it has no route to show, and posting it is a
+  // decision nobody has made yet.
+  group('a run we found', () {
+    RunDraft imported({String id = 'i'}) => draft(
+          id: id,
+          shareToFeed: false,
+          source: RunDraftSource.healthConnect,
+          externalId: 'hc-$id',
+        );
+
+    testWidgets('gets its own heading, apart from the offline ones',
+        (tester) async {
+      await pumpSection(tester, drafts: [draft(id: 'a'), imported()]);
+
+      expect(find.text('Saved run'), findsOneWidget);
+      expect(find.text('Run we found'), findsOneWidget);
+      expect(
+        find.textContaining('Recorded by another app on your phone'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('counts its own group only', (tester) async {
+      await pumpSection(
+        tester,
+        drafts: [imported(id: 'i1'), imported(id: 'i2')],
+      );
+
+      expect(find.text('Runs we found · 2'), findsOneWidget);
+      expect(find.text('Saved run'), findsNothing);
+    });
+
+    testWidgets('says it was found, not saved, and why there is no route',
+        (tester) async {
+      await pumpSection(tester, drafts: [imported()]);
+
+      expect(find.textContaining('Found 2 h ago'), findsOneWidget);
+      expect(find.textContaining('No route recorded'), findsOneWidget);
+    });
+
+    testWidgets('offers to save it privately rather than to post it',
+        (tester) async {
+      await pumpSection(tester, drafts: [imported()]);
+
+      expect(find.text('Save run'), findsOneWidget);
+      expect(find.text('Post'), findsNothing);
+    });
+
+    testWidgets('saving it keeps it private', (tester) async {
+      final result = await pumpSection(tester, drafts: [imported()]);
+
+      await tapIn(tester, find.text('Save run'));
+
+      expect(result.published, hasLength(1));
+      expect(result.published.single.shareToFeed, isFalse);
+    });
+
+    testWidgets('posting it to the feed is behind the overflow menu',
+        (tester) async {
+      final result = await pumpSection(tester, drafts: [imported()]);
+
+      await tapIn(tester, find.byIcon(Icons.more_horiz_rounded));
+      await tapIn(tester, find.text('Post to feed'));
+
+      expect(result.published, hasLength(1));
+      expect(result.published.single.shareToFeed, isTrue);
+      expect(result.published.single.distanceKm, 5.2);
+    });
+
+    testWidgets('a recorded run has no Post to feed option', (tester) async {
+      await pumpSection(tester, drafts: [draft(shareToFeed: false)]);
+
+      await tapIn(tester, find.byIcon(Icons.more_horiz_rounded));
+
+      expect(find.text('Post to feed'), findsNothing);
+    });
+
+    testWidgets('offline, it cannot be sent anywhere', (tester) async {
+      await pumpSection(tester, drafts: [imported()], isOffline: true);
+
+      final button = tester.widget<FilledButton>(find.byType(FilledButton));
+      expect(button.onPressed, isNull);
+      expect(
+        find.textContaining('Offline — reconnect to post'),
+        findsOneWidget,
+      );
     });
   });
 }

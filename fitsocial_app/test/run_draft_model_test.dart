@@ -17,6 +17,8 @@ RunDraft _draft({
   HeartRateSummary? heartRate,
   DateTime? publishAttemptedAt,
   bool shareToFeed = true,
+  RunDraftSource source = RunDraftSource.recorded,
+  String? externalId,
 }) {
   return RunDraft(
     id: 'draft-1',
@@ -31,6 +33,8 @@ RunDraft _draft({
     photoUnavailable: photoUnavailable,
     heartRate: heartRate,
     publishAttemptedAt: publishAttemptedAt,
+    source: source,
+    externalId: externalId,
   );
 }
 
@@ -203,6 +207,70 @@ void main() {
 
     test('carries a private run through as private', () {
       expect(_draft(shareToFeed: false).toRunLogDraft().shareToFeed, isFalse);
+    });
+  });
+
+  // `source` and `externalId` were added without moving the schema version, so
+  // that an offline draft already on a phone stays readable. These pin both
+  // halves of that bargain down: an old file still reads here, and a new file
+  // still reads everything an older build would have looked for.
+  group('the imported-run fields', () {
+    test('a recorded draft writes neither of them', () {
+      final json = _draft().toJson();
+
+      expect(json.containsKey('source'), isFalse);
+      expect(json.containsKey('externalId'), isFalse);
+    });
+
+    test('a file written before they existed reads as recorded', () {
+      final json = _draft().toJson()
+        ..remove('source')
+        ..remove('externalId');
+
+      final read = RunDraft.fromJson(jsonDecode(jsonEncode(json)));
+      expect(read!.source, RunDraftSource.recorded);
+      expect(read.externalId, isNull);
+      expect(read.isImported, isFalse);
+    });
+
+    test('an imported draft survives the round trip', () {
+      final read = _roundTrip(
+        _draft(
+          source: RunDraftSource.healthConnect,
+          externalId: 'hc-uuid-1',
+          shareToFeed: false,
+        ),
+      );
+
+      expect(read!.source, RunDraftSource.healthConnect);
+      expect(read.externalId, 'hc-uuid-1');
+      expect(read.isImported, isTrue);
+      expect(read.shareToFeed, isFalse);
+    });
+
+    test('a source this build does not know reads as recorded', () {
+      // The version gate already rejects a future schema. A label it has never
+      // seen is not worth losing a run over on top of that.
+      final json = _draft().toJson()..['source'] = 'garmin_direct';
+
+      final read = RunDraft.fromJson(json);
+      expect(read!.source, RunDraftSource.recorded);
+    });
+
+    test('copyWith keeps them, and can flip sharing on', () {
+      final draft = _draft(
+        source: RunDraftSource.healthConnect,
+        externalId: 'hc-uuid-1',
+        shareToFeed: false,
+      );
+
+      final shared = draft.copyWith(shareToFeed: true);
+      expect(shared.shareToFeed, isTrue);
+      expect(shared.source, RunDraftSource.healthConnect);
+      expect(shared.externalId, 'hc-uuid-1');
+
+      // And an untouched copy does not silently publish anything.
+      expect(draft.copyWith(photoUnavailable: true).shareToFeed, isFalse);
     });
   });
 }

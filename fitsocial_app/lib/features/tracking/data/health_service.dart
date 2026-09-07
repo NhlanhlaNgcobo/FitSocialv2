@@ -1,5 +1,9 @@
 import 'package:health/health.dart';
 
+import '../../main/domain/app_models.dart';
+import '../domain/imported_run.dart';
+import 'run_import_service.dart';
+
 /// Today's health metrics pulled from Health Connect (Android) /
 /// HealthKit (iOS). Smartwatches (Galaxy Watch, Pixel Watch, Fitbit,
 /// Garmin, …) sync their data into these platform stores, so reading them
@@ -55,7 +59,7 @@ class HealthSummary {
   final DateTime? stepsAsOf;
 }
 
-class HealthService {
+class HealthService implements RunSessionSource {
   HealthService() : _health = Health();
 
   final Health _health;
@@ -89,9 +93,23 @@ class HealthService {
     HealthDataType.SLEEP_REM,
   ];
 
-  /// Everything worth asking for: what the summary needs, plus the fallbacks.
-  /// Every entry is declared in AndroidManifest.xml.
-  static const _requestTypes = <HealthDataType>[..._types, ..._fallbackTypes];
+  /// What [readRunSessions] needs.
+  ///
+  /// Kept out of [_types] for the same reason the fallbacks are: that list is
+  /// the permission gate, and somebody who wants their steps on the dashboard
+  /// but does not want the app reading their watch's workouts has not declined
+  /// health access. It is asked for, and the import simply finds nothing if it
+  /// was refused.
+  static const _importTypes = <HealthDataType>[HealthDataType.WORKOUT];
+
+  /// Everything worth asking for: what the summary needs, plus the fallbacks,
+  /// plus what importing runs needs. Every entry is declared in
+  /// AndroidManifest.xml.
+  static const _requestTypes = <HealthDataType>[
+    ..._types,
+    ..._fallbackTypes,
+    ..._importTypes,
+  ];
 
   static final _requestAccess =
       _requestTypes.map((_) => HealthDataAccess.READ).toList(growable: false);
@@ -219,9 +237,9 @@ class HealthService {
               stepsAsOf = p.dateTo;
             }
           case HealthDataType.SLEEP_SESSION:
-            sleepBySource[p.sourceId] = (sleepBySource[p.sourceId] ??
-                    Duration.zero) +
-                p.dateTo.difference(p.dateFrom);
+            sleepBySource[p.sourceId] =
+                (sleepBySource[p.sourceId] ?? Duration.zero) +
+                    p.dateTo.difference(p.dateFrom);
           default:
             break;
         }
@@ -307,6 +325,186 @@ class HealthService {
     } catch (_) {
       return HealthSummary.unavailable;
     }
+  }
+
+  // --- Importing runs recorded elsewhere --------------------------------
+  //
+  // A run recorded by a watch or by Samsung Health is invisible to this app
+  // otherwise. These three reads are what turns one back into a draft: the
+  // sessions themselves, a distance for the ones that did not carry their own,
+  // and the heart rate over the window.
+  //
+  // Split into three rather than done in one pass on purpose. The session read
+  // runs on every app resume and almost always finds nothing new; the other two
+  // only run for a session that survived the duplicate checks, so the common
+  // case costs exactly one query.
+
+  /// Running sessions written to the platform store between [start] and [end].
+  ///
+  /// Only running: walks, rides and swims are somebody else's feature, and a
+  /// run draft is a run. Treadmill sessions are included and flagged -- an
+  /// indoor run is still a run, it just has no route, which is a shape the
+  /// draft already supports.
+  ///
+  /// Returns empty on any failure, including a refused permission. There is
+  /// nothing the caller could do differently and nothing the runner needs told:
+  /// the feature's whole promise is that runs turn up on their own, so the
+  /// honest failure is silence.
+  @override
+  Future<List<HealthRunRecord>> readRunSessions({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    try {
+      await _health.configure();
+      final points = await _health.getHealthDataFromTypes(
+        types: _importTypes,
+        startTime: start,
+        endTime: end,
+      );
+
+      final records = <HealthRunRecord>[];
+      for (final point in points) {
+        final value = point.value;
+        if (value is! WorkoutHealthValue) continue;
+
+        final activity = value.workoutActivityType;
+        final isTreadmill =
+            activity == HealthWorkoutActivityType.RUNNING_TREADMILL;
+        if (activity != HealthWorkoutActivityType.RUNNING && !isTreadmill) {
+          continue;
+        }
+
+        records.add(
+          HealthRunRecord(
+            externalId: point.uuid,
+            startedAt: point.dateFrom,
+            endedAt: point.dateTo,
+            distanceMeters: _metersFrom(
+              value.totalDistance,
+              value.totalDistanceUnit,
+            ),
+            sourceId: point.sourceId,
+            sourceName: point.sourceName,
+            isTreadmill: isTreadmill,
+          ),
+        );
+      }
+      return records;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Distance recorded inside a window, for a workout that carried none.
+  ///
+  /// Restricted to [sourceId] -- the app that wrote the workout. Every source
+  /// covering the same run writes its own distance records, and adding them
+  /// together would report a 5 km run as 10 km on any phone with a watch paired
+  /// to it. Same reasoning as [_highestSource], applied where there is a right
+  /// answer to pick rather than a guess to make.
+  ///
+  /// Null when nothing was recorded, which the caller must treat as "skip this
+  /// session" rather than as zero.
+  @override
+  Future<double?> readDistanceMeters({
+    required DateTime start,
+    required DateTime end,
+    required String sourceId,
+  }) async {
+    try {
+      await _health.configure();
+      final points = await _health.getHealthDataFromTypes(
+        types: const [HealthDataType.DISTANCE_DELTA],
+        startTime: start,
+        endTime: end,
+      );
+
+      var meters = 0.0;
+      for (final point in points) {
+        if (point.sourceId != sourceId) continue;
+        final value = point.value;
+        if (value is! NumericHealthValue) continue;
+        meters += _metersFrom(value.numericValue, point.unit) ?? 0;
+      }
+      return meters > 0 ? meters : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Heart rate across a session, in the shape a run already records.
+  ///
+  /// Coverage is the span from the first reading to the last rather than the
+  /// number of readings: the point of the field is to say how much of the run
+  /// the figure actually describes, and a watch that stopped reporting halfway
+  /// through must not have its average read as covering the whole thing.
+  ///
+  /// Null when there is nothing usable, so an imported run with no heart rate
+  /// looks the same as a run recorded without a strap.
+  @override
+  Future<HeartRateSummary?> readHeartRateSummary({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    try {
+      await _health.configure();
+      final points = await _health.getHealthDataFromTypes(
+        types: const [HealthDataType.HEART_RATE],
+        startTime: start,
+        endTime: end,
+      );
+
+      var total = 0.0;
+      var count = 0;
+      var max = 0;
+      DateTime? first;
+      DateTime? last;
+
+      for (final point in points) {
+        final value = point.value;
+        if (value is! NumericHealthValue) continue;
+        final bpm = value.numericValue.toDouble();
+        // The same plausibility window the strap recorder applies. A watch
+        // writing a zero while it settles must not drag the average down.
+        if (bpm < 25 || bpm > 240) continue;
+
+        total += bpm;
+        count += 1;
+        if (bpm.round() > max) max = bpm.round();
+        if (first == null || point.dateFrom.isBefore(first)) {
+          first = point.dateFrom;
+        }
+        if (last == null || point.dateTo.isAfter(last)) last = point.dateTo;
+      }
+
+      if (count == 0 || first == null || last == null) return null;
+      final coverage = last.difference(first);
+      return HeartRateSummary(
+        averageBpm: (total / count).round(),
+        maxBpm: max,
+        coverage: coverage.isNegative ? Duration.zero : coverage,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// [value] in metres, or null when there is nothing to convert.
+  ///
+  /// A null unit is read as metres: that is what Health Connect stores distance
+  /// in, and it is what the plugin reports when a record does not name one.
+  static double? _metersFrom(num? value, HealthDataUnit? unit) {
+    if (value == null) return null;
+    final amount = value.toDouble();
+    return switch (unit) {
+      HealthDataUnit.MILE => amount * 1609.344,
+      HealthDataUnit.YARD => amount * 0.9144,
+      HealthDataUnit.FOOT => amount * 0.3048,
+      HealthDataUnit.INCH => amount * 0.0254,
+      HealthDataUnit.CENTIMETER => amount / 100,
+      _ => amount,
+    };
   }
 
   // --- Diagnostics ------------------------------------------------------

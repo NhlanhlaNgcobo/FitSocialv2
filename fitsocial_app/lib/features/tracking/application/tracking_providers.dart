@@ -8,6 +8,7 @@ import '../data/ble_heart_rate_service.dart';
 import '../data/health_service.dart';
 import '../data/heart_rate_recorder.dart';
 import '../data/live_run_service.dart';
+import '../data/run_import_service.dart';
 import '../data/step_tracker_service.dart';
 import '../data/treadmill_run_service.dart';
 
@@ -123,4 +124,13 @@ final sessionStepsProvider = StreamProvider<int>((ref) {
 final healthDiagnosticsProvider =
     FutureProvider.autoDispose<List<HealthTypeDiagnostic>>((ref) {
   return ref.watch(healthServiceProvider).diagnose();
+});
+
+/// Reads runs recorded elsewhere back out of the platform store.
+///
+/// Lives here rather than beside the drafts because it needs
+/// [healthServiceProvider], and `run_draft_providers.dart` is imported by this
+/// file — the dependency only runs in this direction.
+final runImportServiceProvider = Provider<RunImportService>((ref) {
+  return RunImportService(health: ref.watch(healthServiceProvider));
 });

@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../domain/run_pace.dart';
 import 'run_checkpoint_store.dart';
 import 'step_tracker_service.dart';
 import 'stride_calibrator.dart';
@@ -109,14 +110,10 @@ class LiveRunState {
     return '$mins:$secs';
   }
 
-  String get formattedAveragePace {
-    final minutes = elapsed.inSeconds / 60.0;
-    if (distanceKm <= 0.01 || minutes <= 0) return '--:-- /km';
-    final pace = minutes / distanceKm;
-    final mins = pace.floor();
-    final secs = ((pace - mins) * 60).round().toString().padLeft(2, '0');
-    return '$mins:$secs /km';
-  }
+  /// Delegated so a recorded run and a run imported from Health Connect can
+  /// never format the same pace two different ways.
+  String get formattedAveragePace =>
+      formatAveragePace(distanceKm: distanceKm, elapsed: elapsed);
 }
 
 /// The moving-time clock for a run.

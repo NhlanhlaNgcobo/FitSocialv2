@@ -10,6 +10,8 @@ import '../../main/application/activity_actions.dart';
 import '../../main/domain/app_models.dart';
 import '../data/run_checkpoint_store.dart';
 import '../data/run_draft_store.dart';
+import '../data/run_import_ledger.dart';
+import '../data/run_import_preference.dart';
 import '../domain/run_draft.dart';
 
 /// Where both on-disk stores root themselves.
@@ -22,11 +24,14 @@ final runStorageRootProvider = Provider<Future<Directory> Function()>((ref) {
 
 /// The uid whose drafts we are looking at, or null when nobody is signed in.
 ///
+/// Public because the import sync has to know there is somebody to file a run
+/// for before it starts looking for one.
+///
 /// Read off FirebaseAuth with the session watched, exactly as
 /// `backendReachabilityProvider` does — signing in as someone else has to
 /// rebuild the stores onto their own directory rather than serving the
 /// previous user's runs.
-final _draftOwnerProvider = Provider<String?>((ref) {
+final runDraftOwnerProvider = Provider<String?>((ref) {
   ref.watch(appSessionProvider);
   try {
     return FirebaseAuth.instance.currentUser?.uid;
@@ -39,7 +44,7 @@ final _draftOwnerProvider = Provider<String?>((ref) {
 });
 
 final runDraftStoreProvider = Provider<RunDraftStore>((ref) {
-  final userId = ref.watch(_draftOwnerProvider);
+  final userId = ref.watch(runDraftOwnerProvider);
   if (kIsWeb || userId == null) return const NoopRunDraftStore();
   return FileRunDraftStore(
     rootDirectory: ref.watch(runStorageRootProvider),
@@ -47,8 +52,57 @@ final runDraftStoreProvider = Provider<RunDraftStore>((ref) {
   );
 });
 
+/// Filed beside the drafts and per-user for the same reasons they are.
+final runImportLedgerProvider = Provider<RunImportLedger>((ref) {
+  final userId = ref.watch(runDraftOwnerProvider);
+  if (kIsWeb || userId == null) return const NoopRunImportLedger();
+  return FileRunImportLedger(
+    rootDirectory: ref.watch(runStorageRootProvider),
+    userId: userId,
+  );
+});
+
+final runImportPreferenceStoreProvider =
+    Provider<RunImportPreferenceStore>((ref) {
+  return const RunImportPreferenceStore();
+});
+
+/// Whether runs found in Health Connect may be filed as drafts.
+///
+/// Starts true and corrects itself once storage answers, rather than starting
+/// false: true is the default, so an optimistic start is right nearly always,
+/// and the one thing that could go wrong -- an import beginning a few hundred
+/// milliseconds before a stored "off" arrives -- files a draft nobody sees sent
+/// anywhere.
+final runImportEnabledProvider =
+    StateNotifierProvider<RunImportEnabledController, bool>((ref) {
+  return RunImportEnabledController(
+      ref.watch(runImportPreferenceStoreProvider));
+});
+
+class RunImportEnabledController extends StateNotifier<bool> {
+  RunImportEnabledController(this._store) : super(true) {
+    _load();
+  }
+
+  final RunImportPreferenceStore _store;
+
+  Future<void> _load() async {
+    final enabled = await _store.read();
+    if (mounted) state = enabled;
+  }
+
+  /// Applies immediately and persists in the background — a switch must not
+  /// wait on a keystore round trip to move.
+  Future<void> set({required bool enabled}) async {
+    if (enabled == state) return;
+    state = enabled;
+    await _store.write(enabled: enabled);
+  }
+}
+
 final runCheckpointStoreProvider = Provider<RunCheckpointStore>((ref) {
-  final userId = ref.watch(_draftOwnerProvider);
+  final userId = ref.watch(runDraftOwnerProvider);
   if (kIsWeb || userId == null) return const NoopRunCheckpointStore();
   return FileRunCheckpointStore(
     rootDirectory: ref.watch(runStorageRootProvider),
@@ -77,6 +131,7 @@ final runDraftsProvider =
         (ref) {
   return RunDraftController(
     store: ref.watch(runDraftStoreProvider),
+    ledger: ref.watch(runImportLedgerProvider),
     publish: ref.watch(activityActionsProvider).saveRun,
   );
 });
@@ -98,14 +153,18 @@ class RunPublishResult {
 class RunDraftController extends StateNotifier<AsyncValue<List<RunDraft>>> {
   RunDraftController({
     required RunDraftStore store,
+    required RunImportLedger ledger,
     required Future<ActivitySaveResult> Function(RunLogDraft) publish,
   })  : _store = store,
+        _ledger = ledger,
         _publish = publish,
         super(const AsyncValue.loading()) {
     _load();
   }
 
   final RunDraftStore _store;
+
+  final RunImportLedger _ledger;
 
   /// The save call, injected rather than reached for through a Ref.
   ///
@@ -142,6 +201,31 @@ class RunDraftController extends StateNotifier<AsyncValue<List<RunDraft>>> {
     final stored = await _store.save(draft, sourcePhotoPath: sourcePhotoPath);
     await _load();
     return stored;
+  }
+
+  /// The external ids this controller already has drafts for.
+  ///
+  /// Handed to the import alongside the ledger so a ledger that failed to write
+  /// -- or was lost with the app's data -- still cannot produce a second draft
+  /// for a session already sitting in the list.
+  Set<String> get importedIds => {
+        for (final draft in state.valueOrNull ?? const <RunDraft>[])
+          if (draft.externalId case final id?) id,
+      };
+
+  /// Files a run found in Health Connect that FitSocial never saw happen.
+  ///
+  /// The ledger is stamped **after** the draft lands, and never rolled back.
+  /// Those two facts are the whole design: stamping first would lose the run
+  /// outright if the write failed, and clearing the stamp when the runner
+  /// discards the draft would have the same unwanted run offered back every
+  /// time the app opened for the next two days.
+  Future<void> importDetected(RunDraft draft) async {
+    await _store.save(draft);
+    if (draft.externalId case final id?) {
+      await _ledger.markHandled([id]);
+    }
+    await _load();
   }
 
   /// Sends [draft] up the ordinary save path and drops it from disk once it
@@ -182,7 +266,8 @@ class RunDraftController extends StateNotifier<AsyncValue<List<RunDraft>>> {
         save: result,
         // The runner chose a backdrop and it did not go out with the run. Said
         // plainly rather than left for them to notice on the feed.
-        photoMissing: (photoPath != null && !hasPhoto) || draft.photoUnavailable,
+        photoMissing:
+            (photoPath != null && !hasPhoto) || draft.photoUnavailable,
       );
     } finally {
       _publishing.remove(draft.id);
