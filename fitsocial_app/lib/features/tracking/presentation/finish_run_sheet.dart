@@ -1,11 +1,15 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/run_background_section.dart';
+import '../../../shared/widgets/run_summary_card.dart';
+import '../../../shared/widgets/save_run_card_row.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../main/domain/app_models.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -161,6 +165,21 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                   onPick: _pickBackground,
                   onRemove: () => setState(() => _backgroundPath = null),
                 ),
+                // Close to the preview rather than a full gap away: this acts
+                // on the card above it, not on the decision below it.
+                if (!kIsWeb) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SaveRunCardRow(
+                    card: RunCardExport(
+                      route: widget.route,
+                      distanceLabel: widget.distanceLabel,
+                      durationLabel: widget.durationLabel,
+                      background: _backgroundPath == null
+                          ? null
+                          : localBackgroundImage(_backgroundPath!),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 ShareToFeedToggle(
                   value: _shareToFeed,

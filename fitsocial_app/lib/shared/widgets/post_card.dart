@@ -18,6 +18,7 @@ import 'mention_text.dart';
 import 'profile_link.dart';
 import 'quick_toast.dart';
 import 'reaction_bar.dart';
+import '../services/run_card_exporter.dart';
 import 'run_summary_card.dart';
 import 'share_sheet.dart';
 import 'workout_summary_card.dart';
@@ -97,6 +98,18 @@ class PostCard extends StatelessWidget {
   /// on, or both. A run with neither is words, and renders as words.
   bool get _hasRunCard => _isRun && (_hasRoute || imageUrl != null);
 
+  /// What the share sheet needs to redraw this run card into a file, or null
+  /// when there is no card to draw. The metric strip is the reason this cannot
+  /// come out of [_shareRef], which does not carry it.
+  RunCardExport? get _runCardExport => _hasRunCard
+      ? RunCardExport(
+          route: routePoints,
+          distanceLabel: RunSummaryCard.distanceFrom(metricLabels),
+          durationLabel: RunSummaryCard.durationFrom(metricLabels),
+          background: imageUrl == null ? null : NetworkImage(imageUrl!),
+        )
+      : null;
+
   /// This post in the form the share flows want it — the sheet, the Pulse
   /// card, and the link all read from one snapshot.
   SharedPostRef get _shareRef => SharedPostRef.of(
@@ -175,6 +188,7 @@ class PostCard extends StatelessWidget {
               _buildBodyText(palette),
             PostInteractionRow(
               post: _shareRef,
+              runCard: _runCardExport,
               likes: likes,
               comments: comments,
               onCommentTapped: onCommentTapped,
@@ -277,6 +291,7 @@ class PostCard extends StatelessWidget {
           ),
           PostMenuButton(
             post: _shareRef,
+            runCard: _runCardExport,
             onDeleted: onDeleted,
           ),
         ],
@@ -543,6 +558,7 @@ class PostInteractionRow extends ConsumerWidget {
     required this.post,
     required this.likes,
     required this.comments,
+    this.runCard,
     this.onCommentTapped,
     this.horizontalPadding = PostCard._gutter - 10,
     this.iconSize = 22,
@@ -552,6 +568,10 @@ class PostInteractionRow extends ConsumerWidget {
   /// The post being acted on. A snapshot rather than an id because the share
   /// glyph needs the whole thing — see [showPostShareSheet].
   final SharedPostRef post;
+
+  /// The run card behind this post, for the share sheet's save row. Null on
+  /// anything that isn't a run with something to draw.
+  final RunCardExport? runCard;
   final int likes;
   final int comments;
   final VoidCallback? onCommentTapped;
@@ -619,7 +639,7 @@ class PostInteractionRow extends ConsumerWidget {
             icon: Icons.send_outlined,
             color: palette.muted,
             size: iconSize,
-            onTap: () => showPostShareSheet(context, post),
+            onTap: () => showPostShareSheet(context, post, runCard: runCard),
           ),
           const Spacer(),
           _ActionIcon(
@@ -655,10 +675,14 @@ enum _PostMenuAction { delete, share }
 class PostMenuButton extends ConsumerWidget {
   const PostMenuButton({
     required this.post,
+    this.runCard,
     this.onDeleted,
     super.key,
   });
 
+  /// Passed straight through to [showPostShareSheet]; see
+  /// [PostInteractionRow.runCard].
+  final RunCardExport? runCard;
   final VoidCallback? onDeleted;
 
   /// The post this menu acts on, in the form the share flow needs it. Carries
@@ -746,7 +770,7 @@ class PostMenuButton extends ConsumerWidget {
 
     if (action == null || !context.mounted) return;
     if (action == _PostMenuAction.share) {
-      await showPostShareSheet(context, post);
+      await showPostShareSheet(context, post, runCard: runCard);
       return;
     }
 

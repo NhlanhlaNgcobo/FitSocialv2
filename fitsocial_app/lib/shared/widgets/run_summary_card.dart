@@ -21,6 +21,16 @@ ImageProvider localBackgroundImage(String path) {
   return FileImage(File(path));
 }
 
+/// The opaque colour an exported run card sits on.
+///
+/// On screen the card is a rounded pane over the app's page, and its corners
+/// show that page through them. A file has no page, so the export paints this
+/// behind the whole canvas: the page colour under the glass tint, which is what
+/// the lens shows at rest. Near-black on the dark theme, near-white on the
+/// light one, so a saved card still reads as the card that was on screen.
+Color runCardExportGround(AppPalette palette) =>
+    Color.alphaBlend(palette.liquidTint, palette.background);
+
 /// A finished run drawn the way it is shared: the route as a bare orange line,
 /// the two numbers that describe it, and the wordmark.
 ///
@@ -42,6 +52,7 @@ class RunSummaryCard extends StatelessWidget {
     this.background,
     this.margin = EdgeInsets.zero,
     this.aspectRatio = 4 / 3,
+    this.forExport = false,
     super.key,
   });
 
@@ -63,6 +74,17 @@ class RunSummaryCard extends StatelessWidget {
   /// Shape of the card. Wider than tall by default: a route is usually wider
   /// than it is deep, and the numbers want a line of their own underneath.
   final double aspectRatio;
+
+  /// Draw the card for a file rather than for the screen.
+  ///
+  /// On screen the photo-less card is a lens: it looks *through* to whatever the
+  /// app is showing behind it. A file has nothing behind it, and
+  /// `RenderRepaintBoundary.toImage` rasterises this subtree on its own, so the
+  /// lens would come out empty. This paints the colour the lens shows at rest
+  /// instead — light on the light theme, dark on the dark one.
+  ///
+  /// Only [renderRunCardPng] sets this. Every on-screen card leaves it false.
+  final bool forExport;
 
   /// The distance from a run post's metric strip.
   ///
@@ -112,7 +134,11 @@ class RunSummaryCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _Backdrop(background: background, skin: skin),
+              _Backdrop(
+                background: background,
+                skin: skin,
+                forExport: forExport,
+              ),
               if (hasRoute)
                 Padding(
                   // Keeps the line clear of the wordmark above it and the
@@ -163,15 +189,23 @@ class RunSummaryCard extends StatelessWidget {
 
 /// The photo under its scrim, or the themed gradient that stands in for one.
 class _Backdrop extends StatelessWidget {
-  const _Backdrop({required this.background, required this.skin});
+  const _Backdrop({
+    required this.background,
+    required this.skin,
+    required this.forExport,
+  });
 
   final ImageProvider? background;
   final _RunSkin skin;
+  final bool forExport;
 
   @override
   Widget build(BuildContext context) {
     final image = background;
     if (image == null) {
+      // Being captured to a file: no backdrop to look through to, so paint the
+      // ground the lens would have shown.
+      if (forExport) return ColoredBox(color: skin.ground);
       // With no photo there is nothing for the card to sit on, so it looks
       // through to the app's backdrop rather than painting a slab of its own.
       // This is what the flat gradient used to do, and why this card stayed
@@ -187,6 +221,9 @@ class _Backdrop extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
+        // A photo with an alpha channel would otherwise show through to nothing
+        // in a capture. Free on screen, where something is always behind.
+        if (forExport) ColoredBox(color: skin.ground),
         Image(
           image: image,
           fit: BoxFit.cover,
@@ -323,6 +360,7 @@ class _RunSkin {
     required this.wordmark,
     required this.border,
     required this.photoFallback,
+    required this.ground,
     required this.textShadows,
   });
 
@@ -336,6 +374,7 @@ class _RunSkin {
         wordmark: null,
         border: palette.stroke,
         photoFallback: palette.surfaceHigh,
+        ground: runCardExportGround(palette),
         textShadows: const [],
       );
     }
@@ -346,6 +385,7 @@ class _RunSkin {
       wordmark: AppColors.onMedia,
       border: Color(0x38F7F7F7),
       photoFallback: Color(0xFF1E1E1E),
+      ground: Color(0xFF1E1E1E),
       // The scrim handles most photos; this is what carries the numbers across
       // the one that is bright exactly where they sit.
       textShadows: [
@@ -364,6 +404,10 @@ class _RunSkin {
 
   /// Painted when the photo itself fails to load.
   final Color photoFallback;
+
+  /// The opaque colour the card sits on when it is drawn into a file. Unused on
+  /// screen, where the card is transparent by design.
+  final Color ground;
 
   final List<Shadow> textShadows;
 }

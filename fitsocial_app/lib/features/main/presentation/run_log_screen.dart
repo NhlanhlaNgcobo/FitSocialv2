@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/form_section_header.dart';
 import '../../../shared/widgets/glass_well.dart';
@@ -14,6 +16,8 @@ import '../../../shared/widgets/glass.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_background_section.dart';
+import '../../../shared/widgets/run_summary_card.dart';
+import '../../../shared/widgets/save_run_card_row.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/activity_actions.dart';
@@ -281,15 +285,38 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             controller: _entranceController,
             index: sectionIndex++,
             itemCount: _sectionCount,
-            child: RunBackgroundSection(
-              imagePath: _backgroundPath,
-              distanceLabel:
-                  _hasDistance ? '${_formatDistance(_distanceKm)} km' : null,
-              durationLabel: _hasDuration ? _clockLabel : null,
-              onPick: _isSaving ? null : _pickBackground,
-              onRemove: _isSaving
-                  ? null
-                  : () => setState(() => _backgroundPath = null),
+            // Inside the same stagger step as the section it belongs to, so
+            // the entrance sequence keeps its count.
+            child: Column(
+              children: [
+                RunBackgroundSection(
+                  imagePath: _backgroundPath,
+                  distanceLabel: _hasDistance
+                      ? '${_formatDistance(_distanceKm)} km'
+                      : null,
+                  durationLabel: _hasDuration ? _clockLabel : null,
+                  onPick: _isSaving ? null : _pickBackground,
+                  onRemove: _isSaving
+                      ? null
+                      : () => setState(() => _backgroundPath = null),
+                ),
+                if (!kIsWeb) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SaveRunCardRow(
+                    card: RunCardExport(
+                      // A logged run has no trace — the numbers and the photo
+                      // carry the card, exactly as they do on screen.
+                      distanceLabel: _hasDistance
+                          ? '${_formatDistance(_distanceKm)} km'
+                          : null,
+                      durationLabel: _hasDuration ? _clockLabel : null,
+                      background: _backgroundPath == null
+                          ? null
+                          : localBackgroundImage(_backgroundPath!),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),

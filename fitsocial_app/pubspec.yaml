@@ -34,6 +34,12 @@ dependencies:
   go_router: ^14.2.0
   google_maps_flutter: ^2.17.0
   google_sign_in: ^6.2.1
+  # Writes the exported run card to the device gallery. Chosen over
+  # image_gallery_saver, which is unmaintained and has no AGP 8 namespace, and
+  # over hand-rolling it with permission_handler: MediaStore needs no permission
+  # from API 29 and WRITE_EXTERNAL_STORAGE below it, and this already knows the
+  # difference.
+  gal: ^2.3.0
   image_picker: ^1.2.2
   pedometer: ^4.0.2
   sensors_plus: ^6.1.1

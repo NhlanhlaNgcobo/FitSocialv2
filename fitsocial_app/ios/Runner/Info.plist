@@ -66,6 +66,8 @@
 	<!-- Post photos. -->
 	<key>NSCameraUsageDescription</key>
 	<string>FitSocial uses your camera to take photos for your posts and meal logs.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FitSocial saves your run card to your photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>FitSocial needs access to your photos so you can attach them to posts.</string>
 	<!-- Shared links. Flutter hands the launch URL to GoRouter as the initial

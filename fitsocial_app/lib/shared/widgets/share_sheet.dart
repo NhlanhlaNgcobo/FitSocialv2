@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -7,10 +8,12 @@ import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../links/share_links.dart';
+import '../services/run_card_exporter.dart';
+import '../services/run_card_saver.dart';
 import 'quick_toast.dart';
 import 'liquid_glass.dart';
 
-/// The three ways a post leaves the screen it is on.
+/// The ways a post leaves the screen it is on.
 enum _ShareChoice {
   /// Onto the sharer's own Pulse, as a card that opens the post.
   pulse,
@@ -20,19 +23,32 @@ enum _ShareChoice {
 
   /// The link on its own, for pasting somewhere the share sheet doesn't reach.
   copyLink,
+
+  /// The run card itself, drawn to a file and put in the camera roll. Only
+  /// offered on a post that has a run card to draw.
+  saveImage,
 }
 
 /// Opens the share options for [post].
 ///
 /// Two destinations, which is the split Instagram uses: *inside* the app, where
 /// a share means putting the post on your own Pulse, and *outside* it, where a
-/// share means handing someone a link. The link is the only thing that ever
-/// leaves — never the caption, never the photo. Someone who receives it and has
+/// share means handing someone a link. Of the post's own content only the run
+/// card leaves, and only when the reader asks for it by name — never the
+/// caption, never the photo on its own. Someone who receives a link and has
 /// FitSocial opens the post; someone who doesn't gets the page that offers the
 /// app. See [FitSocialLinks].
+///
+/// [runCard] both decides whether the save row appears and says what it should
+/// draw, because [SharedPostRef] carries the route but not the metric strip the
+/// card reads its numbers out of.
 Future<void> showPostShareSheet(
-    BuildContext context, SharedPostRef post) async {
+  BuildContext context,
+  SharedPostRef post, {
+  RunCardExport? runCard,
+}) async {
   final palette = context.palette;
+  final canSaveImage = runCard != null && !kIsWeb;
 
   final choice = await showModalBottomSheet<_ShareChoice>(
     context: context,
@@ -83,6 +99,16 @@ Future<void> showPostShareSheet(
               onTap: () =>
                   Navigator.of(sheetContext).pop(_ShareChoice.copyLink),
             ),
+            // Last, and the only row here that hands over a file rather than a
+            // link — the three above it are one set.
+            if (canSaveImage)
+              _ShareOption(
+                icon: Icons.download_rounded,
+                label: 'Save image',
+                detail: 'Put the run card in your photos',
+                onTap: () =>
+                    Navigator.of(sheetContext).pop(_ShareChoice.saveImage),
+              ),
             const SizedBox(height: AppSpacing.sm),
           ],
         ),
@@ -101,6 +127,25 @@ Future<void> showPostShareSheet(
       await sharePostLink(context, post);
     case _ShareChoice.copyLink:
       await copyPostLink(context, post);
+    case _ShareChoice.saveImage:
+      await saveRunCardImage(context, runCard!);
+  }
+}
+
+/// Draws [card] into the camera roll, saying either way what happened.
+///
+/// Lives here rather than in the row that shares its logic because this one is
+/// reached from a sheet that has already closed: there is no button left to put
+/// a spinner on, so the toast is the whole of the feedback.
+Future<void> saveRunCardImage(BuildContext context, RunCardExport card) async {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  try {
+    final bytes = await renderRunCardPng(context, card);
+    await saveImageToGallery(bytes, name: runCardFileName());
+    if (overlay == null) return;
+    showQuickToastOn(overlay, 'Saved to your photos', tone: ToastTone.success);
+  } catch (error) {
+    reportRunCardFailure(overlay, error);
   }
 }
 
@@ -120,7 +165,7 @@ Future<void> sharePostLink(BuildContext context, SharedPostRef post) async {
         title: '${post.authorName} on FitSocial',
         // Anchors the popover on iPad and macOS, where a share sheet has to
         // come from somewhere. Ignored everywhere else.
-        sharePositionOrigin: _originOf(context),
+        sharePositionOrigin: shareOriginOf(context),
       ),
     );
   } catch (_) {
@@ -150,7 +195,10 @@ Future<void> copyPostLink(BuildContext context, SharedPostRef post) async {
 
 /// Where the tapped control is on screen, for platforms that pop the share
 /// sheet out of it. Null when the widget has already gone.
-Rect? _originOf(BuildContext context) {
+///
+/// Public because saving the run card shares a file from the same sheets and
+/// wants the same anchor.
+Rect? shareOriginOf(BuildContext context) {
   final box = context.findRenderObject();
   if (box is! RenderBox || !box.hasSize) return null;
   return box.localToGlobal(Offset.zero) & box.size;

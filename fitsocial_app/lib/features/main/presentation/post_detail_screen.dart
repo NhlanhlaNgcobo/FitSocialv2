@@ -12,6 +12,7 @@ import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/mention_text.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/post_gradient.dart';
+import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../application/content_providers.dart';
@@ -136,6 +137,19 @@ class _PostPageState extends ConsumerState<_PostPage> {
     final post = widget.post;
     final media = _MediaKind.of(post);
     final strip = _strip(post, media);
+    // Squared off to match the card this page actually shows, so the file is
+    // cropped the way the reader saw it.
+    final runCard = media == _MediaKind.run
+        ? RunCardExport(
+            route: post.routePoints,
+            distanceLabel: RunSummaryCard.distanceFrom(post.metricLabels),
+            durationLabel: RunSummaryCard.durationFrom(post.metricLabels),
+            background: post.imageUrl == null || post.imageUrl!.isEmpty
+                ? null
+                : NetworkImage(post.imageUrl!),
+            aspectRatio: 1,
+          )
+        : null;
 
     return Scaffold(
       // Transparent so this page sits on the app's one backdrop, the
@@ -150,6 +164,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
           // the whole screen anyway.
           PostMenuButton(
             post: SharedPostRef.fromFeedPost(post),
+            runCard: runCard,
             // Nothing left to show once the post is gone.
             onDeleted: () => context.pop(),
           ),
@@ -194,6 +209,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
           const SizedBox(height: AppSpacing.xs),
           PostInteractionRow(
             post: SharedPostRef.fromFeedPost(post),
+            runCard: runCard,
             likes: post.likes,
             comments: post.comments,
             // Aligns the glyphs with the page gutter — the icons carry 10px of

@@ -98,7 +98,16 @@ async function deliver(userId, notificationId, data, messaging) {
 
   const inbox = db().collection("users").doc(userId).collection(TOKENS);
   const snapshot = await inbox.get();
-  if (snapshot.empty) return;
+  if (snapshot.empty) {
+    // Logged rather than returned in silence, because this is the single most
+    // confusing way for push to "not work": everything succeeds, nothing is
+    // sent, and there is nothing in the logs to say why. The recipient simply
+    // has no device registered -- they have never opened the app since push
+    // shipped, refused the permission, or signed out on the only phone they
+    // had it on.
+    console.log(`No registered device for ${userId}; nothing to push.`);
+    return;
+  }
 
   const tokens = snapshot.docs.slice(0, MAX_TOKENS).map((doc) => doc.id);
 
@@ -129,6 +138,15 @@ async function deliver(userId, notificationId, data, messaging) {
       },
     },
   });
+
+  // One line per send, so "did it go out, and to how many devices" is a log
+  // search rather than a database query. Cheap: this fires once per
+  // notification, not once per device.
+  console.log(
+    `Pushed ${data.type} to ${userId}: ` +
+      `${response.successCount} delivered, ${response.failureCount} failed, ` +
+      `of ${tokens.length} device(s).`
+  );
 
   await pruneDeadTokens(inbox, tokens, response);
 }
