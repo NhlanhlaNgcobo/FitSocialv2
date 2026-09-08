@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/reactions/fit_reaction.dart';
+import 'activity_kind.dart';
 
 /// What a post is, as recorded on the document.
 ///
@@ -598,6 +599,8 @@ class RunLogDraft {
     required this.elapsed,
     required this.averagePace,
     required this.shareToFeed,
+    this.activityKind = ActivityKind.run,
+    this.elevationGainMeters,
     this.routePoints = const [],
     this.startedAt,
     this.backgroundImagePath,
@@ -606,8 +609,21 @@ class RunLogDraft {
 
   final double distanceKm;
   final Duration elapsed;
+
+  /// The headline second metric, already formatted: a pace ("5:26 /km") on
+  /// foot, a speed ("28.4 km/h") on a bike. Named for the run case it was
+  /// written for; the field on the document keeps that name too.
   final String averagePace;
   final bool shareToFeed;
+
+  /// Which GPS activity this was. Runs, hikes and rides all save into the same
+  /// collection and differ only by this.
+  final ActivityKind activityKind;
+
+  /// Total climb, in metres. Null when nothing measured it — a manually entered
+  /// session, a treadmill, an import, or a phone that reported no altitude.
+  /// Null and zero are different answers and the save path keeps them apart.
+  final int? elevationGainMeters;
 
   /// GPS trace of the run. Empty for manually entered runs, which have no
   /// recorded route — consumers must treat an empty route as "no map".

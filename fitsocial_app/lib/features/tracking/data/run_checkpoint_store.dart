@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../../main/domain/activity_kind.dart';
 import 'atomic_file.dart';
 import 'live_run_service.dart' show RunPoint;
 
@@ -28,6 +29,8 @@ class RunCheckpoint {
     required this.movingElapsed,
     required this.isPaused,
     required this.points,
+    this.activityKind = ActivityKind.run,
+    this.elevationGainMeters = 0,
     Duration? totalElapsed,
   }) : totalElapsed = totalElapsed ?? movingElapsed;
 
@@ -50,6 +53,16 @@ class RunCheckpoint {
   final bool isPaused;
   final List<RunPoint> points;
 
+  /// Climb banked so far, in metres. Zero for checkpoints written before
+  /// elevation was measured, which is also the right answer for a phone that
+  /// never reported an altitude.
+  final double elevationGainMeters;
+
+  /// What was being recorded, so a recovered session resumes under its own GPS
+  /// tuning and is offered back by the right name. Defaults to a run, which is
+  /// what every checkpoint written before the field existed holds.
+  final ActivityKind activityKind;
+
   double get distanceKm => distanceMeters / 1000;
 
   bool get isStale => DateTime.now().difference(savedAt) > kRunCheckpointMaxAge;
@@ -68,6 +81,15 @@ class RunCheckpoint {
       'movingSeconds': movingElapsed.inSeconds,
       'totalSeconds': totalElapsed.inSeconds,
       'isPaused': isPaused,
+      // Written only when it is not a run, so an ordinary run's checkpoint
+      // stays byte-for-byte what it has always been — and an older build
+      // reading a newer file recovers the session as a run rather than
+      // rejecting it. Same reason the schema version does not move: fromJson
+      // discards any file whose version it does not recognise, and a bump
+      // would throw away every unsaved run sitting on a phone mid-upgrade.
+      if (activityKind != ActivityKind.run)
+        'activityKind': activityKind.wireName,
+      if (elevationGainMeters > 0) 'elevationGainMeters': elevationGainMeters,
       // Triples rather than {lat, lng, ts} maps: this file is rewritten every
       // twenty seconds, and a four-thousand-point run is about 130 KB this way
       // against 400 KB as maps. The timestamp stays because the rolling pace
@@ -109,6 +131,9 @@ class RunCheckpoint {
           ? null
           : Duration(seconds: totalSeconds),
       isPaused: value['isPaused'] as bool? ?? false,
+      activityKind: ActivityKindX.fromWire(value['activityKind']),
+      elevationGainMeters:
+          (value['elevationGainMeters'] as num?)?.toDouble() ?? 0,
       points: _pointsFrom(value['points']),
     );
   }

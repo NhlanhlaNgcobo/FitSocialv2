@@ -11,6 +11,7 @@ import '../../../shared/widgets/route_sparkline.dart';
 import '../../../shared/widgets/run_summary_card.dart'
     show localBackgroundImage;
 import '../application/run_draft_providers.dart';
+import '../../main/domain/activity_kind.dart';
 import '../domain/run_draft.dart';
 
 /// The finished runs that have not gone anywhere yet.
@@ -51,8 +52,8 @@ class RunDraftsSection extends ConsumerWidget {
           _DraftGroup(
             icon: Icons.cloud_off_rounded,
             title: recorded.length == 1
-                ? 'Saved run'
-                : 'Saved runs · ${recorded.length}',
+                ? 'Saved ${_noun(recorded)}'
+                : 'Saved ${_plural(recorded)} · ${recorded.length}',
             blurb: 'Recorded offline. Post them when you\'re back.',
             drafts: recorded,
           ),
@@ -60,8 +61,9 @@ class RunDraftsSection extends ConsumerWidget {
           _DraftGroup(
             icon: Icons.watch_rounded,
             title: imported.length == 1
-                ? 'Run we found'
-                : 'Runs we found · ${imported.length}',
+                ? '${_capitalised(_noun(imported))} we found'
+                : '${_capitalised(_plural(imported))} we found · '
+                    '${imported.length}',
             blurb: 'Recorded by another app on your phone. Nothing is shared '
                 'until you say so.',
             drafts: imported,
@@ -70,6 +72,29 @@ class RunDraftsSection extends ConsumerWidget {
     );
   }
 }
+
+/// What to call a group of drafts.
+///
+/// A group holds whatever the user recorded, so it can be all hikes, all runs,
+/// or a mixture. One kind gets named; a mixture falls back to "activity",
+/// because "Saved runs · 3" over a list containing a bike ride is worse than a
+/// vaguer word that is true.
+String _noun(List<RunDraft> drafts) {
+  final kinds = drafts.map((draft) => draft.activityKind).toSet();
+  return kinds.length == 1
+      ? kinds.first.descriptor.singular.toLowerCase()
+      : 'activity';
+}
+
+String _plural(List<RunDraft> drafts) {
+  final kinds = drafts.map((draft) => draft.activityKind).toSet();
+  return kinds.length == 1
+      ? kinds.first.descriptor.plural.toLowerCase()
+      : 'activities';
+}
+
+String _capitalised(String word) =>
+    word.isEmpty ? word : word[0].toUpperCase() + word.substring(1);
 
 /// A titled run of draft cards. Both groups share every pixel of layout — only
 /// the words and the glyph differ.
@@ -269,7 +294,9 @@ class _RunDraftRowState extends ConsumerState<_RunDraftRow> {
   }
 
   String get _primaryLabel {
-    if (_draft.isImported) return 'Save run';
+    if (_draft.isImported) {
+      return 'Save ${_draft.activityKind.descriptor.singular.toLowerCase()}';
+    }
     return _draft.shareToFeed ? 'Post' : 'Upload';
   }
 

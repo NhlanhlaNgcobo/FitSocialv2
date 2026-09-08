@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../features/main/domain/activity_kind.dart';
 import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/explore_models.dart';
 import 'route_sparkline.dart';
@@ -22,12 +23,33 @@ _PostKind _kindOf(FeedPost post) {
   return _PostKind.text;
 }
 
-IconData _iconFor(_PostKind kind) => switch (kind) {
-      _PostKind.run => Icons.directions_run_rounded,
+/// The glyph for a tile.
+///
+/// [_PostKind.run] covers every GPS activity, because that is how the post
+/// types are written — a hike and a ride are both `postType: 'run'` on the
+/// wire, which is what keeps the feed, Explore and notifications working
+/// unchanged. The post's `activity` label is the only thing that tells them
+/// apart, so the glyph is taken from there rather than from the kind.
+IconData _iconFor(_PostKind kind, FeedPost post) => switch (kind) {
+      _PostKind.run => _activityIconFor(post.activity),
       _PostKind.workout => Icons.fitness_center_rounded,
       _PostKind.meal => Icons.restaurant_rounded,
       _PostKind.text => Icons.format_quote_rounded,
     };
+
+/// Matches a post's display label to an activity, defaulting to the running
+/// glyph — which is correct for every run post written before hikes and rides
+/// existed, and for anything unrecognised.
+IconData _activityIconFor(String? activity) {
+  final label = activity?.trim().toLowerCase();
+  if (label == null || label.isEmpty) return Icons.directions_run_rounded;
+  for (final kind in ActivityDescriptor.gpsKinds) {
+    if (kind.descriptor.singular.toLowerCase() == label) {
+      return kind.descriptor.icon;
+    }
+  }
+  return Icons.directions_run_rounded;
+}
 
 /// A post's measurements, cleaned of the blanks the older logs wrote.
 List<String> _metricsOf(FeedPost post) => post.metricLabels
@@ -140,7 +162,7 @@ class PostSummaryTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _KindGlyph(icon: _iconFor(kind), size: compact ? 22 : 28),
+          _KindGlyph(icon: _iconFor(kind, post), size: compact ? 22 : 28),
           SizedBox(height: compact ? 6 : AppSpacing.sm),
           Expanded(child: body),
           SizedBox(height: compact ? 4 : AppSpacing.sm),
@@ -264,7 +286,7 @@ class PostMediaTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (summarised) ...[
-                  _KindGlyph(icon: _iconFor(kind), size: compact ? 22 : 28),
+                  _KindGlyph(icon: _iconFor(kind, post), size: compact ? 22 : 28),
                   SizedBox(height: compact ? 6 : AppSpacing.sm),
                 ],
                 // The trace sits in the same box the summary card's body does,

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/activity_kind.dart';
 import '../domain/app_models.dart';
 
 enum CreateCanvasDestination {
@@ -16,7 +17,9 @@ extension CreateCanvasDestinationX on CreateCanvasDestination {
       case CreateCanvasDestination.workout:
         return 'Workout draft';
       case CreateCanvasDestination.run:
-        return 'Run tracker';
+        // Covers runs, hikes and rides — the tracker is one flow with a
+        // three-way choice inside it, not three entries on the Create page.
+        return 'Activity tracker';
       case CreateCanvasDestination.meal:
         return 'Meal draft';
       case CreateCanvasDestination.post:
@@ -122,6 +125,7 @@ class RunDraftState {
     this.minutes = 0,
     this.seconds = 0,
     this.shareToFeed = true,
+    this.activityKind = ActivityKind.run,
   });
 
   final double distanceKm;
@@ -129,6 +133,11 @@ class RunDraftState {
   final int minutes;
   final int seconds;
   final bool shareToFeed;
+
+  /// Which activity the tracker is set to. Carried on the draft so that
+  /// resuming a half-entered hike comes back as a hike rather than silently
+  /// becoming a run.
+  final ActivityKind activityKind;
 
   bool get hasContent =>
       distanceKm > 0 || hours > 0 || minutes > 0 || seconds > 0;
@@ -139,6 +148,7 @@ class RunDraftState {
     int? minutes,
     int? seconds,
     bool? shareToFeed,
+    ActivityKind? activityKind,
   }) {
     return RunDraftState(
       distanceKm: distanceKm ?? this.distanceKm,
@@ -146,6 +156,7 @@ class RunDraftState {
       minutes: minutes ?? this.minutes,
       seconds: seconds ?? this.seconds,
       shareToFeed: shareToFeed ?? this.shareToFeed,
+      activityKind: activityKind ?? this.activityKind,
     );
   }
 }

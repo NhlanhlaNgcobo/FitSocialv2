@@ -8,6 +8,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../main/domain/activity_kind.dart';
+import '../domain/elevation_accumulator.dart';
+import '../domain/gps_activity_profile.dart';
 import '../domain/run_pace.dart';
 import 'run_checkpoint_store.dart';
 import 'step_tracker_service.dart';
@@ -41,6 +44,7 @@ class LiveRunState {
     this.startedAt,
     this.fixStats = RunFixStats.empty,
     this.fusion = RunFusionStats.empty,
+    this.elevationGainMeters,
   });
 
   static const idle = LiveRunState(
@@ -100,6 +104,11 @@ class LiveRunState {
   /// What the step counter contributed, and what it learned doing it.
   final RunFusionStats fusion;
 
+  /// Total climb so far, in metres, or null when no fix has yet reported a
+  /// usable altitude. Null and zero are different answers: one is "this phone
+  /// is not telling us", the other is "you have not gone up".
+  final int? elevationGainMeters;
+
   String get formattedPace {
     if (currentPaceMinPerKm <= 0 || currentPaceMinPerKm.isInfinite) {
       return '--:--';
@@ -110,10 +119,33 @@ class LiveRunState {
     return '$mins:$secs';
   }
 
+  /// The rolling speed, in km/h, for the activities described that way.
+  ///
+  /// Derived from the same rolling pace the run readout uses rather than
+  /// measured separately, so the two figures can never disagree about how fast
+  /// the last couple of hundred metres were.
+  String get formattedCurrentSpeed {
+    if (currentPaceMinPerKm <= 0 || currentPaceMinPerKm.isInfinite) {
+      return '--.-';
+    }
+    return (Duration.minutesPerHour / currentPaceMinPerKm).toStringAsFixed(1);
+  }
+
   /// Delegated so a recorded run and a run imported from Health Connect can
   /// never format the same pace two different ways.
   String get formattedAveragePace =>
       formatAveragePace(distanceKm: distanceKm, elapsed: elapsed);
+
+  /// Average speed, for the activities that are described in km/h.
+  String get formattedAverageSpeed =>
+      formatAverageSpeed(distanceKm: distanceKm, elapsed: elapsed);
+
+  /// The headline second figure for [kind]: a pace on foot, a speed on a bike.
+  String formattedAverageFor(ActivityKind kind) => formatPaceOrSpeed(
+        kind: kind,
+        distanceKm: distanceKm,
+        elapsed: elapsed,
+      );
 }
 
 /// The moving-time clock for a run.
@@ -405,15 +437,29 @@ class LiveRunService {
   /// can run the service with nothing behind it.
   final RunCheckpointStore _checkpoints;
 
+  /// Climb over the session. Its own class because measuring it honestly
+  /// takes smoothing and hysteresis that nothing else here needs — see
+  /// [ElevationAccumulator] for why a naive sum of positive deltas is wrong.
+  final _elevation = ElevationAccumulator();
+
+  /// The activity being recorded, and the tuning that comes with it.
+  ///
+  /// Set by [start] rather than by the constructor: `liveRunServiceProvider` is
+  /// a plain, non-autoDispose provider, so one service instance serves every
+  /// run, hike and ride of an app session and cannot be told at construction
+  /// which it is about to record.
+  GpsActivityProfile _profile = GpsActivityProfile.run;
+
+  /// The profile of the run currently being recorded.
+  GpsActivityProfile get profile => _profile;
+
   // --- Tuning constants ---
-  // Below this speed (m/s) the runner is treated as stationary: the clock
-  // auto-pauses and distance stops accumulating. ~0.6 m/s ≈ 2.2 km/h, slower
-  // than any real walk, so it only catches standing-still GPS drift.
-  static const _movingSpeedThreshold = 0.6;
-  // A GPS segment is only counted if it exceeds this many metres AND the
-  // drift floor below — this rejects the metre-scale wander a stationary
-  // phone reports.
-  static const _minSegmentMeters = 4.0;
+  // The activity-dependent ones — the teleport ceiling, the drift and
+  // auto-pause speeds, the minimum segment, whether steps count — live on
+  // [GpsActivityProfile]. What is left here is the same for anything on a GPS.
+  // A GPS segment is only counted if it exceeds the profile's minimum metres
+  // AND the drift floor below — this rejects the metre-scale wander a
+  // stationary phone reports.
   // The widest that floor is ever set. It used to be the reported accuracy
   // itself, unbounded, which quietly cost real distance: at 25 m accuracy a
   // runner had to cover 25 m before a single metre counted, so the route
@@ -620,7 +666,15 @@ class LiveRunService {
     }
   }
 
-  Future<void> start() async {
+  /// Begins recording [profile]'s activity.
+  ///
+  /// Defaults to a run, which keeps every existing caller and test correct and
+  /// makes "a run behaves exactly as it did" the thing this parameter has to
+  /// prove rather than something to take on trust.
+  Future<void> start({
+    GpsActivityProfile profile = GpsActivityProfile.run,
+  }) async {
+    _profile = profile;
     await ensurePermission();
     _reset();
     beginTracking(startedAt: _now());
@@ -633,7 +687,13 @@ class LiveRunService {
   /// a device: [start] cannot run in a test, since [ensurePermission] talks to
   /// the platform.
   @visibleForTesting
-  void beginTracking({required DateTime startedAt}) {
+  void beginTracking({
+    required DateTime startedAt,
+    GpsActivityProfile? profile,
+  }) {
+    // [start] has already set this; the parameter is how a test drives a hike
+    // or a ride, since it cannot go through [start] at all.
+    if (profile != null) _profile = profile;
     _isTracking = true;
     _startedAt = startedAt;
     // Now, not [startedAt]: for a fresh run the two are the same instant, and
@@ -651,7 +711,9 @@ class LiveRunService {
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
     _checkpointTimer =
         Timer.periodic(_checkpointEvery, (_) => _saveCheckpoint());
-    _openSteps();
+    // Nothing to fuse on a bicycle, so the sensors are never opened: no step
+    // subscription, and no accelerometer fallback armed behind it.
+    if (_profile.usesStepFusion) _openSteps();
     _watchLifecycle();
     _emit();
   }
@@ -663,11 +725,15 @@ class LiveRunService {
   /// moving time it had banked — and comes back auto-paused, because nothing
   /// was moving while the app was gone.
   Future<void> resumeFrom(RunCheckpoint checkpoint) async {
+    // Before the reset, so the recovered activity is tracked under its own
+    // tuning rather than finishing a ride on the run profile.
+    _profile = GpsActivityProfile.forKind(checkpoint.activityKind);
     await ensurePermission();
     _reset(accrued: checkpoint.movingElapsed);
     _durationAccrued = checkpoint.totalElapsed;
     _points.addAll(checkpoint.points);
     _distanceMeters = checkpoint.distanceMeters;
+    _elevation.restore(checkpoint.elevationGainMeters);
     beginTracking(startedAt: checkpoint.startedAt);
   }
 
@@ -678,10 +744,12 @@ class LiveRunService {
   /// state. Deliberately opens no position stream and asks for no permission —
   /// there is nothing left to track.
   void restoreForFinish(RunCheckpoint checkpoint) {
+    _profile = GpsActivityProfile.forKind(checkpoint.activityKind);
     _reset(accrued: checkpoint.movingElapsed);
     _durationAccrued = checkpoint.totalElapsed;
     _points.addAll(checkpoint.points);
     _distanceMeters = checkpoint.distanceMeters;
+    _elevation.restore(checkpoint.elevationGainMeters);
     _startedAt = checkpoint.startedAt;
     _isTracking = true;
     _emit();
@@ -697,6 +765,8 @@ class LiveRunService {
     final checkpoint = RunCheckpoint(
       startedAt: _startedAt ?? _now(),
       savedAt: _now(),
+      activityKind: _profile.kind,
+      elevationGainMeters: _elevation.gainMeters,
       distanceMeters: _distanceMeters,
       movingElapsed: _clock.elapsed,
       totalElapsed: _totalElapsed,
@@ -725,9 +795,12 @@ class LiveRunService {
           accuracy: LocationAccuracy.bestForNavigation,
           distanceFilter: 0,
           intervalDuration: const Duration(seconds: 1),
-          foregroundNotificationConfig: const ForegroundNotificationConfig(
-            notificationTitle: 'FitSocial — run in progress',
-            notificationText: 'Tracking your distance, time and route.',
+          foregroundNotificationConfig: ForegroundNotificationConfig(
+            // Not const, and worded by the activity: this sits on the lock
+            // screen for the whole session, and telling a cyclist they have a
+            // run in progress for two hours is its own kind of wrong.
+            notificationTitle: _profile.notificationTitle,
+            notificationText: _profile.notificationText,
             notificationChannelName: 'Live run tracking',
             // Holds a partial wake lock. Without it the CPU sleeps with the
             // screen and fixes arrive in a burst at the next wake, which is
@@ -1001,8 +1074,10 @@ class LiveRunService {
     final dt = point.timestamp.difference(prev.timestamp).inMilliseconds;
     final speed = dt > 0 ? segment / (dt / 1000.0) : 0.0;
 
-    // Reject GPS teleport jumps implying > 12 m/s (~43 km/h).
-    if (speed > 12) {
+    // Reject GPS teleport jumps. The ceiling is the activity's, not a fixed
+    // 12 m/s: that is ~43 km/h, which no runner beats and any cyclist does on a
+    // descent — every one of those fixes used to be thrown away silently.
+    if (speed > _profile.teleportMaxSpeed) {
       _fixesRejectedAsTeleport++;
       return;
     }
@@ -1011,9 +1086,16 @@ class LiveRunService {
     // distance and the GPS accuracy radius, and imply at least a slow walk.
     // Otherwise the phone is standing still and the "movement" is noise.
     final isRealMovement = segment >= _driftFloorFor(position) &&
-        speed >= _movingSpeedThreshold;
+        speed >= _profile.driftRejectSpeed;
 
     if (isRealMovement) {
+      // Only on a fix that already passed every distance filter. A phone
+      // standing still wanders vertically as well as horizontally, and
+      // measuring climb from rejected fixes would credit that wander as a hill.
+      _elevation.observe(
+        altitude: position.altitude,
+        verticalAccuracy: position.altitudeAccuracy,
+      );
       _distanceMeters += _creditFor(segment, dt, position);
       _stepsSinceSegment = 0;
       _clock.markMovement();
@@ -1070,6 +1152,12 @@ class LiveRunService {
   /// that wanders more than twice its own straight line is not a runner going
   /// somewhere.
   double _creditFor(double segment, int dtMillis, Position position) {
+    // A bicycle has no stride and takes no steps. Crediting from them would
+    // read short, and — because the calibrator outlives the ride — teaching
+    // from them would leave a metres-per-step figure that then corrupts the
+    // next run. Take the GPS chord and learn nothing.
+    if (!_profile.usesStepFusion) return segment;
+
     final trusted = dtMillis <= RunFixStats.starvedAbove.inMilliseconds &&
         position.accuracy <= _trustedAccuracyMeters;
     if (trusted) {
@@ -1104,11 +1192,11 @@ class LiveRunService {
   /// merely so-so — but not when position has fallen apart, which is why this
   /// test comes second. Everything else clears half the radius, capped: see
   /// [_maxDriftFloorMeters] for why the full radius was costing real distance.
-  static double _driftFloorFor(Position position) {
+  double _driftFloorFor(Position position) {
     if (position.accuracy > _wellFixedAccuracyMeters) return position.accuracy;
-    if (_reportsMotion(position)) return _minSegmentMeters;
+    if (_reportsMotion(position)) return _profile.minSegmentMeters;
     return math.max(
-      _minSegmentMeters,
+      _profile.minSegmentMeters,
       math.min(position.accuracy / 2, _maxDriftFloorMeters),
     );
   }
@@ -1121,8 +1209,8 @@ class LiveRunService {
       position.speedAccuracy > 0;
 
   /// Whether this fix says, on its own, that the runner is moving.
-  static bool _reportsMotion(Position position) =>
-      _hasPlatformSpeed(position) && position.speed >= _movingSpeedThreshold;
+  bool _reportsMotion(Position position) =>
+      _hasPlatformSpeed(position) && position.speed >= _profile.autoPauseSpeed;
 
   void _noteFixInterval(DateTime at) {
     final previous = _lastFixAt;
@@ -1205,6 +1293,8 @@ class LiveRunService {
         startedAt: _startedAt,
         fixStats: _fixStats,
         fusion: _fusionStats,
+        elevationGainMeters:
+            _elevation.hasReading ? _elevation.gainMetersRounded : null,
       );
 
   void _emit() {
@@ -1220,6 +1310,7 @@ class LiveRunService {
     // The seed survives a reset — it came from the runner's profile, not from
     // the run — but everything measured during the last one does not.
     _calibrator.reset(seedMeters: _seedStride);
+    _elevation.reset();
     _stepCounter.reset();
     _motion.reset();
     _lastSessionSteps = 0;

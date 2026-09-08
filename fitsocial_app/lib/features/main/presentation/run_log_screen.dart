@@ -20,7 +20,9 @@ import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/save_run_card_row.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
+import '../../tracking/domain/run_pace.dart';
 import '../application/activity_actions.dart';
+import '../domain/activity_kind.dart';
 import '../domain/app_models.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -34,11 +36,22 @@ class RunLogScreen extends ConsumerStatefulWidget {
 
 class _RunLogScreenState extends ConsumerState<RunLogScreen>
     with SingleTickerProviderStateMixin {
-  static const int _sectionCount = 7;
+  /// The stagger's denominator: how many sections this build actually emits.
+  ///
+  /// Has to match, or a section that isn't counted never finishes its fade.
+  /// It was a const 7 when the screen always drew the same rows; the activity
+  /// picker added one, and the treadmill card now comes and goes with the
+  /// selected activity, so it is counted rather than assumed.
+  int get _sectionCount => _kind == ActivityKind.run ? 8 : 7;
 
   late final AnimationController _entranceController;
   late final TextEditingController _distanceController;
   late final TextEditingController _durationController;
+
+  /// Which activity every control on this screen is currently about: the GPS
+  /// card it opens, the wording, and whether the manual form's third figure is
+  /// a pace or a speed.
+  ActivityKind _kind = ActivityKind.run;
 
   double _distanceKm = 0;
   int _durationMinutes = 0;
@@ -76,14 +89,22 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   bool get _hasDuration => _durationMinutes > 0;
   bool get _isComplete => _hasDistance && _hasDuration;
 
-  /// `m:ss /km`, the same shape this screen has always saved.
+  /// The headline second figure: `m:ss /km` on foot, `x.x km/h` on a bike.
+  ///
+  /// Formatted by the shared helpers rather than here, so a manually entered
+  /// ride and a recorded one cannot drift into two different shapes.
   String get _paceLabel {
     if (!_isComplete) return '--';
-    final pace = _durationMinutes / _distanceKm;
-    final mins = pace.floor();
-    final secs = ((pace - mins) * 60).round().toString().padLeft(2, '0');
-    return '$mins:$secs /km';
+    return formatPaceOrSpeed(
+      kind: _kind,
+      distanceKm: _distanceKm,
+      elapsed: Duration(minutes: _durationMinutes),
+    );
   }
+
+  /// What that figure is called: "Avg pace" or "Avg speed".
+  String get _paceStatLabel =>
+      _kind.descriptor.usesPace ? 'Avg pace' : 'Avg speed';
 
   String get _durationLabel {
     if (!_hasDuration) return '--';
@@ -148,6 +169,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
               elapsed: Duration(minutes: _durationMinutes),
               averagePace: _paceLabel,
               shareToFeed: _shareToFeed,
+              activityKind: _kind,
               backgroundImagePath: _backgroundPath,
             ),
           );
@@ -175,7 +197,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Log Run'),
+        title: Text('Log ${_kind.descriptor.singular}'),
         actions: const [MusicIslandAction()],
       ),
       body: ListView(
@@ -192,17 +214,36 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             controller: _entranceController,
             index: sectionIndex++,
             itemCount: _sectionCount,
-            child: _GpsHeroCard(onTap: () => context.push('/live-run')),
+            child: _ActivityPicker(
+              selected: _kind,
+              onChanged: (kind) => setState(() => _kind = kind),
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm + 4),
+          const SizedBox(height: AppSpacing.md),
           StaggeredFadeIn(
             controller: _entranceController,
             index: sectionIndex++,
             itemCount: _sectionCount,
-            child: _TreadmillCard(
-              onTap: () => context.push('/treadmill-run'),
+            child: _GpsHeroCard(
+              kind: _kind,
+              onTap: () => context.push('/live-run', extra: _kind),
             ),
           ),
+          // A treadmill is a way of running indoors and nothing else: there is
+          // no indoor hike, and a stationary bike is a different machine with
+          // different numbers. Shown for runs only rather than offered and
+          // then behaving oddly.
+          if (_kind == ActivityKind.run) ...[
+            const SizedBox(height: AppSpacing.sm + 4),
+            StaggeredFadeIn(
+              controller: _entranceController,
+              index: sectionIndex++,
+              itemCount: _sectionCount,
+              child: _TreadmillCard(
+                onTap: () => context.push('/treadmill-run'),
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           StaggeredFadeIn(
             controller: _entranceController,
@@ -276,6 +317,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                       distance: '${_formatDistance(_distanceKm)} km',
                       duration: _durationLabel,
                       pace: _paceLabel,
+                      paceLabel: _paceStatLabel,
                     ),
                   )
                 : const SizedBox(width: double.infinity),
@@ -357,23 +399,145 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   }
 }
 
-/// The primary way into a run: a solid brand-orange card that reads as the
-/// recommended path before the manual form does.
-class _GpsHeroCard extends StatelessWidget {
-  const _GpsHeroCard({required this.onTap});
+/// Run, hike or ride — the choice that everything below it answers to.
+///
+/// Three segments on one pane rather than three tiles on the Create page. The
+/// activities differ in their numbers, not in what you do to start one, so
+/// putting the choice here keeps the Create page at five rows and lets the
+/// selection recolour the card you are about to tap.
+class _ActivityPicker extends StatelessWidget {
+  const _ActivityPicker({required this.selected, required this.onChanged});
 
+  final ActivityKind selected;
+  final ValueChanged<ActivityKind> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return LiquidGlass(
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: palette.stroke),
+        ),
+        child: Row(
+          children: [
+            for (final kind in ActivityDescriptor.gpsKinds)
+              Expanded(
+                child: _ActivitySegment(
+                  kind: kind,
+                  isSelected: kind == selected,
+                  onTap: () => onChanged(kind),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivitySegment extends StatelessWidget {
+  const _ActivitySegment({
+    required this.kind,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final ActivityKind kind;
+  final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final descriptor = kind.descriptor;
+    // Through the palette rather than raw: the fixed hues are set for the dark
+    // theme and glare on the cream one if painted straight.
+    final accent = palette.accent(descriptor.accent);
+
+    return Semantics(
+      selected: isSelected,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? palette.accentFill(descriptor.accent)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                descriptor.icon,
+                size: 18,
+                color: isSelected ? accent : palette.muted,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  descriptor.singular,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isSelected ? accent : palette.muted,
+                    fontSize: 13.5,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The primary way into a session: a solid gradient card that reads as the
+/// recommended path before the manual form does.
+///
+/// Takes its hue from the selected activity, so tapping a segment above
+/// visibly changes the thing you are about to start rather than only changing
+/// a word.
+class _GpsHeroCard extends StatelessWidget {
+  const _GpsHeroCard({required this.kind, required this.onTap});
+
+  final ActivityKind kind;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final descriptor = kind.descriptor;
+    // A run keeps the brand orange it has always had. The other two take their
+    // own accent, darkened one step for the far end of the gradient.
+    final isRun = kind == ActivityKind.run;
+    final accent = palette.accent(descriptor.accent);
+    final gradientStart = isRun ? palette.brand : accent;
+    final gradientEnd = isRun
+        ? AppColors.orange
+        : Color.lerp(accent, const Color(0xFF1A120B), 0.32)!;
+    final subtitle = descriptor.usesPace
+        ? 'Real-time distance, pace and route map'
+        : 'Real-time distance, speed and route map';
 
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: [
           BoxShadow(
-            color: palette.brand.withValues(alpha: 0.28),
+            color: gradientStart.withValues(alpha: 0.28),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
@@ -389,7 +553,7 @@ class _GpsHeroCard extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [palette.brand, AppColors.orange],
+              colors: [gradientStart, gradientEnd],
             ),
           ),
           child: InkWell(
@@ -407,18 +571,18 @@ class _GpsHeroCard extends StatelessWidget {
                       color: AppColors.onBrand.withValues(alpha: 0.18),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.gps_fixed_rounded,
+                    child: Icon(
+                      descriptor.icon,
                       color: AppColors.onBrand,
                       size: 24,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Track live with GPS',
                           style: TextStyle(
                             color: AppColors.onBrand,
@@ -426,10 +590,10 @@ class _GpsHeroCard extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
-                          'Real-time distance, pace and route map',
-                          style: TextStyle(
+                          subtitle,
+                          style: const TextStyle(
                             color: AppColors.onBrand,
                             fontSize: 12.5,
                             height: 1.3,
@@ -667,11 +831,16 @@ class _RunSummary extends StatelessWidget {
     required this.distance,
     required this.duration,
     required this.pace,
+    required this.paceLabel,
   });
 
   final String distance;
   final String duration;
   final String pace;
+
+  /// "Avg pace" or "Avg speed" — a ride's headline figure is neither measured
+  /// nor named the way a run's is.
+  final String paceLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -689,7 +858,7 @@ class _RunSummary extends StatelessWidget {
           _SummaryRule(color: palette.stroke),
           Expanded(child: _SummaryStat(label: 'Time', value: duration)),
           _SummaryRule(color: palette.stroke),
-          Expanded(child: _SummaryStat(label: 'Avg pace', value: pace)),
+          Expanded(child: _SummaryStat(label: paceLabel, value: pace)),
         ],
       ),
     );

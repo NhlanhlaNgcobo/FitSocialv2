@@ -1,7 +1,10 @@
+import 'activity_kind.dart';
 import 'app_models.dart';
 
-/// What a logged session is.
-enum ActivityKind { run, workout }
+// ActivityKind moved to activity_kind.dart so that tracking/ and shared/ can
+// reach it without importing a Progress-tab file. Re-exported because the
+// Progress tab is still where most of its callers live.
+export 'activity_kind.dart';
 
 /// One logged training session.
 ///
@@ -66,19 +69,44 @@ class ActivitySession {
   DateTime get day => ActivityCalendar.dateOnly(startedAt);
 }
 
-/// Rough energy cost of running one kilometre, in kcal.
-///
-/// The usual approximation is about 1 kcal per kg of body mass per km, which
-/// puts a typical adult near this figure. Body mass is not something the app
-/// asks for, so this stands in — and every calorie it produces is flagged as
-/// an estimate rather than shown as a measurement.
-const kcalPerKilometre = 60;
-
 /// Calories for a run of [distanceKm], or 0 for a distance that was not
 /// recorded.
-int estimatedRunCalories(double? distanceKm) {
-  if (distanceKm == null || distanceKm <= 0) return 0;
-  return (distanceKm * kcalPerKilometre).round();
+///
+/// Kept as its own name because it reads better at the call site and because
+/// the Progress tests name it; [estimatedActivityCalories] is the general form.
+int estimatedRunCalories(double? distanceKm) =>
+    estimatedActivityCalories(kind: ActivityKind.run, distanceKm: distanceKm);
+
+/// Calories for one GPS session, by the model that suits the activity.
+///
+/// Running and hiking are costed per kilometre: the energy to move a body over
+/// ground is roughly the same whether that takes twenty minutes or forty.
+/// Cycling is not — almost all of it goes into pushing air aside, so it scales
+/// with speed, and an hour is a far better predictor than a distance is. Hence
+/// two models rather than three constants.
+///
+/// Every figure this returns is an estimate and is flagged as one at the call
+/// site. Returns 0 when the inputs its model needs were not recorded.
+int estimatedActivityCalories({
+  required ActivityKind kind,
+  double? distanceKm,
+  Duration? duration,
+}) {
+  final descriptor = kind.descriptor;
+
+  if (descriptor.kcalPerHour > 0) {
+    if (duration == null || duration <= Duration.zero) return 0;
+    final hours = duration.inSeconds / Duration.secondsPerHour;
+    return (hours * descriptor.kcalPerHour).round();
+  }
+
+  if (descriptor.kcalPerKm > 0) {
+    if (distanceKm == null || distanceKm <= 0) return 0;
+    return (distanceKm * descriptor.kcalPerKm).round();
+  }
+
+  // Workouts carry a figure the user entered; there is nothing to estimate.
+  return 0;
 }
 
 /// The reporting window the Progress tab is showing.

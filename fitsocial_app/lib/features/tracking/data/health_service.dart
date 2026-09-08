@@ -1,5 +1,6 @@
 import 'package:health/health.dart';
 
+import '../../main/domain/activity_kind.dart';
 import '../../main/domain/app_models.dart';
 import '../domain/imported_run.dart';
 import 'run_import_service.dart';
@@ -350,6 +351,27 @@ class HealthService implements RunSessionSource {
   /// nothing the caller could do differently and nothing the runner needs told:
   /// the feature's whole promise is that runs turn up on their own, so the
   /// honest failure is silence.
+  /// The FitSocial activity behind a Health Connect workout type, or null for
+  /// a workout this app has no way to record.
+  ///
+  /// RUNNING_TREADMILL maps to a run like any other: the difference is carried
+  /// by [HealthRunRecord.isTreadmill], which is what explains the missing
+  /// route, not by the activity kind.
+  static ActivityKind? _activityKindFor(HealthWorkoutActivityType activity) {
+    return switch (activity) {
+      HealthWorkoutActivityType.RUNNING ||
+      HealthWorkoutActivityType.RUNNING_TREADMILL =>
+        ActivityKind.run,
+      HealthWorkoutActivityType.HIKING => ActivityKind.hike,
+      // BIKING is what Health Connect calls an outdoor ride; on iOS the same
+      // constant is HealthKit's CYCLING. A stationary bike is
+      // BIKING_STATIONARY and is deliberately not imported — it records no
+      // distance worth filing as a ride.
+      HealthWorkoutActivityType.BIKING => ActivityKind.ride,
+      _ => null,
+    };
+  }
+
   @override
   Future<List<HealthRunRecord>> readRunSessions({
     required DateTime start,
@@ -371,9 +393,12 @@ class HealthService implements RunSessionSource {
         final activity = value.workoutActivityType;
         final isTreadmill =
             activity == HealthWorkoutActivityType.RUNNING_TREADMILL;
-        if (activity != HealthWorkoutActivityType.RUNNING && !isTreadmill) {
-          continue;
-        }
+        // The one place a third-party activity taxonomy is consulted.
+        // Everything not named here — swims, rows, gym sessions — is dropped,
+        // because the drafts list can only offer back sessions this app knows
+        // how to save.
+        final kind = _activityKindFor(activity);
+        if (kind == null) continue;
 
         records.add(
           HealthRunRecord(
@@ -387,6 +412,7 @@ class HealthService implements RunSessionSource {
             sourceId: point.sourceId,
             sourceName: point.sourceName,
             isTreadmill: isTreadmill,
+            activityKind: kind,
           ),
         );
       }

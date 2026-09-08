@@ -109,6 +109,25 @@ function runDurationSeconds(data) {
   return Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : 0;
 }
 
+/**
+ * Whether a `runs` document is a run, for the purpose of a running challenge.
+ *
+ * DELIBERATELY STRICTER THAN challenges.js. That file's isFootActivity admits
+ * hikes, because 75 Hard's task is a walk or a run. This one does not: a
+ * running challenge is a running challenge, and admitting hikes would silently
+ * change what every live leaderboard means for everyone already on it. The two
+ * sets are meant to disagree — do not "fix" one to match the other.
+ *
+ * A missing value means "run", so every document written before activityType
+ * existed keeps its attribution untouched. No backfill; absence is the
+ * migration.
+ */
+function isRunActivity(activityType) {
+  return (
+    activityType == null || activityType === "" || activityType === "run"
+  );
+}
+
 // --- Metrics --------------------------------------------------------------
 
 /**
@@ -410,7 +429,12 @@ async function applyRunToChallenge(challengeDoc, userId, runId, runData) {
   if (runData) {
     const at = runInstant(runData);
     const distanceKm = runDistanceKm(runData);
-    if (at && distanceKm > 0) {
+    // A hike or a ride leaves `target` null rather than returning early, and
+    // that difference is load-bearing: falling through lets the retraction path
+    // below take back an attribution this run already had, so a document edited
+    // from run to ride correctly gives its distance back instead of stranding
+    // it on the leaderboard forever.
+    if (at && distanceKm > 0 && isRunActivity(runData.activityType)) {
       const offset = Number.isInteger(challenge.utcOffsetMinutes)
         ? challenge.utcOffsetMinutes
         : 0;
@@ -425,7 +449,7 @@ async function applyRunToChallenge(challengeDoc, userId, runId, runData) {
           dayKey,
           distanceKm,
           durationSeconds: runDurationSeconds(runData),
-          activityType: "run",
+          activityType: runData.activityType || "run",
         };
       }
     }

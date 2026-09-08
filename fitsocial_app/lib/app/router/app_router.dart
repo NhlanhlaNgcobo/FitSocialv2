@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/app_session.dart';
+import '../../features/main/domain/activity_kind.dart';
 import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../../features/auth/presentation/login_screen.dart';
@@ -301,7 +302,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/live-run',
-        builder: (context, state) => const LiveRunScreen(),
+        // The activity comes through `extra` rather than the path: it is a
+        // choice made on the way in, not an addressable thing, and a deep link
+        // straight to /live-run should still open a run.
+        builder: (context, state) => LiveRunScreen(
+          kind: state.extra is ActivityKind
+              ? state.extra! as ActivityKind
+              : ActivityKind.run,
+        ),
       ),
       GoRoute(
         path: '/treadmill-run',

@@ -96,6 +96,35 @@ const TASKS = {
 
 const TASK_KEYS = Object.keys(TASKS);
 
+/**
+ * Which entries in the `runs` collection count toward the runWalk task.
+ *
+ * `runs` holds every GPS activity, not only runs: an `activityType` field of
+ * "run", "hike" or "ride" discriminates them. 75 Hard's rule is a walk *or* a
+ * run, so a hike counts; a bike ride is neither and does not.
+ *
+ * A missing value means "run". Every document written before activityType
+ * existed has no such field, and `doc.get()` returns undefined for those —
+ * `undefined == null` is true, so they keep counting exactly as they did.
+ * That is the whole migration; nothing is backfilled.
+ *
+ * Deliberately an in-memory filter over what `activityInDay` already fetched,
+ * NOT a `where` clause. Adding activityType to the query would need its own
+ * (authorId, activityType, startedAt) and (authorId, activityType, createdAt)
+ * composite indexes, and a missing or wrong-direction one throws
+ * FAILED_PRECONDITION inside the Promise.all below — the outage described at
+ * length above activityInDay. The filter is not worth that risk.
+ */
+const FOOT_ACTIVITIES = new Set(["run", "hike"]);
+
+function isFootActivity(activityType) {
+  return (
+    activityType == null ||
+    activityType === "" ||
+    FOOT_ACTIVITIES.has(activityType)
+  );
+}
+
 const DAY_COMPLETE_BASE_BONUS = 30;
 const FINISHER_BONUS = 500;
 const EARLY_WORM_POINTS = 10;
@@ -538,7 +567,11 @@ async function readTaskValues(enrollmentRef, userId, dayKey, offsetMinutes) {
     (sum, doc) => sum + (doc.get("durationMinutes") || 0),
     0
   );
-  const runKilometres = runs.reduce(
+  // Hikes count toward runWalk, rides do not — see isFootActivity. Filter once
+  // and use the same list for the audit trail, or sources.runIds would claim a
+  // ride produced a figure it was excluded from.
+  const footRuns = runs.filter((doc) => isFootActivity(doc.get("activityType")));
+  const runKilometres = footRuns.reduce(
     (sum, doc) => sum + (doc.get("distanceKm") || 0),
     0
   );
@@ -555,7 +588,7 @@ async function readTaskValues(enrollmentRef, userId, dayKey, offsetMinutes) {
     },
     sources: {
       workoutIds: workouts.map((doc) => doc.id),
-      runIds: runs.map((doc) => doc.id),
+      runIds: footRuns.map((doc) => doc.id),
       mealIds: meals.map((doc) => doc.id),
       pulseIds: pulses.map((doc) => doc.id),
       stepSource: steps.exists ? steps.get("source") || "unknown" : "none",
@@ -1161,6 +1194,8 @@ exports._internals = {
   daysBetween,
   isEarlyWorm,
   evaluate,
+  readTaskValues,
+  isFootActivity,
   streakMultiplier,
   TASKS,
   TASK_KEYS,

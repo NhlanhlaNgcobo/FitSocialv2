@@ -80,6 +80,14 @@ class RunImportService {
   /// they ran with the app open, Samsung Health recorded the same outing from
   /// the phone's own sensors, and importing it would count one run twice —
   /// forever, in their totals and their streak.
+  ///
+  /// Deliberately blind to the activity kind, now that hikes and rides import
+  /// too. Two overlapping sessions of genuinely different activities are close
+  /// to unheard of; two writers disagreeing about what one outing *was* is not
+  /// — Samsung Health will happily call a trail run a hike. Matching on kind
+  /// as well would let that pair through as two sessions, and a duplicate is
+  /// the worse failure: a missed import can be entered by hand, an inflated
+  /// streak cannot be taken back.
   static List<HealthRunRecord> selectImportable({
     required List<HealthRunRecord> records,
     required Set<String> handled,

@@ -1,3 +1,4 @@
+import '../../main/domain/activity_kind.dart';
 import '../../main/domain/app_models.dart';
 import 'run_draft.dart';
 import 'run_pace.dart';
@@ -54,6 +55,7 @@ class HealthRunRecord {
     required this.sourceId,
     required this.sourceName,
     required this.isTreadmill,
+    this.activityKind = ActivityKind.run,
   });
 
   /// The Health Connect record uuid. The one stable handle on a session, and
@@ -78,6 +80,10 @@ class HealthRunRecord {
   /// A treadmill session. Kept because it explains the missing route: an
   /// indoor run has nowhere to have been.
   final bool isTreadmill;
+
+  /// Which activity Health Connect said this was. Defaults to a run, which is
+  /// what every session imported before hikes and rides was.
+  final ActivityKind activityKind;
 
   Duration get elapsed => endedAt.difference(startedAt);
 
@@ -111,8 +117,13 @@ class HealthRunRecord {
       savedAt: savedAt,
       distanceKm: distanceKm,
       elapsed: elapsed,
-      averagePace: formatAveragePace(distanceKm: distanceKm, elapsed: elapsed),
+      averagePace: formatPaceOrSpeed(
+        kind: activityKind,
+        distanceKm: distanceKm,
+        elapsed: elapsed,
+      ),
       shareToFeed: false,
+      activityKind: activityKind,
       // Empty, always. Health Connect keeps a route on an ExerciseRoute record
       // that needs its own permission and its own per-session consent prompt,
       // and the `health` package does not surface it — so an imported run has

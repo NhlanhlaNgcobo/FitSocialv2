@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:fitsocial_app/features/main/domain/activity_kind.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/tracking/domain/run_draft.dart';
 
@@ -19,6 +20,8 @@ RunDraft _draft({
   bool shareToFeed = true,
   RunDraftSource source = RunDraftSource.recorded,
   String? externalId,
+  ActivityKind activityKind = ActivityKind.run,
+  int? elevationGainMeters,
 }) {
   return RunDraft(
     id: 'draft-1',
@@ -35,6 +38,8 @@ RunDraft _draft({
     publishAttemptedAt: publishAttemptedAt,
     source: source,
     externalId: externalId,
+    activityKind: activityKind,
+    elevationGainMeters: elevationGainMeters,
   );
 }
 
@@ -271,6 +276,81 @@ void main() {
 
       // And an untouched copy does not silently publish anything.
       expect(draft.copyWith(photoUnavailable: true).shareToFeed, isFalse);
+    });
+  });
+
+  // Hikes and rides were added to this file the same way `source` and
+  // `externalId` were: optional, defaulted to what a file written before them
+  // meant, and omitted from the JSON when they hold that default. The schema
+  // version deliberately did NOT move, because fromJson rejects any version it
+  // does not recognise — bumping it would have made every offline draft
+  // already sitting on a phone unreadable, losing real unsent runs to announce
+  // a field.
+  group('activity kind', () {
+    test("a run's file does not carry the key at all", () {
+      final json = _draft().toJson();
+
+      expect(json.containsKey('activityKind'), isFalse);
+      // Which is what lets an older build read this file unchanged.
+      expect(RunDraft.fromJson(json)!.activityKind, ActivityKind.run);
+    });
+
+    test('a hike and a ride round-trip', () {
+      for (final kind in [ActivityKind.hike, ActivityKind.ride]) {
+        final restored = _roundTrip(_draft(activityKind: kind))!;
+        expect(restored.activityKind, kind, reason: kind.name);
+      }
+    });
+
+    test('a kind an older build has never heard of reads as a run', () {
+      final json = _draft(activityKind: ActivityKind.ride).toJson()
+        ..['activityKind'] = 'kayak';
+
+      // Degraded, not discarded. The draft is somebody's only copy of an
+      // outing; publishing it as a run beats dropping it on the floor.
+      final restored = RunDraft.fromJson(json);
+      expect(restored, isNotNull);
+      expect(restored!.activityKind, ActivityKind.run);
+      expect(restored.distanceKm, 5.2);
+    });
+
+    test('copyWith carries the kind', () {
+      // copyWith rebuilds field by field and silently drops anything left out,
+      // so a hike would quietly become a run the moment its photo changed.
+      final hike = _draft(activityKind: ActivityKind.hike);
+
+      expect(hike.copyWith(photoPath: 'a.jpg').activityKind, ActivityKind.hike);
+      expect(hike.copyWith(shareToFeed: false).activityKind, ActivityKind.hike);
+    });
+
+    test('the save path is handed the kind', () {
+      final ride = _draft(activityKind: ActivityKind.ride);
+
+      expect(ride.toRunLogDraft().activityKind, ActivityKind.ride);
+    });
+  });
+
+  group('elevation gain', () {
+    test('is omitted when nothing measured it', () {
+      // Null and zero are different answers, and a manually entered session
+      // must not be recorded as a flat one.
+      expect(_draft().toJson().containsKey('elevationGainMeters'), isFalse);
+      expect(_roundTrip(_draft())!.elevationGainMeters, isNull);
+    });
+
+    test('round-trips, including a measured zero', () {
+      expect(_roundTrip(_draft(elevationGainMeters: 412))!.elevationGainMeters,
+          412);
+      expect(
+          _roundTrip(_draft(elevationGainMeters: 0))!.elevationGainMeters, 0);
+    });
+
+    test('survives copyWith and reaches the save path', () {
+      final hike = _draft(activityKind: ActivityKind.hike,
+          elevationGainMeters: 250);
+
+      expect(hike.copyWith(photoPath: 'a.jpg').elevationGainMeters, 250);
+      expect(hike.toRunLogDraft().elevationGainMeters, 250);
     });
   });
 }

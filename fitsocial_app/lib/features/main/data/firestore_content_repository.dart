@@ -884,18 +884,42 @@ class FirestoreContentRepository implements ContentRepository {
   /// metric strip, which is the only place a legacy run post recorded them.
   static ActivitySession _runSessionFromPost(FeedPost post, DateTime when) {
     final distanceKm = distanceFromMetricLabels(post.metricLabels);
+    final duration =
+        durationFromMetricLabels(post.metricLabels) ?? Duration.zero;
+    // These posts predate the runs collection, so there is no activityType to
+    // read — only the display label the share flow wrote. A legacy post says
+    // 'Run', and anything unrecognised falls back to a run, which is what every
+    // one of them is.
+    final kind = _kindFromActivityLabel(post.activity);
     return ActivitySession(
       id: post.id,
-      kind: ActivityKind.run,
-      title: 'Run',
+      kind: kind,
+      title: kind.descriptor.singular,
       startedAt: when,
-      duration: durationFromMetricLabels(post.metricLabels) ?? Duration.zero,
-      calories: estimatedRunCalories(distanceKm),
+      duration: duration,
+      calories: estimatedActivityCalories(
+        kind: kind,
+        distanceKm: distanceKm,
+        duration: duration,
+      ),
       caloriesAreEstimated: true,
       distanceKm: distanceKm,
       sharedToFeed: true,
       postId: post.id,
     );
+  }
+
+  /// The activity kind behind a post's display label, e.g. "Hike" -> hike.
+  ///
+  /// Posts carry a human label rather than a wire value, because every reader
+  /// of a post renders it directly. Unknown labels read as a run.
+  static ActivityKind _kindFromActivityLabel(String? activity) {
+    final label = activity?.trim().toLowerCase();
+    if (label == null || label.isEmpty) return ActivityKind.run;
+    for (final kind in ActivityKind.values) {
+      if (kind.descriptor.singular.toLowerCase() == label) return kind;
+    }
+    return ActivityKind.run;
   }
 
   /// A workout post as a session, read out of the workoutData map the share
@@ -933,13 +957,21 @@ class FirestoreContentRepository implements ContentRepository {
     if (startedAt == null) return null;
 
     final distanceKm = doubleFromStoredValue(data['distanceKm']);
+    final duration =
+        Duration(seconds: intFromStoredValue(data['durationSeconds']));
+    // Absent means run: every document written before the field existed.
+    final kind = ActivityKindX.fromWire(data['activityType']);
     return ActivitySession(
       id: doc.id,
-      kind: ActivityKind.run,
-      title: 'Run',
+      kind: kind,
+      title: kind.descriptor.singular,
       startedAt: startedAt,
-      duration: Duration(seconds: intFromStoredValue(data['durationSeconds'])),
-      calories: estimatedRunCalories(distanceKm),
+      duration: duration,
+      calories: estimatedActivityCalories(
+        kind: kind,
+        distanceKm: distanceKm,
+        duration: duration,
+      ),
       caloriesAreEstimated: true,
       distanceKm: distanceKm,
       sharedToFeed: boolFromStoredValue(data['sharedToFeed']),
@@ -1004,8 +1036,13 @@ class FirestoreContentRepository implements ContentRepository {
   @override
   Future<void> deleteActivitySession(String id, ActivityKind kind) async {
     _requireCurrentUser();
-    final collection =
-        kind == ActivityKind.run ? runsCollection : workoutsCollection;
+    // Keyed on workout, not on run. Every GPS kind — run, hike and ride — lives
+    // in `runs`, so a `== run ? runs : workouts` test would send a hike to the
+    // workouts collection and delete nothing at all: the row would vanish from
+    // the list and the document would still be there on the next read.
+    final collection = kind == ActivityKind.workout
+        ? workoutsCollection
+        : runsCollection;
     await collection.doc(id).delete();
   }
 
@@ -1307,6 +1344,14 @@ class FirestoreContentRepository implements ContentRepository {
     // Uploaded before anything is written, so both the log and the post can
     // carry the same URL — same order, and the same reasoning, as saveWorkout.
     final backgroundUrl = await _tryUploadBackground(draft.backgroundImagePath);
+    final noun = draft.activityKind.descriptor.singular;
+
+    // Only a run may move the longest-run record. maxRunDistanceKm is a
+    // monotone max — written when it is greater and never otherwise — so one
+    // 60 km ride would claim "Longest Run: 60 km" permanently, and no amount
+    // of running afterwards could take it back.
+    final recordDistanceKm =
+        draft.activityKind == ActivityKind.run ? draft.distanceKm : null;
 
     // The run log is the canonical record and is written whether or not the
     // run is shared, so an unshared GPS run still keeps its route.
@@ -1317,14 +1362,19 @@ class FirestoreContentRepository implements ContentRepository {
     );
 
     if (!draft.shareToFeed) {
-      await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
-      return const ActivitySaveResult(message: 'Run saved.');
+      await _incrementUser(runsDelta: 1, runDistanceKm: recordDistanceKm);
+      return ActivitySaveResult(message: '$noun saved.');
     }
 
     final result = await _createPost(
       profile: profile,
-      activity: 'Run',
-      caption: 'Finished a ${draft.distanceKm.toStringAsFixed(2)} km run.',
+      // The post's one record of which activity this was. Every renderer
+      // already prints this field, so naming it correctly here is what makes a
+      // hike read as a hike everywhere it appears — and it is what
+      // _kindFromActivityLabel reads back when a post is the only trace left.
+      activity: noun,
+      caption: 'Finished a ${draft.distanceKm.toStringAsFixed(2)} km '
+          '${noun.toLowerCase()}.',
       metricLabels: [
         '${draft.distanceKm.toStringAsFixed(2)} km',
         _formatDuration(draft.elapsed),
@@ -1344,9 +1394,9 @@ class FirestoreContentRepository implements ContentRepository {
       routePoints: route,
     );
     await _linkLogToPost(logRef, result.post.id);
-    await _incrementUser(runsDelta: 1, runDistanceKm: draft.distanceKm);
+    await _incrementUser(runsDelta: 1, runDistanceKm: recordDistanceKm);
     return ActivitySaveResult(
-      message: _sharedMessage('Run', synced: result.synced),
+      message: _sharedMessage(noun, synced: result.synced),
       createdPost: result.post,
     );
   }
@@ -1429,6 +1479,18 @@ class FirestoreContentRepository implements ContentRepository {
       'routePoints': route,
       'pointCount': route.length,
       'sharedToFeed': draft.shareToFeed,
+      // Omitted for a run, so a run document written today is shaped exactly
+      // like every run written before hikes and rides existed. That is what
+      // lets "no activityType" mean "run" everywhere it is read — on the
+      // client, and in the two Cloud Functions that score challenges — with
+      // nothing backfilled and no historical document touched.
+      if (draft.activityKind != ActivityKind.run)
+        'activityType': draft.activityKind.wireName,
+      // Omitted when nothing measured it, so a manually entered session is not
+      // recorded as a flat one. Purely additive: no index, no rules change, and
+      // nothing in the challenge functions reads it.
+      if (draft.elevationGainMeters case final gain?)
+        'elevationGainMeters': gain,
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
       // Omitted rather than written as zeros when no strap was connected, so a
       // run without one is shaped exactly like every run logged before straps

@@ -231,7 +231,9 @@ final activityCalendarProvider = FutureProvider.autoDispose
     final existing = byDay[session.day];
     byDay[session.day] = ActivityDay(
       date: session.day,
-      runs: (existing?.runs ?? 0) + (session.kind == ActivityKind.run ? 1 : 0),
+      // isGps, not `== run`: hikes and rides belong in this column too, and
+      // testing for run alone would drop them out of the grid entirely.
+      runs: (existing?.runs ?? 0) + (session.kind.isGps ? 1 : 0),
       workouts: (existing?.workouts ?? 0) +
           (session.kind == ActivityKind.workout ? 1 : 0),
     );

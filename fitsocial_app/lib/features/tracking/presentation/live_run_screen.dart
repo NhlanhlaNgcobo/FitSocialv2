@@ -16,6 +16,7 @@ import '../../../shared/widgets/run_route_map.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../../auth/application/body_metrics_providers.dart';
 import '../../main/application/activity_actions.dart';
+import '../../main/domain/activity_kind.dart';
 import '../../main/domain/app_models.dart';
 import '../../music/application/music_providers.dart';
 import '../../music/presentation/connect_music_action.dart';
@@ -23,6 +24,7 @@ import '../../music/presentation/music_mini_player.dart';
 import '../application/heart_rate_connection_controller.dart';
 import '../application/run_draft_providers.dart';
 import '../application/tracking_providers.dart';
+import '../domain/gps_activity_profile.dart';
 import '../domain/heart_rate_models.dart';
 import '../domain/run_draft.dart';
 import '../data/live_run_service.dart';
@@ -36,7 +38,12 @@ import '../../../shared/widgets/liquid_glass.dart';
 /// duration, and pace from the phone's location sensors, plus live BPM
 /// when a Bluetooth heart-rate device is connected.
 class LiveRunScreen extends ConsumerStatefulWidget {
-  const LiveRunScreen({super.key});
+  const LiveRunScreen({super.key, this.kind = ActivityKind.run});
+
+  /// Which activity is being recorded. Decides the GPS tuning, the wording,
+  /// whether the headline figure is a pace or a speed, and what the saved
+  /// session is filed as. Defaults to a run so a deep link still works.
+  final ActivityKind kind;
 
   @override
   ConsumerState<LiveRunScreen> createState() => _LiveRunScreenState();
@@ -166,7 +173,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       // provider: all fine, the estimate just opens on the default.
       final heightCm = ref.read(bodyMetricsProvider).valueOrNull?.heightCm;
       if (heightCm != null) service.seedStrideFromHeight(heightCm);
-      await service.start();
+      await service.start(profile: GpsActivityProfile.forKind(widget.kind));
       ref
           .read(heartRateRecorderProvider)
           .start(ref.read(bleHeartRateServiceProvider).heartRateStream);
@@ -197,7 +204,8 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       unawaited(ref.read(runCheckpointStoreProvider).clear());
       setState(() {
         _errorMessage =
-            'Run too short to save (${(result.distanceKm * 1000).round()} m).';
+            '${widget.kind.descriptor.singular} too short to save '
+            '(${(result.distanceKm * 1000).round()} m).';
       });
       return;
     }
@@ -240,8 +248,10 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
             RunLogDraft(
               distanceKm: distanceKm,
               elapsed: result.elapsed,
-              averagePace: result.formattedAveragePace,
+              averagePace: result.formattedAverageFor(widget.kind),
               shareToFeed: choice.shareToFeed,
+              activityKind: widget.kind,
+              elevationGainMeters: result.elevationGainMeters,
               startedAt: result.startedAt,
               routePoints: route,
               backgroundImagePath: choice.backgroundImagePath,
@@ -283,8 +293,10 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
               savedAt: DateTime.now(),
               distanceKm: distanceKm,
               elapsed: result.elapsed,
-              averagePace: result.formattedAveragePace,
+              averagePace: result.formattedAverageFor(widget.kind),
               shareToFeed: choice.shareToFeed,
+              activityKind: widget.kind,
+              elevationGainMeters: result.elevationGainMeters,
               routePoints: route,
               startedAt: result.startedAt,
               heartRate: heartRate.hasData ? heartRate : null,
@@ -350,6 +362,9 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     final palette = context.palette;
     final runState =
         ref.watch(liveRunStateProvider).valueOrNull ?? LiveRunState.idle;
+    // A ride is described in km/h; everything on foot in minutes per km.
+    final usesPace = widget.kind.descriptor.usesPace;
+    final showsClimb = widget.kind != ActivityKind.run;
 
     // Driven off the run state rather than the pause button so the GPS
     // auto-pause counts too — it is decided inside the service, and a runner
@@ -450,9 +465,23 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                     ),
                     RunMetric(
                       icon: Icons.speed_rounded,
-                      label: 'PACE /KM',
-                      value: runState.formattedPace,
+                      // Short labels: with a fourth metric alongside, each one
+                      // has a quarter of the width to fit in.
+                      label: usesPace ? 'PACE /KM' : 'KM/H',
+                      value: usesPace
+                          ? runState.formattedPace
+                          : runState.formattedCurrentSpeed,
                     ),
+                    // Climb earns its place on a hike, where it is the number
+                    // that describes the day, and on a ride. A run keeps the
+                    // three metrics it has always had rather than losing a
+                    // quarter of the row to a figure most runners ignore.
+                    if (showsClimb)
+                      RunMetric(
+                        icon: Icons.terrain_rounded,
+                        label: 'CLIMB M',
+                        value: runState.elevationGainMeters?.toString() ?? '--',
+                      ),
                     RunMetric(
                       icon: liveBpm != null
                           ? Icons.favorite_rounded
@@ -612,8 +641,9 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                     child: Text(
                       runState.isTracking
                           ? _gpsStatusLine(runState)
-                          : 'Distance, time and pace are measured live from '
-                              'GPS. Keep your phone with you.',
+                          : 'Distance, time and ${usesPace ? 'pace' : 'speed'} '
+                              'are measured live from GPS. Keep your phone '
+                              'with you.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: palette.muted,

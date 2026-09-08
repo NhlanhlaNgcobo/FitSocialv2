@@ -116,7 +116,7 @@ void main() {
     await pumpCreate(tester, runDrafts: const []);
 
     expect(find.text('Saved run'), findsNothing);
-    expect(find.text('Log a Run'), findsOneWidget);
+    expect(find.text('Track an Activity'), findsOneWidget);
   });
 
   // Neither suppresses the other: they are different kinds of unfinished
@@ -149,7 +149,7 @@ void main() {
 
     for (final title in [
       'Log a Workout',
-      'Log a Run',
+      'Track an Activity',
       'Log a Meal',
       'Share a Post',
       'Enter a Challenge',

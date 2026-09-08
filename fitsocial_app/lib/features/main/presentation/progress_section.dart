@@ -635,9 +635,7 @@ class _SessionIcon extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(
-        kind == ActivityKind.run
-            ? Icons.directions_run_rounded
-            : Icons.fitness_center_rounded,
+        kind.descriptor.icon,
         color: palette.brand,
         size: 22,
       ),

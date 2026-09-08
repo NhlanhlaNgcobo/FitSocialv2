@@ -379,6 +379,17 @@ function createFakeAdmin(seed = {}) {
   const firestore = () => firestoreInstance;
   firestore.FieldValue = FieldValue;
 
+  // Timestamps are plain Dates here. The range filters in `matches` compare
+  // with `>=` / `<`, which coerce a Date through valueOf, so a seeded Date and
+  // a bound built by fromDate order correctly against each other without a
+  // wrapper type. Anything that needs real Timestamp semantics -- toDate,
+  // nanosecond precision -- is not exercised by these tests.
+  firestore.Timestamp = {
+    fromDate: (date) => date,
+    fromMillis: (millis) => new Date(millis),
+    now: () => new Date(),
+  };
+
   const admin = {
     // A default app already exists, which is what the modules under test check
     // for. `apps` is carried alongside it only so that anything still counting

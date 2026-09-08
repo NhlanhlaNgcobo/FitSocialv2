@@ -132,7 +132,9 @@ class _RunImportSyncState extends ConsumerState<RunImportSync>
         await ref.read(contentRepositoryProvider).getActivitySessions();
     return [
       for (final session in sessions)
-        if (session.kind == ActivityKind.run)
+        // Every GPS kind, so that a hike recorded here still blocks the same
+        // hike arriving later from Health Connect.
+        if (session.kind.isGps)
           RunWindow(
             start: session.startedAt,
             end: session.startedAt.add(session.duration),

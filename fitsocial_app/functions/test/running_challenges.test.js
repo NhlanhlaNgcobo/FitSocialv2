@@ -454,6 +454,92 @@ test("a run outside the challenge window is ignored", async () => {
   assert.equal(store.get("challenges/c1/participants/runner").totalDistanceKm, 0);
 });
 
+test("a ride is not a run, and is never attributed", async () => {
+  const { engine, store } = loadEngine(world());
+
+  await engine._internals.attributeRun(
+    "ride1",
+    run("2026-09-02T05:00:00Z", 40, { activityType: "ride" }),
+    "runner"
+  );
+
+  // 40 km would have cleared the goal outright had it counted.
+  assert.equal(store.get("challenges/c1/attributions/ride1"), undefined);
+  const participant = store.get("challenges/c1/participants/runner");
+  assert.equal(participant.totalDistanceKm, 0);
+  assert.equal(participant.completedDays, 0);
+});
+
+test("a hike does not count toward a running challenge", async () => {
+  const { engine, store } = loadEngine(world());
+
+  // Deliberately different from challenges.js, where a hike DOES advance the
+  // runWalk task. A running challenge is a running challenge.
+  await engine._internals.attributeRun(
+    "hike1",
+    run("2026-09-02T05:00:00Z", 12, { activityType: "hike" }),
+    "runner"
+  );
+
+  assert.equal(store.get("challenges/c1/attributions/hike1"), undefined);
+  assert.equal(
+    store.get("challenges/c1/participants/runner").totalDistanceKm,
+    0
+  );
+});
+
+test("an explicit activityType of run is attributed as before", async () => {
+  const { engine, store } = loadEngine(world());
+
+  await engine._internals.attributeRun(
+    "run1",
+    run("2026-09-02T05:00:00Z", 5.4, { activityType: "run" }),
+    "runner"
+  );
+
+  const attribution = store.get("challenges/c1/attributions/run1");
+  assert.equal(attribution.distanceKm, 5.4);
+  assert.equal(attribution.activityType, "run");
+  assert.equal(
+    store.get("challenges/c1/participants/runner").totalDistanceKm,
+    5.4
+  );
+});
+
+test("re-typing a run as a ride retracts the distance it already had", async () => {
+  const { engine, store } = loadEngine(world());
+
+  await engine._internals.attributeRun(
+    "run1",
+    run("2026-09-02T05:00:00Z", 5.4),
+    "runner"
+  );
+  assert.equal(
+    store.get("challenges/c1/participants/runner").totalDistanceKm,
+    5.4
+  );
+
+  // The user corrects the activity after the fact. This is why the gate leaves
+  // `target` null and falls through instead of returning early: an early return
+  // would strand the 5.4 km on the leaderboard with no way to take it back.
+  await engine._internals.attributeRun(
+    "run1",
+    run("2026-09-02T05:00:00Z", 5.4, { activityType: "ride" }),
+    "runner"
+  );
+
+  assert.equal(store.get("challenges/c1/attributions/run1"), undefined);
+  const participant = store.get("challenges/c1/participants/runner");
+  assert.equal(participant.totalDistanceKm, 0);
+  assert.equal(participant.completedDays, 0);
+  assert.equal(participant.currentStreak, 0);
+  assert.equal(
+    store.get("challenges/c1/participants/runner/days/2026-09-02")
+      ?.distanceKm ?? 0,
+    0
+  );
+});
+
 test("the window boundary is the challenge's clock, not UTC", async () => {
   const { engine, store } = loadEngine(world());
 

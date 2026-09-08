@@ -84,9 +84,7 @@ class _SessionLogSheet extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  session.kind == ActivityKind.run
-                      ? Icons.directions_run_rounded
-                      : Icons.fitness_center_rounded,
+                  session.kind.descriptor.icon,
                   color: context.palette.brand,
                 ),
                 const SizedBox(width: AppSpacing.sm),

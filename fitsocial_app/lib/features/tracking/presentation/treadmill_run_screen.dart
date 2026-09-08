@@ -11,6 +11,7 @@ import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../../main/application/activity_actions.dart';
+import '../../main/domain/activity_kind.dart';
 import '../../main/domain/app_models.dart';
 import '../../music/application/music_providers.dart';
 import '../../music/presentation/connect_music_action.dart';
@@ -162,6 +163,11 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
               elapsed: result.elapsed,
               averagePace: result.formattedAveragePace,
               shareToFeed: choice.shareToFeed,
+              // Stated rather than left to the default. A treadmill is a way
+              // of running indoors and nothing else — there is no such thing
+              // as an indoor hike, and a stationary bike is a different
+              // machine reporting different numbers.
+              activityKind: ActivityKind.run,
               startedAt: result.startedAt,
               // No trace to record: the run happened on the spot.
               backgroundImagePath: choice.backgroundImagePath,

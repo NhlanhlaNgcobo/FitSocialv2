@@ -9,6 +9,7 @@ import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../tracking/presentation/run_drafts_section.dart';
 import '../application/create_flow_controller.dart';
+import '../domain/activity_kind.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
@@ -33,9 +34,14 @@ class CreateScreen extends ConsumerWidget {
         },
       ),
       _CreateAction(
-        title: 'Log a Run',
-        subtitle: 'Track your run',
-        icon: Icons.directions_run_rounded,
+        // One entry for all three GPS activities rather than three rows. The
+        // choice between run, hike and ride is made on the tracker screen this
+        // opens, where it can recolour the thing you are about to start —
+        // three tiles here would have grown this page to eight rows and turned
+        // a picker into a menu.
+        title: 'Track an Activity',
+        subtitle: 'Run, hike or ride',
+        icon: Icons.route_rounded,
         accent: _kRunAccent,
         destination: CreateCanvasDestination.run,
         onTap: () {
@@ -140,6 +146,10 @@ class CreateScreen extends ConsumerWidget {
 // four things you can create, the way a brand colour does, rather than describing
 // a surface. Green means "meal" whichever way the app is lit.
 const Color _kWorkoutAccent = AppColors.orangeBright;
+
+/// The GPS tracker's own hue, taken from the run because running is what most
+/// sessions are. Hikes and rides carry their own accents once you are inside
+/// the tracker — see [ActivityDescriptor].
 const Color _kRunAccent = Color(0xFF2ECBFF);
 const Color _kMealAccent = Color(0xFF31C46C);
 const Color _kPostAccent = Color(0xFFB06BFF);

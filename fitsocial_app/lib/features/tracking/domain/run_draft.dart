@@ -1,3 +1,4 @@
+import '../../main/domain/activity_kind.dart';
 import '../../main/domain/app_models.dart';
 
 /// Where a draft came from.
@@ -53,13 +54,16 @@ class RunDraft {
     this.publishAttemptedAt,
     this.source = RunDraftSource.recorded,
     this.externalId,
+    this.activityKind = ActivityKind.run,
+    this.elevationGainMeters,
   });
 
   /// Bumped whenever the stored shape changes in a way older files can't be
   /// read as. [fromJson] rejects anything it doesn't recognise rather than
   /// guessing, so a draft from a future version is skipped, not misread.
   ///
-  /// [source] and [externalId] were added without moving this, on purpose.
+  /// [source], [externalId] and [activityKind] were added without moving this,
+  /// on purpose.
   /// Both are optional with defaults that mean exactly what a file written
   /// before them meant, so an old draft reads correctly here and a new one
   /// reads correctly on an older build. Bumping would have made every offline
@@ -125,6 +129,13 @@ class RunDraft {
   /// to tell about why it is sitting in a list.
   bool get isImported => source != RunDraftSource.recorded;
 
+  /// Which GPS activity this recording was. Defaults to a run, which is what
+  /// every draft written before hikes and rides existed holds.
+  final ActivityKind activityKind;
+
+  /// Total climb, in metres, or null when nothing measured it.
+  final int? elevationGainMeters;
+
   /// The draft as the save path wants it.
   ///
   /// [backgroundImagePath] is passed explicitly rather than read from
@@ -136,6 +147,8 @@ class RunDraft {
       elapsed: elapsed,
       averagePace: averagePace,
       shareToFeed: shareToFeed,
+      activityKind: activityKind,
+      elevationGainMeters: elevationGainMeters,
       routePoints: routePoints,
       startedAt: startedAt,
       backgroundImagePath: backgroundImagePath,
@@ -168,6 +181,8 @@ class RunDraft {
       publishAttemptedAt: publishAttemptedAt ?? this.publishAttemptedAt,
       source: source,
       externalId: externalId,
+      activityKind: activityKind,
+      elevationGainMeters: elevationGainMeters,
     );
   }
 
@@ -194,6 +209,13 @@ class RunDraft {
       // is byte-for-byte what it was before importing existed.
       if (source != RunDraftSource.recorded) 'source': source.wireName,
       if (externalId != null) 'externalId': externalId,
+      // Omitted for a run, on the same terms and for the same reason: an
+      // ordinary run's draft file does not change shape, and an older build
+      // reading a hike draft publishes it as a run rather than discarding it.
+      if (activityKind != ActivityKind.run)
+        'activityKind': activityKind.wireName,
+      if (elevationGainMeters != null)
+        'elevationGainMeters': elevationGainMeters,
     };
   }
 
@@ -227,6 +249,8 @@ class RunDraft {
       // A draft whose flag went missing is treated as private: publishing
       // something the runner did not ask to publish is the worse mistake.
       shareToFeed: value['shareToFeed'] as bool? ?? false,
+      activityKind: ActivityKindX.fromWire(value['activityKind']),
+      elevationGainMeters: (value['elevationGainMeters'] as num?)?.toInt(),
       routePoints: RoutePoint.listFromFirestore(value['routePoints']),
       startedAt: _parseDate(value['startedAt']),
       photoPath: value['photoPath'] as String?,
