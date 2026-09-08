@@ -170,18 +170,12 @@ void main() {
       expect(pending.take(), '/user/u9');
     });
 
-    test('a tapped notification can park a challenge board', () {
-      // The cold-start case: the app was not running, so there is nowhere to
-      // navigate to until the session has restored.
-      final pending = PendingDeepLink()..rememberPush('/challenge/board/ch1');
-
-      expect(pending.take(), '/challenge/board/ch1');
-    });
-
-    test('a notification cannot park somewhere a push may not open', () {
-      final pending = PendingDeepLink()
-        ..rememberPush('/settings')
-        ..rememberPush('/challenge/board/ch1/edit');
+    test('a challenge board is not a shareable link, so it is never parked', () {
+      // A notification can open a challenge board; a link cannot. Redeeming a
+      // parked route is a redirect that replaces the stack, which is why a
+      // tapped notification keeps its destination in PushTapRouter instead of
+      // here — see the note on this class.
+      final pending = PendingDeepLink()..remember('/challenge/board/ch1');
 
       expect(pending.route, isNull);
     });

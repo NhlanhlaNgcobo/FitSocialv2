@@ -201,7 +201,11 @@ Future<Uint8List> renderRunCardPng(
     if (boundary == null) {
       throw const RunCardExportException("Couldn't draw the card.");
     }
-    if (boundary.debugNeedsPaint) await WidgetsBinding.instance.endOfFrame;
+    // No `debugNeedsPaint` probe here. It reads a `late` field that is only
+    // assigned inside an assert, so in a release build — where asserts are
+    // stripped — merely reading it throws LateInitializationError, and this
+    // whole export fails every time. The two frames above are what actually
+    // guarantees the layer: the first builds the entry, the second paints it.
 
     final captured = image = await boundary.toImage(
       pixelRatio: width / size.width,
