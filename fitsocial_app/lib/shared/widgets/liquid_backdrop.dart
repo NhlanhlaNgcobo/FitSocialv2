@@ -13,30 +13,48 @@ import 'glass_motion.dart';
 /// renders as an empty outline — so this is not decoration, it is the other
 /// half of the material.
 ///
-/// Three wide pools of colour drifting on slow, mismatched cycles. Nothing here
-/// is meant to be *noticed*: at rest it reads as a dark room with some warmth
-/// in it, and it only becomes visible where a pane of glass bends it. Kept
-/// deliberately low-frequency for the same reason — a busy backdrop under a
-/// feed is noise you cannot scroll away from.
+/// One warm family: a lit corner at the top left, falling away through rust to
+/// a deep ember along the floor. Nothing here is a hue the app uses to
+/// *identify* something. Cyan is a run, purple is a post, green is a meal,
+/// amber is a ride — eight of them carry meaning, and on the busiest screens
+/// most are in view at once. The ground used to hold a blue and a violet, which
+/// is the ground making a claim in the same language as the data sitting on it,
+/// with nothing to tell the eye which of the two to believe. Warmth alone reads
+/// as a room the app is in rather than as another category in it.
+///
+/// The obvious hazard of choosing warm is the brand, since orange already means
+/// workouts, steps, streaks, the Create disc and every run polyline it draws.
+/// So none of these washes is [AppPalette.brand], and none of them is allowed
+/// near its brightness — see [_BackdropPainter._washes]. The ground is the
+/// unlit end of the same family, which is what lets the brand stay the only lit
+/// orange on the screen.
+///
+/// Kept low-frequency for the same reason it is kept dim: a busy backdrop under
+/// a feed is noise you cannot scroll away from.
 class LiquidBackdrop extends StatefulWidget {
   const LiquidBackdrop({super.key});
 
-  /// One full cycle. Long enough that the motion is never the thing you are
-  /// looking at, which is the only speed that survives being on screen all day.
+  /// The cycle the pools' phase is written in.
+  ///
+  /// Nothing runs for this long any more — see [shift] — but the drift geometry
+  /// is still expressed against it, so a phase of 1 means every pool has come
+  /// back to where it started.
   static const Duration period = Duration(seconds: 72);
 
-  /// How often the drift is actually redrawn.
+  /// How far the ground moves when a screen change lands.
   ///
-  /// Three full-screen radial gradients is the one piece of painting under
-  /// every other pixel in the app, and at [period] there is nothing in it worth
-  /// a fresh one on every vsync: a frame's worth of drift is a fraction of a
-  /// pixel. Quantising the phase holds it to this many repaints a second, which
-  /// cannot be seen at this speed and hands the fill rate back to whatever is
-  /// moving on top — a page transition, most of all.
-  static const int fps = 12;
+  /// Enough that the light is somewhere new, little enough that nothing appears
+  /// to travel: at a fourteenth of [period] the pools cross a few percent of the
+  /// screen, which reads as the lighting having changed rather than as objects
+  /// having moved.
+  static const double shift = 1 / 14;
 
-  /// Distinct phases in one cycle.
-  static const int _steps = 72 * fps;
+  /// How long the ground takes to get there.
+  static const Duration glide = Duration(milliseconds: 700);
+
+  /// Where the ground sits before anything has happened to it — and where it
+  /// stays for anyone who has asked the system for less motion.
+  static const double rest = 0.18;
 
   @override
   State<LiquidBackdrop> createState() => _LiquidBackdropState();
@@ -46,34 +64,45 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: LiquidBackdrop.period,
+    duration: LiquidBackdrop.glide,
   );
 
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _controller,
+    // Leaves quickly and arrives slowly, so the one part of this anybody might
+    // catch is the ground coming to rest rather than the ground setting off.
+    curve: Curves.easeOutCubic,
+  );
+
+  /// Phase the current glide started from.
+  ///
+  /// Never folded back into 0..1. Each pool turns at its own fraction of a
+  /// cycle, so a phase of exactly 1 is a whole revolution only for the pool
+  /// whose spin is 1 — wrapping it would put the other two somewhere they had
+  /// not travelled to, and the ground would jump. Letting it grow costs nothing
+  /// a double will notice inside one run of the app.
+  double _from = LiquidBackdrop.rest;
+
   /// Whether the system has been asked for less motion, read once per
-  /// dependency change rather than on every frame of a transition.
+  /// dependency change rather than on every frame.
   bool _stilled = false;
+
+  double get _phase => _from + LiquidBackdrop.shift * _curve.value;
 
   @override
   void initState() {
     super.initState();
+    _controller.addStatusListener(_onGlide);
     GlassMotion.settled.addListener(_onMotion);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Someone who has asked the system for less motion gets a still backdrop
-    // rather than a slower one. The colour is the point; the drift is a bonus.
+    // Someone who has asked the system for less motion gets a ground that never
+    // moves at all. The light is the point; the shift is a bonus.
     _stilled = MediaQuery.disableAnimationsOf(context);
-    if (_stilled) {
-      _controller.stop();
-      _controller.value = 0.18;
-    } else if (GlassMotion.settled.value) {
-      // Only if nothing is moving. A dependency change landing mid-transition
-      // -- a keyboard, a rotation -- would otherwise start the drift back up
-      // underneath the very frames it is meant to stay out of.
-      _resume();
-    }
+    if (_stilled) _hold();
   }
 
   @override
@@ -83,28 +112,49 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
     super.dispose();
   }
 
-  /// Holds the ground still for the length of a screen change.
+  /// Moves the ground once a screen change has finished — and not before.
   ///
-  /// This is the widest surface in the app and it sits under every other one,
-  /// so a single tick of the drift is a full-screen repaint — and one the
-  /// bottom nav's lens then has to re-read, since its backdrop just moved.
-  /// Spending that on a screen change is the worst possible moment for it: it
-  /// lands on exactly the frames already carrying two branches at once.
+  /// This is the widest surface in the app and it sits under every other one, so
+  /// one tick of it is a full-screen repaint, and one the bottom nav's lens then
+  /// has to re-read because its backdrop just moved. Spending that *during* a
+  /// transition would land it on exactly the frames already carrying two
+  /// branches at once, which is the worst moment in the app to ask for it.
   ///
-  /// And there is nothing to lose. A transition is three hundred milliseconds
-  /// of two screens sliding over the ground; nobody has ever seen a pool of
-  /// colour creep a few pixels underneath that. The drift picks up where it
-  /// left off the moment the app stands still.
+  /// Waiting for the far side gets the shift for nothing. A transition is three
+  /// hundred milliseconds of two screens crossing over a still ground; the light
+  /// changes as the new screen settles, which is both the cheapest frame to do
+  /// it on and the one where it reads as a response to the change rather than
+  /// as part of it.
   void _onMotion() {
     if (!mounted || _stilled) return;
-    GlassMotion.settled.value ? _resume() : _controller.stop();
+
+    if (GlassMotion.settled.value) {
+      if (!_controller.isAnimating) _controller.forward(from: 0);
+      return;
+    }
+
+    // A screen change landing on top of the last one's glide. Leave the light
+    // where it got to rather than paying out the rest of the move across the
+    // very frames this whole arrangement exists to keep clear.
+    _hold();
   }
 
-  void _resume() {
-    if (_controller.isAnimating) return;
-    // From where it stopped, not from zero: restarting the cycle would make the
-    // ground jump at the end of every navigation.
-    _controller.repeat(min: 0, max: 1, period: LiquidBackdrop.period);
+  /// Stops mid-glide without moving anything, by making where it got to the new
+  /// place it starts from.
+  void _hold() {
+    if (!_controller.isAnimating) return;
+    _from = _phase;
+    _controller.stop();
+    _controller.value = 0;
+  }
+
+  void _onGlide(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    // Fold the finished move into the base so the next one starts from here.
+    // Phase is identical either side of this, so there is no frame on which the
+    // ground is anywhere new.
+    _from += LiquidBackdrop.shift;
+    _controller.value = 0;
   }
 
   @override
@@ -115,19 +165,11 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
     // the feed above it into repainting too.
     return RepaintBoundary(
       child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          // Snapped to the drift's own clock, not the display's. The painter
-          // compares this in shouldRepaint, so between two steps the ground is
-          // simply not redrawn.
-          final t = (_controller.value * LiquidBackdrop._steps).floorToDouble() /
-              LiquidBackdrop._steps;
-
-          return CustomPaint(
-            size: Size.infinite,
-            painter: _BackdropPainter(t: t, palette: palette),
-          );
-        },
+        animation: _curve,
+        builder: (context, _) => CustomPaint(
+          size: Size.infinite,
+          painter: _BackdropPainter(t: _phase, palette: palette),
+        ),
       ),
     );
   }
@@ -136,27 +178,31 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
 class _BackdropPainter extends CustomPainter {
   _BackdropPainter({required this.t, required this.palette});
 
-  /// Phase of the drift, 0 to 1.
+  /// Phase of the ground. Grows without bound; only where it leaves each pool
+  /// in that pool's own cycle matters.
   final double t;
 
   final AppPalette palette;
 
-  /// Where each pool sits, how wide it spreads, and how fast it wanders — all
-  /// in fractions of the screen so one backdrop works on every device.
+  /// Where each pool sits, how wide it spreads, and how far it wanders — all in
+  /// fractions of the screen so one backdrop works on every device.
   ///
-  /// The cycles are deliberately coprime-ish. Matched speeds would let the
-  /// pools fall into step and the whole ground would visibly pulse.
+  /// The cycles are deliberately coprime-ish. Matched speeds would let the pools
+  /// fall into step and the whole ground would visibly pulse.
   static const List<_Pool> _pools = [
+    // The lit corner.
     _Pool(
         anchor: Offset(0.18, 0.12),
         drift: Offset(0.10, 0.07),
         spin: 1.0,
         radius: 0.72),
+    // Where the light has mostly gone.
     _Pool(
         anchor: Offset(0.86, 0.34),
         drift: Offset(0.08, 0.11),
         spin: -0.63,
         radius: 0.60),
+    // The floor.
     _Pool(
         anchor: Offset(0.46, 0.92),
         drift: Offset(0.12, 0.06),
@@ -164,18 +210,47 @@ class _BackdropPainter extends CustomPainter {
         radius: 0.80),
   ];
 
-  List<Color> get _hues => palette.isDark
-      ? [palette.brand, const Color(0xFF1E6FA8), const Color(0xFF6B3A96)]
-      : [palette.brand, const Color(0xFF7FB4D8), const Color(0xFFB79AD4)];
-
-  /// How much colour reaches the ground before any glass bends it.
+  /// What each pool is made of, and how much of it reaches the ground.
   ///
-  /// The light theme still takes less — the same wash that reads as depth on
-  /// near-black reads as a stain on cream — but not as much less as it did.
-  /// Light panes are mostly tint, so the backdrop now shows chiefly *between*
-  /// them, which makes the page ground the main place colour lives on light. At
-  /// 0.14 there was nothing there to see, and nothing for a lens to bend.
-  double get _strength => palette.isDark ? 0.30 : 0.20;
+  /// The weights are not equal and are not meant to be: a lit corner and the
+  /// floor it does not reach are different amounts of paint. Giving all three
+  /// the same alpha is what made the old ground read as three coloured blobs
+  /// rather than as one lit room.
+  ///
+  /// One family means hue cannot do the separating, so *value* does. Resolved
+  /// over the dark page these land around `#3B2211`, `#281109` and `#251209`,
+  /// against a `#050505` page in the corners no pool reaches — a fall from the
+  /// top left rather than three warm patches. Matching their brightness would
+  /// give a flat brown sheet, and a flat sheet is the one thing the lens above
+  /// it cannot bend into anything.
+  ///
+  /// None of these is [AppPalette.brand], deliberately. The brand is the most
+  /// overloaded hue in the app and the only lit orange on any screen; a ground
+  /// that borrowed it would be the one place orange meant nothing. Every wash
+  /// here is offset from it and kept far below its brightness.
+  ///
+  /// Light is a real inversion, not a paler copy. On near-black warmth arrives
+  /// by *adding* light; on cream there is no brighter to go, so it arrives by
+  /// taking the page down toward terracotta instead — the same argument
+  /// [AppPalette.paneShadow] is built on. These are pulled much further back
+  /// than the dark set for a reason written into that palette: past roughly
+  /// twenty points of red-to-blue spread a warm page stops reading as a chosen
+  /// colour and starts reading as paper that has aged. A one-family ground on
+  /// cream sits closer to that line than anything else in the app, so it holds
+  /// its warmth and lets the depth come from value.
+  static const List<_Wash> _darkWashes = [
+    _Wash(Color(0xFFFF8A3D), 0.22),
+    _Wash(Color(0xFF7A2E12), 0.30),
+    _Wash(Color(0xFF3A1A0C), 0.60),
+  ];
+
+  static const List<_Wash> _lightWashes = [
+    _Wash(Color(0xFFC99A6B), 0.14),
+    _Wash(Color(0xFFA8724C), 0.13),
+    _Wash(Color(0xFF8A5A38), 0.20),
+  ];
+
+  List<_Wash> get _washes => palette.isDark ? _darkWashes : _lightWashes;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -184,7 +259,7 @@ class _BackdropPainter extends CustomPainter {
       Paint()..color = palette.background,
     );
 
-    final hues = _hues;
+    final washes = _washes;
     final shortest = math.min(size.width, size.height);
 
     for (var i = 0; i < _pools.length; i++) {
@@ -196,11 +271,12 @@ class _BackdropPainter extends CustomPainter {
         (pool.anchor.dy + math.sin(phase * 1.3) * pool.drift.dy) * size.height,
       );
       final radius = shortest * pool.radius;
-      final colour = hues[i].withValues(alpha: _strength);
+      final wash = washes[i];
+      final colour = wash.colour.withValues(alpha: wash.weight);
 
       // Drawn at the origin and moved by the canvas rather than built around a
       // centre that shifts every tick. A gradient anchored to [centre] is a
-      // different shader on every frame of the drift and has to be compiled and
+      // different shader on every frame of the glide and has to be compiled and
       // uploaded as one; anchored at zero it is the same three shaders for the
       // life of the app, and the movement costs a translate.
       canvas.save();
@@ -257,4 +333,14 @@ class _Pool {
 
   /// Spread, as a fraction of the screen's shorter side.
   final double radius;
+}
+
+@immutable
+class _Wash {
+  const _Wash(this.colour, this.weight);
+
+  final Color colour;
+
+  /// How much of [colour] reaches the ground, before any glass bends it.
+  final double weight;
 }

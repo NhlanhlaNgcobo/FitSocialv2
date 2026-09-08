@@ -156,9 +156,9 @@ void main() {
   });
 
   group('the app-wide ground', () {
-    // The backdrop drifts on a 72-second loop that never settles, so every
-    // pump here is a plain pump. pumpAndSettle would wait for an animation
-    // that is designed never to finish.
+    // The backdrop is still unless a screen change has just landed, and the
+    // move it makes then does finish -- so unlike the old 72-second loop, these
+    // are safe to pumpAndSettle.
     testWidgets('keeps its painting off everything above it', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: LiquidBackdrop())),
@@ -176,7 +176,11 @@ void main() {
       );
     });
 
-    testWidgets('does not redraw itself on every frame', (tester) async {
+    testWidgets('costs nothing until a screen change asks it to move', (
+      tester,
+    ) async {
+      addTearDown(GlassMotion.resetForTest);
+
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: LiquidBackdrop())),
       );
@@ -198,13 +202,18 @@ void main() {
       final before = ground();
 
       // Three full-screen radial gradients sit under every other pixel in the
-      // app. On a 72-second cycle a frame's worth of drift is a fraction of a
-      // pixel, and the fill rate is worth more to whatever is moving on top.
-      await tester.pump(const Duration(milliseconds: 16));
+      // app, and an app left open on one screen has no reason to pay for them
+      // twice. Sitting there is free.
+      await tester.pump(const Duration(seconds: 2));
       expect(ground().shouldRepaint(before), isFalse);
 
-      // It still has to actually drift.
-      await tester.pump(const Duration(milliseconds: 400));
+      // A screen change, and the ground is somewhere new by the end of it.
+      GlassMotion.begin();
+      await tester.pump();
+      GlassMotion.end();
+      await tester.pump();
+      await tester.pumpAndSettle();
+
       expect(ground().shouldRepaint(before), isTrue);
     });
 
@@ -224,7 +233,7 @@ void main() {
       expect(tester.hasRunningAnimations, isFalse);
     });
 
-    testWidgets('holds still for the length of a screen change', (
+    testWidgets('moves after a screen change, never during one', (
       tester,
     ) async {
       addTearDown(GlassMotion.resetForTest);
@@ -233,20 +242,27 @@ void main() {
         const MaterialApp(home: Scaffold(body: LiquidBackdrop())),
       );
       await tester.pump();
-      expect(tester.hasRunningAnimations, isTrue);
+
+      // At rest the ground is genuinely at rest -- this is an app that stays
+      // open for the length of a run.
+      expect(tester.hasRunningAnimations, isFalse);
 
       GlassMotion.begin();
       await tester.pump();
 
-      // The widest surface in the app, under every other one. A tick of the
-      // drift is a full-screen repaint that the nav's lens then has to re-read
-      // -- and a screen change is the worst frame in the app to spend that on.
-      // Nobody has ever seen a pool of colour creep under a 300ms transition.
+      // The widest surface in the app, under every other one. A tick of it is a
+      // full-screen repaint that the nav's lens then has to re-read -- and a
+      // screen change is the worst frame in the app to spend that on.
       expect(tester.hasRunningAnimations, isFalse);
 
+      // The far side of the transition is where it is free.
       GlassMotion.end();
       await tester.pump();
       expect(tester.hasRunningAnimations, isTrue);
+
+      // And it arrives, rather than running on.
+      await tester.pumpAndSettle();
+      expect(tester.hasRunningAnimations, isFalse);
     });
 
     test('no theme paints a ground that would cover it', () {
