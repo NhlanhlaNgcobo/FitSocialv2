@@ -81,6 +81,7 @@ class LiquidGlass extends StatefulWidget {
     this.refraction = 24,
     this.edge = 22,
     this.aberration = 0.55,
+    this.reflect = 0,
     this.light = const Offset(-0.55, -0.78),
     this.clip = true,
     this.tintScale = 1,
@@ -104,6 +105,24 @@ class LiquidGlass extends StatefulWidget {
 
   /// Per-channel spread at the lens edge, 0 to 1.
   final double aberration;
+
+  /// How much of the bevel is reflection rather than refraction.
+  ///
+  /// **Zero everywhere except the nav capsule, deliberately.** At zero the
+  /// shader's reflection terms multiply out and the material is exactly what
+  /// it was before they existed -- so every sheet and every card is
+  /// unaffected by them, and the one surface that asks for thickness is the
+  /// only one that pays for it.
+  ///
+  /// Above zero the rim starts returning the room instead of the feed,
+  /// weighted by Fresnel so it only happens where the surface turns. It also
+  /// brings in the broader second specular lobe and the meniscus on the unlit
+  /// side; all three scale together because they are one physical claim --
+  /// that the pane has a thickness, and that you are seeing its edge.
+  ///
+  /// Only meaningful with [lens] on. A painted pane has no bevel to reflect
+  /// anything with.
+  final double reflect;
 
   /// Where the light comes from, in the pane's own space with y pointing down.
   /// Defaults to above and slightly left, matching the rest of the app's
@@ -290,6 +309,14 @@ class _LiquidGlassState extends State<LiquidGlass> {
     // was doing the useful part anyway.
     final refraction = widget.refraction * (palette.isDark ? 1.0 : 0.6);
 
+    // The floor of the little environment the bevel reflects. [rim] is its sky.
+    final floor = palette.glassFloor;
+
+    // Pulled back on light for the same reason the sheen is: a cream pane has
+    // very little headroom above it, so a reflection at full strength stops
+    // reading as glass and starts reading as a grey smear along the edge.
+    final reflect = widget.reflect * (palette.isDark ? 1.0 : 0.55);
+
     final signature = Object.hash(
       widget.borderRadius,
       refraction,
@@ -298,6 +325,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
       widget.light,
       tint,
       Object.hash(rim, sheen, palette.isDark, widget.tintScale),
+      Object.hash(reflect, floor),
     );
     if (signature == _builtFrom && _filter != null) return;
 
@@ -324,7 +352,14 @@ class _LiquidGlassState extends State<LiquidGlass> {
       // Appended past the originals, so nothing above had to be renumbered.
       ..setFloat(16, rim.r)
       ..setFloat(17, rim.g)
-      ..setFloat(18, rim.b);
+      ..setFloat(18, rim.b)
+      // Appended again, after uRimColor, for the reason written above it: the
+      // engine lays uniforms out in declaration order, so anything inserted
+      // higher would silently renumber every float below it.
+      ..setFloat(19, reflect)
+      ..setFloat(20, floor.r)
+      ..setFloat(21, floor.g)
+      ..setFloat(22, floor.b);
 
     _filter = ui.ImageFilter.compose(
       outer: ui.ImageFilter.shader(shader),

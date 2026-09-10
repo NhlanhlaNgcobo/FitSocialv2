@@ -23,11 +23,30 @@ class PulseShareScaffold extends ConsumerStatefulWidget {
     required this.canvas,
     required this.buildDraft,
     this.captionHint = 'Say something about this',
+    this.canvasFillsFrame = false,
+    this.showGradientPicker = true,
     super.key,
   });
 
-  /// What sits in the middle of the frame.
-  final Widget canvas;
+  /// What sits in the middle of the frame — or, with [canvasFillsFrame], what
+  /// *is* the frame.
+  ///
+  /// Built from the gradient currently picked, so a canvas that paints its own
+  /// background stays in step with the palette below it.
+  final Widget Function(PulseGradient gradient) canvas;
+
+  /// Whether [canvas] paints its own background edge to edge.
+  ///
+  /// A shared post is a card centred on a gradient. A shared track is the
+  /// album art itself, filling the screen, and centring that inside padding
+  /// would frame the frame.
+  final bool canvasFillsFrame;
+
+  /// Whether the gradient palette is offered.
+  ///
+  /// Off for a canvas that covers the gradient completely: a colour nobody
+  /// will ever see is a control that does nothing.
+  final bool showGradientPicker;
 
   /// The draft to publish, given whatever the user typed and picked.
   final PulseDraft Function(String caption, String gradientKey) buildDraft;
@@ -133,6 +152,9 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
   }
 
   Widget _buildCanvas(double keyboardInset) {
+    final canvas = widget.canvas(_gradient);
+    if (widget.canvasFillsFrame) return canvas;
+
     return DecoratedBox(
       decoration: BoxDecoration(gradient: _gradient.linear),
       child: SafeArea(
@@ -148,7 +170,7 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
             bottom: keyboardInset > 0 ? 96 : 210,
           ),
           child: Center(
-            child: SingleChildScrollView(child: widget.canvas),
+            child: SingleChildScrollView(child: canvas),
           ),
         ),
       ),
@@ -200,11 +222,13 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
           // While the keyboard is up the palette and the button step out of
           // the way, the same as in the Pulse composer.
           if (!isTyping) ...[
-            const SizedBox(height: AppSpacing.md),
-            _GradientPicker(
-              selectedKey: _gradientKey,
-              onSelected: (key) => setState(() => _gradientKey = key),
-            ),
+            if (widget.showGradientPicker) ...[
+              const SizedBox(height: AppSpacing.md),
+              _GradientPicker(
+                selectedKey: _gradientKey,
+                onSelected: (key) => setState(() => _gradientKey = key),
+              ),
+            ],
             const SizedBox(height: AppSpacing.md),
             SizedBox(
               width: double.infinity,

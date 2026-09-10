@@ -12,7 +12,9 @@ import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/mention_text.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/post_gradient.dart';
+import '../../../shared/services/meal_card_exporter.dart';
 import '../../../shared/services/run_card_exporter.dart';
+import '../../../shared/widgets/meal_summary_card.dart';
 import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../application/content_providers.dart';
@@ -21,6 +23,7 @@ import '../domain/comment_threads.dart';
 import '../domain/shared_post.dart';
 import 'comments_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// A single post on its own page.
@@ -137,17 +140,24 @@ class _PostPageState extends ConsumerState<_PostPage> {
     final post = widget.post;
     final media = _MediaKind.of(post);
     final strip = _strip(post, media);
-    // Squared off to match the card this page actually shows, so the file is
-    // cropped the way the reader saw it.
     final runCard = media == _MediaKind.run
         ? RunCardExport(
             route: post.routePoints,
             distanceLabel: RunSummaryCard.distanceFrom(post.metricLabels),
             durationLabel: RunSummaryCard.durationFrom(post.metricLabels),
+            paceLabel: RunSummaryCard.paceFrom(post.metricLabels),
             background: post.imageUrl == null || post.imageUrl!.isEmpty
                 ? null
-                : NetworkImage(post.imageUrl!),
-            aspectRatio: 1,
+                : appPhoto(post.imageUrl!),
+          )
+        : null;
+    final mealCard = media == _MediaKind.meal
+        ? MealCardExport(
+            activity: post.activity,
+            mealData: post.mealData,
+            background: post.imageUrl == null || post.imageUrl!.isEmpty
+                ? null
+                : appPhoto(post.imageUrl!),
           )
         : null;
 
@@ -165,6 +175,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
           PostMenuButton(
             post: SharedPostRef.fromFeedPost(post),
             runCard: runCard,
+            mealCard: mealCard,
             // Nothing left to show once the post is gone.
             onDeleted: () => context.pop(),
           ),
@@ -210,6 +221,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
           PostInteractionRow(
             post: SharedPostRef.fromFeedPost(post),
             runCard: runCard,
+            mealCard: mealCard,
             likes: post.likes,
             comments: post.comments,
             // Aligns the glyphs with the page gutter — the icons carry 10px of
@@ -237,6 +249,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
 List<String> _strip(FeedPost post, _MediaKind media) {
   switch (media) {
     case _MediaKind.workout:
+    case _MediaKind.meal:
       return const [];
     case _MediaKind.run:
       final shown = {
@@ -257,6 +270,7 @@ enum _MediaKind {
   photo,
   run,
   workout,
+  meal,
 
   /// Words only — the caption becomes the hero instead.
   none;
@@ -278,6 +292,12 @@ enum _MediaKind {
     // exercises — the actual content of the post.
     if (post.workoutData != null || post.postType == PostType.workout) {
       return _MediaKind.workout;
+    }
+    // Gated on mealData rather than postType alone: a meal shared before the
+    // rings existed has no macros to draw and reads better as its plain photo
+    // than as a card of zeroes.
+    if (post.mealData != null) {
+      return _MediaKind.meal;
     }
     if (hasPhoto) return _MediaKind.photo;
     return _MediaKind.none;
@@ -379,19 +399,24 @@ class _MediaBlock extends StatelessWidget {
           route: post.routePoints,
           distanceLabel: RunSummaryCard.distanceFrom(post.metricLabels),
           durationLabel: RunSummaryCard.durationFrom(post.metricLabels),
+          paceLabel: RunSummaryCard.paceFrom(post.metricLabels),
           background: post.imageUrl == null || post.imageUrl!.isEmpty
               ? null
-              : NetworkImage(post.imageUrl!),
+              : appPhoto(post.imageUrl!),
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          // Squarer than the feed's card: on this page the run is the subject,
-          // not a thumbnail of one, so the shape gets more of the height.
-          aspectRatio: 1,
         );
       case _MediaKind.photo:
         return _Photo(post: post);
       case _MediaKind.workout:
         return WorkoutSummaryCard(
           workoutData: post.workoutData,
+          activity: post.activity,
+          backgroundImageUrl: post.imageUrl,
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        );
+      case _MediaKind.meal:
+        return MealSummaryCard(
+          mealData: post.mealData,
           activity: post.activity,
           backgroundImageUrl: post.imageUrl,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -430,8 +455,8 @@ class _Photo extends StatelessWidget {
               ),
             ),
           ),
-          Image.network(
-            post.imageUrl!,
+          Image(
+            image: appPhoto(post.imageUrl!),
             fit: BoxFit.cover,
             // Both fallbacks land on the dark gradient behind the photo, not
             // on the page, so they take the on-media register.

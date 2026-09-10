@@ -707,6 +707,78 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
+  Future<List<UserSearchResult>> fetchFollowList(
+    String userId,
+    FollowListKind kind,
+  ) async {
+    if (userId.isEmpty) return const [];
+
+    final edges = await usersCollection
+        .doc(userId)
+        .collection(kind.collectionName)
+        .limit(_maxFollowedAuthors)
+        .get();
+    if (edges.docs.isEmpty) return const [];
+
+    // Ordered here rather than in the query, for the same reason the feed
+    // sorts its chunks on device: `orderBy` drops documents that are missing
+    // the field, and an edge written without a timestamp would vanish from
+    // the list rather than sort badly. Newest first, nulls last.
+    final ids = [...edges.docs]
+      ..sort((a, b) {
+        final left = a.data()['createdAt'];
+        final right = b.data()['createdAt'];
+        if (left is! Timestamp && right is! Timestamp) return 0;
+        if (left is! Timestamp) return 1;
+        if (right is! Timestamp) return -1;
+        return right.compareTo(left);
+      });
+
+    final profiles = await _profilesByIds(
+      ids.map((doc) => doc.id).toList(growable: false),
+    );
+
+    // Back into edge order. A profile that no longer exists — a deleted
+    // account whose edges outlived it — is simply left out.
+    return [
+      for (final doc in ids)
+        if (profiles[doc.id] case final profile?) profile,
+    ];
+  }
+
+  /// Public profiles for [userIds], keyed by uid.
+  ///
+  /// Chunked at [_authorChunkSize], Firestore's ceiling on `whereIn`, and run
+  /// in parallel — the same shape as [_postsByAuthors], because it is the same
+  /// constraint.
+  Future<Map<String, UserSearchResult>> _profilesByIds(
+    List<String> userIds,
+  ) async {
+    if (userIds.isEmpty) return const {};
+
+    final futures = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
+    for (var i = 0; i < userIds.length; i += _authorChunkSize) {
+      futures.add(
+        usersCollection
+            .where(
+              FieldPath.documentId,
+              whereIn: userIds.skip(i).take(_authorChunkSize).toList(),
+            )
+            .get(),
+      );
+    }
+
+    final snapshots = await Future.wait(futures);
+    return {
+      for (final snapshot in snapshots)
+        for (final doc in snapshot.docs)
+          doc.id: FirestoreMapper.toUserSearchResult(
+            FirestoreUserRecord.fromMap(doc.id, doc.data()),
+          ),
+    };
+  }
+
+  @override
   Future<UserSearchResult?> fetchUserProfile(String userId) async {
     final snapshot = await usersCollection.doc(userId).get();
     if (!snapshot.exists) return null;
@@ -1526,6 +1598,7 @@ class FirestoreContentRepository implements ContentRepository {
       metricLabels: [
         '${draft.calories.trim()} kcal',
         '${draft.protein.trim()}g protein',
+        '${draft.carbs.trim()}g carbs',
         '${draft.fat.trim()}g fat',
       ],
       themeKey: 'graphite',
@@ -1533,6 +1606,15 @@ class FirestoreContentRepository implements ContentRepository {
       // happens to carry a photo, and nothing downstream can tell.
       postType: 'meal',
       imageUrl: draft.imageUrl,
+      // What MealSummaryCard draws its rings from. Kept alongside the string
+      // metrics above rather than replacing them — older surfaces still read
+      // metricLabels as plain text the same way a workout's do.
+      mealData: {
+        'calories': draft.calories.trim(),
+        'protein': draft.protein.trim(),
+        'carbs': draft.carbs.trim(),
+        'fat': draft.fat.trim(),
+      },
     );
     await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(mealsDelta: 1);
@@ -1654,6 +1736,7 @@ class FirestoreContentRepository implements ContentRepository {
     String postType = 'text',
     String? imageUrl,
     Map<String, dynamic>? workoutData,
+    Map<String, dynamic>? mealData,
     List<Map<String, double>> routePoints = const [],
     double? imageAspectRatio,
     List<TaggedUser> taggedUsers = const [],
@@ -1682,6 +1765,7 @@ class FirestoreContentRepository implements ContentRepository {
       postType: postType,
       imageUrl: imageUrl,
       workoutData: workoutData,
+      mealData: mealData,
       routePoints: RoutePoint.listFromFirestore(routePoints),
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
@@ -1720,6 +1804,7 @@ class FirestoreContentRepository implements ContentRepository {
       if (record.imageAspectRatio != null)
         'imageAspectRatio': record.imageAspectRatio,
       if (record.workoutData != null) 'workoutData': record.workoutData,
+      if (record.mealData != null) 'mealData': record.mealData,
       if (routePoints.isNotEmpty) 'routePoints': routePoints,
       if (record.taggedUsers.isNotEmpty)
         'taggedUsers': record.taggedUsers

@@ -7,6 +7,7 @@ import '../application/music_player_controller.dart';
 import '../application/music_providers.dart';
 import '../data/spotify_api_service.dart';
 import '../domain/music_brand.dart';
+import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// Pick something to play.
@@ -217,7 +218,10 @@ class _PlaylistRow extends StatelessWidget {
                               size: 22,
                             ),
                           )
-                        : Image.network(cover, fit: BoxFit.cover),
+                        : Image(
+                            image: appPhotoSized(context, cover, 48),
+                            fit: BoxFit.cover,
+                          ),
                   ),
                 ),
                 const SizedBox(width: 12),

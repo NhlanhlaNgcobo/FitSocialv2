@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import 'app_photo.dart';
 import 'liquid_glass.dart';
 
 /// A logged workout drawn as a tinted block: title, duration and calories, then
@@ -268,8 +269,8 @@ class WorkoutSummaryCard extends StatelessWidget {
             : Stack(
                 children: [
                   Positioned.fill(
-                    child: Image.network(
-                      backgroundImageUrl!,
+                    child: Image(
+                      image: appPhoto(backgroundImageUrl!),
                       fit: BoxFit.cover,
                       // A backdrop that fails to load must not take the
                       // workout's numbers down with it — fall back to the flat

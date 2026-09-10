@@ -55,6 +55,19 @@ abstract class ContentRepository {
   /// Followers / Following for [userId].
   Future<List<ProfileStat>> getProfileStats(String userId);
 
+  /// The people behind one side of [userId]'s follow graph, newest edge first.
+  ///
+  /// Only ever called for the signed-in user — who follows whom in detail is
+  /// the owner's business, and the security rules say the same thing. The
+  /// counts on a profile header stay public; this is the list behind them.
+  ///
+  /// Bounded rather than paged: the same ceiling the home feed reads the
+  /// follow graph under, which is what keeps one screen to a handful of reads.
+  Future<List<UserSearchResult>> fetchFollowList(
+    String userId,
+    FollowListKind kind,
+  );
+
   /// A single public profile, or null when no such user exists.
   Future<UserSearchResult?> fetchUserProfile(String userId);
 

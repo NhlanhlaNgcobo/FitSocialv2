@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme/app_palette.dart';
+import '../../../../shared/widgets/app_photo.dart';
 
 /// Cover art for the current track, with a fallback for the gap before one
 /// loads — or when the service hands back a track with no artwork.
@@ -46,8 +47,8 @@ class MusicAlbumArt extends StatelessWidget {
               gaplessPlayback: true,
               errorBuilder: (_, __, ___) => _placeholder(palette),
             ),
-          (_, final String link) => Image.network(
-              link,
+          (_, final String link) => Image(
+              image: appPhotoSized(context, link, size),
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => _placeholder(palette),
             ),

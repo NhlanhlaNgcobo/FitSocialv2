@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -41,17 +42,21 @@ Color runCardExportGround(AppPalette palette) =>
 /// map is a platform view, and a feed scrolling past a dozen runs was spinning
 /// up a dozen of them.
 ///
-/// With a [background] the line and the numbers sit on the user's photo under a
-/// scrim; without one they sit on the same themed gradient the workout card
-/// uses, so a run and a workout read as two of the same thing.
+/// With a [background] the line and the numbers sit directly on the user's
+/// photo — no scrim, no crop. The card takes the photo's own shape rather than
+/// forcing it into a fixed box, so a portrait shot stays portrait and a wide
+/// one stays wide, in the gallery export and in the feed alike. Without a
+/// photo it falls back to a square, sitting on the same themed gradient the
+/// workout card uses, so a run and a workout read as two of the same thing.
 class RunSummaryCard extends StatelessWidget {
   const RunSummaryCard({
     this.route = const [],
     this.distanceLabel,
     this.durationLabel,
+    this.paceLabel,
     this.background,
     this.margin = EdgeInsets.zero,
-    this.aspectRatio = 4 / 3,
+    this.aspectRatio,
     this.forExport = false,
     super.key,
   });
@@ -66,14 +71,24 @@ class RunSummaryCard extends StatelessWidget {
   /// "28:14", or "1:04:22" past the hour.
   final String? durationLabel;
 
+  /// "5:26 /km" on foot, "28.4 km/h" on a bike. Null drops the stat, same as
+  /// the other two.
+  final String? paceLabel;
+
   /// The photo behind the card. Null keeps the themed gradient.
   final ImageProvider? background;
 
   final EdgeInsetsGeometry margin;
 
-  /// Shape of the card. Wider than tall by default: a route is usually wider
-  /// than it is deep, and the numbers want a line of their own underneath.
-  final double aspectRatio;
+  /// Pins the card's shape instead of letting it find the photo's own ratio.
+  ///
+  /// Left null, the card is square with no photo, and takes on the photo's
+  /// real width/height the moment it decodes — the same shape [renderRunCardPng]
+  /// will write to the file, so nothing here ever forces a crop. Only the
+  /// exporter passes this: it has already decoded the photo before the card is
+  /// built and hands the measured ratio straight in, rather than asking the
+  /// card to resolve the same image a second time inside an offscreen overlay.
+  final double? aspectRatio;
 
   /// Draw the card for a file rather than for the screen.
   ///
@@ -112,6 +127,16 @@ class RunSummaryCard extends StatelessWidget {
     return null;
   }
 
+  /// The pace or speed from a run post's metric strip — the one label with a
+  /// slash in it, on foot or on a bike alike.
+  static String? paceFrom(List<String> metricLabels) {
+    for (final label in metricLabels) {
+      final value = label.trim();
+      if (value.contains('/')) return value;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
@@ -129,8 +154,9 @@ class RunSummaryCard extends StatelessWidget {
         // Inset by the border width so the photo stops at the inside edge of
         // the stroke rather than painting over it.
         borderRadius: BorderRadius.circular(19),
-        child: AspectRatio(
-          aspectRatio: aspectRatio,
+        child: _AutoAspectRatio(
+          background: background,
+          pinned: aspectRatio,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -141,14 +167,14 @@ class RunSummaryCard extends StatelessWidget {
               ),
               if (hasRoute)
                 Padding(
-                  // Keeps the line clear of the wordmark above it and the
-                  // numbers below, so the two never collide on a route that
-                  // happens to run into a corner.
+                  // Keeps the line clear of the branding chips in every
+                  // corner, so the two never collide on a route that happens
+                  // to run into one.
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.lg,
-                    42,
+                    44,
                     AppSpacing.lg,
-                    64,
+                    52,
                   ),
                   child: RouteSparkline(
                     route: route,
@@ -159,25 +185,33 @@ class RunSummaryCard extends StatelessWidget {
                 ),
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Same lockup and the same size as the one in the app bar,
-                    // so a run shared out of the app is signed the way the app
-                    // signs itself.
-                    FitSocialLogo(
-                      size: 15,
-                      animated: false,
-                      color: skin.wordmark,
-                    ),
-                    const Spacer(),
-                    _StatRow(
-                      distanceLabel: distanceLabel,
-                      durationLabel: durationLabel,
-                      skin: skin,
-                    ),
-                  ],
-                ),
+                child: onPhoto
+                    ? _PhotoBranding(
+                        skin: skin,
+                        distanceLabel: distanceLabel,
+                        durationLabel: durationLabel,
+                        paceLabel: paceLabel,
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Same lockup and the same size as the one in the
+                          // app bar, so a run shared out of the app is signed
+                          // the way the app signs itself.
+                          FitSocialLogo(
+                            size: 15,
+                            animated: false,
+                            color: skin.wordmark,
+                          ),
+                          const Spacer(),
+                          _StatRow(
+                            distanceLabel: distanceLabel,
+                            durationLabel: durationLabel,
+                            paceLabel: paceLabel,
+                            skin: skin,
+                          ),
+                        ],
+                      ),
               ),
             ],
           ),
@@ -187,7 +221,105 @@ class RunSummaryCard extends StatelessWidget {
   }
 }
 
-/// The photo under its scrim, or the themed gradient that stands in for one.
+/// Wraps [child] in an [AspectRatio] sized to [pinned] when given, or to
+/// [background]'s own decoded width/height otherwise.
+///
+/// A photo starts this at 1 — the same shape the card falls back to with no
+/// photo at all — and reflows once, the moment the image resolves. Flutter
+/// resolves an [ImageProvider] through one shared cache keyed by the provider
+/// itself, so this costs nothing extra when [_Backdrop] is already decoding
+/// the same photo to paint it: both listeners ride the one decode.
+class _AutoAspectRatio extends StatefulWidget {
+  const _AutoAspectRatio({
+    required this.background,
+    required this.pinned,
+    required this.child,
+  });
+
+  final ImageProvider? background;
+  final double? pinned;
+  final Widget child;
+
+  @override
+  State<_AutoAspectRatio> createState() => _AutoAspectRatioState();
+}
+
+class _AutoAspectRatioState extends State<_AutoAspectRatio> {
+  double _resolved = 1;
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AutoAspectRatio oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.background == oldWidget.background &&
+        widget.pinned == oldWidget.pinned) {
+      return;
+    }
+    _unsubscribe();
+    _resolved = 1;
+    _subscribe();
+  }
+
+  /// No-op when the ratio is pinned or there is no photo to measure — the
+  /// card already knows its shape without decoding anything.
+  void _subscribe() {
+    final background = widget.background;
+    if (widget.pinned != null || background == null) return;
+
+    final stream = background.resolve(const ImageConfiguration());
+    final listener = ImageStreamListener(
+      (info, synchronousCall) {
+        final width = info.image.width;
+        final height = info.image.height;
+        if (height == 0) return;
+        final ratio = width / height;
+        if (synchronousCall) {
+          // Resolving during build (a cache hit) must not call setState
+          // before the first frame has even built.
+          _resolved = ratio;
+        } else if (mounted) {
+          setState(() => _resolved = ratio);
+        }
+      },
+      // A photo that fails to load keeps the square fallback — [_Backdrop]
+      // is the one that shows the user something went wrong.
+      onError: (_, __) {},
+    );
+    stream.addListener(listener);
+    _stream = stream;
+    _listener = listener;
+  }
+
+  void _unsubscribe() {
+    final stream = _stream;
+    final listener = _listener;
+    if (stream != null && listener != null) stream.removeListener(listener);
+    _stream = null;
+    _listener = null;
+  }
+
+  @override
+  void dispose() {
+    _unsubscribe();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio =
+        widget.pinned ?? (widget.background == null ? 1.0 : _resolved);
+    return AspectRatio(aspectRatio: ratio, child: widget.child);
+  }
+}
+
+/// The photo, or the themed gradient that stands in for one.
 class _Backdrop extends StatelessWidget {
   const _Backdrop({
     required this.background,
@@ -218,6 +350,10 @@ class _Backdrop extends StatelessWidget {
       );
     }
 
+    // No scrim: the card is already sized to the photo's own shape, so
+    // BoxFit.cover never crops it — cover and contain agree exactly once the
+    // box is the photo's own ratio. The branding below carries its own
+    // contrast plate instead of darkening the picture to get it.
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -231,50 +367,188 @@ class _Backdrop extends StatelessWidget {
           // with it — fall back to the flat tint and carry on.
           errorBuilder: (_, __, ___) => ColoredBox(color: skin.photoFallback),
         ),
-        // Darkest at the two edges the text lives on, lightest across the
-        // middle where the line is — the line brings its own contrast, and a
-        // flat scrim over the whole photo would only mute it.
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0x8C050505), Color(0x30050505), Color(0xCC050505)],
-              stops: [0, 0.45, 1],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
       ],
     );
   }
 }
 
-/// Distance and time, side by side and hung from the bottom-left corner.
-class _StatRow extends StatelessWidget {
-  const _StatRow({
+/// The wordmark and the three stats, each in its own small frosted plate:
+/// wordmark alone top-left, then distance, pace and time along the bottom
+/// edge — distance at the left, time at the right, pace between the two.
+/// Nothing darkens the photo itself — each plate carries its own contrast, so
+/// the picture stays fully visible everywhere else.
+class _PhotoBranding extends StatelessWidget {
+  const _PhotoBranding({
+    required this.skin,
     required this.distanceLabel,
     required this.durationLabel,
-    required this.skin,
+    required this.paceLabel,
   });
 
+  final _RunSkin skin;
   final String? distanceLabel;
   final String? durationLabel;
-  final _RunSkin skin;
+  final String? paceLabel;
 
   @override
   Widget build(BuildContext context) {
     final distance = distanceLabel?.trim();
     final duration = durationLabel?.trim();
+    final pace = paceLabel?.trim();
+
+    return Stack(
+      children: [
+        Align(
+          alignment: Alignment.topLeft,
+          child: _Chip(
+            skin: skin,
+            child: FitSocialLogo(
+              size: 15,
+              animated: false,
+              color: skin.wordmark,
+            ),
+          ),
+        ),
+        if (distance != null && distance.isNotEmpty)
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: _Chip(
+              skin: skin,
+              child: _CompactStat(value: distance, skin: skin),
+            ),
+          ),
+        if (pace != null && pace.isNotEmpty)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _Chip(
+              skin: skin,
+              child: _CompactStat(value: pace, skin: skin),
+            ),
+          ),
+        if (duration != null && duration.isNotEmpty)
+          Align(
+            alignment: Alignment.bottomRight,
+            child: _Chip(
+              skin: skin,
+              child: _CompactStat(value: duration, skin: skin),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A small frosted-glass plate: the same trick a photo's caption sticker
+/// uses, borrowed here so the branding never needs to darken the picture
+/// under it to stay legible.
+class _Chip extends StatelessWidget {
+  const _Chip({required this.skin, required this.child});
+
+  final _RunSkin skin;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+          decoration: BoxDecoration(
+            color: skin.chipFill,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: skin.chipBorder),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Splits "5.20 km" into its number and its unit so the unit can be set
+/// smaller. A value with no unit — a time — comes back whole.
+(String, String?) _splitValue(String value) {
+  final gap = value.lastIndexOf(' ');
+  if (gap <= 0) return (value, null);
+  return (value.substring(0, gap), value.substring(gap + 1));
+}
+
+/// One measurement, on one line, sized to sit inside a [_Chip] rather than a
+/// whole corner of the card.
+class _CompactStat extends StatelessWidget {
+  const _CompactStat({required this.value, required this.skin});
+
+  final String value;
+  final _RunSkin skin;
+
+  @override
+  Widget build(BuildContext context) {
+    final (number, unit) = _splitValue(value);
+
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: number),
+          if (unit != null)
+            TextSpan(
+              text: ' $unit',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: skin.muted,
+              ),
+            ),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: skin.text,
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+        height: 1,
+        letterSpacing: -0.3,
+      ),
+    );
+  }
+}
+
+/// Distance, pace and time, side by side and hung from the bottom-left
+/// corner.
+///
+/// Only ever drawn on the themed gradient — a photo uses [_PhotoBranding]'s
+/// corner chips instead, so this keeps the plain-text look the workout card's
+/// stats already have.
+class _StatRow extends StatelessWidget {
+  const _StatRow({
+    required this.distanceLabel,
+    required this.durationLabel,
+    required this.paceLabel,
+    required this.skin,
+  });
+
+  final String? distanceLabel;
+  final String? durationLabel;
+  final String? paceLabel;
+  final _RunSkin skin;
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = [
+      (label: 'Distance', value: distanceLabel?.trim()),
+      (label: 'Pace', value: paceLabel?.trim()),
+      (label: 'Time', value: durationLabel?.trim()),
+    ].where((stat) => stat.value != null && stat.value!.isNotEmpty).toList();
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        if (distance != null && distance.isNotEmpty)
-          _Stat(label: 'Distance', value: distance, skin: skin),
-        if (distance != null && duration != null)
-          const SizedBox(width: AppSpacing.lg),
-        if (duration != null && duration.isNotEmpty)
-          _Stat(label: 'Time', value: duration, skin: skin),
+        for (var i = 0; i < stats.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.lg),
+          _Stat(label: stats[i].label, value: stats[i].value!, skin: skin),
+        ],
       ],
     );
   }
@@ -288,17 +562,9 @@ class _Stat extends StatelessWidget {
   final String value;
   final _RunSkin skin;
 
-  /// Splits "5.20 km" into its number and its unit so the unit can be set
-  /// smaller. A value with no unit — a time — comes back whole.
-  static (String, String?) _split(String value) {
-    final gap = value.lastIndexOf(' ');
-    if (gap <= 0) return (value, null);
-    return (value.substring(0, gap), value.substring(gap + 1));
-  }
-
   @override
   Widget build(BuildContext context) {
-    final (number, unit) = _split(value);
+    final (number, unit) = _splitValue(value);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,7 +593,6 @@ class _Stat extends StatelessWidget {
             fontWeight: FontWeight.w800,
             height: 1,
             letterSpacing: -0.8,
-            shadows: skin.textShadows,
           ),
         ),
         const SizedBox(height: 4),
@@ -338,7 +603,6 @@ class _Stat extends StatelessWidget {
             fontSize: 10,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.2,
-            shadows: skin.textShadows,
           ),
         ),
       ],
@@ -361,7 +625,8 @@ class _RunSkin {
     required this.border,
     required this.photoFallback,
     required this.ground,
-    required this.textShadows,
+    required this.chipFill,
+    required this.chipBorder,
   });
 
   factory _RunSkin.resolve(AppPalette palette, {required bool onPhoto}) {
@@ -375,7 +640,9 @@ class _RunSkin {
         border: palette.stroke,
         photoFallback: palette.surfaceHigh,
         ground: runCardExportGround(palette),
-        textShadows: const [],
+        // Unused on the themed gradient — nothing there sits in a [_Chip].
+        chipFill: Colors.transparent,
+        chipBorder: Colors.transparent,
       );
     }
 
@@ -386,11 +653,8 @@ class _RunSkin {
       border: Color(0x38F7F7F7),
       photoFallback: Color(0xFF1E1E1E),
       ground: Color(0xFF1E1E1E),
-      // The scrim handles most photos; this is what carries the numbers across
-      // the one that is bright exactly where they sit.
-      textShadows: [
-        Shadow(color: Color(0x73050505), blurRadius: 12, offset: Offset(0, 3)),
-      ],
+      chipFill: Color(0x66050505),
+      chipBorder: Color(0x29F7F7F7),
     );
   }
 
@@ -409,5 +673,8 @@ class _RunSkin {
   /// screen, where the card is transparent by design.
   final Color ground;
 
-  final List<Shadow> textShadows;
+  /// Fill and border of the frosted plate each branding chip sits in, over a
+  /// photo.
+  final Color chipFill;
+  final Color chipBorder;
 }

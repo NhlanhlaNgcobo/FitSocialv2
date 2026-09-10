@@ -11,14 +11,16 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/reactions/fit_reaction.dart';
+import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/reaction_bar.dart';
 import '../../../shared/widgets/shared_post_card.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
-import 'pulse_music_card.dart';
+import 'pulse_music_frame.dart';
 import 'pulse_comments_sheet.dart';
 import 'pulse_reactions_sheet.dart';
+import 'pulse_photo_frame.dart';
 import 'pulse_text.dart';
 import 'pulse_viewers_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -156,7 +158,7 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
       // Hold the timer until the photo is actually decoded, so a slow
       // connection doesn't spend the five seconds showing a blank frame.
       try {
-        await precacheImage(NetworkImage(segment.mediaUrl!), context)
+        await precacheImage(appPhoto(segment.mediaUrl!), context)
             .timeout(const Duration(seconds: 8));
       } catch (_) {
         // Show whatever the image widget can manage and move on.
@@ -191,16 +193,37 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
     _precacheNext();
   }
 
-  /// Warms the next segment's photo while this one plays, so advancing lands
-  /// on an image that is already decoded.
+  /// Warms everything reachable from this frame while it plays, so the next
+  /// move lands on a photo that is already decoded.
+  ///
+  /// Two destinations, because there are two gestures. A tap advances within
+  /// the author; a sideways swipe turns to the next person. Warming only the
+  /// first left every swipe to a new author fetching from cold — and that is
+  /// the move most likely to *be* cold, since one person's segments are
+  /// usually a single upload and land in the cache together.
   void _precacheNext() {
     final entry = _currentEntry;
     if (entry == null) return;
-    if (_segmentIndex + 1 >= entry.segments.length) return;
 
-    final next = entry.segments[_segmentIndex + 1];
-    if (next.type != PulseMediaType.photo || !next.hasMedia) return;
-    precacheImage(NetworkImage(next.mediaUrl!), context).catchError((_) {});
+    if (_segmentIndex + 1 < entry.segments.length) {
+      _warm(entry.segments[_segmentIndex + 1]);
+    }
+
+    if (_entryIndex + 1 >= _entries.length) return;
+    final next = _entries[_entryIndex + 1];
+    // Where a swipe would actually land — the same cursor _onPageChanged uses,
+    // not the top of the ring.
+    _warm(
+      next.segments[next.firstUnseenIndex.clamp(0, next.segments.length - 1)],
+    );
+  }
+
+  /// Pulls [segment]'s photo into the image cache ahead of time. Failures are
+  /// dropped: a warm that never arrives costs nothing, because the frame that
+  /// needs it fetches it itself.
+  void _warm(PulseSegment segment) {
+    if (segment.type != PulseMediaType.photo || !segment.hasMedia) return;
+    precacheImage(appPhoto(segment.mediaUrl!), context).catchError((_) {});
   }
 
   void _onVideoTick() {
@@ -724,20 +747,20 @@ class _PulseFrame extends StatelessWidget {
         );
 
       case PulseMediaType.photo:
-        return ColoredBox(
-          color: AppColors.mediaBackdrop,
-          child: segment.hasMedia
-              ? Image.network(
-                  segment.mediaUrl!,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                  errorBuilder: (_, __, ___) =>
-                      const _FrameMessage(label: 'This photo is unavailable.'),
-                  loadingBuilder: (_, child, progress) =>
-                      progress == null ? child : const _FrameSpinner(),
-                )
-              : const _FrameMessage(label: 'This Pulse is unavailable.'),
+        if (!segment.hasMedia) {
+          return const ColoredBox(
+            color: AppColors.mediaBackdrop,
+            child: _FrameMessage(label: 'This Pulse is unavailable.'),
+          );
+        }
+        // Shown whole, at whatever shape it was taken in, on a blurred copy of
+        // itself where it does not reach the edges of the screen.
+        return PulsePhotoFrame(
+          image: appPhoto(segment.mediaUrl!),
+          errorBuilder: (_, __, ___) =>
+              const _FrameMessage(label: 'This photo is unavailable.'),
+          loadingBuilder: (_, child, progress) =>
+              progress == null ? child : const _FrameSpinner(),
         );
 
       case PulseMediaType.music:
@@ -750,22 +773,9 @@ class _PulseFrame extends StatelessWidget {
             child: const _FrameMessage(label: 'This Pulse is unavailable.'),
           );
         }
-        return DecoratedBox(
-          decoration: BoxDecoration(gradient: segment.gradient.linear),
-          child: SafeArea(
-            child: Padding(
-              // Clears the header above and the reaction bar below, so the
-              // sticker centres in the frame rather than under the chrome.
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                96,
-                AppSpacing.lg,
-                168,
-              ),
-              child: Center(child: PulseMusicCard(music: music)),
-            ),
-          ),
-        );
+        // Full-bleed: the cover art is the frame, not a card floating on a
+        // gradient. The gradient is what it falls back to with no art to show.
+        return PulseMusicFrame(music: music, gradient: segment.gradient);
 
       case PulseMediaType.post:
         final post = segment.sharedPost;

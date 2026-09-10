@@ -9,6 +9,7 @@ import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 import 'macro_goals_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// The colour each macro keeps, on the summary bars and on the meal rows.
@@ -687,8 +688,8 @@ class _MealThumbnail extends StatelessWidget {
     );
   }
 
-  Widget _photo(String url) => Image.network(
-        url,
+  Widget _photo(String url) => Image(
+        image: appPhoto(url),
         fit: BoxFit.cover,
         // A thumbnail that will not load must not cost the row its macros. The
         // bed underneath is left showing, so the row keeps its shape either

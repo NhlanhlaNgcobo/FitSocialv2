@@ -27,6 +27,10 @@ dependencies:
   # Platform-agnostic file handle. XFile.readAsBytes() works on mobile and web
   # alike, which lets uploads use putData instead of dart:io's File.
   cross_file: ^0.3.5
+  # Disk cache for remote photos. Flutter's built-in image cache is memory-only
+  # and dies with the process, so without this every photo is re-downloaded on
+  # each cold start. See shared/widgets/app_photo.dart.
+  cached_network_image: ^3.4.1
   # Used by ble_heart_rate_service.dart for device identifiers.
   uuid: ^4.5.1
   flutter_riverpod: ^2.5.1
@@ -56,6 +60,12 @@ dependencies:
   crypto: ^3.0.7
   http: ^1.6.0
   image_cropper: ^12.2.1
+  # JPEG encoding for the framed Pulse photo. Flutter's own toByteData only
+  # emits PNG, and a full-screen photographic PNG runs to several megabytes —
+  # too much to push through a story upload. Pure Dart on purpose: a native
+  # compressor would add another Android build surface to a Gradle setup that
+  # has already cost us enough.
+  image: ^4.5.4
   # Pulse playback: video segments in the viewer and the composer preview.
   video_player: ^2.9.2
   # Renders the Spotify / Apple Music / YouTube Music marks from their official

@@ -24,6 +24,7 @@ class RunBackgroundSection extends StatelessWidget {
     this.route = const [],
     this.distanceLabel,
     this.durationLabel,
+    this.paceLabel,
     super.key,
   });
 
@@ -39,6 +40,7 @@ class RunBackgroundSection extends StatelessWidget {
 
   final String? distanceLabel;
   final String? durationLabel;
+  final String? paceLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +58,7 @@ class RunBackgroundSection extends StatelessWidget {
           route: route,
           distanceLabel: distanceLabel,
           durationLabel: durationLabel,
+          paceLabel: paceLabel,
           background: path == null ? null : localBackgroundImage(path),
         ),
         const SizedBox(height: AppSpacing.sm),

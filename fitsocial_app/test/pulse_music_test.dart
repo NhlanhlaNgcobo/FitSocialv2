@@ -9,7 +9,9 @@ import 'package:fitsocial_app/features/music/data/pkce_oauth_client.dart';
 import 'package:fitsocial_app/features/music/data/spotify_api_service.dart';
 import 'package:fitsocial_app/features/pulse/domain/pulse_models.dart';
 import 'package:fitsocial_app/features/pulse/domain/pulse_music.dart';
-import 'package:fitsocial_app/features/pulse/presentation/pulse_music_card.dart';
+import 'package:fitsocial_app/features/pulse/presentation/pulse_music_frame.dart';
+import 'package:fitsocial_app/features/pulse/presentation/pulse_photo_frame.dart';
+import 'package:fitsocial_app/shared/widgets/liquid_glass.dart';
 import 'package:fitsocial_app/features/pulse/presentation/share_music_to_pulse_screen.dart';
 
 const _track = PulseMusic(
@@ -68,7 +70,12 @@ Future<void> pumpCard(
       ],
       child: MaterialApp(
         theme: AppTheme.darkTheme,
-        home: Scaffold(body: PulseMusicCard(music: music)),
+        home: Scaffold(
+          body: PulseMusicFrame(
+            music: music,
+            gradient: PulseGradient.ember,
+          ),
+        ),
       ),
     ),
   );
@@ -216,7 +223,9 @@ void main() {
 
       expect(find.text('LISTENING TO'), findsOneWidget);
       expect(find.text('Bad Habits'), findsOneWidget);
-      expect(find.text('Ed Sheeran · Spotify'), findsOneWidget);
+      // The artist alone: the service is named by the eyebrow above the
+      // cover, and printing it twice on one sticker reads as a stutter.
+      expect(find.text('Ed Sheeran'), findsOneWidget);
     });
 
     // Playback runs against the account on the viewer's device, so someone
@@ -274,6 +283,33 @@ void main() {
       expect(find.byIcon(Icons.music_note_rounded), findsOneWidget);
       expect(find.byType(Image), findsNothing);
     });
+
+    // The whole point of the layout: the album art is the frame, not a
+    // thumbnail on a card floating over a gradient.
+    testWidgets('the cover art is the background', (tester) async {
+      await pumpCard(tester, _track);
+
+      expect(find.byType(PulseBlurredBackdrop), findsOneWidget);
+    });
+
+    // With nothing to fill the frame with, the Pulse gradient is what is left
+    // — a blurred backdrop of no image would be a blank grey screen.
+    testWidgets('a track with no art falls back to the gradient',
+        (tester) async {
+      await pumpCard(tester, _uncoveredTrack);
+
+      expect(find.byType(PulseBlurredBackdrop), findsNothing);
+    });
+
+    testWidgets('the control under the track is glass', (tester) async {
+      await pumpCard(tester, _track);
+
+      // Orange is the app's brand fill, and a slab of it over album art fights
+      // the artwork it is sitting on.
+      expect(find.text('Connect Spotify'), findsOneWidget);
+      expect(find.byType(LiquidGlass), findsOneWidget);
+      expect(find.byType(FilledButton), findsNothing);
+    });
   });
 
   // App Remote — the path that actually plays the music — reports cover art as
@@ -312,7 +348,9 @@ void main() {
       await pumpShareScreen(tester, spotify, _uncoveredTrack);
 
       expect(spotify.lookups, [_uncoveredTrack.trackUri]);
-      expect(find.byType(Image), findsOneWidget);
+      // Two: the cover now does both jobs, sharp in the middle of the frame
+      // and blurred behind it.
+      expect(find.byType(Image), findsNWidgets(2));
     });
 
     testWidgets('does not look one up when the track already has a cover',

@@ -22,6 +22,7 @@ import '../../features/challenges/presentation/challenge_tracker_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
 import '../../features/main/presentation/achievements_screen.dart';
 import '../../features/main/presentation/bmi_screen.dart';
+import '../../features/main/presentation/connections_screen.dart';
 import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/home_screen.dart';
@@ -210,6 +211,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      // Your followers and the people you follow.
+      //
+      // No user id in the path, deliberately: this page only ever shows the
+      // signed-in user's own two lists, and a route that took an id would be
+      // an invitation to open somebody else's. Which tab opens first is a
+      // presentation detail, so it rides in the query string.
+      GoRoute(
+        path: '/connections',
+        builder: (context, state) => ConnectionsScreen(
+          initialKind: FollowListKindX.fromRouteTab(
+            state.uri.queryParameters['tab'],
+          ),
+        ),
       ),
       // Someone else's profile. Outside the shell on purpose: it is a
       // destination you come back from, not one of the five tabs.

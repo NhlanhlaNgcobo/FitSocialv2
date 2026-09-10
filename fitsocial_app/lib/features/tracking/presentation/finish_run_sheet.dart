@@ -47,6 +47,7 @@ Future<FinishRunChoice> showFinishRunSheet({
   required List<RoutePoint> route,
   required String distanceLabel,
   required String durationLabel,
+  String? paceLabel,
   bool saveToDrafts = false,
 }) async {
   final choice = await showModalBottomSheet<FinishRunChoice>(
@@ -59,6 +60,7 @@ Future<FinishRunChoice> showFinishRunSheet({
       route: route,
       distanceLabel: distanceLabel,
       durationLabel: durationLabel,
+      paceLabel: paceLabel,
       saveToDrafts: saveToDrafts,
     ),
   );
@@ -70,12 +72,14 @@ class _FinishRunSheet extends StatefulWidget {
     required this.route,
     required this.distanceLabel,
     required this.durationLabel,
+    required this.paceLabel,
     required this.saveToDrafts,
   });
 
   final List<RoutePoint> route;
   final String distanceLabel;
   final String durationLabel;
+  final String? paceLabel;
   final bool saveToDrafts;
 
   @override
@@ -162,6 +166,7 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                   route: widget.route,
                   distanceLabel: widget.distanceLabel,
                   durationLabel: widget.durationLabel,
+                  paceLabel: widget.paceLabel,
                   onPick: _pickBackground,
                   onRemove: () => setState(() => _backgroundPath = null),
                 ),
@@ -174,6 +179,7 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                       route: widget.route,
                       distanceLabel: widget.distanceLabel,
                       durationLabel: widget.durationLabel,
+                      paceLabel: widget.paceLabel,
                       background: _backgroundPath == null
                           ? null
                           : localBackgroundImage(_backgroundPath!),

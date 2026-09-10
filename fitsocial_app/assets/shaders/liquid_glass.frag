@@ -5,6 +5,11 @@
 // at the rim and falling to nothing through the middle, which is what reads as
 // physical thickness rather than fog.
 //
+// On top of the bend there is a reflection. That is the half that makes a pane
+// read as *thick*: real glass shows you what is behind it and what is in front
+// of it at the same time, and the ratio between the two is decided by viewing
+// angle. See the Fresnel block in main().
+//
 // Bound through ImageFilter.shader, which fixes two things about this file:
 // uSize must be the first uniform (the engine writes the bound texture's size
 // into it), and the first sampler2D is the filter input (the engine binds the
@@ -54,6 +59,21 @@ uniform float uSheen;
 // so appending here leaves every existing float index where it was; inserting
 // above would silently shift all of them.
 uniform vec3 uRimColor;
+
+// How much of the pane is reflection rather than refraction, at its most
+// oblique. Zero is the old material: a lens with a lit edge. Push it up and the
+// bevel starts showing you the room instead of the feed, which is what glass
+// with depth actually does.
+//
+// Appended after uRimColor for the same reason uRimColor was appended after
+// everything else. Do not insert above.
+uniform float uReflect;
+
+// The dark half of what the pane reflects -- the floor, in the little
+// environment the bevel is standing in. uRimColor is the other half, the sky.
+// Together they are the whole world this glass can see: bright above, dark
+// below, which on a phone held upright is very nearly true.
+uniform vec3 uFloorColor;
 
 uniform sampler2D uBackdrop;
 
@@ -114,6 +134,30 @@ void main() {
 
   col = mix(col, uTintColor, uTint);
 
+  // The surface itself. Flat through the middle, turning hard as it approaches
+  // the rim -- this one vector drives the reflection, the specular and the
+  // meniscus below, which is why all three agree about where the bevel is.
+  vec3 N = normalize(vec3(n * bend * 1.6, 1.0));
+  vec3 L = normalize(vec3(uLight, 0.65));
+  vec3 V = vec3(0.0, 0.0, 1.0);
+
+  // Fresnel. Looking straight down at flat glass you see almost entirely what
+  // is behind it; looking along its surface you see almost entirely what is in
+  // front. On a pane lying flat on a screen the only place the eye gets an
+  // oblique angle is the bevel, so this is what makes the rim of the capsule
+  // read as a rolled edge with material in it rather than as a drawn outline.
+  float fres = pow(1.0 - abs(N.z), 3.0);
+
+  // What the bevel reflects. R.y is negative where the surface tips toward the
+  // top of the screen, so the upper bevel picks up uRimColor and the lower one
+  // picks up uFloorColor -- bright above, dark below. That asymmetry is the
+  // entire read of thickness: a pane lit evenly all the way round looks like a
+  // sticker.
+  vec3 R = reflect(-V, N);
+  float sky = clamp(0.5 - R.y * 0.5, 0.0, 1.0);
+  vec3 env = mix(uFloorColor, uRimColor, sky * sky);
+  col = mix(col, env, clamp(fres * uReflect, 0.0, 1.0));
+
   // Specular: the pane's surface turns hardest at the rim, so that is where it
   // catches the light.
   //
@@ -123,16 +167,31 @@ void main() {
   // highlight either vanishes or smears out. A mix cannot overshoot its target,
   // so the same two lines give a white edge on dark and a dark hairline on
   // light purely by what colour they are handed.
-  vec3 N = normalize(vec3(n * bend * 1.6, 1.0));
-  vec3 L = normalize(vec3(uLight, 0.65));
   float spec = pow(max(dot(N, L), 0.0), 28.0);
   col = mix(col, uRimColor, clamp(spec * (0.3 + 0.7 * bend) * uSheen, 0.0, 1.0));
+
+  // A second, much broader lobe. The tight one above is a glint; this is the
+  // soft sheet of light that lies along a thick edge and gives it length. Two
+  // lobes at different widths is most of the difference between plastic and
+  // glass.
+  float sheet = pow(max(dot(N, L), 0.0), 5.0);
+  col = mix(col, uRimColor, clamp(sheet * bend * 0.30 * uSheen * uReflect,
+                                  0.0, 1.0));
 
   // The lit rim: a hairline at the boundary, strongest where it faces the light
   // and fading away where it turns from it.
   float line = 1.0 - smoothstep(0.0, 1.6, abs(d));
   float lit = 0.35 + 0.65 * max(dot(n, uLight), 0.0);
   col = mix(col, uRimColor, clamp(line * lit * 0.85 * uSheen, 0.0, 1.0));
+
+  // The meniscus. Directly opposite the lit rim, just inside the boundary, the
+  // glass pools dark -- the shadow its own thickness casts. Without it the pane
+  // is lit on one side and simply absent on the other, and the eye reads that
+  // as a highlight painted on a flat shape rather than as a solid with two
+  // sides to it.
+  float away = max(-dot(n, uLight), 0.0);
+  col = mix(col, uFloorColor,
+            clamp(line * away * 0.45 * uReflect, 0.0, 1.0));
 
   fragColor = vec4(col, 1.0);
 }

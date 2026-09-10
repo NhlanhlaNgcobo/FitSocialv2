@@ -6,6 +6,7 @@ import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/activity_kind.dart';
 import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/explore_models.dart';
+import 'app_photo.dart';
 import 'route_sparkline.dart';
 
 /// What kind of post a tile is showing. Drives the glyph and what the body
@@ -399,14 +400,19 @@ class _PostPhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) =>
-          MediaPlaceholder(borderRadius: borderRadius, failed: true),
-      loadingBuilder: (_, child, progress) => progress == null
-          ? child
-          : MediaPlaceholder(borderRadius: borderRadius),
+    // Decoded to the cell, not to the 1080px the photo is stored at. A grid
+    // holds a dozen of these on screen at once, and at full size a single
+    // screenful of them fills Flutter's entire decoded-image budget.
+    return LayoutBuilder(
+      builder: (context, constraints) => Image(
+        image: appPhotoSized(context, url, constraints.maxWidth),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            MediaPlaceholder(borderRadius: borderRadius, failed: true),
+        loadingBuilder: (_, child, progress) => progress == null
+            ? child
+            : MediaPlaceholder(borderRadius: borderRadius),
+      ),
     );
   }
 }

@@ -89,11 +89,13 @@ void main() {
       await pumpCard(tester, backgroundUrl: 'https://example.com/park.jpg');
 
       expect(_backdrop, findsOneWidget);
-      // The whole point: the run survives the photo.
+      // The whole point: the run survives the photo. Over a photo the two
+      // numbers sit in their own corner chips rather than a labelled block,
+      // so this checks for the values rather than "DISTANCE"/"TIME".
       expect(find.byType(RouteSparkline), findsOneWidget);
       expect(find.byType(FitSocialLogo), findsOneWidget);
-      expect(find.text('DISTANCE'), findsOneWidget);
-      expect(find.text('TIME'), findsOneWidget);
+      expect(find.text('5.20 km'), findsOneWidget);
+      expect(find.text('28:14'), findsOneWidget);
     });
 
     testWidgets('a manually entered run has no line to draw', (tester) async {
@@ -112,7 +114,7 @@ void main() {
     testWidgets('keeps its numbers light over a photo in either theme',
         (tester) async {
       Color labelColour() =>
-          tester.widget<Text>(find.text('DISTANCE')).style!.color!;
+          tester.widget<Text>(find.text('5.20 km')).style!.color!;
 
       await pumpCard(
         tester,
@@ -153,7 +155,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.byType(RouteSparkline), findsOneWidget);
-      expect(find.text('DISTANCE'), findsOneWidget);
+      expect(find.text('5.20 km'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

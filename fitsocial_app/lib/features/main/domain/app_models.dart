@@ -81,6 +81,7 @@ class FeedPost {
     this.postType = PostType.text,
     this.imageUrl,
     this.workoutData,
+    this.mealData,
     this.routePoints = const [],
     this.authorAvatarUrl,
     this.imageAspectRatio,
@@ -117,6 +118,10 @@ class FeedPost {
   final PostType postType;
   final String? imageUrl;
   final Map<String, dynamic>? workoutData;
+
+  /// The meal's calories, protein, carbs and fat, as logged. Null on every
+  /// post that isn't a meal, and on meals shared before this was recorded.
+  final Map<String, dynamic>? mealData;
 
   /// Completed run route, for the map preview on run posts. Empty on every
   /// other post type.
@@ -174,6 +179,7 @@ class FeedPost {
       postType: postType,
       imageUrl: imageUrl,
       workoutData: workoutData,
+      mealData: mealData,
       routePoints: routePoints,
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
@@ -198,6 +204,7 @@ class FeedPost {
     PostType? postType,
     String? imageUrl,
     Map<String, dynamic>? workoutData,
+    Map<String, dynamic>? mealData,
     List<RoutePoint>? routePoints,
     String? authorAvatarUrl,
     double? imageAspectRatio,
@@ -220,6 +227,7 @@ class FeedPost {
       postType: postType ?? this.postType,
       imageUrl: imageUrl ?? this.imageUrl,
       workoutData: workoutData ?? this.workoutData,
+      mealData: mealData ?? this.mealData,
       routePoints: routePoints ?? this.routePoints,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       imageAspectRatio: imageAspectRatio ?? this.imageAspectRatio,
@@ -1329,6 +1337,53 @@ class ProfileStat {
 
   final String label;
   final String value;
+}
+
+/// Which side of the follow graph a connections list is showing.
+///
+/// The two lists are read out of different subcollections but are otherwise
+/// the same page, so the direction travels as a value rather than as two
+/// near-identical repository methods and two near-identical screens.
+enum FollowListKind { followers, following }
+
+extension FollowListKindX on FollowListKind {
+  /// The label the profile stats bar uses. Kept identical to the strings the
+  /// repository writes onto [ProfileStat] so a tap on a column can find its
+  /// direction without a second mapping to keep in step.
+  String get label => switch (this) {
+        FollowListKind.followers => 'Followers',
+        FollowListKind.following => 'Following',
+      };
+
+  /// The subcollection under `users/{uid}` holding these edges.
+  String get collectionName => switch (this) {
+        FollowListKind.followers => 'followers',
+        FollowListKind.following => 'following',
+      };
+
+  /// What the tab says when the list is empty.
+  String get emptyTitle => switch (this) {
+        FollowListKind.followers => 'No followers yet',
+        FollowListKind.following => 'Not following anyone yet',
+      };
+
+  String get emptyMessage => switch (this) {
+        FollowListKind.followers =>
+          'People who follow you will show up here.',
+        FollowListKind.following =>
+          'Find people in Explore and the ones you follow will show up here.',
+      };
+
+  /// The value carried in the route's `tab` query parameter.
+  String get routeTab => switch (this) {
+        FollowListKind.followers => 'followers',
+        FollowListKind.following => 'following',
+      };
+
+  static FollowListKind fromRouteTab(String? tab) =>
+      tab == FollowListKind.following.routeTab
+          ? FollowListKind.following
+          : FollowListKind.followers;
 }
 
 /// A user surfaced by Explore search.

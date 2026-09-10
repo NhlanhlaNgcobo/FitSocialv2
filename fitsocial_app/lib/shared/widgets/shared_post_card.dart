@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
+import 'app_photo.dart';
 import 'avatar.dart';
 import 'route_sparkline.dart';
 
@@ -182,8 +183,8 @@ class _Body extends StatelessWidget {
         // Same clamp the feed card uses, so a malformed stored ratio can't
         // produce a card taller than the frame it sits in.
         aspectRatio: (post.aspectRatio ?? 1.0).clamp(0.8, 1.91),
-        child: Image.network(
-          post.imageUrl!,
+        child: Image(
+          image: appPhoto(post.imageUrl!),
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => const _Placeholder(
             icon: Icons.broken_image_rounded,

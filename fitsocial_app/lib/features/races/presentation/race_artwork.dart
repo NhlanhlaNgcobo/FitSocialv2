@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/app_palette.dart';
+import '../../../shared/widgets/app_photo.dart';
 import '../domain/race_models.dart';
 
 /// Generated cover art for a race that has no photograph.
@@ -260,8 +261,8 @@ class RaceCover extends StatelessWidget {
     final fallback = RaceArtwork(event: event, showDistance: showDistance);
     if (url == null || url.isEmpty) return fallback;
 
-    return Image.network(
-      url,
+    return Image(
+      image: appPhoto(url),
       fit: BoxFit.cover,
       // The generated art stands in while the photograph downloads, so a slow
       // connection shows the race rather than an empty grey band.

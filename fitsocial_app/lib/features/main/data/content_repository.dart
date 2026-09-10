@@ -75,6 +75,14 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<List<UserSearchResult>> fetchFollowList(
+    String userId,
+    FollowListKind kind,
+  ) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<UserSearchResult?> fetchUserProfile(String userId) async {
     throw StateError(_firebaseSetupMessage);
   }

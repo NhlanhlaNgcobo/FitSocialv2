@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_palette.dart';
+import 'app_photo.dart';
 
 /// How an [Avatar] is edged.
 enum AvatarBorder {
@@ -78,7 +79,7 @@ class Avatar extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       alignment: Alignment.center,
-      child: _buildContent(palette),
+      child: _buildContent(context, palette),
     );
   }
 
@@ -93,11 +94,14 @@ class Avatar extends StatelessWidget {
     }
   }
 
-  Widget _buildContent(AppPalette palette) {
+  Widget _buildContent(BuildContext context, AppPalette palette) {
     final url = imageUrl;
     if (url != null && url.isNotEmpty) {
-      return Image.network(
-        url,
+      return Image(
+        // A 34px circle has no use for a 512px portrait, and there is an avatar
+        // on every row of the feed — decoding them full size is what pushes the
+        // photos out of the cache.
+        image: appPhotoSized(context, url, size),
         width: size,
         height: size,
         fit: BoxFit.cover,

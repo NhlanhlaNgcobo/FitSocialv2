@@ -117,6 +117,7 @@ class FirestorePostRecord {
       postType: (data['postType'] as String?) ?? 'text',
       imageUrl: data['imageUrl'] as String?,
       workoutData: (data['workoutData'] as Map<String, dynamic>?),
+      mealData: (data['mealData'] as Map<String, dynamic>?),
       routePoints: RoutePoint.listFromFirestore(data['routePoints']),
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
       imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
@@ -143,6 +144,7 @@ class FirestorePostRecord {
     this.postType = 'text',
     this.imageUrl,
     this.workoutData,
+    this.mealData,
     this.routePoints = const [],
     this.authorAvatarUrl,
     this.imageAspectRatio,
@@ -175,6 +177,10 @@ class FirestorePostRecord {
   final String postType;
   final String? imageUrl;
   final Map<String, dynamic>? workoutData;
+
+  /// The meal's calories, protein, carbs and fat, as logged. Null for
+  /// everything that isn't a meal, and for meals shared before this existed.
+  final Map<String, dynamic>? mealData;
 
   /// GPS route for run posts; empty for everything else.
   final List<RoutePoint> routePoints;

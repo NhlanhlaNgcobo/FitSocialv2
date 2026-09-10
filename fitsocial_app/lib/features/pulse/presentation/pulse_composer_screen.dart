@@ -11,8 +11,11 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../application/pulse_providers.dart';
+import '../data/pulse_frame_renderer.dart';
 import '../data/pulse_media_picker.dart';
 import '../domain/pulse_models.dart';
+import 'pulse_photo_editor.dart';
+import 'pulse_photo_frame.dart';
 import 'pulse_text.dart';
 
 /// Where a Pulse gets made: a written card, a photo, or a clip.
@@ -45,6 +48,10 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   String? _mediaPath;
   Duration? _videoDuration;
   double? _videoAspectRatio;
+
+  /// Wraps the canvas so the framing someone pinched into place can be
+  /// rasterised exactly as they left it.
+  final GlobalKey _canvasKey = GlobalKey();
   VideoPlayerController? _videoController;
   bool _busy = false;
 
@@ -92,10 +99,7 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   Future<void> _pickPhoto(ImageSource source) async {
     final String? path;
     try {
-      path = await PulseMediaPicker.pickPhoto(
-        context: context,
-        source: source,
-      );
+      path = await PulseMediaPicker.pickPhoto(source: source);
     } catch (_) {
       // A denied permission or a device with no camera lands here. The capture
       // screen is already behind this, so falling back to it is enough.
@@ -183,17 +187,36 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
     FocusScope.of(context).unfocus();
     setState(() => _busy = true);
 
+    var mediaPath = _mediaPath;
+    var aspectRatio = _videoAspectRatio;
+
+    if (_mode == PulseMediaType.photo) {
+      // What leaves the phone is the canvas, not the file that was picked:
+      // the pinch, the drag and the blurred backdrop are all in these pixels,
+      // so every viewer sees the frame that was composed here.
+      final PulseFrameFile framed;
+      try {
+        framed = await renderPulseFrame(_canvasKey);
+      } on PulseFrameRenderException catch (error) {
+        if (!mounted) return;
+        setState(() => _busy = false);
+        _showMessage(error.message);
+        return;
+      }
+      if (!mounted) return;
+      mediaPath = framed.path;
+      aspectRatio = framed.aspectRatio;
+    }
+
     final draft = PulseDraft(
       type: _mode,
-      localFilePath: _mediaPath,
+      localFilePath: mediaPath,
       text: _mode == PulseMediaType.text
           ? _textController.text
           : _captionController.text,
       gradientKey: _gradientKey,
       videoDuration: _videoDuration,
-      aspectRatio: _mode == PulseMediaType.video
-          ? _videoAspectRatio
-          : PulseMediaPicker.aspectRatio,
+      aspectRatio: aspectRatio,
     );
 
     try {
@@ -243,7 +266,7 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          _buildCanvas(keyboardInset),
+          RepaintBoundary(key: _canvasKey, child: _buildCanvas(keyboardInset)),
           const _ControlScrim(),
           SafeArea(
             bottom: false,
@@ -391,9 +414,7 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
           );
         }
         return _MediaCanvas(
-          child: kIsWeb
-              ? Image.network(path, fit: BoxFit.cover)
-              : Image.file(File(path), fit: BoxFit.cover),
+          child: PulsePhotoEditor(image: pulseLocalPhoto(path)),
         );
 
       case PulseMediaType.video:

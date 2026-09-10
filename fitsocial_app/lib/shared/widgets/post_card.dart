@@ -11,6 +11,7 @@ import '../../features/main/data/content_repository.dart';
 import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
+import 'app_photo.dart';
 import 'avatar.dart';
 import 'confirm_destructive_sheet.dart';
 import 'liquid_glass.dart';
@@ -18,7 +19,9 @@ import 'mention_text.dart';
 import 'profile_link.dart';
 import 'quick_toast.dart';
 import 'reaction_bar.dart';
+import '../services/meal_card_exporter.dart';
 import '../services/run_card_exporter.dart';
+import 'meal_summary_card.dart';
 import 'run_summary_card.dart';
 import 'share_sheet.dart';
 import 'workout_summary_card.dart';
@@ -40,6 +43,7 @@ class PostCard extends StatelessWidget {
     this.postType = PostType.text,
     this.imageUrl,
     this.workoutData,
+    this.mealData,
     this.routePoints = const [],
     this.authorAvatarUrl,
     this.imageAspectRatio,
@@ -69,6 +73,11 @@ class PostCard extends StatelessWidget {
   final PostType postType;
   final String? imageUrl;
   final Map<String, dynamic>? workoutData;
+
+  /// The meal's calories, protein, carbs and fat. Null on every post that
+  /// isn't a meal, and on meals shared before this was recorded — those fall
+  /// back to the plain photo rather than a card of zeroes.
+  final Map<String, dynamic>? mealData;
 
   /// Completed run route. When non-empty the card renders a map preview of the
   /// finished run instead of the plain gradient tile.
@@ -106,7 +115,19 @@ class PostCard extends StatelessWidget {
           route: routePoints,
           distanceLabel: RunSummaryCard.distanceFrom(metricLabels),
           durationLabel: RunSummaryCard.durationFrom(metricLabels),
-          background: imageUrl == null ? null : NetworkImage(imageUrl!),
+          paceLabel: RunSummaryCard.paceFrom(metricLabels),
+          background: imageUrl == null ? null : appPhoto(imageUrl!),
+        )
+      : null;
+
+  /// What the share sheet needs to redraw this meal card into a file, or null
+  /// when there is no meal card to draw — a meal shared before [mealData]
+  /// existed has nothing worth putting in a file.
+  MealCardExport? get _mealCardExport => mealData != null
+      ? MealCardExport(
+          activity: activity,
+          mealData: mealData,
+          background: imageUrl == null ? null : appPhoto(imageUrl!),
         )
       : null;
 
@@ -189,6 +210,7 @@ class PostCard extends StatelessWidget {
             PostInteractionRow(
               post: _shareRef,
               runCard: _runCardExport,
+              mealCard: _mealCardExport,
               likes: likes,
               comments: comments,
               onCommentTapped: onCommentTapped,
@@ -292,6 +314,7 @@ class PostCard extends StatelessWidget {
           PostMenuButton(
             post: _shareRef,
             runCard: _runCardExport,
+            mealCard: _mealCardExport,
             onDeleted: onDeleted,
           ),
         ],
@@ -362,10 +385,15 @@ class PostCard extends StatelessWidget {
     if (_hasRunCard) return _buildRunPayload();
 
     switch (postType) {
-      // A meal is a photo of food, so it renders as one.
       case PostType.image:
-      case PostType.meal:
         return _buildImagePayload(palette);
+      // A meal with structured mealData gets its rings; one shared before
+      // that existed falls back to the plain photo rather than a card of
+      // zeroes.
+      case PostType.meal:
+        return mealData != null
+            ? _buildMealPayload()
+            : _buildImagePayload(palette);
       case PostType.workout:
         return _buildWorkoutPayload();
       // A run with no route has nothing to draw; _hasPayload has already
@@ -383,7 +411,8 @@ class PostCard extends StatelessWidget {
       route: routePoints,
       distanceLabel: RunSummaryCard.distanceFrom(metricLabels),
       durationLabel: RunSummaryCard.durationFrom(metricLabels),
-      background: imageUrl == null ? null : NetworkImage(imageUrl!),
+      paceLabel: RunSummaryCard.paceFrom(metricLabels),
+      background: imageUrl == null ? null : appPhoto(imageUrl!),
       margin: const EdgeInsets.symmetric(horizontal: _gutter),
     );
   }
@@ -422,8 +451,8 @@ class PostCard extends StatelessWidget {
               ),
             ),
             if (imageUrl != null)
-              Image.network(
-                imageUrl!,
+              Image(
+                image: appPhoto(imageUrl!),
                 fit: BoxFit.cover,
                 // Both fallbacks land on the dark gradient behind the photo,
                 // not on the card, so they take the on-media register.
@@ -481,6 +510,17 @@ class PostCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  // ── MEAL payload (the rings, on the meal's own photo) ─────────────────────
+
+  Widget _buildMealPayload() {
+    return MealSummaryCard(
+      mealData: mealData,
+      activity: activity,
+      backgroundImageUrl: imageUrl,
+      margin: const EdgeInsets.symmetric(horizontal: _gutter),
     );
   }
 
@@ -559,6 +599,7 @@ class PostInteractionRow extends ConsumerWidget {
     required this.likes,
     required this.comments,
     this.runCard,
+    this.mealCard,
     this.onCommentTapped,
     this.horizontalPadding = PostCard._gutter - 10,
     this.iconSize = 22,
@@ -572,6 +613,10 @@ class PostInteractionRow extends ConsumerWidget {
   /// The run card behind this post, for the share sheet's save row. Null on
   /// anything that isn't a run with something to draw.
   final RunCardExport? runCard;
+
+  /// The meal card behind this post, for the same save row. Null on anything
+  /// that isn't a meal with structured macros to draw.
+  final MealCardExport? mealCard;
   final int likes;
   final int comments;
   final VoidCallback? onCommentTapped;
@@ -639,7 +684,12 @@ class PostInteractionRow extends ConsumerWidget {
             icon: Icons.send_outlined,
             color: palette.muted,
             size: iconSize,
-            onTap: () => showPostShareSheet(context, post, runCard: runCard),
+            onTap: () => showPostShareSheet(
+              context,
+              post,
+              runCard: runCard,
+              mealCard: mealCard,
+            ),
           ),
           const Spacer(),
           _ActionIcon(
@@ -676,6 +726,7 @@ class PostMenuButton extends ConsumerWidget {
   const PostMenuButton({
     required this.post,
     this.runCard,
+    this.mealCard,
     this.onDeleted,
     super.key,
   });
@@ -683,6 +734,10 @@ class PostMenuButton extends ConsumerWidget {
   /// Passed straight through to [showPostShareSheet]; see
   /// [PostInteractionRow.runCard].
   final RunCardExport? runCard;
+
+  /// Passed straight through to [showPostShareSheet]; see
+  /// [PostInteractionRow.mealCard].
+  final MealCardExport? mealCard;
   final VoidCallback? onDeleted;
 
   /// The post this menu acts on, in the form the share flow needs it. Carries
@@ -770,7 +825,12 @@ class PostMenuButton extends ConsumerWidget {
 
     if (action == null || !context.mounted) return;
     if (action == _PostMenuAction.share) {
-      await showPostShareSheet(context, post, runCard: runCard);
+      await showPostShareSheet(
+        context,
+        post,
+        runCard: runCard,
+        mealCard: mealCard,
+      );
       return;
     }
 

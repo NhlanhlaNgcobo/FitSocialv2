@@ -64,7 +64,7 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
     return Row(
       children: [
         Expanded(
-          child: _CardActionButton(
+          child: CardActionButton(
             icon: Icons.download_rounded,
             label: 'Save to Photos',
             working: _busy == _CardAction.save,
@@ -73,7 +73,7 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
-          child: _CardActionButton(
+          child: CardActionButton(
             icon: Icons.ios_share_rounded,
             label: 'Share',
             working: _busy == _CardAction.share,
@@ -87,14 +87,17 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
 
 enum _CardAction { save, share }
 
-/// The same glass button the photo picker uses directly above this row, so the
-/// two read as one block of controls rather than two designs.
-class _CardActionButton extends StatelessWidget {
-  const _CardActionButton({
+/// One half of a save/share row: an icon that becomes a spinner while
+/// [working], glass-styled to match the photo picker sitting above it. Shared
+/// with [SaveMealCardRow] so every "download this card" control looks and
+/// behaves like one design rather than two.
+class CardActionButton extends StatelessWidget {
+  const CardActionButton({
     required this.icon,
     required this.label,
     required this.working,
     required this.onTap,
+    super.key,
   });
 
   final IconData icon;

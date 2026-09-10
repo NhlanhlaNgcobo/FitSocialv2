@@ -137,6 +137,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
       route: const [],
       distanceLabel: '${distanceKm.toStringAsFixed(2)} km',
       durationLabel: _formatElapsed(result.elapsed),
+      paceLabel: result.formattedAveragePace,
       saveToDrafts: saveToDrafts,
     );
     if (!mounted) return;

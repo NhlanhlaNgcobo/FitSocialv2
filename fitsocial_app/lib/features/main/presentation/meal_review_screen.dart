@@ -1,6 +1,7 @@
 import '../../../shared/widgets/quick_toast.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,14 +18,22 @@ import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../domain/app_models.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
+import '../../../shared/widgets/fit_social_logo.dart';
+import '../../../shared/widgets/macro_ring.dart';
+import '../../../shared/widgets/network_photo_aspect.dart';
+import '../../../shared/widgets/save_meal_card_row.dart';
+import '../../../shared/services/meal_card_exporter.dart';
 
 /// The three macros, each with a colour it keeps everywhere on this screen —
 /// the split bar, the field tiles and the per-item readouts all agree, so a
-/// glance at the bar maps onto a number without a legend.
-const Color _proteinColor = AppColors.orangeBright;
-const Color _carbsColor = Color(0xFF4FB6A5);
-const Color _fatColor = Color(0xFFF5C451);
+/// glance at the bar maps onto a number without a legend. Aliased from
+/// [macro_ring.dart] so the hero's rings and the rest of this screen never
+/// drift onto different hexes for the same macro.
+const Color _proteinColor = proteinMacroColor;
+const Color _carbsColor = carbsMacroColor;
+const Color _fatColor = fatMacroColor;
 
 class MealReviewScreen extends ConsumerStatefulWidget {
   const MealReviewScreen({super.key});
@@ -278,6 +287,10 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
         ),
         children: [
           _buildHero(context),
+          if (!kIsWeb) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _buildSaveMealCardRow(),
+          ],
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Meal name'),
           const SizedBox(height: AppSpacing.sm),
@@ -349,24 +362,41 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
   /// The numbers are a readout of the fields below rather than a second copy —
   /// they follow every edit, so the picture and the figures can't disagree.
   Widget _buildHero(BuildContext context) {
+    final imageUrl = _imageUrl;
+    final stack = _buildHeroStack(context);
+
+    // Sized to the photo's own shape rather than a fixed 224 — a portrait or
+    // panoramic meal shot used to have its edges cut off to force it square;
+    // this shows the whole picture the way it was actually taken.
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
-      child: SizedBox(
-        height: 224,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (_imageUrl != null)
-              Image.network(
-                _imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const _HeroBackdrop(),
-                loadingBuilder: (context, child, progress) =>
-                    progress == null ? child : const _HeroBackdrop(),
-              )
-            else
-              const _HeroBackdrop(),
+      child: imageUrl == null
+          ? SizedBox(height: 224, width: double.infinity, child: stack)
+          : NetworkPhotoAspect(
+              imageUrl: imageUrl,
+              fallbackAspectRatio: 4 / 3,
+              builder: (context, aspectRatio) => AspectRatio(
+                aspectRatio: aspectRatio,
+                child: stack,
+              ),
+            ),
+    );
+  }
+
+  Widget _buildHeroStack(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_imageUrl != null)
+          Image(
+            image: appPhoto(_imageUrl!),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const _HeroBackdrop(),
+            loadingBuilder: (context, child, progress) =>
+                progress == null ? child : const _HeroBackdrop(),
+          )
+        else
+          const _HeroBackdrop(),
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -379,6 +409,15 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
                   ],
                   stops: [0.32, 0.7, 1],
                 ),
+              ),
+            ),
+            const Positioned(
+              top: AppSpacing.md,
+              left: AppSpacing.md,
+              child: FitSocialLogo(
+                size: 15,
+                animated: false,
+                color: AppColors.onMedia,
               ),
             ),
             Positioned(
@@ -398,6 +437,20 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
                 animation: _summary,
                 builder: (context, _) {
                   final name = _nameController.text.trim();
+                  final calories = _valueOf(_caloriesController);
+                  final protein = _valueOf(_proteinController);
+                  final carbs = _valueOf(_carbsController);
+                  final fat = _valueOf(_fatController);
+                  // Rings read as a share of the meal's own calories, so they
+                  // stay true to the number printed beside them rather than
+                  // an external daily target this screen doesn't track.
+                  final macroCalories =
+                      protein * 4 + carbs * 4 + fat * 9;
+                  final totalCalories = calories > 0 ? calories : macroCalories;
+                  double fractionOf(int kcal) => totalCalories <= 0
+                      ? 0
+                      : (kcal / totalCalories).clamp(0.0, 1.0);
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -414,63 +467,53 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                '${_valueOf(_caloriesController)}',
-                                style: const TextStyle(
-                                  color: AppColors.onMedia,
-                                  fontSize: 30,
-                                  height: 1,
-                                  fontWeight: FontWeight.w800,
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(text: '$calories'),
+                                const TextSpan(
+                                  text: ' kcal',
+                                  style: TextStyle(
+                                    color: AppColors.onMediaMuted,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Text(
-                                'kcal',
-                                style: TextStyle(
-                                  color: AppColors.onMediaMuted,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerRight,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _HeroMacro(
-                                    label: 'P',
-                                    value: _valueOf(_proteinController),
-                                    color: _proteinColor,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  _HeroMacro(
-                                    label: 'C',
-                                    value: _valueOf(_carbsController),
-                                    color: _carbsColor,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  _HeroMacro(
-                                    label: 'F',
-                                    value: _valueOf(_fatController),
-                                    color: _fatColor,
-                                  ),
-                                ],
-                              ),
+                              ],
                             ),
+                            style: const TextStyle(
+                              color: AppColors.onMedia,
+                              fontSize: 30,
+                              height: 1,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.8,
+                              shadows: onMediaTextShadows,
+                            ),
+                          ),
+                          const Spacer(),
+                          MacroRing(
+                            label: 'Protein',
+                            grams: protein,
+                            fraction: fractionOf(protein * 4),
+                            color: _proteinColor,
+                          ),
+                          const SizedBox(width: 10),
+                          MacroRing(
+                            label: 'Carbs',
+                            grams: carbs,
+                            fraction: fractionOf(carbs * 4),
+                            color: _carbsColor,
+                          ),
+                          const SizedBox(width: 10),
+                          MacroRing(
+                            label: 'Fat',
+                            grams: fat,
+                            fraction: fractionOf(fat * 9),
+                            color: _fatColor,
                           ),
                         ],
                       ),
@@ -480,8 +523,31 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
               ),
             ),
           ],
-        ),
-      ),
+    );
+  }
+
+  /// The save/share row under the hero, rebuilding on every edit so the file
+  /// it draws always matches the numbers on screen — the same guarantee the
+  /// hero itself makes.
+  Widget _buildSaveMealCardRow() {
+    return AnimatedBuilder(
+      animation: _summary,
+      builder: (context, _) {
+        final imageUrl = _imageUrl;
+        final name = _nameController.text.trim();
+        return SaveMealCardRow(
+          card: MealCardExport(
+            activity: name.isEmpty ? 'Untitled meal' : _titleCase(name),
+            mealData: {
+              'calories': _valueOf(_caloriesController),
+              'protein': _valueOf(_proteinController),
+              'carbs': _valueOf(_carbsController),
+              'fat': _valueOf(_fatController),
+            },
+            background: imageUrl == null ? null : appPhoto(imageUrl),
+          ),
+        );
+      },
     );
   }
 
@@ -675,41 +741,6 @@ class _HeroBackdrop extends StatelessWidget {
           color: AppColors.orangeBright,
         ),
       ),
-    );
-  }
-}
-
-class _HeroMacro extends StatelessWidget {
-  const _HeroMacro({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final int value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          '$label ${value}g',
-          style: const TextStyle(
-            color: AppColors.onMedia,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
     );
   }
 }

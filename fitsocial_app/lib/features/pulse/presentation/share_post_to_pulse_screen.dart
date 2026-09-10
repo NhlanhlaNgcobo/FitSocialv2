@@ -24,7 +24,7 @@ class SharePostToPulseScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PulseShareScaffold(
-      canvas: SharedPostCard(post: post),
+      canvas: (_) => SharedPostCard(post: post),
       buildDraft: (caption, gradientKey) => PulseDraft(
         type: PulseMediaType.post,
         text: caption,

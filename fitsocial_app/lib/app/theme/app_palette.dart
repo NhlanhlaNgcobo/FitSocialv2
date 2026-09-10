@@ -32,6 +32,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.glassSheen,
     required this.glassRimHigh,
     required this.glassRimSoft,
+    required this.glassFloor,
     required this.liquidTint,
     required this.paneShadow,
     required this.navShadow,
@@ -112,6 +113,19 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color glassRimHigh;
   final Color glassRimSoft;
 
+  /// The dark half of what a pane of liquid glass reflects.
+  ///
+  /// [glassRimHigh] is the sky in that little environment; this is the
+  /// floor. The bevel picks up one along its upper edge and the other along
+  /// its lower, and the difference between them is the whole read of
+  /// thickness -- a rim lit evenly all the way round looks like a sticker.
+  ///
+  /// Near-black on dark, where the floor really is the page. On light it is
+  /// a warm mid grey rather than the page's own cream: the pane needs
+  /// somewhere darker than itself to sit against, and cream on cream is the
+  /// flat-sheet failure this palette was tuned against.
+  final Color glassFloor;
+
   /// What liquid glass mixes into the backdrop it is bending, with the alpha
   /// carrying *how much*.
   ///
@@ -157,6 +171,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     glassSheen: Color(0x1AFFFFFF),
     glassRimHigh: Color(0x73FFFFFF),
     glassRimSoft: Color(0x1AFFFFFF),
+    glassFloor: Color(0xFF000000),
     liquidTint: Color(0x1F000000),
     paneShadow: Color(0x00000000),
     navShadow: Color(0x8C000000),
@@ -204,6 +219,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     glassSheen: Color(0x8CFFFFFF),
     glassRimHigh: Color(0x1F000000),
     glassRimSoft: Color(0x0A000000),
+    glassFloor: Color(0xFF8A8378),
     // 78% white, the same weight the frosted pane used before the lens
     // arrived. The 14% it briefly ran at is invisible on cream: the card
     // loses its surface entirely and only the hairline is left, which is
@@ -269,6 +285,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? glassSheen,
     Color? glassRimHigh,
     Color? glassRimSoft,
+    Color? glassFloor,
     Color? liquidTint,
     Color? paneShadow,
     Color? navShadow,
@@ -293,6 +310,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       glassSheen: glassSheen ?? this.glassSheen,
       glassRimHigh: glassRimHigh ?? this.glassRimHigh,
       glassRimSoft: glassRimSoft ?? this.glassRimSoft,
+      glassFloor: glassFloor ?? this.glassFloor,
       liquidTint: liquidTint ?? this.liquidTint,
       paneShadow: paneShadow ?? this.paneShadow,
       navShadow: navShadow ?? this.navShadow,
@@ -325,6 +343,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       glassSheen: Color.lerp(glassSheen, other.glassSheen, t)!,
       glassRimHigh: Color.lerp(glassRimHigh, other.glassRimHigh, t)!,
       glassRimSoft: Color.lerp(glassRimSoft, other.glassRimSoft, t)!,
+      glassFloor: Color.lerp(glassFloor, other.glassFloor, t)!,
       liquidTint: Color.lerp(liquidTint, other.liquidTint, t)!,
       paneShadow: Color.lerp(paneShadow, other.paneShadow, t)!,
       navShadow: Color.lerp(navShadow, other.navShadow, t)!,

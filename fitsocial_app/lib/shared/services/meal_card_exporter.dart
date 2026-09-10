@@ -6,63 +6,53 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import '../../app/theme/app_palette.dart';
-import '../../features/main/domain/app_models.dart';
 import '../widgets/fit_social_logo.dart';
-import '../widgets/route_sparkline.dart';
-import '../widgets/run_summary_card.dart';
+import '../widgets/meal_summary_card.dart';
 
-/// Everything the run card needs to draw itself into a file.
+/// Everything the meal card needs to draw itself into a file.
 ///
-/// [background] is an [ImageProvider] rather than a path or a URL because the
-/// three callers hold three different things — a picked file, a Firebase URL,
-/// and in tests a [MemoryImage] — and the card takes a provider anyway.
+/// [background] is an [ImageProvider], already resolved through `appPhoto` by
+/// the caller — the same reason `RunCardExport.background` takes a provider
+/// rather than a URL: the card is about to be rasterised off-screen, and
+/// resolving the same photo a second time inside that overlay would race the
+/// capture.
 @immutable
-class RunCardExport {
-  const RunCardExport({
-    this.route = const [],
-    this.distanceLabel,
-    this.durationLabel,
-    this.paceLabel,
+class MealCardExport {
+  const MealCardExport({
+    required this.activity,
+    this.mealData,
     this.background,
   });
 
-  final List<RoutePoint> route;
-  final String? distanceLabel;
-  final String? durationLabel;
-  final String? paceLabel;
+  final String activity;
+  final Map<String, dynamic>? mealData;
   final ImageProvider? background;
 
-  /// Whether there is anything worth drawing. A run with no line is fine — a
-  /// treadmill run is nothing but numbers — but a card with no line, no photo
-  /// and no numbers is an empty rectangle.
-  bool get hasContent =>
-      RouteSparkline.canDraw(route) ||
-      background != null ||
-      (distanceLabel?.trim().isNotEmpty ?? false) ||
-      (durationLabel?.trim().isNotEmpty ?? false);
+  /// A meal is always a photo of food; there's nothing worth a file without
+  /// one.
+  bool get hasContent => background != null;
 }
 
 /// A capture that could not be made, carrying the line to show the user.
-class RunCardExportException implements Exception {
-  const RunCardExportException(this.message);
+class MealCardExportException implements Exception {
+  const MealCardExportException(this.message);
 
   /// Written for the toast, not for a log.
   final String message;
 
   @override
-  String toString() => 'RunCardExportException: $message';
+  String toString() => 'MealCardExportException: $message';
 }
 
 /// The width every exported card comes out at, on every device.
-const int kRunCardExportWidth = 1080;
+const int kMealCardExportWidth = 1080;
 
 /// The width the card is laid out at before it is scaled up.
 ///
-/// The card's spacing, type sizes and stroke widths were all tuned against a
-/// phone-width card, so it is laid out at phone width and rasterised at 3x
-/// rather than laid out at 1080 and rasterised at 1x — same pixels out, but the
-/// proportions stay the ones that were designed.
+/// Mirrors the run card's own logical width: the card's spacing and type
+/// sizes were tuned against a phone-width card, so it is laid out at phone
+/// width and rasterised at 3x rather than laid out at 1080 and rasterised at
+/// 1x — same pixels out, but the proportions stay the ones that were designed.
 const double _logicalWidth = 360;
 
 /// Only one capture at a time. Two overlapping ones would fight over the image
@@ -71,46 +61,48 @@ bool _capturing = false;
 
 /// Draws [spec] as a PNG, off screen, at [width] pixels wide.
 ///
-/// Returns the encoded bytes. Throws [RunCardExportException] with a line the
-/// caller can show as-is: when there is nothing to draw, when the backdrop
-/// photo will not load, or when the engine refuses the capture.
-Future<Uint8List> renderRunCardPng(
+/// Returns the encoded bytes. Throws [MealCardExportException] with a line the
+/// caller can show as-is: when there is nothing to draw, when the photo will
+/// not load, or when the engine refuses the capture.
+Future<Uint8List> renderMealCardPng(
   BuildContext context,
-  RunCardExport spec, {
-  int width = kRunCardExportWidth,
+  MealCardExport spec, {
+  int width = kMealCardExportWidth,
 }) async {
   if (kIsWeb) {
-    throw const RunCardExportException('Saving the card needs the app.');
+    throw const MealCardExportException('Saving the card needs the app.');
   }
   if (!spec.hasContent) {
-    throw const RunCardExportException("There's nothing on this card yet.");
+    throw const MealCardExportException("There's nothing on this card yet.");
   }
   if (_capturing) {
-    throw const RunCardExportException('Still saving the last one.');
+    throw const MealCardExportException('Still saving the last one.');
   }
 
-  // Read the ambient tree before the first await: the finish sheet is a modal
-  // route and may well be gone by the time the photo has decoded.
+  // Read the ambient tree before the first await: the review screen could in
+  // principle be gone by the time the photo has decoded.
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) {
-    throw const RunCardExportException("Couldn't draw the card.");
+    throw const MealCardExportException("Couldn't draw the card.");
   }
   final theme = Theme.of(context);
-  final ground = runCardExportGround(context.palette);
   final media = MediaQuery.of(context);
   final configuration = createLocalImageConfiguration(context);
+  // The card's own dark fallback tint. Unlike the run card, a meal card never
+  // looks through to the app's theme — it always shows a photo or this.
+  const ground = Color(0xFF1E1E1E);
 
   _capturing = true;
   final held = <_HeldImage>[];
   OverlayEntry? entry;
   ui.Image? image;
   try {
-    // Both images have to be decoded *before* the card is built: an unresolved
+    // The photo has to be decoded *before* the card is built: an unresolved
     // Image paints nothing on its first frame, and the capture would take a
-    // card with a hole where the photo and the wordmark belong. Decoding the
-    // background here also measures it — the ratio below is the photo's own,
-    // never a forced crop, and it is what gets handed to the card so it does
-    // not have to resolve the same image a second time inside the overlay.
+    // card with a hole where the photo belongs. Decoding it here also
+    // measures it — the ratio below is the photo's own, never a forced crop —
+    // and it is what gets handed to the card so it does not have to resolve
+    // the same image a second time inside the overlay.
     final background = spec.background;
     var ratio = 1.0;
     if (background != null) {
@@ -119,10 +111,10 @@ Future<Uint8List> renderRunCardPng(
         held.add(backgroundHeld);
         final decoded = backgroundHeld.image;
         if (decoded != null && decoded.height != 0) {
-          ratio = decoded.width / decoded.height;
+          ratio = (decoded.width / decoded.height).clamp(0.8, 1.91);
         }
       } on Object {
-        throw const RunCardExportException(
+        throw const MealCardExportException(
           "Couldn't load your photo — try again in a moment.",
         );
       }
@@ -131,7 +123,7 @@ Future<Uint8List> renderRunCardPng(
       held.add(
         await _hold(const AssetImage(kFitSocialMarkAsset), configuration),
       );
-    } on RunCardExportException {
+    } on MealCardExportException {
       rethrow;
     } on Object {
       // The wordmark is usually already cached by the app bar. If it somehow
@@ -150,11 +142,10 @@ Future<Uint8List> renderRunCardPng(
         top: 0,
         child: IgnorePointer(
           child: MediaQuery(
-            // The file is a fixed-size artifact, so it must not reflow with the
-            // reader's text settings — the card's numbers are single-line and
-            // would clip. devicePixelRatio is deliberately left alone: it is
-            // part of AssetImage's cache key, and changing it here would miss
-            // the wordmark that was just held open above.
+            // The file is a fixed-size artifact, so it must not reflow with
+            // the reader's text settings. devicePixelRatio is deliberately
+            // left alone: it is part of AssetImage's cache key, and changing
+            // it here would miss the wordmark that was just held open above.
             data: media.copyWith(
               textScaler: TextScaler.noScaling,
               boldText: false,
@@ -171,20 +162,16 @@ Future<Uint8List> renderRunCardPng(
                     key: boundaryKey,
                     // Behind the whole canvas, not just the card: the card's
                     // corners are rounded, and the wedges outside them would
-                    // otherwise be transparent. Instagram flattens alpha to
-                    // black, which would put black notches on a light card.
+                    // otherwise be transparent.
                     child: ColoredBox(
                       color: ground,
                       child: SizedBox.fromSize(
                         size: size,
-                          child: RunSummaryCard(
-                          route: spec.route,
-                          distanceLabel: spec.distanceLabel,
-                          durationLabel: spec.durationLabel,
-                          paceLabel: spec.paceLabel,
-                          background: spec.background,
+                        child: MealSummaryCard(
+                          activity: spec.activity,
+                          mealData: spec.mealData,
+                          backgroundImage: spec.background,
                           aspectRatio: ratio,
-                          forExport: true,
                         ),
                       ),
                     ),
@@ -206,23 +193,18 @@ Future<Uint8List> renderRunCardPng(
     final boundary = boundaryKey.currentContext?.findRenderObject()
         as RenderRepaintBoundary?;
     if (boundary == null) {
-      throw const RunCardExportException("Couldn't draw the card.");
+      throw const MealCardExportException("Couldn't draw the card.");
     }
-    // No `debugNeedsPaint` probe here. It reads a `late` field that is only
-    // assigned inside an assert, so in a release build — where asserts are
-    // stripped — merely reading it throws LateInitializationError, and this
-    // whole export fails every time. The two frames above are what actually
-    // guarantees the layer: the first builds the entry, the second paints it.
 
     final captured = image = await boundary.toImage(
       pixelRatio: width / size.width,
     );
     final data = await captured.toByteData(format: ui.ImageByteFormat.png);
     if (data == null) {
-      throw const RunCardExportException("Couldn't draw the card.");
+      throw const MealCardExportException("Couldn't draw the card.");
     }
     return data.buffer.asUint8List();
-  } on RunCardExportException {
+  } on MealCardExportException {
     rethrow;
   } catch (error, stack) {
     // Reported rather than rethrown raw: the user gets a line they can read,
@@ -232,10 +214,10 @@ Future<Uint8List> renderRunCardPng(
         exception: error,
         stack: stack,
         library: 'fitsocial',
-        context: ErrorDescription('drawing the run card to a file'),
+        context: ErrorDescription('drawing the meal card to a file'),
       ),
     );
-    throw const RunCardExportException("Couldn't draw the card.");
+    throw const MealCardExportException("Couldn't draw the card.");
   } finally {
     image?.dispose();
     entry?.remove();
@@ -261,12 +243,12 @@ class _HeldImage {
   void release() => stream.removeListener(listener);
 }
 
-/// Decodes [provider] and holds the listener open, so the cache entry cannot be
-/// evicted between here and the capture frame.
+/// Decodes [provider] and holds the listener open, so the cache entry cannot
+/// be evicted between here and the capture frame.
 ///
 /// Deliberately not [precacheImage], which swallows failures — a photo that
-/// quietly failed would export as the grey fallback, which looks like a bug in
-/// the card rather than a failure to save.
+/// quietly failed would export as the flat fallback, which looks like a bug
+/// in the card rather than a failure to save.
 Future<_HeldImage> _hold(
   ImageProvider provider,
   ImageConfiguration configuration,

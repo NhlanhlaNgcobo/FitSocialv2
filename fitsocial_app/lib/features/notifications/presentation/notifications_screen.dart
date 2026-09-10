@@ -7,6 +7,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/follow_button.dart';
+import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/notification_providers.dart';
 import '../domain/notification_models.dart';
@@ -539,8 +540,8 @@ class _Trailing extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        imageUrl,
+      child: Image(
+        image: appPhotoSized(context, imageUrl, _size),
         width: _size,
         height: _size,
         fit: BoxFit.cover,

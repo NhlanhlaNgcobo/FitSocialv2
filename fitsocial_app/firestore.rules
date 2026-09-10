@@ -464,16 +464,23 @@ service cloud.firestore {
       }
 
       // Who this user follows. Owned by {userId}.
+      //
+      // READ is owner-only. The counts stay public -- they live on the profile
+      // document, which anybody signed in can read -- but the list behind them
+      // is the account owner's to look at, and nothing in the app asks for
+      // somebody else's. The rules that gate a Pulse on the follow graph use
+      // exists() rather than a client read, so they are unaffected.
       match /following/{followedId} {
-        allow read: if request.auth != null;
+        allow read: if request.auth != null && request.auth.uid == userId;
         allow create, delete: if request.auth != null
                              && request.auth.uid == userId;
       }
 
       // Who follows this user. Written by the FOLLOWER, not the profile owner,
-      // so authorisation keys off the document id instead of {userId}.
+      // so authorisation keys off the document id instead of {userId} -- while
+      // READ, as above, belongs to the person being followed.
       match /followers/{followerId} {
-        allow read: if request.auth != null;
+        allow read: if request.auth != null && request.auth.uid == userId;
         allow create, delete: if request.auth != null
                              && request.auth.uid == followerId;
       }

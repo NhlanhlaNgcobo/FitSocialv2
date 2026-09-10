@@ -8,6 +8,8 @@ import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../links/share_links.dart';
+import '../services/meal_card_exporter.dart';
+import '../services/meal_card_saver.dart';
 import '../services/run_card_exporter.dart';
 import '../services/run_card_saver.dart';
 import 'quick_toast.dart';
@@ -24,8 +26,8 @@ enum _ShareChoice {
   /// The link on its own, for pasting somewhere the share sheet doesn't reach.
   copyLink,
 
-  /// The run card itself, drawn to a file and put in the camera roll. Only
-  /// offered on a post that has a run card to draw.
+  /// The run or meal card itself, drawn to a file and put in the camera roll.
+  /// Only offered on a post that has a card to draw.
   saveImage,
 }
 
@@ -33,22 +35,24 @@ enum _ShareChoice {
 ///
 /// Two destinations, which is the split Instagram uses: *inside* the app, where
 /// a share means putting the post on your own Pulse, and *outside* it, where a
-/// share means handing someone a link. Of the post's own content only the run
-/// card leaves, and only when the reader asks for it by name — never the
-/// caption, never the photo on its own. Someone who receives a link and has
-/// FitSocial opens the post; someone who doesn't gets the page that offers the
-/// app. See [FitSocialLinks].
+/// share means handing someone a link. Of the post's own content only its run
+/// or meal card leaves, and only when the reader asks for it by name — never
+/// the caption, never the photo on its own. Someone who receives a link and
+/// has FitSocial opens the post; someone who doesn't gets the page that offers
+/// the app. See [FitSocialLinks].
 ///
-/// [runCard] both decides whether the save row appears and says what it should
-/// draw, because [SharedPostRef] carries the route but not the metric strip the
-/// card reads its numbers out of.
+/// [runCard] and [mealCard] both decide whether the save row appears and say
+/// what it should draw, because [SharedPostRef] carries neither the route nor
+/// the macros the cards read their numbers out of. A post is never both, so at
+/// most one is ever non-null.
 Future<void> showPostShareSheet(
   BuildContext context,
   SharedPostRef post, {
   RunCardExport? runCard,
+  MealCardExport? mealCard,
 }) async {
   final palette = context.palette;
-  final canSaveImage = runCard != null && !kIsWeb;
+  final canSaveImage = (runCard != null || mealCard != null) && !kIsWeb;
 
   final choice = await showModalBottomSheet<_ShareChoice>(
     context: context,
@@ -105,7 +109,7 @@ Future<void> showPostShareSheet(
               _ShareOption(
                 icon: Icons.download_rounded,
                 label: 'Save image',
-                detail: 'Put the run card in your photos',
+                detail: 'Put this card in your photos',
                 onTap: () =>
                     Navigator.of(sheetContext).pop(_ShareChoice.saveImage),
               ),
@@ -128,7 +132,11 @@ Future<void> showPostShareSheet(
     case _ShareChoice.copyLink:
       await copyPostLink(context, post);
     case _ShareChoice.saveImage:
-      await saveRunCardImage(context, runCard!);
+      if (runCard != null) {
+        await saveRunCardImage(context, runCard);
+      } else if (mealCard != null) {
+        await saveMealCardImage(context, mealCard);
+      }
   }
 }
 
@@ -146,6 +154,19 @@ Future<void> saveRunCardImage(BuildContext context, RunCardExport card) async {
     showQuickToastOn(overlay, 'Saved to your photos', tone: ToastTone.success);
   } catch (error) {
     reportRunCardFailure(overlay, error);
+  }
+}
+
+/// [saveRunCardImage]'s meal-flavoured twin.
+Future<void> saveMealCardImage(BuildContext context, MealCardExport card) async {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  try {
+    final bytes = await renderMealCardPng(context, card);
+    await saveImageToGallery(bytes, name: mealCardFileName());
+    if (overlay == null) return;
+    showQuickToastOn(overlay, 'Saved to your photos', tone: ToastTone.success);
+  } catch (error) {
+    reportMealCardFailure(overlay, error);
   }
 }
 

@@ -10,8 +10,6 @@ import '../../../shared/widgets/follow_button.dart';
 import '../../../shared/widgets/profile_bio.dart';
 import '../../../shared/widgets/profile_stats_bar.dart';
 import '../../../shared/widgets/quick_toast.dart';
-import '../../challenges/application/challenge_providers.dart';
-import '../../challenges/presentation/badge_shelf.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 
@@ -192,11 +190,6 @@ class _ProfileBody extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.lg),
                 bio,
               ],
-              // The same shelf as your own profile, read-only. Badges are
-              // public on purpose: being able to see what somebody else has
-              // done is most of the reason to earn one.
-              const SizedBox(height: AppSpacing.lg),
-              _UserBadgeShelf(userId: user.id),
               const SizedBox(height: AppSpacing.lg),
             ],
           ),
@@ -349,23 +342,4 @@ class _Message extends StatelessWidget {
 String _formatHandle(String handle) {
   final trimmed = handle.trim().replaceAll(RegExp(r'^@+'), '');
   return trimmed.isEmpty ? '@fitsocial' : '@$trimmed';
-}
-
-/// Somebody else's badge case. Collapses when they hold none, so a profile is
-/// never given an empty shelf as a comment on the person.
-class _UserBadgeShelf extends ConsumerWidget {
-  const _UserBadgeShelf({required this.userId});
-
-  final String userId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final badges = ref.watch(badgesProvider(userId)).valueOrNull ?? const [];
-    if (badges.isEmpty) return const SizedBox.shrink();
-
-    return BadgeShelf(
-      badges: badges,
-      onTap: (badge) => showBadgeSheet(context, badge),
-    );
-  }
 }

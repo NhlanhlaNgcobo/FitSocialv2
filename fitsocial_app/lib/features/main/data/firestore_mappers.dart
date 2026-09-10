@@ -79,6 +79,7 @@ class FirestoreMapper {
       postType: _parsePostType(post.postType),
       imageUrl: post.imageUrl,
       workoutData: post.workoutData,
+      mealData: post.mealData,
       routePoints: post.routePoints,
       authorAvatarUrl: post.authorAvatarUrl,
       imageAspectRatio: post.imageAspectRatio,

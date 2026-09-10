@@ -337,6 +337,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                       ? '${_formatDistance(_distanceKm)} km'
                       : null,
                   durationLabel: _hasDuration ? _clockLabel : null,
+                  paceLabel: _isComplete ? _paceLabel : null,
                   onPick: _isSaving ? null : _pickBackground,
                   onRemove: _isSaving
                       ? null
@@ -352,6 +353,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                           ? '${_formatDistance(_distanceKm)} km'
                           : null,
                       durationLabel: _hasDuration ? _clockLabel : null,
+                      paceLabel: _isComplete ? _paceLabel : null,
                       background: _backgroundPath == null
                           ? null
                           : localBackgroundImage(_backgroundPath!),

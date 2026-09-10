@@ -7,7 +7,7 @@ import '../../main/domain/app_models.dart';
 import '../../music/application/music_providers.dart';
 import '../domain/pulse_models.dart';
 import '../domain/pulse_music.dart';
-import 'pulse_music_card.dart';
+import 'pulse_music_frame.dart';
 import 'pulse_share_scaffold.dart';
 
 /// "Share what you're listening to" — the Instagram and Spotify move, in
@@ -68,8 +68,18 @@ class _ShareMusicToPulseScreenState
 
   @override
   Widget build(BuildContext context) {
+    final hasArt = (_music.albumArtUrl ?? '').isNotEmpty;
+
     return PulseShareScaffold(
-      canvas: PulseMusicCard(music: _music),
+      canvas: (gradient) => PulseMusicFrame(
+        music: _music,
+        gradient: gradient,
+        contentPadding: PulseMusicFrame.sharePadding,
+      ),
+      canvasFillsFrame: true,
+      // Once the cover art is the background there is no gradient left to see,
+      // so the palette only appears for a track that arrived without artwork.
+      showGradientPicker: !hasArt,
       captionHint: 'Say something about this track',
       // Reads _music rather than the widget's copy, so a cover that resolves
       // while the caption is being typed still makes it onto the Pulse.

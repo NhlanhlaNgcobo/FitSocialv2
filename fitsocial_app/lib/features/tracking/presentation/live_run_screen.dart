@@ -223,6 +223,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       route: route,
       distanceLabel: '${distanceKm.toStringAsFixed(2)} km',
       durationLabel: _formatElapsed(result.elapsed),
+      paceLabel: result.formattedAverageFor(widget.kind),
       saveToDrafts: saveToDrafts,
     );
     if (!mounted) return;

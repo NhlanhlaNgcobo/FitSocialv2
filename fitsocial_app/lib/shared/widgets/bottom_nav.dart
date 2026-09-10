@@ -226,6 +226,13 @@ class _FitSocialBottomNavState extends State<FitSocialBottomNav>
           // The surface the whole effect exists for, and the reason the cost is
           // worth paying exactly here: the feed really is moving behind it.
           lens: true,
+          // The only surface in the app that reflects. Everything else -- every
+          // sheet, every card -- leaves [LiquidGlass.reflect] at zero, where the
+          // shader's reflection terms multiply out and the material is exactly
+          // what it always was. The capsule is the one pane worth giving a
+          // thickness to, because it is the one pane that is always on screen
+          // with something moving behind it.
+          reflect: 0.75,
           child: SizedBox(
             height: FitSocialBottomNav._barHeight,
             child: _NavRow(

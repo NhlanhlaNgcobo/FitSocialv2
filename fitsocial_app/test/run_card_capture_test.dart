@@ -108,12 +108,35 @@ void main() {
   // there is no tester in there to pump for it.
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  testWidgets('comes out 1080 wide at the shape it was asked for',
+  testWidgets('comes out 1080 square with no photo to take a shape from',
       (tester) async {
     final (image, _) = await capture(tester);
 
     expect(image.width, 1080);
-    expect(image.height, 810); // 4:3
+    expect(image.height, 1080); // no background: falls back to 1:1
+  });
+
+  testWidgets('takes the photo\'s own shape instead of a forced crop',
+      (tester) async {
+    // 8x8 painted as 4 wide, 2 tall: an unambiguous 2:1 photo. A forced 4:3
+    // card would come out wrong in either dimension.
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawRect(
+      const Rect.fromLTWH(0, 0, 16, 8),
+      Paint()..color = const Color(0xFF00AA44),
+    );
+    final picture = recorder.endRecording();
+    final photoImage = await picture.toImage(16, 8);
+    final data =
+        (await photoImage.toByteData(format: ui.ImageByteFormat.png))!;
+    picture.dispose();
+    photoImage.dispose();
+    final photo = MemoryImage(data.buffer.asUint8List());
+
+    final (image, _) = await capture(tester, spec: _spec.withBackground(photo));
+
+    expect(image.width, 1080);
+    expect(image.height, 540); // 2:1, the photo's own ratio
   });
 
   testWidgets('is opaque and dark on the dark theme', (tester) async {
@@ -189,6 +212,5 @@ extension on RunCardExport {
         distanceLabel: distanceLabel,
         durationLabel: durationLabel,
         background: background,
-        aspectRatio: aspectRatio,
       );
 }

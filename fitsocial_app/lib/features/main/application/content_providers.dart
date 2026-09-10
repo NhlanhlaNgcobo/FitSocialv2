@@ -309,6 +309,27 @@ final profileStatsProvider =
   return ref.watch(contentRepositoryProvider).getProfileStats(userId);
 });
 
+/// The people on one side of the SIGNED-IN user's follow graph.
+///
+/// Keyed by direction and not by user id, deliberately: the uid comes from the
+/// session rather than from the caller, so there is no argument that could ask
+/// this for somebody else's followers. The rules enforce the same thing on the
+/// server; this is what stops the app from writing a read that would be
+/// refused.
+///
+/// autoDispose because the list is only ever on screen while the connections
+/// page is open, and re-opening it should show who follows you now rather than
+/// who did when you last looked.
+final followListProvider = FutureProvider.autoDispose
+    .family<List<UserSearchResult>, FollowListKind>((ref, kind) {
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return Future.value(const []);
+  return ref.watch(contentRepositoryProvider).fetchFollowList(
+        currentUserId,
+        kind,
+      );
+});
+
 /// One public profile by id, for the other-user profile screen.
 final userProfileProvider =
     FutureProvider.family<UserSearchResult?, String>((ref, userId) {
@@ -391,8 +412,13 @@ final exploreFilterProvider =
 
 /// Whether the signed-in user follows [targetUserId]. Keyed by target only —
 /// the follower is always the current user.
+///
+/// autoDispose because each key holds a live document listener, and the
+/// connections list puts one behind every row it builds. Without it, scrolling
+/// a few hundred rows would leave a few hundred listeners open for the rest of
+/// the session; with it, they close as the rows scroll out of the list's cache.
 final isFollowingProvider =
-    StreamProvider.family<bool, String>((ref, targetUserId) {
+    StreamProvider.autoDispose.family<bool, String>((ref, targetUserId) {
   final currentUserId = ref.watch(currentUserIdProvider);
   if (currentUserId == null) return Stream.value(false);
   return ref
@@ -466,6 +492,11 @@ class FollowActions {
     // isFollowingProvider is a live stream and updates itself; the profile
     // header counts are one-shot reads and need refreshing.
     _ref.invalidate(profileStatsProvider);
+
+    // So is the connections list, which is where an unfollow is most often
+    // made — a row you just unfollowed from should not still be listed as
+    // somebody you follow when you come back to it.
+    _ref.invalidate(followListProvider);
 
     // The home feed is built from the follow graph, so following someone is
     // exactly the moment it stops being right. Rebuilt rather than patched:

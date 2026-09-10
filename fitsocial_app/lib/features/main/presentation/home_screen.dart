@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -59,6 +60,13 @@ class HomeScreen extends ConsumerWidget {
           // enough to scroll — which is exactly when a stale feed is least
           // worth refreshing, and an empty one could never be recovered.
           physics: const AlwaysScrollableScrollPhysics(),
+          // A screen and a half of read-ahead, against a default of 250px —
+          // shorter than a single post. At the default a photo only starts
+          // downloading as its card enters the viewport, which is what made
+          // scrolling land on a spinner every time. Cards in the cache area are
+          // laid out but not painted, so this buys the fetches a head start
+          // without paying to draw anything nobody is looking at.
+          scrollCacheExtent: const ScrollCacheExtent.viewport(1.5),
           padding: EdgeInsets.fromLTRB(
             AppSpacing.md,
             AppSpacing.sm,
@@ -158,6 +166,7 @@ class HomeScreen extends ConsumerWidget {
           postType: post.postType,
           imageUrl: post.imageUrl,
           workoutData: post.workoutData,
+          mealData: post.mealData,
           routePoints: post.routePoints,
           authorAvatarUrl: post.authorAvatarUrl,
           imageAspectRatio: post.imageAspectRatio,

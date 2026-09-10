@@ -7,8 +7,6 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
-import '../../challenges/application/challenge_providers.dart';
-import '../../challenges/presentation/badge_shelf.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
@@ -77,13 +75,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 bio,
               ],
-              // The badge case, above the grid. It draws nothing at all until
-              // there is something in it, so a new account is not given an
-              // empty trophy shelf to feel bad about.
-              if (userId != null) ...[
-                const SizedBox(height: AppSpacing.lg),
-                _ProfileBadgeShelf(userId: userId),
-              ],
               const SizedBox(height: AppSpacing.lg),
               const _SectionIndicator(),
               const Expanded(
@@ -103,28 +94,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// The badges a user holds, between their bio and their grid.
-///
-/// A thin wrapper rather than the shelf used directly, so the provider is
-/// watched here and the profile's own build is not rebuilt every time a badge
-/// lands.
-class _ProfileBadgeShelf extends ConsumerWidget {
-  const _ProfileBadgeShelf({required this.userId});
-
-  final String userId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final badges = ref.watch(badgesProvider(userId)).valueOrNull ?? const [];
-    if (badges.isEmpty) return const SizedBox.shrink();
-
-    return BadgeShelf(
-      badges: badges,
-      onTap: (badge) => showBadgeSheet(context, badge),
     );
   }
 }
