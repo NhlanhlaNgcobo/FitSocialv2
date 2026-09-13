@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_palette.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
 import 'app_photo.dart';
 import 'avatar.dart';
 import 'route_sparkline.dart';
+import 'run_summary_card.dart';
+import 'workout_summary_card.dart';
 
 /// A post as it appears once it has been put on somebody's Pulse.
 ///
@@ -168,9 +171,13 @@ class _Header extends StatelessWidget {
 /// A photo post draws its photo and a run draws the line it was: the shape of
 /// somebody's route is the one thing on a run post worth recognising across a
 /// room, and it comes off the snapshot with no map, no tiles and no network.
-/// Everything else draws a tinted tile with the glyph for what it was, because
-/// a workout block is too much detail at this size — the card is an invitation
-/// to open the post, not a copy of it.
+/// A run that was logged on a photo draws the line on that photo, the same
+/// way the feed card does — the picture is the runner's own, and the card
+/// should look like the post it opens. A workout draws its log sheet — the
+/// same [WorkoutSummaryCard] the feed draws, on its photo if it had one —
+/// because a workout *is* its numbers, and a glyph in their place said nothing
+/// about the session. Only a share too old to carry what it needs falls back
+/// to a tinted tile with a glyph and a label.
 class _Body extends StatelessWidget {
   const _Body({required this.post});
 
@@ -179,22 +186,7 @@ class _Body extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (post.kind == SharedPostKind.photo && post.hasImage) {
-      return AspectRatio(
-        // Same clamp the feed card uses, so a malformed stored ratio can't
-        // produce a card taller than the frame it sits in.
-        aspectRatio: (post.aspectRatio ?? 1.0).clamp(0.8, 1.91),
-        child: Image(
-          image: appPhoto(post.imageUrl!),
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const _Placeholder(
-            icon: Icons.broken_image_rounded,
-            label: 'Photo unavailable',
-          ),
-          loadingBuilder: (_, child, progress) => progress == null
-              ? child
-              : const _Placeholder(icon: Icons.image_rounded, label: ''),
-        ),
-      );
+      return _Photo(post: post);
     }
 
     switch (post.kind) {
@@ -207,24 +199,55 @@ class _Body extends StatelessWidget {
             label: 'Run route',
           );
         }
-        return _Tile(
-          child: Padding(
-            // Generous, because the line is scaled to whatever box it is given
-            // — crowding the edges here would only make it bigger, not better.
-            padding: const EdgeInsets.all(20),
-            child: RouteSparkline(
-              route: post.route,
-              strokeWidth: 3,
-              // The card is fixed to the on-media register whatever the app
-              // theme is doing, and so is the line drawn on it.
-              onMedia: true,
-            ),
+        final line = Padding(
+          // Generous, because the line is scaled to whatever box it is given
+          // — crowding the edges here would only make it bigger, not better.
+          padding: const EdgeInsets.all(20),
+          child: RouteSparkline(
+            route: post.route,
+            strokeWidth: 3,
+            // The card is fixed to the on-media register whatever the app
+            // theme is doing, and so is the line drawn on it.
+            onMedia: true,
           ),
         );
+        if (!post.hasImage) return _Tile(child: line);
+        // The runner's backdrop with the line over it and no scrim — what the
+        // feed shows for this post. The photo sets the shape, as it does
+        // there, so the line lands where the runner saw it land.
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            _Photo(post: post),
+            Positioned.fill(child: line),
+          ],
+        );
       case SharedPostKind.workout:
-        return const _Placeholder(
-          icon: Icons.fitness_center_rounded,
-          label: 'Workout',
+        // A share written before the snapshot carried the log has the kind
+        // but not the numbers, and still gets the label — unless it has a
+        // photo, which the sheet can at least sit on with its title.
+        if (!post.hasWorkout && !post.hasImage) {
+          return const _Placeholder(
+            icon: Icons.fitness_center_rounded,
+            label: 'Workout',
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          // The sheet reads its colours off the app palette when it has no
+          // photo, and this card is dark whatever the app is doing — so it is
+          // handed the dark palette, and its type stays white on it.
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              extensions: const [AppPalette.dark],
+            ),
+            child: WorkoutSummaryCard(
+              workoutData: post.workoutData,
+              activity: post.activity,
+              backgroundImageUrl: post.imageUrl,
+              margin: EdgeInsets.zero,
+            ),
+          ),
         );
       case SharedPostKind.photo:
       case SharedPostKind.text:
@@ -233,6 +256,48 @@ class _Body extends StatelessWidget {
         // whole card, so nothing is reserved above it.
         return const SizedBox.shrink();
     }
+  }
+}
+
+/// The post's photo, at the shape it was cropped to.
+///
+/// A photo post stores that shape. A run does not — its backdrop is measured
+/// as it decodes, the way the feed's run card measures it — so a null ratio
+/// here means "the photo's own", not "square".
+class _Photo extends StatelessWidget {
+  const _Photo({required this.post});
+
+  final SharedPostRef post;
+
+  /// Same clamp the feed card uses, so neither a malformed stored ratio nor a
+  /// very tall photo can produce a card taller than the frame it sits in.
+  static const double _minRatio = 0.8;
+  static const double _maxRatio = 1.91;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = appPhoto(post.imageUrl!);
+    return PhotoAspectRatio(
+      background: image,
+      // Only a run is left to measure. A photo post without a stored ratio
+      // is square, exactly as the feed draws it.
+      pinned: post.kind == SharedPostKind.route
+          ? post.aspectRatio
+          : post.aspectRatio ?? 1.0,
+      minRatio: _minRatio,
+      maxRatio: _maxRatio,
+      child: Image(
+        image: image,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const _Placeholder(
+          icon: Icons.broken_image_rounded,
+          label: 'Photo unavailable',
+        ),
+        loadingBuilder: (_, child, progress) => progress == null
+            ? child
+            : const _Placeholder(icon: Icons.image_rounded, label: ''),
+      ),
+    );
   }
 }
 

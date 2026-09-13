@@ -10,7 +10,6 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/glass.dart';
-import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/heart_rate_connection_controller.dart';
 import '../application/tracking_providers.dart';
@@ -219,8 +218,6 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
   Widget _devicesSection(AppPalette palette, int? liveBpm) {
     final connection = ref.watch(heartRateConnectionProvider);
     final controller = ref.read(heartRateConnectionProvider.notifier);
-    final isScanning =
-        connection.status == HeartRateConnectionStatus.scanning;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -235,14 +232,8 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
           ),
           const SizedBox(height: AppSpacing.md),
         ],
-        PrimaryButton(
-          label: isScanning ? 'Scanning…' : 'Scan for Devices',
-          icon: Icons.bluetooth_searching_rounded,
-          onPressed: isScanning ? null : controller.scan,
-        ),
         if (connection.status == HeartRateConnectionStatus.failed &&
             connection.remoteId != null) ...[
-          const SizedBox(height: AppSpacing.sm),
           TextButton.icon(
             onPressed: controller.retry,
             icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -289,19 +280,11 @@ class _HealthDashboardScreenState extends ConsumerState<HealthDashboardScreen>
         ],
         if (connection.discovered.isEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          if (isScanning)
-            const _HintPanel(
-              icon: Icons.bluetooth_searching_rounded,
-              text: 'Looking for nearby heart-rate devices. Make sure yours is '
-                  'awake and not already paired to another app.',
-              busy: true,
-            )
-          else
-            const _HintPanel(
-              icon: Icons.watch_rounded,
-              text: 'Works with smartwatches and chest straps that broadcast '
-                  'the standard Bluetooth heart-rate profile.',
-            ),
+          const _HintPanel(
+            icon: Icons.watch_rounded,
+            text: 'Works with smartwatches and chest straps that broadcast '
+                'the standard Bluetooth heart-rate profile.',
+          ),
         ],
       ],
     );
@@ -918,18 +901,15 @@ class _NoticeCard extends StatelessWidget {
   }
 }
 
-/// The quiet panel under the scan button: what this section works with, or
-/// what it is doing while it looks.
+/// The quiet panel at the foot of the devices section: what it works with.
 class _HintPanel extends StatelessWidget {
   const _HintPanel({
     required this.icon,
     required this.text,
-    this.busy = false,
   });
 
   final IconData icon;
   final String text;
-  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -945,17 +925,7 @@ class _HintPanel extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (busy)
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.4,
-                color: palette.brand,
-              ),
-            )
-          else
-            Icon(icon, size: 26, color: palette.muted),
+          Icon(icon, size: 26, color: palette.muted),
           const SizedBox(height: 12),
           Text(
             text,

@@ -47,7 +47,9 @@ void main() {
     await _pump(tester, [_comment('c1', author: 'Thandi', text: 'Strong run')]);
 
     await tester.tap(find.text('Reply'));
-    await tester.pump();
+    // The chip grows in rather than popping, and is clipped until it has —
+    // so the ✕ is only there to tap once the animation has landed.
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.close_rounded));
     await tester.pump();
 

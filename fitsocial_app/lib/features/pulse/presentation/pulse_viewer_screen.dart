@@ -17,6 +17,7 @@ import '../../../shared/widgets/reaction_bar.dart';
 import '../../../shared/widgets/shared_post_card.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
+import '../domain/pulse_text_style.dart';
 import 'pulse_music_frame.dart';
 import 'pulse_comments_sheet.dart';
 import 'pulse_reactions_sheet.dart';
@@ -534,7 +535,12 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
             onDelete: entry.isOwn ? () => _confirmDelete(segment) : null,
           ),
           const Spacer(),
+          // The caption pill is the old way of carrying words on a Pulse, and
+          // it is still how a shared post or track carries theirs. Anything
+          // written with the text tool arrives with a style, and the frame
+          // draws it where it was placed instead.
           if (segment.type != PulseMediaType.text &&
+              segment.textStyle == null &&
               segment.text.trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -727,23 +733,14 @@ class _PulseFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (segment.type) {
       case PulseMediaType.text:
-        return DecoratedBox(
-          decoration: BoxDecoration(gradient: segment.gradient.linear),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Center(
-              child: Text(
-                segment.text,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.onMedia,
-                  fontSize: pulseTextSize(segment.text),
-                  fontWeight: FontWeight.w800,
-                  height: 1.2,
-                ),
-              ),
-            ),
+        // A card written before the text tool existed has no style, and the
+        // defaults — the plain face, white, centred — are what it looked like.
+        return _withPlacedText(
+          segment,
+          DecoratedBox(
+            decoration: BoxDecoration(gradient: segment.gradient.linear),
           ),
+          fallback: PulseTextStyle.defaults,
         );
 
       case PulseMediaType.photo:
@@ -775,7 +772,10 @@ class _PulseFrame extends StatelessWidget {
         }
         // Full-bleed: the cover art is the frame, not a card floating on a
         // gradient. The gradient is what it falls back to with no art to show.
-        return PulseMusicFrame(music: music, gradient: segment.gradient);
+        return _withPlacedText(
+          segment,
+          PulseMusicFrame(music: music, gradient: segment.gradient),
+        );
 
       case PulseMediaType.post:
         final post = segment.sharedPost;
@@ -787,27 +787,30 @@ class _PulseFrame extends StatelessWidget {
             child: const _FrameMessage(label: 'This Pulse is unavailable.'),
           );
         }
-        return DecoratedBox(
-          decoration: BoxDecoration(gradient: segment.gradient.linear),
-          child: SafeArea(
-            child: Padding(
-              // Clears the header above and the reaction bar below, so the
-              // card centres in the frame rather than under the chrome.
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                96,
-                AppSpacing.lg,
-                168,
-              ),
-              child: Center(
-                child: SharedPostCard(
-                  post: post,
-                  // The card is the way through to the post it came from. Its
-                  // own gesture wins over the viewer's tap zones, so tapping
-                  // it opens the post instead of advancing the Pulse.
-                  onTap: onOpenSharedPost == null
-                      ? null
-                      : () => onOpenSharedPost!(post.postId),
+        return _withPlacedText(
+          segment,
+          DecoratedBox(
+            decoration: BoxDecoration(gradient: segment.gradient.linear),
+            child: SafeArea(
+              child: Padding(
+                // Clears the header above and the reaction bar below, so the
+                // card centres in the frame rather than under the chrome.
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  96,
+                  AppSpacing.lg,
+                  168,
+                ),
+                child: Center(
+                  child: SharedPostCard(
+                    post: post,
+                    // The card is the way through to the post it came from. Its
+                    // own gesture wins over the viewer's tap zones, so tapping
+                    // it opens the post instead of advancing the Pulse.
+                    onTap: onOpenSharedPost == null
+                        ? null
+                        : () => onOpenSharedPost!(post.postId),
+                  ),
                 ),
               ),
             ),
@@ -822,19 +825,46 @@ class _PulseFrame extends StatelessWidget {
             child: _FrameSpinner(),
           );
         }
-        return ColoredBox(
-          color: AppColors.mediaBackdrop,
-          child: FittedBox(
-            fit: BoxFit.cover,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
+        // A clip's words cannot be baked into it the way a photo's are, so
+        // they are laid over the video here, where the composer put them.
+        return _withPlacedText(
+          segment,
+          ColoredBox(
+            color: AppColors.mediaBackdrop,
+            child: FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: controller.value.size.width,
+                height: controller.value.size.height,
+                child: VideoPlayer(controller),
+              ),
             ),
           ),
         );
     }
+  }
+
+  /// [frame] with the segment's words set down on it where its style says.
+  ///
+  /// Nothing is added for a segment with no words, or — unless [fallback] is
+  /// given — one whose words carry no style: those are the old caption pill's
+  /// to draw, and the chrome above handles them.
+  static Widget _withPlacedText(
+    PulseSegment segment,
+    Widget frame, {
+    PulseTextStyle? fallback,
+  }) {
+    final text = segment.text.trim();
+    final style = segment.textStyle ?? fallback;
+    if (text.isEmpty || style == null) return frame;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        frame,
+        IgnorePointer(child: PulseTextLayer(text: text, style: style)),
+      ],
+    );
   }
 }
 

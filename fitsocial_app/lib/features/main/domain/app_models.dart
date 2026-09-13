@@ -440,23 +440,40 @@ class ExerciseEntry {
         name: (map['name'] as String?) ?? '',
         sets: (map['sets'] as num?)?.toInt() ?? 0,
         reps: (map['reps'] as num?)?.toInt() ?? 0,
+        weightKg: (map['weightKg'] as num?)?.toDouble(),
       );
   const ExerciseEntry({
     required this.name,
     required this.sets,
     required this.reps,
+    this.weightKg,
   });
 
   final String name;
   final int sets;
   final int reps;
 
+  /// The load carried, in kilograms. Null where it was not recorded — every
+  /// entry written before this field existed, and bodyweight work, which has a
+  /// load but not one the user types.
+  ///
+  /// Kilograms rather than "whatever the user typed", following the rule
+  /// `MeasurementUnits` already sets for body weight: storage is metric, and
+  /// the display setting only decides what the readout says. A number whose
+  /// meaning depends on a preference read at some later date is how a 60 kg
+  /// bench becomes a 60 lb one.
+  final double? weightKg;
+
   /// Firestore can only store primitives, lists, and maps — never custom
   /// classes — so entries must be converted before being written.
+  ///
+  /// An unrecorded weight is left out of the map rather than written as null,
+  /// so a document keeps the shape it had before the field existed.
   Map<String, dynamic> toMap() => {
         'name': name,
         'sets': sets,
         'reps': reps,
+        if (weightKg != null) 'weightKg': weightKg,
       };
 }
 
@@ -469,9 +486,15 @@ class WorkoutLogDraft {
     required this.notes,
     required this.shareToFeed,
     this.backgroundImagePath,
+    this.loggedAt,
   });
 
   final String title;
+
+  /// When the session happened. Null means "now", which is every workout
+  /// typed in by hand; a session pulled from the health store carries its own
+  /// start so a gym visit from last night is not logged as this morning's.
+  final DateTime? loggedAt;
 
   /// How long the session lasted. Numeric rather than a "45 min" label so the
   /// Progress tab can add durations up; the label is derived where it is shown.
@@ -497,6 +520,41 @@ class WorkoutLogDraft {
 
   /// "320 kcal", for the post's metric strip.
   String get caloriesLabel => '$calories kcal';
+
+  /// The map the post carries as `workoutData`, in the shape
+  /// `WorkoutSummaryCard` reads.
+  ///
+  /// Built here rather than inside the repository so the log screen can draw
+  /// the card before the save — the file it exports is then the card the post
+  /// is about to show, byte for byte the same document.
+  Map<String, dynamic> get workoutData => {
+        'title': title.trim().isEmpty ? 'Workout' : title.trim(),
+        'duration': durationLabel,
+        'calories': caloriesLabel,
+        'exercises': exercises.map((e) => e.toMap()).toList(),
+      };
+}
+
+/// A session already logged, in the shape the log screen can start from.
+///
+/// What the "Repeat" chips are built out of. Deliberately not an
+/// [ActivitySession]: that model is the Progress tab's — it carries a count of
+/// exercises rather than the exercises, because a streak grid never needs to
+/// know what was lifted. Refilling a form does.
+class RecentWorkout {
+  const RecentWorkout({
+    required this.title,
+    required this.durationMinutes,
+    required this.calories,
+    required this.exercises,
+    required this.loggedAt,
+  });
+
+  final String title;
+  final int durationMinutes;
+  final int calories;
+  final List<ExerciseEntry> exercises;
+  final DateTime loggedAt;
 }
 
 /// One GPS coordinate on a saved run route.
@@ -582,9 +640,8 @@ class HeartRateSummary {
     if (value is! Map) return null;
     // See RoutePoint.fromMap: skippable means skippable for a wrong type too,
     // not just for a missing key.
-    final average = (value['avgBpm'] is num)
-        ? (value['avgBpm'] as num).round()
-        : null;
+    final average =
+        (value['avgBpm'] is num) ? (value['avgBpm'] as num).round() : null;
     // A zero average is not a reading, it is the absence of one.
     if (average == null || average <= 0) return null;
     final max = (value['maxBpm'] is num) ? (value['maxBpm'] as num).round() : 0;
@@ -1368,8 +1425,7 @@ extension FollowListKindX on FollowListKind {
       };
 
   String get emptyMessage => switch (this) {
-        FollowListKind.followers =>
-          'People who follow you will show up here.',
+        FollowListKind.followers => 'People who follow you will show up here.',
         FollowListKind.following =>
           'Find people in Explore and the ones you follow will show up here.',
       };

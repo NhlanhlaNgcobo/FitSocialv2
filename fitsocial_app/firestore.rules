@@ -837,6 +837,32 @@ service cloud.firestore {
                             && resource.data.authorId == request.auth.uid;
     }
 
+    // Live activity shares — an activity in progress, published so that
+    // somebody holding the link can watch it on a map.
+    //
+    // Readable by any signed-in user who can name the document, and by
+    // nobody who cannot: the id is a random UUID minted on the sharer's phone
+    // and is the whole credential, so `get` is open and `list` is closed. That
+    // split is the security model — opening `list` would turn every live
+    // location in the app into a query away.
+    //
+    // Written only by the sharer, and only as themselves. The author may not
+    // be reassigned on update, so a document cannot be handed to somebody
+    // else's account after the fact.
+    match /liveActivities/{shareId} {
+      allow get: if request.auth != null;
+      allow list: if false;
+      allow create: if request.auth != null
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.status in ['live', 'ended'];
+      allow update: if request.auth != null
+                    && resource.data.authorId == request.auth.uid
+                    && request.resource.data.authorId == resource.data.authorId
+                    && request.resource.data.status in ['live', 'ended'];
+      allow delete: if request.auth != null
+                    && resource.data.authorId == request.auth.uid;
+    }
+
     // Workout logs — the canonical record of a logged workout, written
     // whether or not it was shared. Private to its author for the same reason
     // as /runs: this is a training history, and the feed already carries its

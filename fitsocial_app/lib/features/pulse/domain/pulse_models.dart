@@ -4,6 +4,7 @@ import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../main/domain/shared_post.dart';
 import 'pulse_music.dart';
+import 'pulse_text_style.dart';
 
 /// Timing rules for Pulse playback and expiry.
 ///
@@ -152,6 +153,7 @@ class PulseSegment {
     this.authorAvatarUrl,
     this.mediaUrl,
     this.text = '',
+    this.textStyle,
     this.gradientKey = 'ember',
     this.viewCount = 0,
     this.reactions = FitReactionSummary.empty,
@@ -178,6 +180,14 @@ class PulseSegment {
   /// The written message on a text Pulse, or the caption laid over a photo or
   /// video. Empty when there is none.
   final String text;
+
+  /// How and where [text] is drawn — face, colour, plate, placement.
+  ///
+  /// Null on a Pulse written before the text tool existed, which the viewer
+  /// draws the old way: a centred message on a text card, a caption pill on
+  /// anything else. A photo Pulse made with the tool carries no text at all,
+  /// because the words are baked into its pixels.
+  final PulseTextStyle? textStyle;
 
   /// Background palette for a text Pulse, and the tint behind a still that is
   /// letterboxed. See [PulseGradient].
@@ -308,6 +318,7 @@ class PulseDraft {
     required this.type,
     this.localFilePath,
     this.text = '',
+    this.textStyle,
     this.gradientKey = 'ember',
     this.videoDuration,
     this.aspectRatio,
@@ -322,6 +333,10 @@ class PulseDraft {
   final String? localFilePath;
 
   final String text;
+
+  /// How [text] is drawn. Null from the share screens, whose captions are
+  /// plain; set by the composer's text tool.
+  final PulseTextStyle? textStyle;
   final String gradientKey;
   final Duration? videoDuration;
   final double? aspectRatio;

@@ -554,10 +554,20 @@ class _TrendingTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // The same radius as the clip above, so the glass rim on a
+            // summary tile lands on the edge the grid actually shows.
             if (hasPhoto)
-              PostMediaTile(post: post, showAuthor: true)
+              PostMediaTile(
+                post: post,
+                showAuthor: true,
+                borderRadius: AppRadius.nested,
+              )
             else
-              PostSummaryTile(post: post, showAuthor: true),
+              PostSummaryTile(
+                post: post,
+                showAuthor: true,
+                borderRadius: AppRadius.nested,
+              ),
             // Both counts, not just likes: comments are weighted double in the
             // ranking, so a post sitting high on the strength of its replies
             // would otherwise look mysteriously placed.

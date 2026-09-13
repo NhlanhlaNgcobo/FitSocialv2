@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/auth/application/app_session.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
+import '../identity/profile_identity.dart';
+import 'comment_well.dart';
 import 'mention_suggestions.dart';
 import 'quick_toast.dart';
-import '../../shared/widgets/liquid_glass.dart';
 
 /// The "Add a comment…" well and its send button.
 ///
@@ -132,6 +132,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    // Watched, not read: a profile photo changed on the settings page should
+    // show up in the box without reopening the sheet.
+    final profile = ref.watch(appSessionProvider).profile;
 
     return Container(
       decoration: BoxDecoration(
@@ -142,21 +145,42 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       ),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
+        AppSpacing.sm + 2,
+        AppSpacing.md,
+        AppSpacing.sm + 2,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.replyTo != null) _replyBanner(palette, widget.replyTo!),
+          // Grows and collapses rather than popping: the chip arrives from a
+          // tap up in the list, and a bar that jumps a line under the thumb
+          // is what makes the sheet feel cheap.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            alignment: Alignment.bottomLeft,
+            child: widget.replyTo == null
+                ? const SizedBox(width: double.infinity)
+                : _replyChip(palette, widget.replyTo!),
+          ),
           // Above the field, not below it: this bar already sits on the
           // keyboard, so there is no room underneath to open into.
           MentionSuggestions(
             controller: _controller,
             focusNode: _focusNode,
           ),
-          _inputRow(palette),
+          CommentWell(
+            controller: _controller,
+            focusNode: _focusNode,
+            onSubmit: _submit,
+            isSending: _isSending,
+            hintText: widget.replyTo == null
+                ? 'Add a comment…'
+                : 'Reply to ${widget.replyTo!.authorName}…',
+            avatarInitials: avatarInitials(profile?.displayName),
+            avatarUrl: profile?.avatarUrl,
+          ),
         ],
       ),
     );
@@ -165,107 +189,56 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   /// Says where this comment is about to go, and offers the one way out of
   /// it. Without this a reply and a new comment are the same empty box, and
   /// the difference only shows up after it has been sent.
-  Widget _replyBanner(AppPalette palette, CommentReplyTarget target) {
+  ///
+  /// A brand chip rather than a muted line of text: it is the one thing on
+  /// the bar that changes what a send *does*, so it gets the accent.
+  Widget _replyChip(AppPalette palette, CommentReplyTarget target) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Row(
-        children: [
-          Icon(Icons.reply_rounded, size: 15, color: palette.muted),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              'Replying to ${target.authorName}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: palette.muted, fontSize: 13),
-            ),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
+          decoration: BoxDecoration(
+            color: palette.brandSoft,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            border: Border.all(color: palette.brandSoftStroke),
           ),
-          GestureDetector(
-            onTap: widget.onClearReply,
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              child: Icon(
-                Icons.close_rounded,
-                size: 16,
-                color: palette.muted,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.reply_rounded, size: 14, color: palette.brandText),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Replying to ${target.authorName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.brandText,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.1,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: widget.onClearReply,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 15,
+                    color: palette.brandText,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-    );
-  }
-
-  Widget _inputRow(AppPalette palette) {
-    return Row(
-      children: [
-        Expanded(
-          child: LiquidGlass(
-            // Painted by the lens rather than by a fill of its own: a pane
-            // over the app backdrop, like every other card.
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                style: TextStyle(
-                  color: palette.text,
-                  fontSize: 15,
-                ),
-                decoration: InputDecoration(
-                  hintText: widget.replyTo == null
-                      ? 'Add a comment...'
-                      : 'Reply to ${widget.replyTo!.authorName}...',
-                  hintStyle: TextStyle(color: palette.muted),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                ),
-                maxLines: 3,
-                minLines: 1,
-                textCapitalization: TextCapitalization.sentences,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _submit(),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        GestureDetector(
-          onTap: _submit,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFA053), Color(0xFFFF6B2C)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: _isSending
-                ? const Padding(
-                    padding: EdgeInsets.all(10),
-                    child: CircularProgressIndicator(
-                      color: AppColors.onBrand,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : Icon(
-                    Icons.send_rounded,
-                    color: palette.text,
-                    size: 18,
-                  ),
-          ),
-        ),
-      ],
     );
   }
 }

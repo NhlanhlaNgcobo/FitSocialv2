@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/input/typed_number.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
@@ -205,7 +206,7 @@ class _ManualRunEntryScreenState extends ConsumerState<ManualRunEntryScreen>
                             ),
                             onChanged: (value) {
                               setState(() {
-                                _distanceKm = double.tryParse(value) ?? 0;
+                                _distanceKm = parseTypedDouble(value) ?? 0;
                               });
                               _syncDraft();
                             },

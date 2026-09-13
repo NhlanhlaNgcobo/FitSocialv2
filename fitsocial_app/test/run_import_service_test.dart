@@ -273,4 +273,64 @@ void main() {
       expect(drafts.single.routePoints, isEmpty);
     });
   });
+
+  /// What "Fill from your health app" reads. Unlike [collect] it answers for
+  /// the runner who asked, so nothing is filtered for having been seen before.
+  group('latest', () {
+    final now = DateTime(2026, 9, 12, 11);
+
+    test('picks the newest plausible session', () async {
+      final source = _FakeSource(sessions: [
+        record(id: 'old', startedAt: now.subtract(const Duration(hours: 30))),
+        record(
+          id: 'new',
+          startedAt: now.subtract(const Duration(hours: 2)),
+          length: const Duration(minutes: 50, seconds: 25),
+          distanceMeters: 10010,
+        ),
+        // Started and cancelled: zero length, so never the answer even
+        // though it is the most recent.
+        record(
+          id: 'cancelled',
+          startedAt: now.subtract(const Duration(minutes: 10)),
+          length: Duration.zero,
+        ),
+      ]);
+
+      final found = await RunImportService(health: source).latest(now: now);
+
+      expect(found!.record.externalId, 'new');
+      expect(found.distanceKm, 10.01);
+      expect(found.elapsed, const Duration(minutes: 50, seconds: 25));
+      expect(source.readFrom, now.subtract(RunImportService.scanWindow));
+    });
+
+    test('is null when the store has nothing', () async {
+      expect(
+        await RunImportService(health: _FakeSource()).latest(now: now),
+        isNull,
+      );
+    });
+
+    test('falls back to distance records, and hands back a time-only session',
+        () async {
+      final withRecords = _FakeSource(
+        sessions: [record(startedAt: now, distanceMeters: null)],
+        distanceMeters: 3000,
+      );
+      final found =
+          await RunImportService(health: withRecords).latest(now: now);
+      expect(found!.distanceKm, 3.0);
+      expect(withRecords.distanceReads, 1);
+
+      // No distance anywhere: still offered, because a form can leave the
+      // distance blank for the runner to fill. A draft could not.
+      final bare = _FakeSource(
+        sessions: [record(startedAt: now, distanceMeters: null)],
+      );
+      final timeOnly = await RunImportService(health: bare).latest(now: now);
+      expect(timeOnly!.distanceKm, isNull);
+      expect(timeOnly.elapsed, const Duration(minutes: 30));
+    });
+  });
 }

@@ -23,14 +23,18 @@ Future<void> pumpComposer(WidgetTester tester) async {
   await tester.pump();
 }
 
-/// Taps [tab] below its label, near the bottom edge of the switch.
+/// The mode switch is icons only; each tab is found by the name it reads
+/// out and shows on a long press.
+Finder modeTab(String tab) => find.byTooltip(tab);
+
+/// Taps [tab] near the bottom edge of its segment, not on the icon.
 ///
-/// Tapping the words themselves would pass against a row of labels floating in
+/// Tapping the icon itself would pass against a row of icons floating in
 /// dead space. The whole segment is the button, so the test presses where a
 /// thumb actually lands.
 Future<void> tapModeBelowLabel(WidgetTester tester, String tab) async {
-  final label = tester.getRect(find.text(tab));
-  await tester.tapAt(Offset(label.center.dx, label.bottom + 8));
+  final segment = tester.getRect(modeTab(tab));
+  await tester.tapAt(Offset(segment.center.dx, segment.bottom - 4));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
 }
@@ -44,9 +48,9 @@ void main() {
       await pumpComposer(tester);
 
       expect(find.text('Capture a Pulse'), findsOneWidget);
-      expect(find.text('Photo'), findsOneWidget);
-      expect(find.text('Video'), findsOneWidget);
-      expect(find.text('Text'), findsOneWidget);
+      expect(modeTab('Photo'), findsOneWidget);
+      expect(modeTab('Video'), findsOneWidget);
+      expect(modeTab('Text'), findsOneWidget);
     });
 
     testWidgets('reaches video from a tap anywhere in its segment',
@@ -95,8 +99,61 @@ void main() {
       expect(find.text('Share Pulse'), findsOneWidget);
       expect(
         tester.getCenter(find.text('Share Pulse')).dy,
-        lessThan(tester.getCenter(find.text('Photo')).dy),
+        lessThan(tester.getCenter(modeTab('Photo')).dy),
       );
+    });
+  });
+
+  group('the background button', () {
+    // Only a written card has a backdrop to change: a photo or clip is its
+    // own background.
+    testWidgets('is only offered on a text card', (tester) async {
+      await pumpComposer(tester);
+      expect(find.byTooltip('Change background'), findsNothing);
+
+      await tapModeBelowLabel(tester, 'Text');
+      expect(find.byTooltip('Change background'), findsOneWidget);
+    });
+
+    testWidgets('sits under the text tool', (tester) async {
+      await pumpComposer(tester);
+      await tapModeBelowLabel(tester, 'Text');
+
+      final text = tester.getCenter(find.byTooltip('Add text'));
+      final background = tester.getCenter(find.byTooltip('Change background'));
+      expect(background.dx, moreOrLessEquals(text.dx, epsilon: 1));
+      expect(background.dy, greaterThan(text.dy));
+    });
+
+    // The card's fill is the only place the choice shows, so that is what
+    // the test reads.
+    testWidgets('changes the card with every tap', (tester) async {
+      await pumpComposer(tester);
+      await tapModeBelowLabel(tester, 'Text');
+
+      Gradient? fill() {
+        final card = tester.widget<DecoratedBox>(
+          find
+              .ancestor(
+                of: find.text('Say something'),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        );
+        return (card.decoration as BoxDecoration).gradient;
+      }
+
+      final first = fill();
+      await tester.tap(find.byTooltip('Change background'));
+      await tester.pump();
+      final second = fill();
+      await tester.tap(find.byTooltip('Change background'));
+      await tester.pump();
+      final third = fill();
+
+      expect(second, isNot(equals(first)));
+      expect(third, isNot(equals(second)));
+      expect(third, isNot(equals(first)));
     });
   });
 
@@ -138,7 +195,7 @@ void main() {
     testWidgets('opens when the shutter is pressed', (tester) async {
       await pumpComposer(tester);
       // By size, not by icon alone: the Photo tab in the mode switch carries
-      // the same glyph at 17. The disc is the big one.
+      // the same glyph at 22. The disc is the big one.
       await tester.tap(find.byWidgetPredicate(
         (widget) =>
             widget is Icon &&

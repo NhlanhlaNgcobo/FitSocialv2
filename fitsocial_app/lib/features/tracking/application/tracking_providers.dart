@@ -11,6 +11,7 @@ import '../data/live_run_service.dart';
 import '../data/run_import_service.dart';
 import '../data/step_tracker_service.dart';
 import '../data/treadmill_run_service.dart';
+import '../data/workout_prefill_service.dart';
 
 final stepTrackerServiceProvider = Provider<StepTrackerService>((ref) {
   return StepTrackerService();
@@ -133,4 +134,10 @@ final healthDiagnosticsProvider =
 /// file — the dependency only runs in this direction.
 final runImportServiceProvider = Provider<RunImportService>((ref) {
   return RunImportService(health: ref.watch(healthServiceProvider));
+});
+
+/// The workout-side read behind "Fill from your health app" on the Training
+/// Log. Same store as the run import, different slice of it.
+final workoutPrefillServiceProvider = Provider<WorkoutPrefillService>((ref) {
+  return WorkoutPrefillService(health: ref.watch(healthServiceProvider));
 });

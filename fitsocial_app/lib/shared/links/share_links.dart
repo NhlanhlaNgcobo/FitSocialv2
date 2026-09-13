@@ -58,13 +58,20 @@ abstract final class FitSocialLinks {
   ///
   /// Anything outside this set is not a link we published, so it is neither
   /// held over a sign-in nor treated as a destination — see [routeFor].
-  static const Set<String> _shareablePrefixes = {'post', 'user'};
+  static const Set<String> _shareablePrefixes = {'post', 'user', 'live'};
 
   /// The link to hand out for a post. This is what the OS share sheet sends.
   static Uri post(String postId) => _web('post', postId);
 
   /// The link to hand out for someone's profile.
   static Uri profile(String userId) => _web('user', userId);
+
+  /// The link to hand out for an activity being tracked right now.
+  ///
+  /// The id is a random UUID minted by the sharer's phone and is the whole
+  /// credential: anyone signed in who holds it can watch, nobody can find it
+  /// without it. See `FirestoreLiveShareRepository`.
+  static Uri live(String shareId) => _web('live', shareId);
 
   /// The custom-scheme twin of [post], for the landing page's hand-off.
   static Uri postScheme(String postId) => _scheme('post', postId);

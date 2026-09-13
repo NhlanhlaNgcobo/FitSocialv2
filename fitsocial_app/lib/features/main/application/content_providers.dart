@@ -215,6 +215,16 @@ final activitySessionsProvider =
   return ref.watch(contentRepositoryProvider).getActivitySessions();
 });
 
+/// The sessions behind the log screen's "Repeat" chips.
+///
+/// autoDispose, and invalidated on every save, so a workout logged now is
+/// offered as a template the next time the screen opens rather than after a
+/// restart.
+final recentWorkoutsProvider =
+    FutureProvider.autoDispose<List<RecentWorkout>>((ref) {
+  return ref.watch(contentRepositoryProvider).getRecentWorkouts();
+});
+
 /// The gap-filled run/workout calendar behind the streak grid.
 ///
 /// The window is derived from the range here rather than in the widget so the

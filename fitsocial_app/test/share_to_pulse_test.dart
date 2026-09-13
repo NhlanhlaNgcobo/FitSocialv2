@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fitsocial_app/app/theme/app_palette.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/main/domain/shared_post.dart';
 import 'package:fitsocial_app/features/pulse/domain/pulse_models.dart';
+import 'package:fitsocial_app/features/pulse/presentation/pulse_text_tool.dart';
+import 'package:fitsocial_app/features/pulse/presentation/share_post_to_pulse_screen.dart';
 import 'package:fitsocial_app/shared/widgets/route_sparkline.dart';
 import 'package:fitsocial_app/shared/widgets/shared_post_card.dart';
+import 'package:fitsocial_app/shared/widgets/workout_summary_card.dart';
 
 FeedPost _post({
   String? imageUrl,
@@ -35,7 +39,19 @@ FeedPost _post({
   );
 }
 
+/// A log the way the workout screen writes one.
+const Map<String, dynamic> _legDay = {
+  'title': 'Leg day',
+  'duration': '45 min',
+  'calories': '320 kcal',
+  'exercises': [
+    {'name': 'Squat', 'sets': 5, 'reps': 5, 'weightKg': 100},
+    {'name': 'Lunge', 'sets': 3, 'reps': 12, 'weightKg': 20},
+  ],
+};
+
 void main() {
+  runShareScreenTests();
   group('SharedPostRef', () {
     test('a route outranks the stored type, exactly as the feed card has it',
         () {
@@ -129,6 +145,71 @@ void main() {
       expect(ref.kind, SharedPostKind.workout);
     });
 
+    test(
+        'a workout with a photo is still a workout — the photo is its backdrop',
+        () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(
+          postType: PostType.workout,
+          imageUrl: 'https://example.com/gym.jpg',
+          workoutData: _legDay,
+        ),
+      );
+
+      expect(ref.kind, SharedPostKind.workout);
+      expect(ref.hasImage, isTrue);
+      expect(ref.hasWorkout, isTrue);
+    });
+
+    test('a workout carries its log, thinned to what the sheet reads', () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(
+          postType: PostType.workout,
+          workoutData: {
+            ..._legDay,
+            'notes': 'felt strong',
+            'exercises': [
+              ..._legDay['exercises'] as List,
+              'Plain string exercise',
+              const {'sets': 3},
+              for (var i = 0; i < 20; i++) {'name': 'Filler $i'},
+            ],
+          },
+        ),
+      );
+
+      final log = ref.workoutData!;
+      expect(log['title'], 'Leg day');
+      expect(log['duration'], '45 min');
+      expect(log.containsKey('notes'), isFalse);
+      final exercises = log['exercises'] as List;
+      expect(exercises.length, SharedPostRef.maxWorkoutExercises);
+      expect(exercises.first,
+          {'name': 'Squat', 'sets': 5, 'reps': 5, 'weightKg': 100});
+      // A bare name survives; an entry with no name does not.
+      expect(exercises[2], {'name': 'Plain string exercise'});
+      expect(exercises[3], {'name': 'Filler 0'});
+    });
+
+    test('a workout keeps its log through a Pulse document', () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(postType: PostType.workout, workoutData: _legDay),
+      );
+
+      final restored = SharedPostRef.fromMap(ref.toMap())!;
+
+      expect(restored.kind, SharedPostKind.workout);
+      expect(restored.workoutData, ref.workoutData);
+    });
+
+    test('only a workout carries a log', () {
+      final ref = SharedPostRef.fromFeedPost(
+        _post(postType: PostType.image, imageUrl: 'https://example.com/a.jpg'),
+      );
+
+      expect(ref.workoutData, isNull);
+      expect(ref.toMap().containsKey('workoutData'), isFalse);
+    });
     test('a long caption is clipped, because the card is not the post', () {
       final ref = SharedPostRef.fromFeedPost(
         _post(caption: 'a' * 400),
@@ -237,8 +318,8 @@ void main() {
     });
 
     test('round-trips through its stored key', () {
-      expect(PulseMediaType.fromKey(PulseMediaType.post.key),
-          PulseMediaType.post);
+      expect(
+          PulseMediaType.fromKey(PulseMediaType.post.key), PulseMediaType.post);
       // A document written before this kind existed still reads as a photo.
       expect(PulseMediaType.fromKey(null), PulseMediaType.photo);
     });
@@ -321,6 +402,97 @@ void main() {
       expect(find.byType(Image), findsNothing);
     });
 
+    testWidgets('a run logged on a photo draws the line on that photo',
+        (tester) async {
+      await tester.pumpWidget(
+        host(
+          SharedPostCard(
+            // Narrow enough that a 4:5 photo and the card's chrome fit the
+            // test surface without overflowing.
+            width: 240,
+            post: SharedPostRef.fromFeedPost(
+              _post(
+                postType: PostType.run,
+                imageUrl: 'https://example.com/run.jpg',
+                routePoints: const [
+                  RoutePoint(latitude: 1, longitude: 1),
+                  RoutePoint(latitude: 2, longitude: 2),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Both, and in that order: the photo is the backdrop, the line is over
+      // it. The tinted tile that stands in for a photo is not drawn at all.
+      expect(find.byType(Image), findsOneWidget);
+      expect(find.byType(RouteSparkline), findsOneWidget);
+      expect(find.text('RUN ROUTE'), findsNothing);
+      final photoY = tester.getRect(find.byType(Image)).top;
+      final lineY = tester.getRect(find.byType(RouteSparkline)).top;
+      expect(lineY, greaterThanOrEqualTo(photoY));
+    });
+
+    testWidgets('a workout share draws the log sheet, not a glyph for it',
+        (tester) async {
+      await tester.pumpWidget(
+        host(
+          SharedPostCard(
+            width: 280,
+            post: SharedPostRef.fromFeedPost(
+              _post(postType: PostType.workout, workoutData: _legDay),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(WorkoutSummaryCard), findsOneWidget);
+      expect(find.text('Leg day'), findsOneWidget);
+      expect(find.text('Squat'), findsOneWidget);
+      expect(find.text('Lunge'), findsOneWidget);
+      expect(find.text('WORKOUT'), findsNothing);
+    });
+
+    testWidgets('a workout share on a photo draws the sheet over the photo',
+        (tester) async {
+      await tester.pumpWidget(
+        host(
+          SharedPostCard(
+            width: 280,
+            post: SharedPostRef.fromFeedPost(
+              _post(
+                postType: PostType.workout,
+                imageUrl: 'https://example.com/gym.jpg',
+                workoutData: _legDay,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(WorkoutSummaryCard), findsOneWidget);
+      expect(find.byKey(WorkoutSummaryCard.backdropKey), findsOneWidget);
+      expect(find.text('Squat'), findsOneWidget);
+    });
+
+    testWidgets(
+        'a workout share written before the log was carried keeps the label',
+        (tester) async {
+      await tester.pumpWidget(
+        host(
+          SharedPostCard(
+            post: SharedPostRef.fromMap(const {
+              'postId': 'p1',
+              'kind': 'workout',
+            })!,
+          ),
+        ),
+      );
+
+      expect(find.text('WORKOUT'), findsOneWidget);
+      expect(find.byType(WorkoutSummaryCard), findsNothing);
+    });
     testWidgets('a share written before the trace was carried keeps the label',
         (tester) async {
       await tester.pumpWidget(
@@ -336,6 +508,77 @@ void main() {
 
       expect(find.text('RUN ROUTE'), findsOneWidget);
       expect(find.byType(RouteSparkline), findsNothing);
+    });
+  });
+}
+
+/// The share screen, mounted the way the router mounts it: the post rides in
+/// as a snapshot, and nothing is read until Share is pressed.
+Future<void> pumpShareScreen(WidgetTester tester, FeedPost post) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      child: MaterialApp(
+        theme: ThemeData(extensions: const [AppPalette.dark]),
+        home: SharePostToPulseScreen(post: SharedPostRef.fromFeedPost(post)),
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
+void runShareScreenTests() {
+  group('sharing a run to Pulse', () {
+    final run = _post(
+      postType: PostType.run,
+      imageUrl: 'https://example.com/run.jpg',
+      routePoints: const [
+        RoutePoint(latitude: 1, longitude: 1),
+        RoutePoint(latitude: 2, longitude: 2),
+      ],
+    );
+
+    testWidgets(
+        'mounts the card with its photo, and offers the text tool '
+        'and the backdrop wheel', (tester) async {
+      await pumpShareScreen(tester, run);
+
+      expect(find.byType(SharedPostCard), findsOneWidget);
+      expect(find.byType(Image), findsOneWidget);
+      expect(find.byType(RouteSparkline), findsOneWidget);
+      expect(find.byTooltip('Add text'), findsOneWidget);
+      expect(find.byTooltip('Change background'), findsOneWidget);
+      expect(find.text('Share Pulse'), findsOneWidget);
+    });
+
+    testWidgets('the wheel steps the mount to the next backdrop',
+        (tester) async {
+      await pumpShareScreen(tester, run);
+
+      LinearGradient mount() {
+        final boxes = tester
+            .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+            .map((box) => box.decoration)
+            .whereType<BoxDecoration>()
+            .map((decoration) => decoration.gradient)
+            .whereType<LinearGradient>();
+        return boxes.first;
+      }
+
+      final before = mount();
+      await tester.tap(find.byTooltip('Change background'));
+      await tester.pump();
+
+      expect(mount(), isNot(equals(before)));
+    });
+
+    testWidgets('the text tool opens over the card', (tester) async {
+      await pumpShareScreen(tester, run);
+
+      await tester.tap(find.byTooltip('Add text'));
+      await tester.pump();
+
+      expect(find.byType(PulseTextEditor), findsOneWidget);
+      expect(find.text('Done'), findsOneWidget);
     });
   });
 }

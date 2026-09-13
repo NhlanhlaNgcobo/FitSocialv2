@@ -12,6 +12,8 @@ import '../services/meal_card_exporter.dart';
 import '../services/meal_card_saver.dart';
 import '../services/run_card_exporter.dart';
 import '../services/run_card_saver.dart';
+import '../services/workout_card_exporter.dart';
+import '../services/workout_card_saver.dart';
 import 'quick_toast.dart';
 import 'liquid_glass.dart';
 
@@ -26,8 +28,8 @@ enum _ShareChoice {
   /// The link on its own, for pasting somewhere the share sheet doesn't reach.
   copyLink,
 
-  /// The run or meal card itself, drawn to a file and put in the camera roll.
-  /// Only offered on a post that has a card to draw.
+  /// The run, meal or workout card itself, drawn to a file and put in the
+  /// camera roll. Only offered on a post that has a card to draw.
   saveImage,
 }
 
@@ -35,24 +37,26 @@ enum _ShareChoice {
 ///
 /// Two destinations, which is the split Instagram uses: *inside* the app, where
 /// a share means putting the post on your own Pulse, and *outside* it, where a
-/// share means handing someone a link. Of the post's own content only its run
-/// or meal card leaves, and only when the reader asks for it by name — never
-/// the caption, never the photo on its own. Someone who receives a link and
-/// has FitSocial opens the post; someone who doesn't gets the page that offers
-/// the app. See [FitSocialLinks].
+/// share means handing someone a link. Of the post's own content only its run,
+/// meal or workout card leaves, and only when the reader asks for it by name —
+/// never the caption, never the photo on its own. Someone who receives a link
+/// and has FitSocial opens the post; someone who doesn't gets the page that
+/// offers the app. See [FitSocialLinks].
 ///
-/// [runCard] and [mealCard] both decide whether the save row appears and say
-/// what it should draw, because [SharedPostRef] carries neither the route nor
-/// the macros the cards read their numbers out of. A post is never both, so at
-/// most one is ever non-null.
+/// [runCard], [mealCard] and [workoutCard] each decide whether the save row
+/// appears and say what it should draw, because [SharedPostRef] carries none
+/// of the route, the macros or the exercises the cards read their numbers out
+/// of. A post is only ever one of the three, so at most one is non-null.
 Future<void> showPostShareSheet(
   BuildContext context,
   SharedPostRef post, {
   RunCardExport? runCard,
   MealCardExport? mealCard,
+  WorkoutCardExport? workoutCard,
 }) async {
   final palette = context.palette;
-  final canSaveImage = (runCard != null || mealCard != null) && !kIsWeb;
+  final canSaveImage =
+      (runCard != null || mealCard != null || workoutCard != null) && !kIsWeb;
 
   final choice = await showModalBottomSheet<_ShareChoice>(
     context: context,
@@ -136,6 +140,8 @@ Future<void> showPostShareSheet(
         await saveRunCardImage(context, runCard);
       } else if (mealCard != null) {
         await saveMealCardImage(context, mealCard);
+      } else if (workoutCard != null) {
+        await saveWorkoutCardImage(context, workoutCard);
       }
   }
 }
@@ -158,7 +164,8 @@ Future<void> saveRunCardImage(BuildContext context, RunCardExport card) async {
 }
 
 /// [saveRunCardImage]'s meal-flavoured twin.
-Future<void> saveMealCardImage(BuildContext context, MealCardExport card) async {
+Future<void> saveMealCardImage(
+    BuildContext context, MealCardExport card) async {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   try {
     final bytes = await renderMealCardPng(context, card);
@@ -167,6 +174,22 @@ Future<void> saveMealCardImage(BuildContext context, MealCardExport card) async 
     showQuickToastOn(overlay, 'Saved to your photos', tone: ToastTone.success);
   } catch (error) {
     reportMealCardFailure(overlay, error);
+  }
+}
+
+/// [saveRunCardImage]'s workout-flavoured twin.
+Future<void> saveWorkoutCardImage(
+  BuildContext context,
+  WorkoutCardExport card,
+) async {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  try {
+    final bytes = await renderWorkoutCardPng(context, card);
+    await saveImageToGallery(bytes, name: workoutCardFileName());
+    if (overlay == null) return;
+    showQuickToastOn(overlay, 'Saved to your photos', tone: ToastTone.success);
+  } catch (error) {
+    reportWorkoutCardFailure(overlay, error);
   }
 }
 

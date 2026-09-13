@@ -6,6 +6,8 @@
 // and someone's weight is nobody else's business. These fields are stored in
 // the owner-only `private` subcollection instead.
 
+import '../../../shared/input/typed_number.dart';
+
 /// Which units the user entered their figures in.
 ///
 /// Storage is always metric — a stored number that changes meaning with a
@@ -93,11 +95,7 @@ const double maxWeightKg = 400;
 /// input filter had quietly dropped the comma. A weight of 705 kg is outside
 /// the accepted range, which is how a perfectly ordinary entry ended up
 /// producing no BMI at all.
-double? parseMeasurement(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) return null;
-  return double.tryParse(trimmed.replaceAll(',', '.'));
-}
+double? parseMeasurement(String raw) => parseTypedDouble(raw);
 
 /// The height above which a metric entry is read as centimetres.
 ///

@@ -1,8 +1,7 @@
 import '../../../shared/widgets/quick_toast.dart';
-import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show Uint8List;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,7 +42,10 @@ class MealUploadScreen extends ConsumerStatefulWidget {
 
 class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   final ImagePicker _picker = ImagePicker();
-  String? _imagePath;
+  /// The photo, held in memory from the moment it is picked. The upload sends
+  /// these bytes rather than re-reading a file the OS may have cleared while
+  /// the user was on this screen.
+  Uint8List? _imageBytes;
   _AnalysisStage _stage = _AnalysisStage.idle;
 
   bool get _isBusy => _stage != _AnalysisStage.idle;
@@ -63,9 +65,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
       final LostDataResponse response = await _picker.retrieveLostData();
       if (response.isEmpty) return;
       final file = response.file;
-      if (file != null && mounted) {
-        setState(() => _imagePath = file.path);
-      }
+      if (file != null) await _holdPhoto(file.path);
     } catch (_) {
       // Lost-data recovery is best-effort only.
     }
@@ -74,11 +74,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   Future<void> _pickImage(ImageSource source) async {
     try {
       final path = await _pickDownscaled(source);
-      if (path != null && mounted) {
-        setState(() {
-          _imagePath = path;
-        });
-      }
+      if (path != null) await _holdPhoto(path);
     } on PlatformException catch (e) {
       if (e.code == 'already_active') {
         // A previous pick never completed (interrupted flow). Flush the
@@ -86,9 +82,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
         try {
           await _picker.retrieveLostData();
           final path = await _pickDownscaled(source);
-          if (path != null && mounted) {
-            setState(() => _imagePath = path);
-          }
+          if (path != null) await _holdPhoto(path);
           return;
         } catch (_) {}
       }
@@ -121,6 +115,26 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   /// uploads a few hundred KB — full-resolution phone photos can exceed the
   /// 10 MB Storage rules cap and make the AI analysis slow and costly.
   ///
+  /// Reads the picked photo into memory straight away, while the file is
+  /// guaranteed to exist, and shows it. Uses XFile so web's blob: URLs work.
+  Future<void> _holdPhoto(String path) async {
+    final Uint8List bytes;
+    try {
+      bytes = await XFile(path).readAsBytes();
+    } catch (_) {
+      if (mounted) {
+        showQuickToast(
+          context,
+          "Couldn't load that photo. Please try again.",
+          tone: ToastTone.danger,
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _imageBytes = bytes);
+  }
+
   /// Returns the cropped file's path, or null if the user backed out.
   Future<String?> _pickDownscaled(ImageSource source) {
     return InstagramPhotoPicker.pickAndCrop(
@@ -130,7 +144,8 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   }
 
   Future<void> _analyzeAndNavigate() async {
-    if (_imagePath == null) return;
+    final bytes = _imageBytes;
+    if (bytes == null) return;
 
     setState(() {
       _stage = _AnalysisStage.uploading;
@@ -140,7 +155,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
       final repository = ref.read(contentRepositoryProvider);
 
       // Step 1: Upload to Firebase Storage
-      final imageUrl = await repository.uploadMealImage(_imagePath!);
+      final imageUrl = await repository.uploadMealImageBytes(bytes);
       if (!mounted) return;
       setState(() {
         _stage = _AnalysisStage.analyzing;
@@ -198,7 +213,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = _imagePath != null;
+    final hasPhoto = _imageBytes != null;
 
     // The scrim has to cover the app bar and the action bar as well as the
     // page, so the Scaffold sits inside the Stack rather than hosting it.
@@ -299,9 +314,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
                   aspectRatio: 4 / 5,
                   child: ColoredBox(
                     color: AppColors.mediaBackdrop,
-                    child: kIsWeb
-                        ? Image.network(_imagePath!, fit: BoxFit.contain)
-                        : Image.file(File(_imagePath!), fit: BoxFit.contain),
+                    child: Image.memory(_imageBytes!, fit: BoxFit.contain),
                   ),
                 ),
                 Positioned(
@@ -312,7 +325,7 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
                     label: 'Change photo',
                     onTap: _isBusy
                         ? null
-                        : () => setState(() => _imagePath = null),
+                        : () => setState(() => _imageBytes = null),
                   ),
                 ),
               ],

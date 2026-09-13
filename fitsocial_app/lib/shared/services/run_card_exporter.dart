@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -11,6 +10,7 @@ import '../../features/main/domain/app_models.dart';
 import '../widgets/fit_social_logo.dart';
 import '../widgets/route_sparkline.dart';
 import '../widgets/run_summary_card.dart';
+import 'held_image.dart';
 
 /// Everything the run card needs to draw itself into a file.
 ///
@@ -101,7 +101,7 @@ Future<Uint8List> renderRunCardPng(
   final configuration = createLocalImageConfiguration(context);
 
   _capturing = true;
-  final held = <_HeldImage>[];
+  final held = <HeldImage>[];
   OverlayEntry? entry;
   ui.Image? image;
   try {
@@ -115,7 +115,7 @@ Future<Uint8List> renderRunCardPng(
     var ratio = 1.0;
     if (background != null) {
       try {
-        final backgroundHeld = await _hold(background, configuration);
+        final backgroundHeld = await holdImage(background, configuration);
         held.add(backgroundHeld);
         final decoded = backgroundHeld.image;
         if (decoded != null && decoded.height != 0) {
@@ -129,7 +129,7 @@ Future<Uint8List> renderRunCardPng(
     }
     try {
       held.add(
-        await _hold(const AssetImage(kFitSocialMarkAsset), configuration),
+        await holdImage(const AssetImage(kFitSocialMarkAsset), configuration),
       );
     } on RunCardExportException {
       rethrow;
@@ -177,7 +177,7 @@ Future<Uint8List> renderRunCardPng(
                       color: ground,
                       child: SizedBox.fromSize(
                         size: size,
-                          child: RunSummaryCard(
+                        child: RunSummaryCard(
                           route: spec.route,
                           distanceLabel: spec.distanceLabel,
                           durationLabel: spec.durationLabel,
@@ -243,52 +243,5 @@ Future<Uint8List> renderRunCardPng(
       image.release();
     }
     _capturing = false;
-  }
-}
-
-/// A decoded image, kept in the cache until [release].
-class _HeldImage {
-  _HeldImage(this.stream, this.listener, {this.image});
-
-  final ImageStream stream;
-  final ImageStreamListener listener;
-
-  /// The decoded frame, so a caller can measure it without resolving the same
-  /// provider a second time. Null only if the stream completed with no frame,
-  /// which [_hold] would already have thrown on.
-  final ui.Image? image;
-
-  void release() => stream.removeListener(listener);
-}
-
-/// Decodes [provider] and holds the listener open, so the cache entry cannot be
-/// evicted between here and the capture frame.
-///
-/// Deliberately not [precacheImage], which swallows failures — a photo that
-/// quietly failed would export as the grey fallback, which looks like a bug in
-/// the card rather than a failure to save.
-Future<_HeldImage> _hold(
-  ImageProvider provider,
-  ImageConfiguration configuration,
-) async {
-  final stream = provider.resolve(configuration);
-  final ready = Completer<void>();
-  ui.Image? decoded;
-  final listener = ImageStreamListener(
-    (info, _) {
-      decoded = info.image;
-      if (!ready.isCompleted) ready.complete();
-    },
-    onError: (error, stack) {
-      if (!ready.isCompleted) ready.completeError(error, stack);
-    },
-  );
-  stream.addListener(listener);
-  try {
-    await ready.future;
-    return _HeldImage(stream, listener, image: decoded);
-  } on Object {
-    stream.removeListener(listener);
-    rethrow;
   }
 }

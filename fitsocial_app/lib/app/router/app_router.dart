@@ -48,6 +48,7 @@ import '../../features/pulse/presentation/pulse_viewer_screen.dart';
 import '../../features/pulse/presentation/share_music_to_pulse_screen.dart';
 import '../../features/pulse/presentation/share_post_to_pulse_screen.dart';
 import '../../features/tracking/presentation/health_dashboard_screen.dart';
+import '../../features/tracking/presentation/live_activity_viewer_screen.dart';
 import '../../features/tracking/presentation/live_run_screen.dart';
 import '../../features/tracking/presentation/treadmill_run_screen.dart';
 import '../../features/weather/presentation/weather_forecast_screen.dart';
@@ -329,6 +330,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/treadmill-run',
         builder: (context, state) => const TreadmillRunScreen(),
+      ),
+      // Somebody else's activity in progress, reached through a shared link.
+      // Outside the shell for the same reason a post is: you arrive from a
+      // chat, watch, and leave. The id is the whole credential — see
+      // FitSocialLinks.live.
+      GoRoute(
+        path: '/live/:shareId',
+        builder: (context, state) => LiveActivityViewerScreen(
+          shareId: state.pathParameters['shareId']!,
+        ),
       ),
       GoRoute(
         path: '/health',

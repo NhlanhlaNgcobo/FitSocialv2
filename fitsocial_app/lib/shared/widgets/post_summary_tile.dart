@@ -7,6 +7,7 @@ import '../../features/main/domain/activity_kind.dart';
 import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/explore_models.dart';
 import 'app_photo.dart';
+import 'liquid_glass.dart';
 import 'route_sparkline.dart';
 
 /// What kind of post a tile is showing. Drives the glyph and what the body
@@ -70,8 +71,9 @@ const List<Shadow> _mediaTextShadows = [
 /// a muddy orange rectangle with the activity's name printed on it, repeated
 /// down the column, saying nothing about any of the posts behind it. Those
 /// colour pairs were mixed for the dark app and describe nothing about a post,
-/// so this drops them and builds on the palette instead — a quiet card, with
-/// the post's own content as the only thing on it worth looking at.
+/// so this drops them for a pane of the app's glass instead — a quiet card
+/// over the backdrop, with the post's own content as the only thing on it
+/// worth looking at.
 ///
 /// What "content" means depends on the post. A GPS run has a shape; a workout
 /// and a meal have numbers; a written post has its words. Each leads with its
@@ -146,61 +148,62 @@ class PostSummaryTile extends StatelessWidget {
     // The second and third metrics, where there is room for them.
     final detail = compact ? '' : metrics.skip(1).join(' · ');
 
-    return Container(
-      padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.sm + 2),
-      decoration: BoxDecoration(
-        // A whisper of a gradient rather than a flat fill: a grid of flat
-        // cards reads as a spreadsheet, and this is the same lift the workout
-        // card in the feed has always had.
-        gradient: LinearGradient(
-          colors: [palette.surface, palette.surfaceHigh],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    final shape = BorderRadius.circular(borderRadius);
+
+    return LiquidGlass(
+      // Painted by the lens rather than by a fill of its own: a pane over the
+      // app backdrop, like every other card. The old surface-to-surfaceHigh
+      // gradient was an opaque slab, and on the dark theme that slab is
+      // black — a grid of them next to photos read as a grid of holes.
+      borderRadius: shape,
+      child: Container(
+        padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.sm + 2),
+        decoration: BoxDecoration(
+          borderRadius: shape,
+          border: Border.all(color: palette.stroke),
         ),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: palette.stroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _KindGlyph(icon: _iconFor(kind, post), size: compact ? 22 : 28),
-          SizedBox(height: compact ? 6 : AppSpacing.sm),
-          Expanded(child: body),
-          SizedBox(height: compact ? 4 : AppSpacing.sm),
-          if (caption != null && caption.isNotEmpty)
-            Text(
-              caption,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: palette.text,
-                fontSize: compact ? 11.5 : 14,
-                fontWeight: FontWeight.w800,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _KindGlyph(icon: _iconFor(kind, post), size: compact ? 22 : 28),
+            SizedBox(height: compact ? 6 : AppSpacing.sm),
+            Expanded(child: body),
+            SizedBox(height: compact ? 4 : AppSpacing.sm),
+            if (caption != null && caption.isNotEmpty)
+              Text(
+                caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: compact ? 11.5 : 14,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-          if (detail.isNotEmpty) ...[
-            const SizedBox(height: 1),
-            Text(
-              detail,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: palette.brandText, fontSize: 11.5),
-            ),
-          ],
-          if (showAuthor) ...[
-            const SizedBox(height: 2),
-            Text(
-              post.userName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: palette.muted,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
+            if (detail.isNotEmpty) ...[
+              const SizedBox(height: 1),
+              Text(
+                detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: palette.brandText, fontSize: 11.5),
               ),
-            ),
+            ],
+            if (showAuthor) ...[
+              const SizedBox(height: 2),
+              Text(
+                post.userName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: palette.muted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -287,7 +290,8 @@ class PostMediaTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (summarised) ...[
-                  _KindGlyph(icon: _iconFor(kind, post), size: compact ? 22 : 28),
+                  _KindGlyph(
+                      icon: _iconFor(kind, post), size: compact ? 22 : 28),
                   SizedBox(height: compact ? 6 : AppSpacing.sm),
                 ],
                 // The trace sits in the same box the summary card's body does,

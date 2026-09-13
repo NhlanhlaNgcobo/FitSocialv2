@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -14,9 +15,11 @@ import '../application/pulse_providers.dart';
 import '../data/pulse_frame_renderer.dart';
 import '../data/pulse_media_picker.dart';
 import '../domain/pulse_models.dart';
+import '../domain/pulse_text_style.dart';
 import 'pulse_photo_editor.dart';
 import 'pulse_photo_frame.dart';
-import 'pulse_text.dart';
+import 'pulse_share_controls.dart';
+import 'pulse_text_tool.dart';
 
 /// Where a Pulse gets made: a written card, a photo, or a clip.
 ///
@@ -33,10 +36,19 @@ class PulseComposerScreen extends ConsumerStatefulWidget {
 }
 
 class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
+  /// The words on the Pulse — the whole message on a text card, or the text
+  /// laid over a photo or clip. One controller for both: whichever kind is
+  /// being made, there is only ever one piece of writing on it.
   final TextEditingController _textController = TextEditingController();
-  final TextEditingController _captionController = TextEditingController();
-  final FocusNode _textFocus = FocusNode();
-  final FocusNode _captionFocus = FocusNode();
+
+  /// How and where those words are drawn. Owned here rather than by the text
+  /// tool because the same value goes on to the rasteriser and the draft.
+  PulseTextStyle _textStyle = PulseTextStyle.defaults;
+
+  /// Whether the text tool has the screen. While it does, the words are being
+  /// typed in the middle over a dimmed canvas; otherwise they sit on the
+  /// canvas as a sticker.
+  bool _editingText = false;
 
   // A Pulse is a camera format first and a writing format second, so the
   // composer opens on photo mode — but on the capture screen, with the shutter
@@ -58,9 +70,6 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   @override
   void dispose() {
     _textController.dispose();
-    _captionController.dispose();
-    _textFocus.dispose();
-    _captionFocus.dispose();
     _videoController?.dispose();
     super.dispose();
   }
@@ -69,11 +78,11 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
 
   bool get _hasMedia => (_mediaPath ?? '').isNotEmpty;
 
+  bool get _hasText => _textController.text.trim().isNotEmpty;
+
   bool get _canShare {
-    if (_busy) return false;
-    if (_mode == PulseMediaType.text) {
-      return _textController.text.trim().isNotEmpty;
-    }
+    if (_busy || _editingText) return false;
+    if (_mode == PulseMediaType.text) return _hasText;
     return _hasMedia;
   }
 
@@ -83,8 +92,32 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
     setState(() {
       _mode = mode;
       // Media belongs to the mode that picked it — a photo must not linger
-      // behind the video tab, where Share would upload it as an .mp4.
+      // behind the video tab, where Share would upload it as an .mp4. The
+      // writing goes with it: words placed over a photo were placed for that
+      // photo, and would land somewhere meaningless on a blank card.
       _clearMedia();
+      _clearText();
+    });
+  }
+
+  void _clearText() {
+    _textController.clear();
+    _textStyle = PulseTextStyle.defaults;
+    _editingText = false;
+  }
+
+  void _openTextTool() {
+    if (_editingText) return;
+    setState(() => _editingText = true);
+  }
+
+  void _closeTextTool() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _editingText = false;
+      // Whitespace is not a message. Cleared rather than kept, so a stray
+      // space does not leave an invisible sticker that still counts as text.
+      if (!_hasText) _textController.clear();
     });
   }
 
@@ -208,12 +241,16 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
       aspectRatio = framed.aspectRatio;
     }
 
+    // On a photo the words are already in the pixels — the canvas above was
+    // rasterised with the sticker on it — so the document carries none, or
+    // the viewer would draw them twice. A clip cannot be baked, so its words
+    // travel with their style and the viewer lays them over the video.
+    final bakedIntoPhoto = _mode == PulseMediaType.photo;
     final draft = PulseDraft(
       type: _mode,
       localFilePath: mediaPath,
-      text: _mode == PulseMediaType.text
-          ? _textController.text
-          : _captionController.text,
+      text: bakedIntoPhoto ? '' : _textController.text,
+      textStyle: bakedIntoPhoto ? null : _textStyle,
       gradientKey: _gradientKey,
       videoDuration: _videoDuration,
       aspectRatio: aspectRatio,
@@ -255,56 +292,77 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
   @override
   Widget build(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final isTyping = keyboardInset > 0;
 
-    return Scaffold(
-      backgroundColor: AppColors.mediaBackdrop,
-      // The keyboard overlays the canvas instead of resizing the screen. With
-      // resize on, every control has to be re-fitted into the shrinking space
-      // and the layout collapses — the canvas is repositioned by hand below.
-      resizeToAvoidBottomInset: false,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          RepaintBoundary(key: _canvasKey, child: _buildCanvas(keyboardInset)),
-          const _ControlScrim(),
-          SafeArea(
-            bottom: false,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: _buildTopBar(isTyping),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            // Controls ride the top of the keyboard rather than hiding behind
-            // it, so the palette stays reachable mid-sentence.
-            bottom: keyboardInset,
-            child: SafeArea(
-              top: false,
-              bottom: !isTyping,
-              child: _buildControls(isTyping),
-            ),
-          ),
-          if (_busy)
-            const ColoredBox(
-              color: Color(0xAA050505),
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.orangeBright,
+    return PopScope(
+      // Back while the text tool is open closes the tool, not the composer:
+      // the words are kept, and the card is where they were being put.
+      canPop: !_editingText,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeTextTool();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.mediaBackdrop,
+        // The keyboard overlays the canvas instead of resizing the screen. With
+        // resize on, every control has to be re-fitted into the shrinking space
+        // and the layout collapses — the text tool positions itself above the
+        // keyboard by hand instead.
+        resizeToAvoidBottomInset: false,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            RepaintBoundary(key: _canvasKey, child: _buildCanvas()),
+            const _ControlScrim(),
+            // The text tool brings its own chrome and takes the whole screen
+            // while it is open: the words are the only thing being worked on,
+            // and the palette, Share and the mode switch would only crowd them.
+            if (_editingText)
+              PulseTextEditor(
+                controller: _textController,
+                style: _textStyle,
+                onStyleChanged: (style) => setState(() => _textStyle = style),
+                onDone: _closeTextTool,
+                keyboardInset: keyboardInset,
+              )
+            else ...[
+              SafeArea(
+                bottom: false,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: _buildTopBar(),
                 ),
               ),
-            ),
-        ],
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SafeArea(top: false, child: _buildControls()),
+              ),
+            ],
+            if (_busy)
+              const ColoredBox(
+                color: Color(0xAA050505),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.orangeBright,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTopBar(bool isTyping) {
+  Widget _buildTopBar() {
+    // Text is offered wherever there is something to write on: a blank card,
+    // or a photo or clip already chosen. Not on the capture screen — there is
+    // nothing there yet to put words over.
+    final canWrite = _mode == PulseMediaType.text || _hasMedia;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconButton(
             onPressed: () => context.pop(),
@@ -313,28 +371,58 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
             tooltip: 'Close',
           ),
           const Spacer(),
-          if (isTyping)
-            TextButton(
-              onPressed: () => FocusScope.of(context).unfocus(),
-              style: TextButton.styleFrom(foregroundColor: AppColors.onMedia),
-              child: const Text(
-                'Done',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-              ),
-            )
-          else if (_hasMedia)
-            IconButton(
-              onPressed: () => setState(_clearMedia),
-              icon: const Icon(Icons.refresh_rounded),
-              color: AppColors.onMedia,
-              tooltip: 'Choose something else',
-            ),
+          // The tools stack down the right edge, the way a story composer
+          // keeps its rail: text first, then whatever applies to the canvas
+          // underneath it.
+          Column(
+            children: [
+              if (canWrite) PulseTextToolButton(onTap: _openTextTool),
+              if (_mode == PulseMediaType.text)
+                PulseBackgroundButton(onTap: _cycleGradient),
+              if (_hasMedia)
+                IconButton(
+                  onPressed: () => setState(_clearMedia),
+                  icon: const Icon(Icons.refresh_rounded),
+                  color: AppColors.onMedia,
+                  tooltip: 'Choose something else',
+                ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCanvas(double keyboardInset) {
+  /// Steps the text card on to the next backdrop, wrapping round at the end.
+  /// One tap per colour rather than a palette to pick from: the set is small
+  /// enough to walk through, and a tap is faster than a scroll and a choice.
+  void _cycleGradient() {
+    const all = PulseGradient.all;
+    final index = all.indexWhere((gradient) => gradient.key == _gradientKey);
+    setState(() => _gradientKey = all[(index + 1) % all.length].key);
+  }
+
+  /// The words, set down where their style says, over whatever [background]
+  /// is. Nothing while the text tool is open — the tool is showing them in
+  /// the middle of the screen, and a second copy on the canvas would sit
+  /// behind the dimmer as a ghost.
+  Widget _withText(Widget background) {
+    if (_editingText || !_hasText) return background;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        background,
+        PulseTextSticker(
+          text: _textController.text,
+          style: _textStyle,
+          onStyleChanged: (style) => setState(() => _textStyle = style),
+          onTap: _openTextTool,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCanvas() {
     switch (_mode) {
       // Neither is reachable from here: sharing a post starts from the post
       // and sharing a track starts from the player, and both land on their own
@@ -346,56 +434,18 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
 
       case PulseMediaType.text:
         return GestureDetector(
-          // The whole canvas is the way in, not just the line of hint text —
-          // the field itself is only as tall as what has been typed so far.
-          onTap: _textFocus.requestFocus,
+          // The whole canvas is the way in, not just the line of hint text.
+          // Deliberately not opened on arrival: the background is picked
+          // before the writing starts, and a keyboard on open would bury the
+          // palette behind it.
+          onTap: _openTextTool,
           behavior: HitTestBehavior.opaque,
-          child: DecoratedBox(
-            decoration: BoxDecoration(gradient: _gradient.linear),
-            child: SafeArea(
-              child: Padding(
-                // Centres the message in what is still visible above the
-                // keyboard, the way Instagram keeps the caret in view.
-                padding: EdgeInsets.only(
-                  left: AppSpacing.lg,
-                  right: AppSpacing.lg,
-                  top: 72,
-                  // Clears the whole control stack — palette, Share, mode
-                  // switch — so the last line typed is never behind a button.
-                  bottom: keyboardInset > 0 ? 72 : 184,
-                ),
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: TextField(
-                      controller: _textController,
-                      focusNode: _textFocus,
-                      onChanged: (_) => setState(() {}),
-                      // Deliberately not autofocused: the background is picked
-                      // before the writing starts, and a keyboard on open would
-                      // bury the palette behind it.
-                      maxLines: null,
-                      maxLength: 280,
-                      textAlign: TextAlign.center,
-                      textCapitalization: TextCapitalization.sentences,
-                      cursorColor: AppColors.onMedia,
-                      style: TextStyle(
-                        color: AppColors.onMedia,
-                        fontSize: pulseTextSize(_textController.text),
-                        fontWeight: FontWeight.w800,
-                        height: 1.25,
-                      ),
-                      decoration: barePulseInput(
-                        hintText: 'Say something',
-                        hintStyle: const TextStyle(
-                          color: Color(0x8AFFFFFF),
-                          fontSize: 34,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+          child: _withText(
+            DecoratedBox(
+              decoration: BoxDecoration(gradient: _gradient.linear),
+              child: _hasText || _editingText
+                  ? const SizedBox.expand()
+                  : const _WritingPrompt(),
             ),
           ),
         );
@@ -413,8 +463,12 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
             onGallery: () => _pickPhoto(ImageSource.gallery),
           );
         }
-        return _MediaCanvas(
-          child: PulsePhotoEditor(image: pulseLocalPhoto(path)),
+        // The sticker rides inside the same boundary as the photo, which is
+        // what bakes it into the frame on Share.
+        return _withText(
+          _MediaCanvas(
+            child: PulsePhotoEditor(image: pulseLocalPhoto(path)),
+          ),
         );
 
       case PulseMediaType.video:
@@ -430,29 +484,23 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
             onGallery: () => _pickVideo(ImageSource.gallery),
           );
         }
-        return _MediaCanvas(
-          child: FittedBox(
-            fit: BoxFit.cover,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
+        return _withText(
+          _MediaCanvas(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: controller.value.size.width,
+                height: controller.value.size.height,
+                child: VideoPlayer(controller),
+              ),
             ),
           ),
         );
     }
   }
 
-  Widget _buildControls(bool isTyping) {
-    // Writing a text Pulse clears the deck entirely: the message *is* the
-    // canvas, so leaving the palette floating over the keyboard just crowds
-    // it. Colour is a decision made before the first tap, and the Done button
-    // in the top bar is the way back out to it.
-    if (_mode == PulseMediaType.text && isTyping) {
-      return const SizedBox.shrink();
-    }
-
+  Widget _buildControls() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -463,34 +511,40 @@ class _PulseComposerScreenState extends ConsumerState<PulseComposerScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_mode == PulseMediaType.text)
-            _GradientPicker(
-              selectedKey: _gradientKey,
-              onSelected: (key) => setState(() => _gradientKey = key),
-            )
-          else if (_hasMedia)
-            _CaptionField(
-              controller: _captionController,
-              focusNode: _captionFocus,
-              onChanged: () => setState(() {}),
-            ),
-          // While the keyboard is up, the mode switch and Share step out of
-          // the way — reaching them means finishing the sentence first.
-          if (!isTyping) ...[
-            // Share sits with the writing it belongs to, and the mode switch
-            // holds the bottom edge where a tab bar belongs: the kind of Pulse
-            // is picked once on the way in, but Share is read on the way out.
-            //
-            // Nothing to share yet on an empty camera screen, and a dead grey
-            // button under the shutter is just noise. It arrives with the shot.
-            if (_mode == PulseMediaType.text || _hasMedia) ...[
-              const SizedBox(height: AppSpacing.md),
-              _ShareButton(onPressed: _canShare ? _share : null),
-            ],
+          // Share sits above the mode switch, which holds the bottom edge
+          // where a tab bar belongs: the kind of Pulse is picked once on the
+          // way in, but Share is read on the way out.
+          //
+          // Nothing to share yet on an empty camera screen, and a dead grey
+          // button under the shutter is just noise. It arrives with the shot.
+          if (_mode == PulseMediaType.text || _hasMedia) ...[
+            PulseShareButton(onPressed: _canShare ? _share : null),
             const SizedBox(height: AppSpacing.md),
-            _ModeSelector(mode: _mode, onSelected: _switchMode),
           ],
+          _ModeSelector(mode: _mode, onSelected: _switchMode),
         ],
+      ),
+    );
+  }
+}
+
+/// What a blank text card says before anything is written on it.
+///
+/// Plain [Text] rather than a field's hint: the field lives in the text tool
+/// now, and a tap anywhere on the card opens it.
+class _WritingPrompt extends StatelessWidget {
+  const _WritingPrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text(
+        'Say something',
+        style: TextStyle(
+          color: Color(0x8AFFFFFF),
+          fontSize: 34,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -798,224 +852,14 @@ class _MediaCanvas extends StatelessWidget {
   }
 }
 
-/// Caption input for a photo or clip.
+/// The mode switch, cut like the app's tab bar: a floating capsule of icons
+/// with a lifted pane tracking the selected one.
 ///
-/// Sits on a translucent pill rather than a form field — it is part of the
-/// picture, not part of a settings screen.
-class _CaptionField extends StatelessWidget {
-  const _CaptionField({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0x99000000),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.text_fields_rounded,
-              color: Color(0xCCFFFFFF), size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              onChanged: (_) => onChanged(),
-              maxLength: 140,
-              textCapitalization: TextCapitalization.sentences,
-              cursorColor: AppColors.onMedia,
-              style: const TextStyle(
-                color: AppColors.onMedia,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-              decoration: barePulseInput(
-                hintText: 'Add a caption',
-                hintStyle: const TextStyle(
-                  color: Color(0x8AFFFFFF),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The backdrop a written Pulse gets set on.
-///
-/// The chosen swatch wears a ring with a gap inside it rather than a thicker
-/// border — a heavier edge on a small circle eats the colour it is meant to be
-/// showing off.
-class _GradientPicker extends StatelessWidget {
-  const _GradientPicker({required this.selectedKey, required this.onSelected});
-
-  final String selectedKey;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: PulseGradient.all.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          final gradient = PulseGradient.all[index];
-          final selected = gradient.key == selectedKey;
-          return GestureDetector(
-            onTap: () => onSelected(gradient.key),
-            child: Semantics(
-              button: true,
-              selected: selected,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                width: 40,
-                height: 40,
-                margin: const EdgeInsets.symmetric(vertical: 2),
-                padding: EdgeInsets.all(selected ? 3 : 0),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color:
-                        selected ? AppColors.onMedia : const Color(0x00FFFFFF),
-                    width: 2,
-                  ),
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: gradient.linear,
-                    border: Border.all(
-                      color: const Color(0x59FFFFFF),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// The one thing this screen exists to do.
-///
-/// Lit orange with a glow under it while it is live, and smoked glass while
-/// there is nothing to send — the difference has to be readable at a glance
-/// over any photo, which a greyed-out fill alone is not.
-class _ShareButton extends StatefulWidget {
-  const _ShareButton({required this.onPressed});
-
-  /// Null while the Pulse is not ready to go out.
-  final VoidCallback? onPressed;
-
-  @override
-  State<_ShareButton> createState() => _ShareButtonState();
-}
-
-class _ShareButtonState extends State<_ShareButton> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value) return;
-    setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null;
-    final foreground = enabled ? AppColors.onMedia : AppColors.onMediaMuted;
-
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: 'Share Pulse',
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        onTapDown: enabled ? (_) => _setPressed(true) : null,
-        onTapCancel: () => _setPressed(false),
-        onTapUp: (_) => _setPressed(false),
-        child: AnimatedScale(
-          scale: _pressed ? 0.97 : 1,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            height: 54,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: enabled
-                  ? const LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [AppColors.orangeBright, AppColors.orange],
-                    )
-                  : null,
-              color: enabled ? null : const Color(0x8A000000),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color:
-                    enabled ? const Color(0x3DFFFFFF) : const Color(0x1FFFFFFF),
-              ),
-              boxShadow: enabled
-                  ? [
-                      // Cast in the deep orange rather than the lit one, and
-                      // kept tight. A wide halo in the bright tone reads as a
-                      // second light source over a coloured canvas and washes
-                      // the bottom of the screen out; this just lifts the
-                      // button off whatever is behind it.
-                      BoxShadow(
-                        color: AppColors.orange.withValues(alpha: 0.28),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.bolt_rounded, size: 20, color: foreground),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Share Pulse',
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
+/// Sized to its three icons rather than stretched across the screen — three
+/// glyphs in a full-width bar float apart from each other and stop reading
+/// as one control. Smoked glass rather than [LiquidGlass]: that pane takes
+/// its tint from the theme, and this screen is a dark media surface whatever
+/// the theme says, so the chrome here is drawn in the composer's own black.
 class _ModeSelector extends StatelessWidget {
   const _ModeSelector({required this.mode, required this.onSelected});
 
@@ -1032,78 +876,92 @@ class _ModeSelector extends StatelessWidget {
 
   static const _duration = Duration(milliseconds: 220);
 
+  static const double _height = 52;
+  static const double _tabWidth = 56;
+  static const double _inset = 4;
+  static const double _edge = 1;
+  static const _radius = BorderRadius.all(Radius.circular(_height / 2));
+
   @override
   Widget build(BuildContext context) {
     final selectedIndex = _options.indexWhere((option) => option.$1 == mode);
 
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: const Color(0x99000000),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0x2EFFFFFF)),
+    return DecoratedBox(
+      // Outside the clip on purpose: a shadow drawn inside ClipRRect would be
+      // clipped away by the very shape casting it.
+      decoration: const BoxDecoration(
+        borderRadius: _radius,
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x66000000),
+            blurRadius: 18,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final tabWidth = constraints.maxWidth / _options.length;
-          return SizedBox(
-            height: 44,
+      child: ClipRRect(
+        borderRadius: _radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            height: _height,
+            // The border is drawn inside the box, so it is counted in.
+            width: _tabWidth * _options.length + (_inset + _edge) * 2,
+            padding: const EdgeInsets.all(_inset),
+            decoration: BoxDecoration(
+              borderRadius: _radius,
+              color: const Color(0x8C000000),
+              border: Border.all(
+                color: const Color(0x33FFFFFF),
+                width: _edge,
+              ),
+            ),
             child: Stack(
               children: [
-                // One pill that slides between the tabs rather than three that
-                // blink on and off: the travel is what says these are three
-                // positions of one control, not three separate buttons.
+                // One pane that slides between the tabs rather than three
+                // that blink on and off: the travel is what says these are
+                // three positions of one control, not three separate buttons.
                 AnimatedPositioned(
                   duration: _duration,
                   curve: Curves.easeOutCubic,
-                  left: tabWidth * selectedIndex,
-                  width: tabWidth,
+                  left: _tabWidth * selectedIndex,
+                  width: _tabWidth,
                   top: 0,
                   bottom: 0,
                   child: const DecoratedBox(
+                    // A white lift, as the app's bar does it, rather than an
+                    // orange slab: the one lit orange thing down here should
+                    // be Share.
                     decoration: BoxDecoration(
-                      // Flat deep orange, no lit gradient and no coloured
-                      // glow. This pill sits directly under the Share button:
-                      // two lit orange slabs stacked over a coloured canvas
-                      // read as one bright blob, and the place switch ends up
-                      // shouting as loudly as the thing it is switching to.
-                      // Deep and unlit, it stays legible and lets Share lead.
-                      color: AppColors.orange,
-                      borderRadius: BorderRadius.all(Radius.circular(14)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x45000000),
-                          blurRadius: 10,
-                          offset: Offset(0, 3),
-                        ),
-                      ],
+                      color: Color(0x24FFFFFF),
+                      borderRadius: BorderRadius.all(Radius.circular(22)),
+                      border: Border.fromBorderSide(
+                        BorderSide(color: Color(0x26FFFFFF)),
+                      ),
                     ),
                   ),
                 ),
-                // Expanded, and stretched across the cross axis, so each tab's
-                // tap target is the whole height of the bar. Left to size
-                // itself, the row collapses to the height of the label inside
-                // it and everything below the text stops responding.
-                SizedBox.expand(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final (type, icon, label) in _options)
-                        Expanded(
-                          child: _ModeTab(
-                            icon: icon,
-                            label: label,
-                            selected: type == mode,
-                            onTap: () => onSelected(type),
-                          ),
+                // Stretched across the cross axis, so each tab's tap target
+                // is the whole height of the bar.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (type, icon, label) in _options)
+                      SizedBox(
+                        width: _tabWidth,
+                        child: _ModeTab(
+                          icon: icon,
+                          label: label,
+                          selected: type == mode,
+                          onTap: () => onSelected(type),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
               ],
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
@@ -1118,6 +976,9 @@ class _ModeTab extends StatelessWidget {
   });
 
   final IconData icon;
+
+  /// Read out, and shown on a long press, but never drawn: the icons carry
+  /// the bar on their own, as the app's do.
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -1128,39 +989,31 @@ class _ModeTab extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        // Icon and label brighten on the same curve the pill travels on, so
-        // the label is lit by the time the pill arrives under it.
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: selected ? 1 : 0),
-          duration: _ModeSelector._duration,
-          curve: Curves.easeOutCubic,
-          builder: (context, t, _) {
-            final color = Color.lerp(
-              const Color(0xB3FFFFFF),
-              AppColors.onMedia,
-              t,
-            )!;
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 17, color: color),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 13.5,
-                    fontWeight:
-                        FontWeight.lerp(FontWeight.w600, FontWeight.w800, t),
-                    letterSpacing: 0.1,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          // The icon brightens on the same curve the pane travels on, so it
+          // is lit by the time the pane arrives under it.
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: selected ? 1 : 0),
+            duration: _ModeSelector._duration,
+            curve: Curves.easeOutCubic,
+            builder: (context, t, _) {
+              return Center(
+                child: Icon(
+                  icon,
+                  size: 22,
+                  color: Color.lerp(
+                    const Color(0x9EFFFFFF),
+                    AppColors.onMedia,
+                    t,
                   ),
                 ),
-              ],
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

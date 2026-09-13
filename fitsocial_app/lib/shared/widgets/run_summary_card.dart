@@ -154,7 +154,7 @@ class RunSummaryCard extends StatelessWidget {
         // Inset by the border width so the photo stops at the inside edge of
         // the stroke rather than painting over it.
         borderRadius: BorderRadius.circular(19),
-        child: _AutoAspectRatio(
+        child: PhotoAspectRatio(
           background: background,
           pinned: aspectRatio,
           child: Stack(
@@ -229,22 +229,35 @@ class RunSummaryCard extends StatelessWidget {
 /// resolves an [ImageProvider] through one shared cache keyed by the provider
 /// itself, so this costs nothing extra when [_Backdrop] is already decoding
 /// the same photo to paint it: both listeners ride the one decode.
-class _AutoAspectRatio extends StatefulWidget {
-  const _AutoAspectRatio({
+///
+/// Public because the Pulse card for a shared run draws the same photo under
+/// the same line, and a run post never stores its backdrop's ratio — the
+/// feed measures it, so the Pulse card measures it too.
+class PhotoAspectRatio extends StatefulWidget {
+  const PhotoAspectRatio({
     required this.background,
     required this.pinned,
     required this.child,
+    this.minRatio,
+    this.maxRatio,
+    super.key,
   });
 
   final ImageProvider? background;
   final double? pinned;
   final Widget child;
 
+  /// Bounds on the measured ratio, for a card that sits inside a frame it
+  /// must not outgrow. Null leaves the photo's own shape alone, which is what
+  /// the feed's run card wants: a portrait shot stays portrait there.
+  final double? minRatio;
+  final double? maxRatio;
+
   @override
-  State<_AutoAspectRatio> createState() => _AutoAspectRatioState();
+  State<PhotoAspectRatio> createState() => _PhotoAspectRatioState();
 }
 
-class _AutoAspectRatioState extends State<_AutoAspectRatio> {
+class _PhotoAspectRatioState extends State<PhotoAspectRatio> {
   double _resolved = 1;
   ImageStream? _stream;
   ImageStreamListener? _listener;
@@ -256,7 +269,7 @@ class _AutoAspectRatioState extends State<_AutoAspectRatio> {
   }
 
   @override
-  void didUpdateWidget(covariant _AutoAspectRatio oldWidget) {
+  void didUpdateWidget(covariant PhotoAspectRatio oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.background == oldWidget.background &&
         widget.pinned == oldWidget.pinned) {
@@ -313,8 +326,9 @@ class _AutoAspectRatioState extends State<_AutoAspectRatio> {
 
   @override
   Widget build(BuildContext context) {
-    final ratio =
-        widget.pinned ?? (widget.background == null ? 1.0 : _resolved);
+    var ratio = widget.pinned ?? (widget.background == null ? 1.0 : _resolved);
+    if (widget.minRatio case final min? when ratio < min) ratio = min;
+    if (widget.maxRatio case final max? when ratio > max) ratio = max;
     return AspectRatio(aspectRatio: ratio, child: widget.child);
   }
 }
@@ -542,12 +556,22 @@ class _StatRow extends StatelessWidget {
       (label: 'Time', value: durationLabel?.trim()),
     ].where((stat) => stat.value != null && stat.value!.isNotEmpty).toList();
 
+    // Each stat takes an equal share and shrinks its number to fit: three
+    // 30-pt figures — "10.01 km", "5:02 /km", "50:25" — are wider than a
+    // narrow phone, and a run card that spills off its own edge is not a
+    // card anyone will share.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         for (var i = 0; i < stats.length; i++) ...[
-          if (i > 0) const SizedBox(width: AppSpacing.lg),
-          _Stat(label: stats[i].label, value: stats[i].value!, skin: skin),
+          if (i > 0) const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: _Stat(
+              label: stats[i].label,
+              value: stats[i].value!,
+              skin: skin,
+            ),
+          ),
         ],
       ],
     );
@@ -570,29 +594,32 @@ class _Stat extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: number),
-              if (unit != null)
-                TextSpan(
-                  text: ' $unit',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: skin.muted,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: number),
+                if (unit != null)
+                  TextSpan(
+                    text: ' $unit',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: skin.muted,
+                    ),
                   ),
-                ),
-            ],
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: skin.text,
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            height: 1,
-            letterSpacing: -0.8,
+              ],
+            ),
+            maxLines: 1,
+            style: TextStyle(
+              color: skin.text,
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              height: 1,
+              letterSpacing: -0.8,
+            ),
           ),
         ),
         const SizedBox(height: 4),

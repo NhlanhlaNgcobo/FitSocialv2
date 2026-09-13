@@ -724,8 +724,7 @@ class FirestoreContentRepository implements ContentRepository {
     // sorts its chunks on device: `orderBy` drops documents that are missing
     // the field, and an edge written without a timestamp would vanish from
     // the list rather than sort badly. Newest first, nulls last.
-    final ids = [...edges.docs]
-      ..sort((a, b) {
+    final ids = [...edges.docs]..sort((a, b) {
         final left = a.data()['createdAt'];
         final right = b.data()['createdAt'];
         if (left is! Timestamp && right is! Timestamp) return 0;
@@ -820,6 +819,60 @@ class FirestoreContentRepository implements ContentRepository {
     return mergeSessions(
       logged: logged,
       fromPosts: await _postSessions(user.uid),
+    );
+  }
+
+  @override
+  Future<List<RecentWorkout>> getRecentWorkouts({int limit = 6}) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const [];
+
+    // Same shape as every other history in here: an `authorId` equality filter
+    // on the free single-field index, ordered in Dart. One user's own workout
+    // log is small.
+    final docs = await _activityLogs(workoutsCollection, user.uid);
+    final workouts = _mapDocs(docs, _toRecentWorkout)
+      ..sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+
+    // Newest wins per title, and insertion order is preserved, so the chips
+    // come back newest-first with no repeats.
+    final byTitle = <String, RecentWorkout>{};
+    for (final workout in workouts) {
+      byTitle.putIfAbsent(workout.title.toLowerCase(), () => workout);
+      if (byTitle.length == limit) break;
+    }
+    return byTitle.values.toList();
+  }
+
+  static RecentWorkout? _toRecentWorkout(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    final loggedAt = _firstTimestamp(data, const ['loggedAt', 'createdAt']);
+    if (loggedAt == null) return null;
+
+    final title = _text(data['title']);
+    // A chip with no name is not worth offering: the title is the whole label.
+    if (title == null) return null;
+
+    // Same two shapes `durationMinutes` has always had — see _toWorkoutSession.
+    final minutes = data.containsKey('durationMinutes')
+        ? intFromStoredValue(data['durationMinutes'])
+        : intFromStoredValue(data['duration']);
+
+    return RecentWorkout(
+      title: title,
+      durationMinutes: minutes,
+      calories: intFromStoredValue(data['calories']),
+      // Absent on every workout logged before the log document carried them,
+      // which repeats as a title and its totals and nothing else.
+      exercises: (data['exercises'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(ExerciseEntry.fromMap)
+              .where((entry) => entry.name.isNotEmpty)
+              .toList() ??
+          const [],
+      loggedAt: loggedAt,
     );
   }
 
@@ -1112,9 +1165,8 @@ class FirestoreContentRepository implements ContentRepository {
     // in `runs`, so a `== run ? runs : workouts` test would send a hike to the
     // workouts collection and delete nothing at all: the row would vanish from
     // the list and the document would still be there on the next read.
-    final collection = kind == ActivityKind.workout
-        ? workoutsCollection
-        : runsCollection;
+    final collection =
+        kind == ActivityKind.workout ? workoutsCollection : runsCollection;
     await collection.doc(id).delete();
   }
 
@@ -1299,12 +1351,7 @@ class FirestoreContentRepository implements ContentRepository {
       themeKey: 'burn',
       postType: 'workout',
       imageUrl: backgroundUrl,
-      workoutData: {
-        'title': draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
-        'duration': draft.durationLabel,
-        'calories': draft.caloriesLabel,
-        'exercises': draft.exercises.map((e) => e.toMap()).toList(),
-      },
+      workoutData: draft.workoutData,
     );
     await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(workoutsDelta: 1);
@@ -1523,9 +1570,14 @@ class FirestoreContentRepository implements ContentRepository {
       'duration': draft.durationLabel,
       'caloriesLabel': draft.caloriesLabel,
       'exerciseCount': draft.exercises.length,
+      // The exercises themselves, not just how many. The post already carried
+      // them and the log did not, which meant the canonical record held less
+      // detail than the copy — and left the log screen with nothing to build a
+      // "repeat this session" from.
+      'exercises': draft.exercises.map((e) => e.toMap()).toList(),
       'sharedToFeed': draft.shareToFeed,
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
-      'loggedAt': Timestamp.now(),
+      'loggedAt': Timestamp.fromDate(draft.loggedAt ?? DateTime.now()),
       'createdAt': FieldValue.serverTimestamp(),
     }));
     return ref;
@@ -1567,7 +1619,8 @@ class FirestoreContentRepository implements ContentRepository {
       // Omitted rather than written as zeros when no strap was connected, so a
       // run without one is shaped exactly like every run logged before straps
       // were recorded and nothing needs migrating.
-      if (draft.heartRate case final hr? when hr.hasData) 'heartRate': hr.toMap(),
+      if (draft.heartRate case final hr? when hr.hasData)
+        'heartRate': hr.toMap(),
       if (draft.startedAt != null)
         'startedAt': Timestamp.fromDate(draft.startedAt!),
       'createdAt': FieldValue.serverTimestamp(),
@@ -2525,6 +2578,15 @@ class FirestoreContentRepository implements ContentRepository {
     // mobile XFile reads the picked file, on web it fetches the blob: URL that
     // image_picker returns instead of a real path.
     final bytes = await XFile(localFilePath).readAsBytes();
+    return _uploadJpegBytes(path, bytes, timeout: timeout);
+  }
+
+  /// Uploads in-memory JPEG [bytes] to [path], giving up after [timeout].
+  Future<String> _uploadJpegBytes(
+    String path,
+    Uint8List bytes, {
+    required Duration timeout,
+  }) async {
     final uploadTask = FirebaseStorage.instance.ref().child(path).putData(
           bytes,
           SettableMetadata(contentType: 'image/jpeg'),
@@ -2563,6 +2625,28 @@ class FirestoreContentRepository implements ContentRepository {
     return _uploadJpeg(
       'posts/${user.uid}/$timestamp.jpg',
       localFilePath,
+      timeout: _imageUploadTimeout,
+    );
+  }
+
+  @override
+  Future<String> uploadPostImageBytes(Uint8List bytes) {
+    final user = _requireCurrentUser();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return _uploadJpegBytes(
+      'posts/${user.uid}/$timestamp.jpg',
+      bytes,
+      timeout: _imageUploadTimeout,
+    );
+  }
+
+  @override
+  Future<String> uploadMealImageBytes(Uint8List bytes) {
+    final user = _requireCurrentUser();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return _uploadJpegBytes(
+      'meals/${user.uid}/$timestamp.jpg',
+      bytes,
       timeout: _imageUploadTimeout,
     );
   }

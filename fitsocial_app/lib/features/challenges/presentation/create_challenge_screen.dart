@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/input/typed_number.dart';
 import '../application/running_challenge_providers.dart';
 import '../domain/challenge_clock.dart';
 import '../domain/running_challenge.dart';
@@ -84,7 +85,9 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
                 // Three characters is what the rules demand, so refusing it
                 // here means the user is told why rather than watching a write
                 // be rejected.
-                if (text.length < 3) return 'Give it a name of 3 or more characters.';
+                if (text.length < 3) {
+                  return 'Give it a name of 3 or more characters.';
+                }
                 return null;
               },
             ),
@@ -98,14 +101,14 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.md),
-
             const _Label('THE GOAL'),
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _goal,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
               ],
               decoration: const InputDecoration(
                 labelText: 'Total distance',
@@ -121,9 +124,10 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
             const SizedBox(height: AppSpacing.sm),
             TextFormField(
               controller: _dailyMinimum,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
               ],
               decoration: const InputDecoration(
                 labelText: 'A day counts from',
@@ -143,7 +147,6 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-
             const _Label('WHEN'),
             const SizedBox(height: AppSpacing.sm),
             _DateRow(
@@ -170,7 +173,6 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
               style: TextStyle(color: palette.muted, fontSize: 12),
             ),
             const SizedBox(height: AppSpacing.lg),
-
             const _Label('WHO CAN JOIN'),
             const SizedBox(height: AppSpacing.sm),
             SegmentedButton<ChallengeVisibility>(
@@ -199,7 +201,6 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
               style: TextStyle(color: palette.muted, fontSize: 12),
             ),
             const SizedBox(height: AppSpacing.xl),
-
             FilledButton(
               onPressed: _saving ? null : _create,
               child: _saving
@@ -230,7 +231,7 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
     required double max,
     required String what,
   }) {
-    final parsed = double.tryParse((value ?? '').trim());
+    final parsed = parseTypedDouble(value ?? '');
     if (parsed == null) return 'Enter a number for the $what.';
     if (parsed < min) return 'The $what has to be at least $min km.';
     if (parsed > max) return 'The $what has to be under $max km.';
@@ -246,8 +247,9 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
       return;
     }
 
-    final goal = double.parse(_goal.text.trim());
-    final daily = double.parse(_dailyMinimum.text.trim());
+    // Both passed [_number] a moment ago, so neither can be null.
+    final goal = parseTypedDouble(_goal.text)!;
+    final daily = parseTypedDouble(_dailyMinimum.text)!;
     if (daily > goal) {
       // Not caught by either field's own validator, because it is a
       // relationship between them: a daily bar above the total goal is a
@@ -258,16 +260,15 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
 
     setState(() => _saving = true);
     try {
-      final challenge =
-          await ref.read(runningChallengeActionsProvider).create(
-                title: _title.text,
-                description: _description.text,
-                goalValueKm: goal,
-                dailyMinimumKm: daily,
-                startDayKey: _startDayKey,
-                endDayKey: _endDayKey,
-                visibility: _visibility,
-              );
+      final challenge = await ref.read(runningChallengeActionsProvider).create(
+            title: _title.text,
+            description: _description.text,
+            goalValueKm: goal,
+            dailyMinimumKm: daily,
+            startDayKey: _startDayKey,
+            endDayKey: _endDayKey,
+            visibility: _visibility,
+          );
 
       if (!mounted) return;
       if (challenge == null) {

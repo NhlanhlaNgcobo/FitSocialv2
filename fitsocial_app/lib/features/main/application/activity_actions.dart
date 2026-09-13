@@ -58,6 +58,9 @@ class ActivityActions {
       // without this the square for today keeps the value it was first built
       // with and a run logged mid-session never lights up.
       ..invalidate(activitySessionsProvider)
+      // And the log screen's repeat chips, so the session just saved is
+      // offered as a template the next time it opens.
+      ..invalidate(recentWorkoutsProvider)
       // And the meal history, so a meal logged from the tracking page appears
       // in today's totals rather than after a restart.
       ..invalidate(loggedMealsProvider);

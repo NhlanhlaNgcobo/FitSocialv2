@@ -61,6 +61,23 @@ void main() {
       );
     });
 
+    test('a live activity link opens the viewer, and survives a sign-in', () {
+      // A UUID, the shape the sharer's phone mints.
+      const id = '3f2c8b1e-6a4d-4e9f-9b2a-1c5d7e8f9a0b';
+      final link = FitSocialLinks.live(id);
+
+      expect(link.toString(), 'https://fitsocialv2.web.app/live/$id');
+      expect(FitSocialLinks.routeFor(link), '/live/$id');
+      expect(
+        FitSocialLinks.routeFor(Uri.parse('fitsocial://app/live/$id')),
+        '/live/$id',
+      );
+      // The person at home may not have the app open, or be signed in, when
+      // the link arrives. It has to be held over the sign-in like a post is.
+      expect(FitSocialLinks.isShareableRoute('/live/$id'), isTrue);
+      expect(FitSocialLinks.isPushRoute('/live/$id'), isTrue);
+    });
+
     test('a trailing slash and an odd case still resolve', () {
       expect(
         FitSocialLinks.routeFor(

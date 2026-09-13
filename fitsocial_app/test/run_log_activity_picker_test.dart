@@ -101,18 +101,37 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), '30');
     await tester.pumpAndSettle();
 
-    // The summary stat labels are upper-cased when they are painted.
+    // The summary stat labels are upper-cased when they are painted. The
+    // figure itself is drawn twice — once in the summary, once on the card
+    // preview underneath — so it is counted as present, not as singular.
     expect(find.text('AVG PACE'), findsOneWidget);
-    expect(find.text('3:00 /km'), findsOneWidget);
+    expect(find.text('3:00 /km'), findsWidgets);
 
     await choose(tester, ActivityKind.ride);
 
     // The same 10 km in 30 minutes. A cyclist reads that as 20 km/h; "3:00
     // /km" is a number no cyclist has ever used to describe anything.
     expect(find.text('AVG SPEED'), findsOneWidget);
-    expect(find.text('20.0 km/h'), findsOneWidget);
+    expect(find.text('20.0 km/h'), findsWidgets);
     expect(find.text('AVG PACE'), findsNothing);
     expect(find.text('3:00 /km'), findsNothing);
+  });
+
+  testWidgets('a comma-decimal keyboard fills the form like a dotted one',
+      (tester) async {
+    await pumpRunLog(tester);
+
+    // Exactly what a tester in a comma-decimal locale typed. Both figures
+    // were on screen and the form still asked for a distance and a time.
+    await tester.enterText(find.byType(TextField).first, '10,01');
+    await tester.enterText(find.byType(TextField).at(1), '50,42');
+    await tester.pumpAndSettle();
+
+    expect(find.text('AVG PACE'), findsOneWidget);
+    // 50.42 min over 10.01 km. Minutes carry their seconds now, so the card's
+    // clock reads the actual time rather than the whole minutes.
+    expect(find.text('50:25'), findsWidgets);
+    expect(find.textContaining('before saving'), findsNothing);
   });
 
   testWidgets('the GPS card opens the tracker with the chosen activity',

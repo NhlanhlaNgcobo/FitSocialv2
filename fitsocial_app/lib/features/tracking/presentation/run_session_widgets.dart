@@ -46,19 +46,18 @@ class AmbientRunGlow extends StatelessWidget {
 /// LIVE / PAUSED / READY, in the tone that matches.
 ///
 /// [accent] lights the pill in brand orange — the run is either live or held by
-/// something the app decided. [pulsing] is reserved for "counting right now", so
-/// a glance from arm's length tells you whether the clock is still moving.
+/// something the app decided. Whether the clock is still counting is left to
+/// the figures beside it: a pulsing dot in a pill this size read as clutter,
+/// not as a heartbeat.
 class RunStatusPill extends StatelessWidget {
   const RunStatusPill({
     required this.label,
     required this.accent,
-    required this.pulsing,
     super.key,
   });
 
   final String label;
   final bool accent;
-  final bool pulsing;
 
   @override
   Widget build(BuildContext context) {
@@ -66,97 +65,21 @@ class RunStatusPill extends StatelessWidget {
     final color = accent ? palette.brandText : palette.muted;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(99),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PulseDot(color: color, active: pulsing),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.4,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.4,
+        ),
       ),
-    );
-  }
-}
-
-/// A dot that breathes while [active]. Owns its own controller so the ticker
-/// only runs on the frames that actually need it.
-class _PulseDot extends StatefulWidget {
-  const _PulseDot({required this.color, required this.active});
-
-  final Color color;
-  final bool active;
-
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.active) _controller.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(_PulseDot old) {
-    super.didUpdateWidget(old);
-    if (widget.active == old.active) return;
-    if (widget.active) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller.stop();
-      _controller.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final t = _controller.value;
-        return Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: widget.color,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: widget.color.withValues(alpha: 0.55 * t),
-                blurRadius: 4 + 6 * t,
-                spreadRadius: 1 + 3 * t,
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }
@@ -288,11 +211,7 @@ class RunHeroCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          RunStatusPill(
-            label: statusLabel,
-            accent: statusAccent,
-            pulsing: isRunning,
-          ),
+          RunStatusPill(label: statusLabel, accent: statusAccent),
           const SizedBox(height: AppSpacing.lg),
           FittedBox(
             fit: BoxFit.scaleDown,

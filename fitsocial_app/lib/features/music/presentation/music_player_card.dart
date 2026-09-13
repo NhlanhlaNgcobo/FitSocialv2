@@ -199,10 +199,11 @@ void _shareTrackToPulse(BuildContext context, MusicPlayerState player) {
       title: track.title,
       artist: track.artist,
       trackUri: track.uri,
-      // Only the https form travels: the `spotify:image:` reference and the
-      // decoded bytes App Remote hands back are both local to this phone. The
-      // controller resolves this URL from the track while it plays, and the
-      // share screen looks it up itself if it is still missing here.
+      // Only the https form travels: the bytes both App Remote and the media
+      // session hand back are local to this phone. The controller resolves
+      // this URL from the track while it plays where it can, and the share
+      // screen looks it up by id or by name if it is still missing here —
+      // which on the media-session path it always is.
       albumArtUrl: track.albumArtUrl,
     ),
   );

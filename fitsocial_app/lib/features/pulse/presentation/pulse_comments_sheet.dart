@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/identity/profile_identity.dart';
+import '../../../shared/widgets/comment_well.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/mention_suggestions.dart';
+import '../../auth/application/app_session.dart';
 import '../../main/application/content_providers.dart'
     show currentUserIdProvider;
 import '../../main/domain/app_models.dart' show Comment;
@@ -273,9 +276,10 @@ class _PulseCommentComposerState extends ConsumerState<_PulseCommentComposer> {
       return const SizedBox.shrink();
     }
 
+    final profile = ref.watch(appSessionProvider).profile;
+
     return LiquidGlass(
-      // Painted by the lens rather than by a fill of its own: a pane
-      // over the app backdrop, like every other card.
+      // Square: this pane meets the sheet's bottom edge on both sides.
       borderRadius: BorderRadius.circular(0),
       child: Container(
         decoration: BoxDecoration(
@@ -283,9 +287,9 @@ class _PulseCommentComposerState extends ConsumerState<_PulseCommentComposer> {
         ),
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
-          AppSpacing.sm,
-          AppSpacing.sm,
-          AppSpacing.sm,
+          AppSpacing.sm + 2,
+          AppSpacing.md,
+          AppSpacing.sm + 2,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -293,69 +297,16 @@ class _PulseCommentComposerState extends ConsumerState<_PulseCommentComposer> {
             // Above the field, not below it: this bar already sits on the
             // keyboard, so there is no room underneath to open into.
             MentionSuggestions(controller: _controller, focusNode: _focusNode),
-            Row(
-              children: [
-                Expanded(
-                  child: LiquidGlass(
-                    // Painted by the lens rather than by a fill of its own: a pane
-                    // over the app backdrop, like every other card.
-                    borderRadius: BorderRadius.circular(24),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        style: TextStyle(color: palette.text, fontSize: 15),
-                        decoration: InputDecoration(
-                          hintText: 'Add a comment...',
-                          hintStyle: TextStyle(color: palette.muted),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                        ),
-                        maxLines: 3,
-                        minLines: 1,
-                        textCapitalization: TextCapitalization.sentences,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _submit(),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                GestureDetector(
-                  onTap: _submit,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFFFA053), Color(0xFFFF6B2C)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: _isSending
-                        ? const Padding(
-                            padding: EdgeInsets.all(10),
-                            child: CircularProgressIndicator(
-                              color: AppColors.onBrand,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : Icon(
-                            Icons.send_rounded,
-                            color: palette.text,
-                            size: 18,
-                          ),
-                  ),
-                ),
-              ],
+            // The same box as under a post — see [CommentWell] for why the
+            // material is shared and the writes are not.
+            CommentWell(
+              controller: _controller,
+              focusNode: _focusNode,
+              onSubmit: _submit,
+              isSending: _isSending,
+              hintText: 'Add a comment…',
+              avatarInitials: avatarInitials(profile?.displayName),
+              avatarUrl: profile?.avatarUrl,
             ),
           ],
         ),

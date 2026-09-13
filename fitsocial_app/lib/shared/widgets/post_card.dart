@@ -16,11 +16,13 @@ import 'avatar.dart';
 import 'confirm_destructive_sheet.dart';
 import 'liquid_glass.dart';
 import 'mention_text.dart';
+import 'post_action_icons.dart';
 import 'profile_link.dart';
 import 'quick_toast.dart';
 import 'reaction_bar.dart';
 import '../services/meal_card_exporter.dart';
 import '../services/run_card_exporter.dart';
+import '../services/workout_card_exporter.dart';
 import 'meal_summary_card.dart';
 import 'run_summary_card.dart';
 import 'share_sheet.dart';
@@ -131,6 +133,23 @@ class PostCard extends StatelessWidget {
         )
       : null;
 
+  /// Whether this post is a workout — by its type, or by the log it carries,
+  /// which is how a workout shared before [PostType.workout] existed is told.
+  bool get _isWorkout => postType == PostType.workout || workoutData != null;
+
+  /// What the share sheet needs to redraw this workout card into a file, or
+  /// null when there is no card to draw. A workout typed `workout` but with no
+  /// log and no photo has nothing to draw but its title.
+  WorkoutCardExport? get _workoutCardExport {
+    if (!_isWorkout) return null;
+    final card = WorkoutCardExport(
+      activity: activity,
+      workoutData: workoutData,
+      background: imageUrl == null ? null : appPhoto(imageUrl!),
+    );
+    return card.hasContent ? card : null;
+  }
+
   /// This post in the form the share flows want it — the sheet, the Pulse
   /// card, and the link all read from one snapshot.
   SharedPostRef get _shareRef => SharedPostRef.of(
@@ -143,7 +162,8 @@ class PostCard extends StatelessWidget {
         imageUrl: imageUrl,
         aspectRatio: imageAspectRatio,
         route: routePoints,
-        hasWorkout: workoutData != null || postType == PostType.workout,
+        workoutData: workoutData,
+        hasWorkout: postType == PostType.workout,
       );
 
   /// Whether there is anything to draw between the header and the actions.
@@ -211,6 +231,7 @@ class PostCard extends StatelessWidget {
               post: _shareRef,
               runCard: _runCardExport,
               mealCard: _mealCardExport,
+              workoutCard: _workoutCardExport,
               likes: likes,
               comments: comments,
               onCommentTapped: onCommentTapped,
@@ -315,6 +336,7 @@ class PostCard extends StatelessWidget {
             post: _shareRef,
             runCard: _runCardExport,
             mealCard: _mealCardExport,
+            workoutCard: _workoutCardExport,
             onDeleted: onDeleted,
           ),
         ],
@@ -600,6 +622,7 @@ class PostInteractionRow extends ConsumerWidget {
     required this.comments,
     this.runCard,
     this.mealCard,
+    this.workoutCard,
     this.onCommentTapped,
     this.horizontalPadding = PostCard._gutter - 10,
     this.iconSize = 22,
@@ -617,6 +640,10 @@ class PostInteractionRow extends ConsumerWidget {
   /// The meal card behind this post, for the same save row. Null on anything
   /// that isn't a meal with structured macros to draw.
   final MealCardExport? mealCard;
+
+  /// The workout card behind this post, for the same save row. Null on
+  /// anything that isn't a workout with a log or a photo to draw.
+  final WorkoutCardExport? workoutCard;
   final int likes;
   final int comments;
   final VoidCallback? onCommentTapped;
@@ -671,33 +698,40 @@ class PostInteractionRow extends ConsumerWidget {
             },
           ),
           _ActionIcon(
-            icon: Icons.mode_comment_outlined,
-            color: palette.muted,
+            icon: PostActionIcon(
+              glyph: PostActionGlyph.comment,
+              color: palette.muted,
+              size: iconSize,
+            ),
             count: comments,
-            size: iconSize,
             onTap: onCommentTapped,
           ),
           _ActionIcon(
             // The paper plane, not the platform's share glyph: this opens
             // FitSocial's own options first — Pulse among them — and only
             // reaches the OS sheet if that is what the user picks.
-            icon: Icons.send_outlined,
-            color: palette.muted,
-            size: iconSize,
+            icon: PostActionIcon(
+              glyph: PostActionGlyph.send,
+              color: palette.muted,
+              size: iconSize,
+            ),
             onTap: () => showPostShareSheet(
               context,
               post,
               runCard: runCard,
               mealCard: mealCard,
+              workoutCard: workoutCard,
             ),
           ),
           const Spacer(),
           _ActionIcon(
-            icon: isBookmarked
-                ? Icons.bookmark_rounded
-                : Icons.bookmark_border_rounded,
-            color: isBookmarked ? palette.brand : palette.muted,
-            size: iconSize,
+            icon: Icon(
+              isBookmarked
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_border_rounded,
+              color: isBookmarked ? palette.brand : palette.muted,
+              size: iconSize,
+            ),
             onTap: () async {
               final userId = FirebaseAuth.instance.currentUser?.uid;
               if (userId == null) return;
@@ -727,6 +761,7 @@ class PostMenuButton extends ConsumerWidget {
     required this.post,
     this.runCard,
     this.mealCard,
+    this.workoutCard,
     this.onDeleted,
     super.key,
   });
@@ -738,6 +773,10 @@ class PostMenuButton extends ConsumerWidget {
   /// Passed straight through to [showPostShareSheet]; see
   /// [PostInteractionRow.mealCard].
   final MealCardExport? mealCard;
+
+  /// Passed straight through to [showPostShareSheet]; see
+  /// [PostInteractionRow.workoutCard].
+  final WorkoutCardExport? workoutCard;
   final VoidCallback? onDeleted;
 
   /// The post this menu acts on, in the form the share flow needs it. Carries
@@ -769,8 +808,8 @@ class PostMenuButton extends ConsumerWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         builder: (sheetContext) => LiquidGlass(
-          // Over the screen it was opened from, so there is real content to bend.
-          lens: true,
+              // Over the screen it was opened from, so there is real content to bend.
+              lens: true,
               // A sheet always has a page behind it, which makes it the one
               // surface in the app guaranteed something worth bending.
               borderRadius:
@@ -830,6 +869,7 @@ class PostMenuButton extends ConsumerWidget {
         post,
         runCard: runCard,
         mealCard: mealCard,
+        workoutCard: workoutCard,
       );
       return;
     }
@@ -897,16 +937,15 @@ class PostMenuButton extends ConsumerWidget {
 class _ActionIcon extends StatelessWidget {
   const _ActionIcon({
     required this.icon,
-    required this.color,
     this.count = 0,
-    this.size = 22,
     this.onTap,
   });
 
-  final IconData icon;
-  final Color color;
+  /// The glyph itself, already coloured and sized. A widget rather than an
+  /// [IconData] because two of the three marks in this row are drawn paths
+  /// rather than font glyphs — see [PostActionIcon].
+  final Widget icon;
   final int count;
-  final double size;
   final VoidCallback? onTap;
 
   @override
@@ -921,7 +960,7 @@ class _ActionIcon extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: size),
+            icon,
             if (count > 0) ...[
               const SizedBox(width: 6),
               // The count stays the plain foreground whatever the icon is

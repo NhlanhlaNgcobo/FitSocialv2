@@ -12,6 +12,7 @@ import '../domain/app_models.dart';
 import '../../../shared/widgets/activity_grid.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
+import '../../../shared/widgets/glass_top_bar.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../pulse/presentation/pulse_tray.dart';
@@ -28,7 +29,11 @@ class HomeScreen extends ConsumerWidget {
     final rows = _rows(posts, ref);
 
     return Scaffold(
-      appBar: AppBar(
+      // The top bar is glass, and glass needs the feed running underneath it —
+      // the same bargain `extendBody` strikes for the nav at the other end.
+      // The list pays for it in top padding, below.
+      extendBodyBehindAppBar: true,
+      appBar: GlassTopBar(
         title: const FitSocialLogo(size: 24, animated: false),
         actions: [
           const MusicIslandAction(),
@@ -55,6 +60,10 @@ class HomeScreen extends ConsumerWidget {
         onRefresh: () => _refresh(ref),
         color: context.palette.brand,
         backgroundColor: context.palette.surface,
+        // The list now starts at the top of the screen, so the default 40px
+        // would drop the spinner behind the bar. Put it below the glass, where
+        // it is the one thing on this screen that should not be refracted.
+        displacement: GlassTopBar.clearance(context) + AppSpacing.sm,
         child: ListView.builder(
           // Without this the gesture is only available once the feed is long
           // enough to scroll — which is exactly when a stale feed is least
@@ -69,7 +78,9 @@ class HomeScreen extends ConsumerWidget {
           scrollCacheExtent: const ScrollCacheExtent.viewport(1.5),
           padding: EdgeInsets.fromLTRB(
             AppSpacing.md,
-            AppSpacing.sm,
+            // Clears the glass top bar, which overlays this list now rather
+            // than sitting above it — the mirror of the nav's clearance below.
+            AppSpacing.sm + GlassTopBar.clearance(context),
             AppSpacing.md,
             // Clears the floating nav, which overlays this list rather than
             // sitting below it.

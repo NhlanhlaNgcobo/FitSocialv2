@@ -54,6 +54,10 @@
       {
         "source": "/user/**",
         "destination": "/open.html"
+      },
+      {
+        "source": "/live/**",
+        "destination": "/open.html"
       }
     ],
     "headers": [

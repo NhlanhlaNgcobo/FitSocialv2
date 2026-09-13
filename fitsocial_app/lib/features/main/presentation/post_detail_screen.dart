@@ -14,6 +14,7 @@ import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/post_gradient.dart';
 import '../../../shared/services/meal_card_exporter.dart';
 import '../../../shared/services/run_card_exporter.dart';
+import '../../../shared/services/workout_card_exporter.dart';
 import '../../../shared/widgets/meal_summary_card.dart';
 import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
@@ -160,6 +161,15 @@ class _PostPageState extends ConsumerState<_PostPage> {
                 : appPhoto(post.imageUrl!),
           )
         : null;
+    final workoutCard = media == _MediaKind.workout
+        ? WorkoutCardExport(
+            activity: post.activity,
+            workoutData: post.workoutData,
+            background: post.imageUrl == null || post.imageUrl!.isEmpty
+                ? null
+                : appPhoto(post.imageUrl!),
+          )
+        : null;
 
     return Scaffold(
       // Transparent so this page sits on the app's one backdrop, the
@@ -176,6 +186,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
             post: SharedPostRef.fromFeedPost(post),
             runCard: runCard,
             mealCard: mealCard,
+            workoutCard: workoutCard,
             // Nothing left to show once the post is gone.
             onDeleted: () => context.pop(),
           ),
@@ -222,6 +233,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
             post: SharedPostRef.fromFeedPost(post),
             runCard: runCard,
             mealCard: mealCard,
+            workoutCard: workoutCard,
             likes: post.likes,
             comments: post.comments,
             // Aligns the glyphs with the page gutter — the icons carry 10px of

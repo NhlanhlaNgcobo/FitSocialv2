@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/bootstrap/bootstrap_status.dart';
@@ -39,6 +42,11 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<List<LoggedMeal>> getLoggedMeals() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<RecentWorkout>> getRecentWorkouts({int limit = 6}) async {
     throw StateError(_firebaseSetupMessage);
   }
 
@@ -236,6 +244,11 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<String> uploadMealImageBytes(Uint8List bytes) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<Map<String, dynamic>> analyzeMealImage(String imageUrl) async {
     throw StateError(_firebaseSetupMessage);
   }
@@ -247,6 +260,11 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<String> uploadPostImage(String localFilePath) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<String> uploadPostImageBytes(Uint8List bytes) async {
     throw StateError(_firebaseSetupMessage);
   }
 

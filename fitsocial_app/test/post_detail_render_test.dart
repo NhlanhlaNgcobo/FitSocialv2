@@ -53,7 +53,8 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Leg Day'), findsOneWidget);
-    expect(find.text('45 min'), findsOneWidget);
+    // The log sheet sets the duration in small caps under the title.
+    expect(find.text('45 MIN'), findsOneWidget);
     expect(find.textContaining('squats'), findsOneWidget);
   });
 

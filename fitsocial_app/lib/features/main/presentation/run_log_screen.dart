@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,12 +7,14 @@ import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/input/typed_number.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/form_section_header.dart';
 import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/glass.dart';
+import '../../../shared/widgets/health_pull_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_background_section.dart';
@@ -20,6 +22,10 @@ import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/save_run_card_row.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
+import '../../tracking/application/run_draft_providers.dart';
+import '../../tracking/application/tracking_providers.dart';
+import '../../tracking/data/run_import_service.dart';
+import '../../tracking/domain/run_draft.dart';
 import '../../tracking/domain/run_pace.dart';
 import '../application/activity_actions.dart';
 import '../domain/activity_kind.dart';
@@ -41,8 +47,10 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   /// Has to match, or a section that isn't counted never finishes its fade.
   /// It was a const 7 when the screen always drew the same rows; the activity
   /// picker added one, and the treadmill card now comes and goes with the
-  /// selected activity, so it is counted rather than assumed.
-  int get _sectionCount => _kind == ActivityKind.run ? 8 : 7;
+  /// selected activity, so it is counted rather than assumed. The health
+  /// card is another that comes and goes: there is no platform store on web.
+  int get _sectionCount =>
+      (_kind == ActivityKind.run ? 8 : 7) + (kIsWeb ? 0 : 1);
 
   late final AnimationController _entranceController;
   late final TextEditingController _distanceController;
@@ -54,9 +62,22 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   ActivityKind _kind = ActivityKind.run;
 
   double _distanceKm = 0;
-  int _durationMinutes = 0;
+
+  /// Typed as minutes, held as a Duration so a fractional entry keeps its
+  /// seconds all the way to the post.
+  Duration _elapsed = Duration.zero;
   bool _shareToFeed = true;
   bool _isSaving = false;
+
+  /// The health-store session the form was filled from, if it was. Carried
+  /// through to the save so the outing keeps its real start time and cannot
+  /// arrive a second time as an import.
+  HealthRunPrefill? _healthPrefill;
+  bool _isPullingHealth = false;
+
+  /// Why the last pull produced nothing, shown under the card. Cleared by the
+  /// next attempt.
+  String? _healthNote;
 
   /// The chosen backdrop, as a local path. Uploaded on save, not on pick — a
   /// user who backs out of the form should not have left a file behind.
@@ -86,7 +107,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   }
 
   bool get _hasDistance => _distanceKm > 0;
-  bool get _hasDuration => _durationMinutes > 0;
+  bool get _hasDuration => _elapsed > Duration.zero;
   bool get _isComplete => _hasDistance && _hasDuration;
 
   /// The headline second figure: `m:ss /km` on foot, `x.x km/h` on a bike.
@@ -98,7 +119,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
     return formatPaceOrSpeed(
       kind: _kind,
       distanceKm: _distanceKm,
-      elapsed: Duration(minutes: _durationMinutes),
+      elapsed: _elapsed,
     );
   }
 
@@ -108,8 +129,8 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
 
   String get _durationLabel {
     if (!_hasDuration) return '--';
-    final hours = _durationMinutes ~/ 60;
-    final mins = _durationMinutes % 60;
+    final hours = _elapsed.inHours;
+    final mins = _elapsed.inMinutes % 60;
     if (hours == 0) return '$mins min';
     return mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
   }
@@ -120,9 +141,10 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   /// gets shared, and a preview that reads "45 min" where the post will read
   /// "45:00" is a preview of something else.
   String get _clockLabel {
-    final hours = _durationMinutes ~/ 60;
-    final mins = (_durationMinutes % 60).toString().padLeft(2, '0');
-    return hours == 0 ? '$mins:00' : '$hours:$mins:00';
+    final hours = _elapsed.inHours;
+    final mins = (_elapsed.inMinutes % 60).toString().padLeft(2, '0');
+    final secs = (_elapsed.inSeconds % 60).toString().padLeft(2, '0');
+    return hours == 0 ? '$mins:$secs' : '$hours:$mins:$secs';
   }
 
   static String _formatDistance(double value) {
@@ -132,6 +154,107 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
       text = text.replaceFirst(RegExp(r'\.$'), '');
     }
     return text;
+  }
+
+  /// Minutes for the duration field, to the same two places: 50:25 is typed
+  /// back as "50.42", which parses to the same second.
+  static String _formatMinutes(Duration value) =>
+      _formatDistance(value.inSeconds / 60);
+
+  /// Reads the latest session out of the health store into the form.
+  ///
+  /// Access is *asked for* rather than checked. The dashboard's gate covers
+  /// steps and heart rate but not exercise sessions, so "granted" there can
+  /// still mean "declined" here, and the silent import can only find nothing.
+  /// Health Connect returns at once when everything is already allowed, and a
+  /// tap on a button that says what it wants is the one moment a permission
+  /// dialog is not a surprise.
+  Future<void> _pullFromHealth() async {
+    if (_isPullingHealth || _isSaving) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isPullingHealth = true;
+      _healthNote = null;
+    });
+    try {
+      final granted =
+          await ref.read(healthServiceProvider).requestPermissions();
+      if (!mounted) return;
+      if (!granted) {
+        setState(() => _healthNote = HealthPullCard.refusedNote);
+        return;
+      }
+      final prefill = await ref.read(runImportServiceProvider).latest();
+      if (!mounted) return;
+      if (prefill == null) {
+        setState(() => _healthNote = HealthPullCard.emptyNote);
+        return;
+      }
+      _applyHealthPrefill(prefill);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _healthNote = HealthPullCard.failedNote);
+    } finally {
+      if (mounted) setState(() => _isPullingHealth = false);
+    }
+  }
+
+  void _applyHealthPrefill(HealthRunPrefill prefill) {
+    final km = prefill.distanceKm;
+    setState(() {
+      _healthPrefill = prefill;
+      // The session decides the activity: a hike pulled into a form set to
+      // "run" would be saved as a run, and the picker is right there to
+      // override it.
+      _kind = prefill.kind;
+      _distanceKm = km ?? 0;
+      _elapsed = prefill.elapsed;
+      _distanceController.text = km == null ? '' : _formatDistance(km);
+      _durationController.text = _formatMinutes(prefill.elapsed);
+      _showFieldErrors = false;
+      _errorMessage = null;
+    });
+    final source = prefill.record.sourceName;
+    showQuickToast(
+      context,
+      km == null
+          ? 'Time filled from $source. Add the distance.'
+          : 'Filled from $source',
+      tone: ToastTone.success,
+    );
+  }
+
+  /// "Run · Today 07:12 · 10.01 km in 50:25".
+  static String _describePrefill(HealthRunPrefill prefill) {
+    final distance = prefill.distanceKm;
+    final clock = HealthPullCard.clockLabel(prefill.elapsed);
+    return [
+      prefill.kind.descriptor.singular,
+      HealthPullCard.whenLabel(prefill.record.startedAt),
+      distance == null
+          ? '$clock, no distance recorded'
+          : '${_formatDistance(distance)} km in $clock',
+    ].join(' · ');
+  }
+
+  /// A saved session came out of the health store: stamp the ledger so the
+  /// background import never files it, and drop the draft if it already has.
+  ///
+  /// Housekeeping, so it must not fail the save: the run is already in
+  /// Firestore, and its window blocks the import on its own even if this
+  /// throws.
+  Future<void> _retireImport(String externalId) async {
+    try {
+      await ref.read(runImportLedgerProvider).markHandled([externalId]);
+      final controller = ref.read(runDraftsProvider.notifier);
+      final drafts =
+          ref.read(runDraftsProvider).valueOrNull ?? const <RunDraft>[];
+      for (final draft in drafts) {
+        if (draft.externalId == externalId) await controller.discard(draft);
+      }
+    } catch (error) {
+      debugPrint('Could not retire imported run $externalId: $error');
+    }
   }
 
   /// Picks and crops a backdrop. The cropper downscales and re-encodes, so what
@@ -166,14 +289,22 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
       final result = await ref.read(activityActionsProvider).saveRun(
             RunLogDraft(
               distanceKm: _distanceKm,
-              elapsed: Duration(minutes: _durationMinutes),
+              elapsed: _elapsed,
               averagePace: _paceLabel,
               shareToFeed: _shareToFeed,
               activityKind: _kind,
               backgroundImagePath: _backgroundPath,
+              // Only ever set by a health pull. A run typed from memory has
+              // no start worth recording beyond "now".
+              startedAt: _healthPrefill?.record.startedAt,
+              heartRate: _healthPrefill?.heartRate,
             ),
           );
       if (!mounted) return;
+      if (_healthPrefill case final prefill?) {
+        await _retireImport(prefill.record.externalId);
+        if (!mounted) return;
+      }
       showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
     } catch (error) {
@@ -252,6 +383,27 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
             child: const _LabelledDivider(label: 'or log it manually'),
           ),
           const SizedBox(height: AppSpacing.lg),
+          if (!kIsWeb) ...[
+            StaggeredFadeIn(
+              controller: _entranceController,
+              index: sectionIndex++,
+              itemCount: _sectionCount,
+              child: HealthPullCard(
+                busy: _isPullingHealth,
+                filled: _healthPrefill != null,
+                title: _healthPrefill == null
+                    ? HealthPullCard.idleTitle
+                    : 'Filled from ${_healthPrefill!.record.sourceName}',
+                subtitle: _healthPrefill == null
+                    ? 'Pull your latest session from Samsung Health or '
+                        'your watch'
+                    : _describePrefill(_healthPrefill!),
+                note: _healthNote,
+                onTap: _isSaving ? null : _pullFromHealth,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           StaggeredFadeIn(
             controller: _entranceController,
             index: sectionIndex++,
@@ -279,7 +431,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                       invalid: _showFieldErrors && !_hasDistance,
                       onChanged: (value) {
                         setState(() {
-                          _distanceKm = double.tryParse(value.trim()) ?? 0;
+                          _distanceKm = parseTypedDouble(value) ?? 0;
                         });
                       },
                     ),
@@ -290,11 +442,12 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                       controller: _durationController,
                       suffix: 'min',
                       hint: '0',
-                      decimal: false,
+                      // Minutes, but not whole ones: "50,5" is a real time.
+                      decimal: true,
                       invalid: _showFieldErrors && !_hasDuration,
                       onChanged: (value) {
                         setState(() {
-                          _durationMinutes = int.tryParse(value.trim()) ?? 0;
+                          _elapsed = parseTypedMinutes(value);
                         });
                       },
                     ),
@@ -333,6 +486,9 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
               children: [
                 RunBackgroundSection(
                   imagePath: _backgroundPath,
+                  // A logged run has no trace, so a blank card is just numbers
+                  // on a gradient: offer the photo, preview only once picked.
+                  previewWithoutImage: false,
                   distanceLabel: _hasDistance
                       ? '${_formatDistance(_distanceKm)} km'
                       : null,
@@ -343,7 +499,9 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                       ? null
                       : () => setState(() => _backgroundPath = null),
                 ),
-                if (!kIsWeb) ...[
+                // The card only exists on screen once there is a photo, so
+                // the export follows it.
+                if (!kIsWeb && _backgroundPath != null) ...[
                   const SizedBox(height: AppSpacing.sm),
                   SaveRunCardRow(
                     card: RunCardExport(
@@ -354,9 +512,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                           : null,
                       durationLabel: _hasDuration ? _clockLabel : null,
                       paceLabel: _isComplete ? _paceLabel : null,
-                      background: _backgroundPath == null
-                          ? null
-                          : localBackgroundImage(_backgroundPath!),
+                      background: localBackgroundImage(_backgroundPath!),
                     ),
                   ),
                 ],
@@ -522,14 +678,11 @@ class _GpsHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final descriptor = kind.descriptor;
-    // A run keeps the brand orange it has always had. The other two take their
-    // own accent, darkened one step for the far end of the gradient.
-    final isRun = kind == ActivityKind.run;
+    // Every kind takes its own accent — a run is blue, same as its segment and
+    // its feed cards — darkened one step for the far end of the gradient.
     final accent = palette.accent(descriptor.accent);
-    final gradientStart = isRun ? palette.brand : accent;
-    final gradientEnd = isRun
-        ? AppColors.orange
-        : Color.lerp(accent, const Color(0xFF1A120B), 0.32)!;
+    final gradientStart = accent;
+    final gradientEnd = Color.lerp(accent, const Color(0xFF1A120B), 0.32)!;
     final subtitle = descriptor.usesPace
         ? 'Real-time distance, pace and route map'
         : 'Real-time distance, speed and route map';
@@ -568,7 +721,7 @@ class _GpsHeroCard extends StatelessWidget {
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(
-                      // On the orange fill, so the white is fixed in both
+                      // On the accent fill, so the white is fixed in both
                       // themes — same rule as AppColors.onBrand.
                       color: AppColors.onBrand.withValues(alpha: 0.18),
                       shape: BoxShape.circle,
@@ -624,7 +777,7 @@ class _GpsHeroCard extends StatelessWidget {
 ///
 /// Deliberately the quieter of the two: it is the same live tracking, minus the
 /// one signal a treadmill can't give — so it reads as the alternative to the
-/// orange card above rather than a second recommendation competing with it.
+/// accent card above rather than a second recommendation competing with it.
 class _TreadmillCard extends StatelessWidget {
   const _TreadmillCard({required this.onTap});
 

@@ -12,6 +12,7 @@ import '../../main/domain/app_models.dart' show Comment, PublicAuthorName;
 import '../../main/domain/shared_post.dart';
 import '../domain/pulse_music.dart';
 import '../domain/pulse_models.dart';
+import '../domain/pulse_text_style.dart';
 import 'pulse_repository_contract.dart';
 
 /// Firestore-backed Pulses.
@@ -182,6 +183,8 @@ class FirestorePulseRepository implements PulseRepository {
       // Pulse was made, and does not change when the author skips a track.
       if (draft.music != null) 'music': draft.music!.toMap(),
       if (draft.text.trim().isNotEmpty) 'text': draft.text.trim(),
+      if (draft.text.trim().isNotEmpty && draft.textStyle != null)
+        'textStyle': draft.textStyle!.toMap(),
       'gradientKey': draft.gradientKey,
       if (draft.aspectRatio != null) 'aspectRatio': draft.aspectRatio,
       if (draft.videoDuration != null)
@@ -203,6 +206,7 @@ class FirestorePulseRepository implements PulseRepository {
       type: draft.type,
       mediaUrl: mediaUrl,
       text: draft.text.trim(),
+      textStyle: draft.text.trim().isEmpty ? null : draft.textStyle,
       gradientKey: draft.gradientKey,
       createdAt: now,
       expiresAt: expiresAt,
@@ -576,6 +580,7 @@ class FirestorePulseRepository implements PulseRepository {
       type: PulseMediaType.fromKey(data['type'] as String?),
       mediaUrl: data['mediaUrl'] as String?,
       text: (data['text'] as String?) ?? '',
+      textStyle: PulseTextStyle.fromMap(data['textStyle']),
       gradientKey: (data['gradientKey'] as String?) ?? 'ember',
       createdAt: createdAt,
       expiresAt: expiresAt,

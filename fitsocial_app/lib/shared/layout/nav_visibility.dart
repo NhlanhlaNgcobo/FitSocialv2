@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Decides, from scroll activity, whether the floating nav should be on screen.
@@ -73,4 +74,31 @@ class NavVisibility {
   }
 
   void dispose() => hidden.dispose();
+}
+
+/// Carries the shell's [NavVisibility] down to whatever wants to move with it.
+///
+/// The nav capsule is handed its state directly, because the shell builds it.
+/// The top bar is not: it belongs to whichever screen is showing, several
+/// levels below, and the scroll that drives it is caught up here. Passing the
+/// notifier rather than the value is the point — an [InheritedNotifier]
+/// rebuilds only the widgets that read it, so a flip repaints the two bars and
+/// leaves the branch stack between them alone.
+class NavVisibilityScope extends InheritedNotifier<ValueListenable<bool>> {
+  const NavVisibilityScope({
+    required ValueListenable<bool> hidden,
+    required super.child,
+    super.key,
+  }) : super(notifier: hidden);
+
+  /// Whether the shell's bars are currently off screen.
+  ///
+  /// Defaults to visible where there is no scope — a screen pushed over the
+  /// shell has no scroll signal reaching it, and a bar that hid itself there
+  /// could never be brought back.
+  static bool hiddenOf(BuildContext context) {
+    final scope =
+        context.dependOnInheritedWidgetOfExactType<NavVisibilityScope>();
+    return scope?.notifier?.value ?? false;
+  }
 }

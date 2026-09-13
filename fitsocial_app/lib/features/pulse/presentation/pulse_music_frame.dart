@@ -31,10 +31,16 @@ class PulseMusicFrame extends ConsumerWidget {
     required this.music,
     required this.gradient,
     this.contentPadding = viewerPadding,
+    this.resolvingArt = false,
     super.key,
   });
 
   final PulseMusic music;
+
+  /// Whether a cover is still being looked up for a track that arrived
+  /// without one. The placeholder spins instead of sitting there as if the
+  /// grey square were the answer.
+  final bool resolvingArt;
 
   /// Painted when the track has no cover art to fill the frame with — an older
   /// Pulse, or a service whose artwork this app cannot reach.
@@ -81,6 +87,7 @@ class PulseMusicFrame extends ConsumerWidget {
                     child: _Details(
                       music: music,
                       coverSize: math.max(cover, 96),
+                      resolvingArt: resolvingArt,
                     ),
                   ),
                 );
@@ -94,10 +101,15 @@ class PulseMusicFrame extends ConsumerWidget {
 }
 
 class _Details extends StatelessWidget {
-  const _Details({required this.music, required this.coverSize});
+  const _Details({
+    required this.music,
+    required this.coverSize,
+    required this.resolvingArt,
+  });
 
   final PulseMusic music;
   final double coverSize;
+  final bool resolvingArt;
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +133,11 @@ class _Details extends StatelessWidget {
           ],
         ),
         SizedBox(height: coverSize * 0.12),
-        _Cover(imageUrl: music.albumArtUrl, size: coverSize),
+        _Cover(
+          imageUrl: music.albumArtUrl,
+          size: coverSize,
+          resolving: resolvingArt,
+        ),
         SizedBox(height: coverSize * 0.13),
         Text(
           music.title,
@@ -303,10 +319,17 @@ class _GlassButton extends StatelessWidget {
 
 /// The sharp cover, held whole in the middle of the frame.
 class _Cover extends StatelessWidget {
-  const _Cover({required this.imageUrl, required this.size});
+  const _Cover({
+    required this.imageUrl,
+    required this.size,
+    this.resolving = false,
+  });
 
   final String? imageUrl;
   final double size;
+
+  /// Whether a URL is still being looked up. Only meaningful without one.
+  final bool resolving;
 
   @override
   Widget build(BuildContext context) {
@@ -318,11 +341,20 @@ class _Cover extends StatelessWidget {
             borderRadius: radius,
           ),
           child: Center(
-            child: Icon(
-              Icons.music_note_rounded,
-              color: AppColors.onMedia.withValues(alpha: 0.7),
-              size: size * 0.34,
-            ),
+            child: resolving && (imageUrl ?? '').isEmpty
+                ? SizedBox(
+                    width: size * 0.18,
+                    height: size * 0.18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: AppColors.onMedia.withValues(alpha: 0.7),
+                    ),
+                  )
+                : Icon(
+                    Icons.music_note_rounded,
+                    color: AppColors.onMedia.withValues(alpha: 0.7),
+                    size: size * 0.34,
+                  ),
           ),
         );
 

@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import '../../../shared/reactions/fit_reaction.dart';
+
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 import '../domain/meal_tracking.dart';
@@ -21,6 +24,17 @@ abstract class ContentRepository {
   /// period's deltas, and the session list — and one user's own training
   /// history is small enough that fetching it once beats a query per view.
   Future<List<ActivitySession>> getActivitySessions();
+
+  /// The signed-in user's most recent workouts, newest first, one per title.
+  ///
+  /// Feeds the log screen's "Repeat" chips, so it is deduplicated by title:
+  /// somebody who trains the same four splits has four templates, not twenty
+  /// copies of the newest one.
+  ///
+  /// Only workouts logged after exercises were recorded on the log document
+  /// carry any; older ones come back with an empty list and repeat only the
+  /// title, duration and calories.
+  Future<List<RecentWorkout>> getRecentWorkouts({int limit});
 
   /// Every meal the signed-in user has logged.
   ///
@@ -219,8 +233,17 @@ abstract class ContentRepository {
   /// Uploads a meal photo to Firebase Storage and returns the download URL.
   Future<String> uploadMealImage(String localFilePath);
 
+  /// Uploads already-loaded JPEG bytes as a meal photo.
+  ///
+  /// Screens that hold the user's photo while they fill in a form use this so
+  /// the upload never depends on a file still existing on disk.
+  Future<String> uploadMealImageBytes(Uint8List bytes);
+
   /// Uploads a post image to Firebase Storage and returns the download URL.
   Future<String> uploadPostImage(String localFilePath);
+
+  /// Byte-based twin of [uploadPostImage]; see [uploadMealImageBytes].
+  Future<String> uploadPostImageBytes(Uint8List bytes);
 
   /// Calls the analyzeMeal Cloud Function with the image URL and returns
   /// structured nutritional data.

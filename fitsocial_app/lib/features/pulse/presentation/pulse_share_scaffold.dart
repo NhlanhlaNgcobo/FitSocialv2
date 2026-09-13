@@ -7,14 +7,17 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
-import 'pulse_text.dart';
+import '../domain/pulse_text_style.dart';
+import 'pulse_share_controls.dart';
+import 'pulse_text_tool.dart';
 
 /// The shared canvas behind every "add this to your Pulse" screen.
 ///
 /// Sharing a post and sharing a track are the same screen with a different
-/// thing mounted on it: a card on a gradient you pick, a caption you may or
-/// may not write, and one button. Only [canvas] and [buildDraft] differ, so
-/// they are the only two things a caller supplies.
+/// thing mounted on it: a card on a gradient you pick, words you may or may
+/// not write over it with the same text tool the composer has, and one
+/// button. Only [canvas] and [buildDraft] differ, so they are the only two
+/// things a caller supplies.
 ///
 /// Nothing here uploads. Both kinds publish from a snapshot written onto the
 /// Pulse document, which is what lets a single write finish the job.
@@ -22,6 +25,7 @@ class PulseShareScaffold extends ConsumerStatefulWidget {
   const PulseShareScaffold({
     required this.canvas,
     required this.buildDraft,
+    this.beforeShare,
     this.captionHint = 'Say something about this',
     this.canvasFillsFrame = false,
     this.showGradientPicker = true,
@@ -48,9 +52,26 @@ class PulseShareScaffold extends ConsumerStatefulWidget {
   /// will ever see is a control that does nothing.
   final bool showGradientPicker;
 
-  /// The draft to publish, given whatever the user typed and picked.
-  final PulseDraft Function(String caption, String gradientKey) buildDraft;
+  /// The draft to publish, given whatever the user wrote and picked.
+  ///
+  /// [text] is empty and [textStyle] the defaults when nothing was written;
+  /// otherwise the style says how and where the words sit on the frame.
+  final PulseDraft Function(
+    String text,
+    PulseTextStyle textStyle,
+    String gradientKey,
+  ) buildDraft;
 
+  /// Awaited, under the busy state, before [buildDraft] is read.
+  ///
+  /// For anything the screen is still fetching that belongs on the Pulse —
+  /// a cover that is being looked up, say. A Pulse is a snapshot: whatever
+  /// has not landed by the time the draft is built is missing for 24 hours,
+  /// and a Share pressed a beat after arriving must not lose it. Errors are
+  /// the caller's to swallow; a hook that throws fails the share.
+  final Future<void> Function()? beforeShare;
+
+  /// What the empty text tool says.
   final String captionHint;
 
   @override
@@ -58,23 +79,50 @@ class PulseShareScaffold extends ConsumerStatefulWidget {
 }
 
 class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
-  final TextEditingController _captionController = TextEditingController();
-  final FocusNode _captionFocus = FocusNode();
+  /// The words over the canvas, and how they are drawn — the same tool, the
+  /// same state, as the composer keeps for a text card.
+  final TextEditingController _textController = TextEditingController();
+  PulseTextStyle _textStyle = PulseTextStyle.defaults;
+  bool _editingText = false;
 
   String _gradientKey = PulseGradient.ember.key;
   bool _busy = false;
 
   @override
   void dispose() {
-    _captionController.dispose();
-    _captionFocus.dispose();
+    _textController.dispose();
     super.dispose();
   }
 
   PulseGradient get _gradient => PulseGradient.fromKey(_gradientKey);
 
+  bool get _hasText => _textController.text.trim().isNotEmpty;
+
+  void _openTextTool() {
+    if (_editingText) return;
+    setState(() => _editingText = true);
+  }
+
+  void _closeTextTool() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _editingText = false;
+      // Whitespace is not a message. Cleared rather than kept, so a stray
+      // space does not leave an invisible sticker that still counts as text.
+      if (!_hasText) _textController.clear();
+    });
+  }
+
+  /// Steps the mount on to the next backdrop, wrapping round at the end —
+  /// the composer's one-tap wheel, not a palette.
+  void _cycleGradient() {
+    const all = PulseGradient.all;
+    final index = all.indexWhere((gradient) => gradient.key == _gradientKey);
+    setState(() => _gradientKey = all[(index + 1) % all.length].key);
+  }
+
   Future<void> _share() async {
-    if (_busy) return;
+    if (_busy || _editingText) return;
     FocusScope.of(context).unfocus();
     // Read off the root overlay before anything awaits: this route pops on
     // success, and a message anchored to its Scaffold would go with it.
@@ -82,8 +130,14 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
     setState(() => _busy = true);
 
     try {
+      await widget.beforeShare?.call();
+      if (!mounted) return;
       await ref.read(pulseActionsProvider).publish(
-            widget.buildDraft(_captionController.text, _gradientKey),
+            widget.buildDraft(
+              _hasText ? _textController.text : '',
+              _textStyle,
+              _gradientKey,
+            ),
           );
       if (!mounted) return;
       showQuickToastOn(
@@ -109,49 +163,82 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
   @override
   Widget build(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final isTyping = keyboardInset > 0;
 
-    return Scaffold(
-      backgroundColor: AppColors.mediaBackdrop,
-      // Same rule as the Pulse composer: the keyboard overlays the canvas
-      // rather than resizing it, and the controls are lifted by hand below.
-      resizeToAvoidBottomInset: false,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          _buildCanvas(keyboardInset),
-          SafeArea(
-            bottom: false,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: _buildTopBar(isTyping),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: keyboardInset,
-            child: SafeArea(
-              top: false,
-              bottom: !isTyping,
-              child: _buildControls(isTyping),
-            ),
-          ),
-          if (_busy)
-            const ColoredBox(
-              color: Color(0xAA050505),
-              child: Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.orangeBright,
+    return PopScope(
+      // Back while the text tool is open closes the tool, not the screen.
+      canPop: !_editingText,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeTextTool();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.mediaBackdrop,
+        // Same rule as the Pulse composer: the keyboard overlays the canvas
+        // rather than resizing it; the text tool lifts itself above it.
+        resizeToAvoidBottomInset: false,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            _withText(_buildCanvas()),
+            // The text tool brings its own chrome and takes the whole screen
+            // while it is open, exactly as it does in the composer.
+            if (_editingText)
+              PulseTextEditor(
+                controller: _textController,
+                style: _textStyle,
+                onStyleChanged: (style) => setState(() => _textStyle = style),
+                onDone: _closeTextTool,
+                keyboardInset: keyboardInset,
+                hintText: widget.captionHint,
+              )
+            else ...[
+              SafeArea(
+                bottom: false,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: _buildTopBar(),
                 ),
               ),
-            ),
-        ],
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SafeArea(top: false, child: _buildControls()),
+              ),
+            ],
+            if (_busy)
+              const ColoredBox(
+                color: Color(0xAA050505),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.orangeBright,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildCanvas(double keyboardInset) {
+  /// The words, set down where their style says, over the canvas. Nothing
+  /// while the text tool is open — it is showing them itself.
+  Widget _withText(Widget background) {
+    if (_editingText || !_hasText) return background;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        background,
+        PulseTextSticker(
+          text: _textController.text,
+          style: _textStyle,
+          onStyleChanged: (style) => setState(() => _textStyle = style),
+          onTap: _openTextTool,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCanvas() {
     final canvas = widget.canvas(_gradient);
     if (widget.canvasFillsFrame) return canvas;
 
@@ -159,15 +246,13 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
       decoration: BoxDecoration(gradient: _gradient.linear),
       child: SafeArea(
         child: Padding(
-          // Clears the top bar and the control stack, so the card centres in
-          // the space that is actually free rather than under the chrome. The
-          // bottom inset shrinks with the keyboard, which is what keeps the
-          // card on screen while a caption is being typed.
-          padding: EdgeInsets.only(
-            left: AppSpacing.lg,
-            right: AppSpacing.lg,
-            top: 64,
-            bottom: keyboardInset > 0 ? 96 : 210,
+          // Clears the top bar and the Share pill, so the card centres in the
+          // space that is actually free rather than under the chrome.
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            64,
+            AppSpacing.lg,
+            120,
           ),
           child: Center(
             child: SingleChildScrollView(child: canvas),
@@ -177,10 +262,11 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
     );
   }
 
-  Widget _buildTopBar(bool isTyping) {
+  Widget _buildTopBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconButton(
             onPressed: () => context.pop(),
@@ -189,21 +275,21 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
             tooltip: 'Close',
           ),
           const Spacer(),
-          if (isTyping)
-            TextButton(
-              onPressed: () => FocusScope.of(context).unfocus(),
-              style: TextButton.styleFrom(foregroundColor: AppColors.onMedia),
-              child: const Text(
-                'Done',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-              ),
-            ),
+          // The composer's rail: text first, then the backdrop wheel for a
+          // canvas that still shows its gradient.
+          Column(
+            children: [
+              PulseTextToolButton(onTap: _openTextTool),
+              if (widget.showGradientPicker)
+                PulseBackgroundButton(onTap: _cycleGradient),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildControls(bool isTyping) {
+  Widget _buildControls() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -211,148 +297,9 @@ class _PulseShareScaffoldState extends ConsumerState<PulseShareScaffold> {
         AppSpacing.md,
         AppSpacing.md,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _CaptionField(
-            controller: _captionController,
-            focusNode: _captionFocus,
-            hintText: widget.captionHint,
-          ),
-          // While the keyboard is up the palette and the button step out of
-          // the way, the same as in the Pulse composer.
-          if (!isTyping) ...[
-            if (widget.showGradientPicker) ...[
-              const SizedBox(height: AppSpacing.md),
-              _GradientPicker(
-                selectedKey: _gradientKey,
-                onSelected: (key) => setState(() => _gradientKey = key),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.md),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _busy ? null : _share,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.orangeBright,
-                  disabledBackgroundColor: const Color(0x66111111),
-                  foregroundColor: AppColors.onMedia,
-                  disabledForegroundColor: AppColors.onMediaMuted,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                icon: const Icon(Icons.bolt_rounded),
-                label: const Text(
-                  'Share to Pulse',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Somewhere to say why you are sharing it. Optional — the thing on the canvas
-/// is the point.
-class _CaptionField extends StatelessWidget {
-  const _CaptionField({
-    required this.controller,
-    required this.focusNode,
-    required this.hintText,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String hintText;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 12,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0x99000000),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.text_fields_rounded,
-              color: Color(0xCCFFFFFF), size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              maxLength: 140,
-              textCapitalization: TextCapitalization.sentences,
-              cursorColor: AppColors.onMedia,
-              style: const TextStyle(
-                color: AppColors.onMedia,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-              decoration: barePulseInput(
-                hintText: hintText,
-                hintStyle: const TextStyle(
-                  color: Color(0x8AFFFFFF),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The mount the card sits on. Same swatches as a text Pulse — there is one
-/// Pulse palette, not one per composer.
-class _GradientPicker extends StatelessWidget {
-  const _GradientPicker({required this.selectedKey, required this.onSelected});
-
-  final String selectedKey;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: PulseGradient.all.length,
-        separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          final gradient = PulseGradient.all[index];
-          final selected = gradient.key == selectedKey;
-          return GestureDetector(
-            onTap: () => onSelected(gradient.key),
-            child: Container(
-              width: 36,
-              height: 36,
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: gradient.linear,
-                border: Border.all(
-                  color: selected ? AppColors.onMedia : const Color(0x66FFFFFF),
-                  width: selected ? 3 : 1,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+      // Centred, not stretched: it is a pill over the canvas, as in the
+      // composer, not a footer across it.
+      child: Center(child: PulseShareButton(onPressed: _busy ? null : _share)),
     );
   }
 }

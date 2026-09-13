@@ -1,7 +1,6 @@
 import '../../../shared/widgets/quick_toast.dart';
-import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,7 +43,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// only in — an '@' left in the activity line must not open it.
   final _captionFocus = FocusNode();
 
-  String? _imagePath;
+  /// The cropped photo, held in memory from the moment the cropper returns.
+  ///
+  /// The upload reads these bytes, never the file: the cropper's output lives
+  /// on disk where the OS may clear it while the user is still tagging
+  /// people, and a post must not fail because of that.
+  Uint8List? _imageBytes;
   double? _imageAspectRatio;
 
   /// People picked in the tag sheet. Held here rather than in the create-flow
@@ -91,21 +95,33 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     // previously chosen photo alone rather than clearing it.
     if (path == null) return;
 
+    // Load the bytes now, while the cropper's file is guaranteed to exist.
+    // XFile so this also works on web, where the path is a blob: URL.
+    final Uint8List bytes;
+    try {
+      bytes = await XFile(path).readAsBytes();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = "Couldn't load that photo. Please try again.";
+      });
+      return;
+    }
+
     // Record the shape the user chose so the feed renders it faithfully
     // instead of forcing every photo into one aspect ratio.
-    final ratio = await _readAspectRatio(path);
+    final ratio = await _readAspectRatio(bytes);
     if (!mounted) return;
     setState(() {
-      _imagePath = path;
+      _imageBytes = bytes;
       _imageAspectRatio = ratio;
+      _errorMessage = null;
     });
   }
 
-  /// Decodes just enough of the file to read its dimensions. Uses XFile so it
-  /// works on web, where the path is a blob: URL rather than a real file.
-  Future<double?> _readAspectRatio(String path) async {
+  /// Decodes just enough of the image to read its dimensions.
+  Future<double?> _readAspectRatio(Uint8List bytes) async {
     try {
-      final bytes = await XFile(path).readAsBytes();
       final image = await decodeImageFromList(bytes);
       if (image.height == 0) return null;
       return image.width / image.height;
@@ -142,10 +158,11 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
     try {
       String? imageUrl;
-      if (_imagePath != null) {
+      final bytes = _imageBytes;
+      if (bytes != null) {
         imageUrl = await ref
             .read(contentRepositoryProvider)
-            .uploadPostImage(_imagePath!);
+            .uploadPostImageBytes(bytes);
       }
 
       final result = await ref.read(activityActionsProvider).sharePost(
@@ -198,7 +215,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
           AppSpacing.md,
         ),
         children: [
-          if (_imagePath == null)
+          if (_imageBytes == null)
             _MediaPicker(
               onGallery:
                   _isSaving ? null : () => _pickImage(ImageSource.gallery),
@@ -206,12 +223,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             )
           else
             _SelectedPhoto(
-              path: _imagePath!,
+              bytes: _imageBytes!,
               aspectRatio: _imageAspectRatio,
               onChange:
                   _isSaving ? null : () => _pickImage(ImageSource.gallery),
               onRemove:
-                  _isSaving ? null : () => setState(() => _imagePath = null),
+                  _isSaving ? null : () => setState(() => _imageBytes = null),
             ),
           const SizedBox(height: AppSpacing.md),
           _ComposerCard(
@@ -241,7 +258,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
         child: _ShareBar(
           isSaving: _isSaving,
           // Only the photo upload takes long enough to be worth narrating.
-          showProgress: _isSaving && _imagePath != null,
+          showProgress: _isSaving && _imageBytes != null,
           onPressed: _isSaving ? null : _sharePost,
         ),
       ),
@@ -388,13 +405,13 @@ class _MediaAction extends StatelessWidget {
 /// shape the feed will give it.
 class _SelectedPhoto extends StatelessWidget {
   const _SelectedPhoto({
-    required this.path,
+    required this.bytes,
     required this.aspectRatio,
     required this.onChange,
     required this.onRemove,
   });
 
-  final String path;
+  final Uint8List bytes;
   final double? aspectRatio;
   final VoidCallback? onChange;
   final VoidCallback? onRemove;
@@ -411,11 +428,9 @@ class _SelectedPhoto extends StatelessWidget {
             aspectRatio: aspectRatio ?? 4 / 5,
             child: ColoredBox(
               color: AppColors.mediaBackdrop,
-              // image_picker hands back a blob: URL on web, where dart:io's
-              // File throws when read.
-              child: kIsWeb
-                  ? Image.network(path, fit: BoxFit.cover)
-                  : Image.file(File(path), fit: BoxFit.cover),
+              // Rendered from the same bytes the upload sends, so the
+              // preview and the post can never disagree.
+              child: Image.memory(bytes, fit: BoxFit.cover),
             ),
           ),
           Positioned(

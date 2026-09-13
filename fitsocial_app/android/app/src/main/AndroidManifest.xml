@@ -115,7 +115,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <!-- Scoped to the two path prefixes that name shareable
+                <!-- Scoped to the path prefixes that name shareable
                      content, and NOT left as a bare host. A host-wide claim
                      makes the app the handler for every URL on its own
                      domain, including the privacy policy — so opening the
@@ -127,6 +127,8 @@
                       android:pathPrefix="/post/"/>
                 <data android:scheme="https" android:host="fitsocialv2.web.app"
                       android:pathPrefix="/user/"/>
+                <data android:scheme="https" android:host="fitsocialv2.web.app"
+                      android:pathPrefix="/live/"/>
             </intent-filter>
             <!-- fitsocial://app/post/{id} — the hand-off the hosted page uses
                  when the App Link above was not verified for this install

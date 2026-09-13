@@ -29,7 +29,10 @@ import '../domain/heart_rate_models.dart';
 import '../domain/run_draft.dart';
 import '../data/live_run_service.dart';
 import 'finish_run_sheet.dart';
+import 'live_run_map_screen.dart';
+import 'live_share_card.dart';
 import 'recover_run_sheet.dart';
+import 'run_map_readout.dart';
 import 'run_session_widgets.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -51,7 +54,7 @@ class LiveRunScreen extends ConsumerStatefulWidget {
 
 class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  static const int _sectionCount = 4;
+  static const int _sectionCount = 3;
 
   late final AnimationController _entranceController;
 
@@ -184,6 +187,17 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
     }
   }
 
+  /// The map, and only the map. Finish pressed up there comes back here to
+  /// be acted on, because this screen owns the finish sheet and the save.
+  Future<void> _expandMap() async {
+    final finish = await LiveRunMapScreen.show(context, kind: widget.kind);
+    if (!mounted || !finish) return;
+    // Belt and braces: the map only offers Finish while tracking, but a run
+    // that ended between the tap and the pop must not be stopped twice.
+    if (!ref.read(liveRunServiceProvider).current.isTracking) return;
+    await _stopAndSave();
+  }
+
   Future<void> _stopAndSave() async {
     final service = ref.read(liveRunServiceProvider);
     final result = service.stop();
@@ -216,8 +230,8 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
         .toList(growable: false);
 
     // The run is over and the numbers are final; this only asks what it should
-    // look like on the way out. Every exit from the sheet saves, so nothing
-    // here can lose the run that just finished.
+    // look like on the way out. Dismissing the sheet saves, so nothing here
+    // can lose the run by accident — only its Discard button can, on purpose.
     final choice = await showFinishRunSheet(
       context: context,
       route: route,
@@ -227,6 +241,16 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       saveToDrafts: saveToDrafts,
     );
     if (!mounted) return;
+
+    if (choice.discard) {
+      // The checkpoint goes with it, or the run they just threw away would be
+      // offered back for recovery on the next launch.
+      await ref.read(runCheckpointStoreProvider).clear();
+      if (!mounted) return;
+      showQuickToast(context, 'Run discarded');
+      context.go('/home');
+      return;
+    }
 
     setState(() {
       _isSaving = true;
@@ -443,57 +467,27 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                 controller: _entranceController,
                 index: sectionIndex++,
                 itemCount: _sectionCount,
-                child: runState.isTracking
-                    ? _MapFrame(route: runState.routePoints)
-                    : const _RoutePlaceholder(),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              StaggeredFadeIn(
-                controller: _entranceController,
-                index: sectionIndex++,
-                itemCount: _sectionCount,
-                child: RunHeroCard(
-                  statusLabel: statusLabel,
-                  statusAccent: statusAccent,
-                  isRunning: isRunning,
-                  headlineValue: runState.distanceKm.toStringAsFixed(2),
-                  headlineUnit: 'KM',
-                  metrics: [
-                    RunMetric(
-                      icon: Icons.timer_outlined,
-                      label: 'TIME',
-                      value: _formatElapsed(runState.elapsed),
-                    ),
-                    RunMetric(
-                      icon: Icons.speed_rounded,
-                      // Short labels: with a fourth metric alongside, each one
-                      // has a quarter of the width to fit in.
-                      label: usesPace ? 'PACE /KM' : 'KM/H',
-                      value: usesPace
-                          ? runState.formattedPace
-                          : runState.formattedCurrentSpeed,
-                    ),
+                child: _RouteStage(
+                  route: runState.isTracking ? runState.routePoints : null,
+                  onExpand: _expandMap,
+                  readout: RunMapReadout(
+                    statusLabel: statusLabel,
+                    statusAccent: statusAccent,
+                    distanceKm: runState.distanceKm,
+                    elapsedLabel: _formatElapsed(runState.elapsed),
+                    // Short labels: the figures share one row on the plate.
+                    paceLabel: usesPace ? 'PACE /KM' : 'KM/H',
+                    paceValue: usesPace
+                        ? runState.formattedPace
+                        : runState.formattedCurrentSpeed,
                     // Climb earns its place on a hike, where it is the number
                     // that describes the day, and on a ride. A run keeps the
-                    // three metrics it has always had rather than losing a
-                    // quarter of the row to a figure most runners ignore.
-                    if (showsClimb)
-                      RunMetric(
-                        icon: Icons.terrain_rounded,
-                        label: 'CLIMB M',
-                        value: runState.elevationGainMeters?.toString() ?? '--',
-                      ),
-                    RunMetric(
-                      icon: liveBpm != null
-                          ? Icons.favorite_rounded
-                          : isReconnecting
-                              ? Icons.bluetooth_searching_rounded
-                              : Icons.monitor_heart_outlined,
-                      label: isReconnecting ? 'RECONNECTING' : 'BPM',
-                      value: liveBpm?.toString() ?? '--',
-                      accent: liveBpm != null,
-                    ),
-                  ],
+                    // three figures it has always had rather than adding one
+                    // most runners ignore.
+                    climbMeters: showsClimb
+                        ? runState.elevationGainMeters?.toString() ?? '--'
+                        : null,
+                  ),
                 ),
               ),
               // Status, not an error: it explains why the distance stopped
@@ -565,24 +559,6 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                     tone: RunBannerTone.danger,
                   ),
               ],
-              // Said before the run rather than during it, because during it
-              // is too late to be read. The starvation banner below only
-              // appears once the stream is already failing, and a runner whose
-              // phone is in a pouch is not looking at the screen then — the
-              // whole reason the throttle bit is that the screen went off.
-              // Here they are still holding it, and the setting is two taps.
-              if (!runState.isTracking && !_isBatteryExempt) ...[
-                const SizedBox(height: AppSpacing.md),
-                RunBanner(
-                  icon: Icons.battery_saver_rounded,
-                  message: 'Android throttles GPS once the screen goes off — '
-                      'which is most of a run in a pocket or a waist pouch. '
-                      'Set FitSocial to Unrestricted and it keeps tracking.',
-                  tone: RunBannerTone.brand,
-                  actionLabel: 'Allow unrestricted battery',
-                  onAction: _allowUnrestrictedBattery,
-                ),
-              ],
               const SizedBox(height: AppSpacing.lg),
               StaggeredFadeIn(
                 controller: _entranceController,
@@ -599,6 +575,15 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                   onFinish: _stopAndSave,
                 ),
               ),
+              // Offered only once there is a position to share. Sits under
+              // the controls rather than in the app bar because it is pressed
+              // once, on the way out of the door, by someone handing a link
+              // to whoever is waiting at home — not something to reach for
+              // mid-run.
+              if (runState.isTracking) ...[
+                const SizedBox(height: AppSpacing.md),
+                LiveShareCard(kind: widget.kind),
+              ],
               if (_errorMessage != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 RunBanner(
@@ -663,15 +648,44 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
   }
 }
 
-/// The route map, framed to match the cards under it.
-class _MapFrame extends StatelessWidget {
-  const _MapFrame({required this.route});
+/// The map and the numbers as one thing: the route fills the frame and the
+/// readout sits along its bottom edge, so the screen is the run rather than a
+/// map with a scoreboard under it. Full screen is the same picture with the
+/// readout moved to the top.
+///
+/// Before the run starts [route] is null and the frame holds the placeholder
+/// instead, at the same height with the same readout — so the page does not
+/// reflow the moment tracking begins; the map simply drops in behind the
+/// figures.
+///
+/// Tapping anywhere on the map — or the corner button, for whoever would not
+/// think to — opens it full screen. The button exists because a tap on a map
+/// is not something anyone expects to do anything; the map itself also takes
+/// the tap because, mid-run, a target the size of the whole frame is the only
+/// one that can be hit reliably.
+class _RouteStage extends StatelessWidget {
+  const _RouteStage({
+    required this.route,
+    required this.onExpand,
+    required this.readout,
+  });
 
-  final List<LatLng> route;
+  /// Null before tracking starts.
+  final List<LatLng>? route;
+  final VoidCallback onExpand;
+  final RunMapReadout readout;
+
+  /// The old map and hero card, stacked, less the gap between them.
+  static const double _height = 400;
+
+  /// Space between the plate and the frame's edge — the plate is *on* the map
+  /// rather than a border of it.
+  static const double _inset = 10;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final route = this.route;
 
     return Container(
       decoration: BoxDecoration(
@@ -685,16 +699,68 @@ class _MapFrame extends StatelessWidget {
           ),
         ],
       ),
-      child: RunRouteMap(route: route, height: 240),
+      child: Stack(
+        children: [
+          if (route != null)
+            RunRouteMap(
+              route: route,
+              height: _height,
+              onTap: onExpand,
+              // Keeps the Google logo and the camera's centre clear of the
+              // plate along the bottom.
+              padding: const EdgeInsets.only(
+                bottom: RunMapReadout.approximateHeight + _inset,
+              ),
+            )
+          else
+            const _RoutePlaceholder(height: _height),
+          if (route != null)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Tooltip(
+                message: 'Full screen map',
+                child: Material(
+                  color: RunMapPlate.fill(context),
+                  shape: CircleBorder(
+                    side: BorderSide(
+                      color: palette.stroke.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: onExpand,
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Icon(
+                        Icons.open_in_full_rounded,
+                        size: 17,
+                        color: palette.text,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Positioned(
+            left: _inset,
+            right: _inset,
+            bottom: _inset,
+            child: readout,
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// What sits where the map will be, before the run starts. Keeps the page from
-/// reflowing the moment tracking begins — the map drops into the same slot at
-/// the same height.
+/// What sits where the map will be, before the run starts. Its message sits in
+/// the upper part of the frame, above the readout that shares it.
 class _RoutePlaceholder extends StatelessWidget {
-  const _RoutePlaceholder();
+  const _RoutePlaceholder({required this.height});
+
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -705,8 +771,13 @@ class _RoutePlaceholder extends StatelessWidget {
       // over the app backdrop, like every other card.
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        height: 240,
+        height: height,
         width: double.infinity,
+        // Leaves the plate's strip at the bottom out of the centring, so the
+        // message sits in the middle of what is actually empty.
+        padding: const EdgeInsets.only(
+          bottom: RunMapReadout.approximateHeight + _RouteStage._inset,
+        ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: palette.stroke),

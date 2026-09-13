@@ -77,6 +77,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Already pulled in by flutter_test; named here so a test may import it
+  # directly to drive the live-share write throttle under a fake clock.
+  fake_async: ^1.3.1
   flutter_lints: ^4.0.0
   flutter_launcher_icons: ^0.14.4
 
@@ -87,6 +90,27 @@ flutter:
     - assets/images/welcome_reference_athlete.png
   shaders:
     - assets/shaders/liquid_glass.frag
+  # The Pulse text tool's typefaces. Bundled rather than fetched at runtime so
+  # a written Pulse never flashes the fallback face while a download lands, on
+  # either the composer or the viewer. All SIL OFL; licences sit beside them.
+  fonts:
+    - family: PulseModern
+      fonts:
+        - asset: assets/fonts/Montserrat-Variable.ttf
+    - family: PulseNeon
+      fonts:
+        - asset: assets/fonts/Pacifico-Regular.ttf
+    - family: PulseTypewriter
+      fonts:
+        - asset: assets/fonts/CourierPrime-Bold.ttf
+          weight: 700
+    - family: PulseStrong
+      fonts:
+        - asset: assets/fonts/Anton-Regular.ttf
+    - family: PulseElegant
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-ItalicVariable.ttf
+          style: italic
 
 flutter_launcher_icons:
   android: true

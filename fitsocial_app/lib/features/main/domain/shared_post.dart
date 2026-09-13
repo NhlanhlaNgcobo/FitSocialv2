@@ -70,6 +70,7 @@ class SharedPostRef {
     this.imageUrl,
     this.aspectRatio,
     this.route = const [],
+    this.workoutData,
   });
 
   /// Builds a reference from the pieces a card already holds, for the callers
@@ -77,9 +78,11 @@ class SharedPostRef {
   /// built that way, and reassembling a [FeedPost] there just to take it apart
   /// again would be ceremony.
   ///
-  /// The precedence between [route], [imageUrl] and [hasWorkout] is the one
-  /// the feed card and the detail page already use: a real route outranks the
-  /// stored type, and a run with no fixes falls back to being words.
+  /// The precedence between [route], [workoutData], [imageUrl] and
+  /// [hasWorkout] is the one the feed card and the detail page already use: a
+  /// real route outranks the stored type, a workout's photo is the backdrop
+  /// to its log rather than a photo post, and a run with no fixes falls back
+  /// to being words.
   factory SharedPostRef.of({
     required String postId,
     required String authorId,
@@ -90,17 +93,19 @@ class SharedPostRef {
     String? imageUrl,
     double? aspectRatio,
     List<RoutePoint> route = const [],
+    Map<String, dynamic>? workoutData,
     bool hasWorkout = false,
   }) {
     final image = (imageUrl ?? '').trim();
     final trace = _thin(route);
+    final log = _thinWorkout(workoutData);
     final SharedPostKind kind;
     if (trace.length >= 2) {
       kind = SharedPostKind.route;
+    } else if (log != null || hasWorkout) {
+      kind = SharedPostKind.workout;
     } else if (image.isNotEmpty) {
       kind = SharedPostKind.photo;
-    } else if (hasWorkout) {
-      kind = SharedPostKind.workout;
     } else {
       kind = SharedPostKind.text;
     }
@@ -115,9 +120,11 @@ class SharedPostRef {
       caption: _truncate(caption.trim()),
       imageUrl: image.isEmpty ? null : image,
       aspectRatio: aspectRatio,
-      // Only a run carries its shape. On any other kind the trace would be
-      // weight on the Pulse document that nothing draws.
+      // Only a run carries its shape, and only a workout its log. On any
+      // other kind they would be weight on the Pulse document that nothing
+      // draws.
       route: kind == SharedPostKind.route ? trace : const [],
+      workoutData: kind == SharedPostKind.workout ? log : null,
     );
   }
 
@@ -138,7 +145,8 @@ class SharedPostRef {
   /// the real thing.
   final String caption;
 
-  /// Photo to draw on the card. Null on everything that isn't a photo post.
+  /// Photo to draw on the card: a photo post's picture, or the backdrop a run
+  /// was logged on. Null on everything else.
   final String? imageUrl;
 
   /// width / height of [imageUrl], so the card keeps the shape the author
@@ -154,6 +162,16 @@ class SharedPostRef {
   /// card knew how to draw one — those still get the placeholder.
   final List<RoutePoint> route;
 
+  /// The workout's log — title, duration, calories and the exercises with
+  /// their sets, reps and loads — so the card can draw the sheet the feed
+  /// draws instead of a glyph standing in for it.
+  ///
+  /// Carried for the same reason [route] is, and thinned the same way: only
+  /// the keys the sheet reads survive, and the exercise list is capped at
+  /// [maxWorkoutExercises]. Null on everything that isn't a workout, and on
+  /// shares written before the card knew how to draw one.
+  final Map<String, dynamic>? workoutData;
+
   /// Longest caption carried onto the card. Two lines at the size it is set
   /// in, which is as much as fits under the picture before the card starts
   /// competing with the Pulse around it.
@@ -165,10 +183,16 @@ class SharedPostRef {
   /// Pulse document that is read on every frame of playback.
   static const int maxRoutePoints = 80;
 
+  /// Exercises kept on the snapshot. The sheet prints five and a count of the
+  /// rest, so the names past this line would only ever be a number.
+  static const int maxWorkoutExercises = 12;
+
   bool get hasImage => (imageUrl ?? '').isNotEmpty;
 
   /// A polyline needs at least two fixes; a single point is not a route.
   bool get hasRoute => route.length >= 2;
+
+  bool get hasWorkout => workoutData != null;
 
   static SharedPostRef fromFeedPost(FeedPost post) {
     return SharedPostRef.of(
@@ -181,8 +205,52 @@ class SharedPostRef {
       imageUrl: post.imageUrl,
       aspectRatio: post.imageAspectRatio,
       route: post.routePoints,
-      hasWorkout: post.workoutData != null || post.postType == PostType.workout,
+      workoutData: post.workoutData,
+      hasWorkout: post.postType == PostType.workout,
     );
+  }
+
+  /// The log with only what the sheet reads on it, or null when there is no
+  /// log worth carrying.
+  ///
+  /// Each exercise is rewritten as a map of the four keys the card knows,
+  /// whatever shape the post was holding — older posts wrote plain strings,
+  /// and [WorkoutSummaryCard] reads both. An empty result is null rather than
+  /// an empty map, so "has a log" stays one question.
+  static Map<String, dynamic>? _thinWorkout(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    String? text(Object? value) {
+      final result = value?.toString().trim() ?? '';
+      return result.isEmpty ? null : result;
+    }
+
+    final exercises = <Map<String, dynamic>>[];
+    final raw = data['exercises'];
+    if (raw is List) {
+      for (final entry in raw) {
+        if (exercises.length >= maxWorkoutExercises) break;
+        if (entry is Map) {
+          final name = text(entry['name']);
+          if (name == null) continue;
+          exercises.add({
+            'name': name,
+            if (entry['sets'] case final num sets) 'sets': sets,
+            if (entry['reps'] case final num reps) 'reps': reps,
+            if (entry['weightKg'] case final num weight) 'weightKg': weight,
+          });
+        } else if (text(entry) case final name?) {
+          exercises.add({'name': name});
+        }
+      }
+    }
+
+    final log = <String, dynamic>{
+      if (text(data['title']) case final title?) 'title': title,
+      if (text(data['duration']) case final duration?) 'duration': duration,
+      if (text(data['calories']) case final calories?) 'calories': calories,
+      if (exercises.isNotEmpty) 'exercises': exercises,
+    };
+    return log.isEmpty ? null : Map.unmodifiable(log);
   }
 
   static String _truncate(String value) {
@@ -215,6 +283,7 @@ class SharedPostRef {
         if (aspectRatio != null) 'aspectRatio': aspectRatio,
         if (route.isNotEmpty)
           'route': [for (final point in route) point.toMap()],
+        if (workoutData != null) 'workoutData': workoutData,
       };
 
   /// Null for anything missing the post id, which is the one field the card
@@ -246,6 +315,14 @@ class SharedPostRef {
       // Thinned again on the way back in: the length is capped on write, but
       // the document was written by a client and this is drawn on every frame.
       route: _thin(RoutePoint.listFromFirestore(value['route'])),
+      // Thinned again on the way back in, for the same reason the route is:
+      // the document was written by a client, and the sheet is drawn from
+      // this on every frame of playback.
+      workoutData: value['workoutData'] is Map
+          ? _thinWorkout(
+              Map<String, dynamic>.from(value['workoutData'] as Map),
+            )
+          : null,
     );
   }
 }

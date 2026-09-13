@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../../main/domain/activity_kind.dart';
 import '../../main/domain/app_models.dart';
 import '../domain/imported_run.dart';
 import '../domain/run_draft.dart';
@@ -165,6 +166,43 @@ class RunImportService {
     return drafts;
   }
 
+  /// The most recent session in the store, resolved for the Log Run form.
+  ///
+  /// This is what "Fill from your health app" reads. It differs from
+  /// [collect] on purpose in two ways. It ignores the ledger and the known
+  /// runs: the runner has just asked for this session by name, so a copy
+  /// already filed as a draft is theirs to deal with (the form discards it on
+  /// save), not a reason to say nothing was found. And it hands back a session
+  /// with no distance rather than skipping it — a form can show a time and an
+  /// empty distance field; a draft cannot.
+  ///
+  /// Null only when there is no plausible session in the window at all.
+  Future<HealthRunPrefill?> latest({DateTime? now}) async {
+    final end = now ?? DateTime.now();
+    final records = await _health.readRunSessions(
+      start: end.subtract(scanWindow),
+      end: end,
+    );
+    final candidates = records
+        .where((record) => !record.hasImplausibleDuration)
+        .toList()
+      ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    if (candidates.isEmpty) return null;
+
+    final record = candidates.first;
+    final distanceKm = await _resolveDistanceKm(record);
+    return HealthRunPrefill(
+      record: record,
+      distanceKm: distanceKm == null || distanceKm < minimumDistanceKm
+          ? null
+          : double.parse(distanceKm.toStringAsFixed(2)),
+      heartRate: await _health.readHeartRateSummary(
+        start: record.startedAt,
+        end: record.endedAt,
+      ),
+    );
+  }
+
   /// The workout's own distance, or the distance records inside its window.
   ///
   /// Budget watches and treadmill sessions commonly write a workout with no
@@ -183,4 +221,25 @@ class RunImportService {
     );
     return measured == null ? null : measured / 1000.0;
   }
+}
+
+/// One health-store session, resolved as far as it can be, for pre-filling a
+/// manual entry. The record is kept whole because the save needs its start
+/// time and external id to stop the same outing arriving again as an import.
+class HealthRunPrefill {
+  const HealthRunPrefill({
+    required this.record,
+    required this.distanceKm,
+    required this.heartRate,
+  });
+
+  final HealthRunRecord record;
+
+  /// Null when neither the workout nor its window recorded a usable distance.
+  final double? distanceKm;
+
+  final HeartRateSummary? heartRate;
+
+  ActivityKind get kind => record.activityKind;
+  Duration get elapsed => record.elapsed;
 }

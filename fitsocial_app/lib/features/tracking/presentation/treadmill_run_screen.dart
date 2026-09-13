@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/connectivity/backend_reachability.dart';
+import '../../../shared/input/typed_number.dart';
 import '../../../shared/widgets/bouncy_chip.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
@@ -91,7 +92,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
   void _setDistance(String raw) {
     ref
         .read(treadmillRunServiceProvider)
-        .setDistanceKm(double.tryParse(raw.trim()) ?? 0);
+        .setDistanceKm(parseTypedDouble(raw) ?? 0);
   }
 
   void _bumpDistance(double amount) {
@@ -131,7 +132,8 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     // again afterwards.
     final saveToDrafts = !kIsWeb && ref.read(isOfflineProvider);
 
-    // Every exit from the sheet saves — the run is over by the time it opens.
+    // Dismissing the sheet saves — the run is over by the time it opens. Only
+    // its Discard button, after confirming, throws the run away.
     final choice = await showFinishRunSheet(
       context: context,
       route: const [],
@@ -141,6 +143,14 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
       saveToDrafts: saveToDrafts,
     );
     if (!mounted) return;
+
+    if (choice.discard) {
+      // Nothing was checkpointed for a treadmill run, so there is nothing to
+      // clear: leaving is the whole of discarding.
+      showQuickToast(context, 'Run discarded');
+      context.go('/home');
+      return;
+    }
 
     setState(() {
       _isSaving = true;

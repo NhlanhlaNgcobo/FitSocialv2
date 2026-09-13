@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../main/domain/app_models.dart';
 import '../data/apple_music_auth_service.dart';
 import '../data/apple_music_config.dart';
+import '../data/cover_art_lookup_service.dart';
 import '../data/media_session_service.dart';
 import '../data/music_token_store.dart';
 import '../data/pkce_oauth_client.dart';
@@ -43,6 +44,15 @@ final appleMusicAuthProvider = Provider<AppleMusicAuthService>((ref) {
 
 final spotifyApiServiceProvider = Provider<SpotifyApiService>((ref) {
   return SpotifyApiService(authService: ref.watch(spotifyAuthProvider));
+});
+
+/// Cover art by name, for tracks that arrived with no URL to share.
+///
+/// The media session — the path everyone is on — reports artwork as bytes
+/// that cannot leave this phone. This is how a Pulse still gets a cover
+/// another device can fetch, with no account behind it.
+final coverArtLookupProvider = Provider<CoverArtLookupService>((ref) {
+  return CoverArtLookupService();
 });
 
 /// The bridge to the Spotify app on this phone.

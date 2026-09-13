@@ -16,6 +16,12 @@ enum RunRouteMapMode {
   /// non-interactive, so it can sit inside a scrolling feed without stealing
   /// vertical drags.
   completed,
+
+  /// Somebody else's run in progress, watched through a shared link. Behaves
+  /// like [live] — the camera follows the newest fix, the map can be panned —
+  /// except that the newest fix is *their* position, so the viewer's own
+  /// location dot stays off and the marker carries their name.
+  spectator,
 }
 
 /// Themed Google Map that draws a run route as a deep-orange polyline.
@@ -34,6 +40,10 @@ class RunRouteMap extends StatefulWidget {
     this.mode = RunRouteMapMode.live,
     this.height = 220,
     this.showBadge = true,
+    this.currentMarkerTitle,
+    this.borderRadius = const BorderRadius.all(Radius.circular(20)),
+    this.padding = EdgeInsets.zero,
+    this.onTap,
   });
 
   /// Ordered GPS trace. Fewer than two points draws no line (there is nothing
@@ -42,6 +52,25 @@ class RunRouteMap extends StatefulWidget {
   final RunRouteMapMode mode;
   final double height;
   final bool showBadge;
+
+  /// What the marker on the newest fix is called in [RunRouteMapMode.spectator]
+  /// — the athlete's name, usually. Ignored in the other modes, which have
+  /// their own fixed labels.
+  final String? currentMarkerTitle;
+
+  /// Card corners by default; zero when the map *is* the screen.
+  final BorderRadius borderRadius;
+
+  /// Insets the map's own furniture — the Google logo, the camera's centre —
+  /// away from anything laid over its edges, so a control cluster along the
+  /// bottom does not sit on the attribution and the runner's dot stays in the
+  /// uncovered middle.
+  final EdgeInsets padding;
+
+  /// A tap on the map itself, away from a marker. The map owns every gesture
+  /// inside it, so a [GestureDetector] wrapped around the outside never hears
+  /// this — it has to come from the map.
+  final VoidCallback? onTap;
 
   @override
   State<RunRouteMap> createState() => _RunRouteMapState();
@@ -95,7 +124,11 @@ class _RunRouteMapState extends State<RunRouteMap> {
   // arrives, since a GoogleMap requires some initial camera target.
   static const _fallbackTarget = LatLng(-26.2041, 28.0473);
 
-  bool get _isLive => widget.mode == RunRouteMapMode.live;
+  /// Whether the camera follows the newest fix and the map takes gestures —
+  /// true of a run being tracked and of one being watched.
+  bool get _isLive => widget.mode != RunRouteMapMode.completed;
+
+  bool get _isSpectator => widget.mode == RunRouteMapMode.spectator;
 
   @override
   void didUpdateWidget(RunRouteMap old) {
@@ -177,7 +210,13 @@ class _RunRouteMapState extends State<RunRouteMap> {
           icon: BitmapDescriptor.defaultMarkerWithHue(
             BitmapDescriptor.hueOrange,
           ),
-          infoWindow: InfoWindow(title: _isLive ? 'You' : 'Finish'),
+          infoWindow: InfoWindow(
+            title: switch (widget.mode) {
+              RunRouteMapMode.live => 'You',
+              RunRouteMapMode.completed => 'Finish',
+              RunRouteMapMode.spectator => widget.currentMarkerTitle ?? 'Them',
+            },
+          ),
         ),
     };
   }
@@ -188,7 +227,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
         widget.route.isNotEmpty ? widget.route.last : _fallbackTarget;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: widget.borderRadius,
       child: SizedBox(
         height: widget.height,
         width: double.infinity,
@@ -200,8 +239,9 @@ class _RunRouteMapState extends State<RunRouteMap> {
                 zoom: 16,
               ),
               style: context.palette.isDark ? _darkStyle : _lightStyle,
-              // The blue "my location" dot only makes sense while running.
-              myLocationEnabled: _isLive,
+              // The blue "my location" dot only makes sense while running —
+              // on somebody else's run it would put the viewer on their map.
+              myLocationEnabled: _isLive && !_isSpectator,
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
               compassEnabled: false,
@@ -212,8 +252,10 @@ class _RunRouteMapState extends State<RunRouteMap> {
               scrollGesturesEnabled: _isLive,
               rotateGesturesEnabled: false,
               tiltGesturesEnabled: false,
+              padding: widget.padding,
               polylines: _buildPolylines(),
               markers: _buildMarkers(),
+              onTap: widget.onTap == null ? null : (_) => widget.onTap!(),
               onMapCreated: (controller) {
                 _map = controller;
                 _syncCamera();
@@ -223,7 +265,11 @@ class _RunRouteMapState extends State<RunRouteMap> {
               Positioned(
                 top: 12,
                 left: 12,
-                child: _RouteBadge(label: _isLive ? 'LIVE ROUTE' : 'ROUTE'),
+                child: _RouteBadge(
+                  label: widget.mode == RunRouteMapMode.completed
+                      ? 'ROUTE'
+                      : 'LIVE ROUTE',
+                ),
               ),
           ],
         ),
@@ -245,28 +291,64 @@ class _RouteBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Container(
+    return RunMapPlate(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        // A plate that pulls *away* from the map underneath it, which means
-        // opposite directions in the two themes. Light needs more opacity: a
-        // pale wash over a pale map leaves nothing for the label to sit on.
-        color: palette.isDark
-            ? Colors.black.withValues(alpha: 0.55)
-            : Colors.white.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      borderRadius: const BorderRadius.all(Radius.circular(8)),
       child: Text(
         label,
         style: TextStyle(
-          color: palette.muted,
+          color: context.palette.muted,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.5,
         ),
       ),
+    );
+  }
+}
+
+/// A plate that sits *on* the map: the surface every badge and floating
+/// control over a [RunRouteMap] is made of.
+///
+/// It pulls *away* from the map underneath it, which means opposite directions
+/// in the two themes. Light needs more opacity: a pale wash over a pale map
+/// leaves nothing for a label to sit on. Deliberately not glass — the map is a
+/// platform view, and there is no backdrop behind it for a lens to bend.
+class RunMapPlate extends StatelessWidget {
+  const RunMapPlate({
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.borderRadius = const BorderRadius.all(Radius.circular(99)),
+    this.shape = BoxShape.rectangle,
+    super.key,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  /// Ignored when [shape] is [BoxShape.circle].
+  final BorderRadius borderRadius;
+  final BoxShape shape;
+
+  /// The plate colour on its own, for controls that paint their own ink and
+  /// only borrow the surface.
+  static Color fill(BuildContext context) => context.palette.isDark
+      ? Colors.black.withValues(alpha: 0.55)
+      : Colors.white.withValues(alpha: 0.82);
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: fill(context),
+        shape: shape,
+        borderRadius: shape == BoxShape.circle ? null : borderRadius,
+        border: Border.all(color: palette.stroke.withValues(alpha: 0.6)),
+      ),
+      child: child,
     );
   }
 }

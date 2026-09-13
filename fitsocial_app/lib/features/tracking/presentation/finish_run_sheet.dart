@@ -6,6 +6,7 @@ import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/services/run_card_exporter.dart';
+import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/run_background_section.dart';
 import '../../../shared/widgets/run_summary_card.dart';
@@ -16,7 +17,11 @@ import '../../../shared/widgets/liquid_glass.dart';
 
 /// What the runner decided on the way out of a tracked run.
 class FinishRunChoice {
-  const FinishRunChoice({required this.shareToFeed, this.backgroundImagePath});
+  const FinishRunChoice({
+    required this.shareToFeed,
+    this.backgroundImagePath,
+    this.discard = false,
+  });
 
   /// What the sheet falls back to when it is dismissed by the system back
   /// button rather than by its own Save.
@@ -26,7 +31,14 @@ class FinishRunChoice {
   /// shares, which is exactly what Finish did before the sheet existed.
   static const dismissed = FinishRunChoice(shareToFeed: true);
 
+  /// The runner asked for the run to be thrown away. Only ever produced by the
+  /// sheet's own Discard button after a confirmation — never by dismissal.
+  static const discarded = FinishRunChoice(shareToFeed: false, discard: true);
+
   final bool shareToFeed;
+
+  /// True when nothing should be saved: not to the feed, not to drafts.
+  final bool discard;
 
   /// Local path of the photo to sit behind the run card, or null for the
   /// gradient.
@@ -37,7 +49,9 @@ class FinishRunChoice {
 /// it, and decide whether it goes to the feed.
 ///
 /// The run is already over and already recorded when this opens, so the sheet
-/// cannot be cancelled into losing it — every way out saves.
+/// cannot be *accidentally* cancelled into losing it: dismissing saves. The
+/// only way to lose the run is the Discard button at the bottom, which asks
+/// first and answers [FinishRunChoice.discarded].
 ///
 /// [saveToDrafts] only changes what the sheet *says*. Where the run actually
 /// goes is the caller's decision, made before this opened and not revisited
@@ -97,6 +111,20 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
     );
     if (path == null || !mounted) return;
     setState(() => _backgroundPath = path);
+  }
+
+  /// Throws the run away, after asking. The confirmation names the distance so
+  /// the runner sees what they are about to lose, not just a generic "sure?".
+  Future<void> _discard() async {
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: 'Discard this run?',
+      message: '${widget.distanceLabel} in ${widget.durationLabel} will not '
+          'be saved. This cannot be undone.',
+      confirmLabel: 'Discard',
+    );
+    if (!confirmed || !mounted) return;
+    Navigator.of(context).pop(FinishRunChoice.discarded);
   }
 
   @override
@@ -216,6 +244,20 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                       shareToFeed: _shareToFeed,
                       backgroundImagePath: _backgroundPath,
                     ),
+                  ),
+                ),
+                // Under the primary action and in the muted colour, so it is
+                // there for the runner who wants it without competing with
+                // Save for the runner who does not.
+                const SizedBox(height: AppSpacing.xs),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: _discard,
+                    style: TextButton.styleFrom(
+                      foregroundColor: palette.muted,
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: const Text('Discard run'),
                   ),
                 ),
               ],

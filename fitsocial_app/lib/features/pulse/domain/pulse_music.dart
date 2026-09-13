@@ -56,10 +56,11 @@ class PulseMusic {
 
   /// An https cover-art URL.
   ///
-  /// Only ever a URL the music service already hosts. App Remote reports cover
-  /// art as `spotify:image:…` plus raw bytes, and neither is something a
-  /// viewer's device can fetch — rather than re-hosting label artwork on our
-  /// own Storage, a Pulse without a usable URL simply draws the placeholder.
+  /// Only ever a URL some catalogue already hosts. Both the App Remote and the
+  /// phone's media session report cover art as raw bytes, which no viewer's
+  /// device can fetch — rather than re-hosting label artwork on our own
+  /// Storage, the share screen looks a URL up by track id or by name, and a
+  /// Pulse it finds nothing for simply draws the placeholder.
   final String? albumArtUrl;
 
   /// The same track with cover art attached, once a URL has been found for it.

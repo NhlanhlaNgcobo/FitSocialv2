@@ -99,7 +99,14 @@ class _AppShellState extends State<AppShell> {
           Expanded(
             child: NotificationListener<ScrollNotification>(
               onNotification: _visibility.handle,
-              child: widget.navigationShell,
+              // Published to the branch below so a screen's own top bar can
+              // leave through the top edge on the same scroll that sends the
+              // nav out through the bottom. The listener has to stay outside
+              // it: the scope is what reads the signal, not what produces it.
+              child: NavVisibilityScope(
+                hidden: _visibility.hidden,
+                child: widget.navigationShell,
+              ),
             ),
           ),
         ],

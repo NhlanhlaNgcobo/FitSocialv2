@@ -12,8 +12,10 @@ import 'run_summary_card.dart';
 /// The preview is the real [RunSummaryCard], not an approximation of one: what
 /// the user is deciding is whether their numbers survive on that photo, and a
 /// bright sky under the corner the time sits in is the only way to find that
-/// out. It is drawn before a photo is picked too, so the gradient the card
-/// falls back to is a choice rather than a surprise.
+/// out. Whether it is drawn before a photo is picked is the caller's call:
+/// a tracked run previews its gradient fallback so that fallback is a choice
+/// rather than a surprise, while a manually logged run has nothing but numbers
+/// to show on a blank card and only previews once there is a photo.
 ///
 /// Shared by the manual run form and the sheet that closes a tracked run.
 class RunBackgroundSection extends StatelessWidget {
@@ -22,6 +24,7 @@ class RunBackgroundSection extends StatelessWidget {
     required this.onPick,
     required this.onRemove,
     this.route = const [],
+    this.previewWithoutImage = true,
     this.distanceLabel,
     this.durationLabel,
     this.paceLabel,
@@ -37,6 +40,11 @@ class RunBackgroundSection extends StatelessWidget {
   /// The trace, when this run has one. A manually entered run has no line and
   /// previews as photo, numbers and wordmark alone.
   final List<RoutePoint> route;
+
+  /// Whether the card is previewed on its gradient fallback before a photo is
+  /// chosen. False hides the card until there is a photo, leaving only the
+  /// pick buttons under the header.
+  final bool previewWithoutImage;
 
   final String? distanceLabel;
   final String? durationLabel;
@@ -54,14 +62,16 @@ class RunBackgroundSection extends StatelessWidget {
           label: 'Background',
           hint: 'Optional',
         ),
-        RunSummaryCard(
-          route: route,
-          distanceLabel: distanceLabel,
-          durationLabel: durationLabel,
-          paceLabel: paceLabel,
-          background: path == null ? null : localBackgroundImage(path),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        if (path != null || previewWithoutImage) ...[
+          RunSummaryCard(
+            route: route,
+            distanceLabel: distanceLabel,
+            durationLabel: durationLabel,
+            paceLabel: paceLabel,
+            background: path == null ? null : localBackgroundImage(path),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         BackgroundPickerRow(
           hasImage: path != null,
           onPick: onPick,

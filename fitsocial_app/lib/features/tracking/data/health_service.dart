@@ -3,7 +3,9 @@ import 'package:health/health.dart';
 import '../../main/domain/activity_kind.dart';
 import '../../main/domain/app_models.dart';
 import '../domain/imported_run.dart';
+import '../domain/imported_workout.dart';
 import 'run_import_service.dart';
+import 'workout_prefill_service.dart';
 
 /// Today's health metrics pulled from Health Connect (Android) /
 /// HealthKit (iOS). Smartwatches (Galaxy Watch, Pixel Watch, Fitbit,
@@ -60,7 +62,7 @@ class HealthSummary {
   final DateTime? stepsAsOf;
 }
 
-class HealthService implements RunSessionSource {
+class HealthService implements RunSessionSource, WorkoutSessionSource {
   HealthService() : _health = Health();
 
   final Health _health;
@@ -372,31 +374,43 @@ class HealthService implements RunSessionSource {
     };
   }
 
+  /// Every exercise session in the window, with its workout payload.
+  ///
+  /// The one read behind both [readRunSessions] and [readWorkoutSessions];
+  /// they differ only in which activities they keep and what they make of
+  /// them. Throws on failure — the callers decide what silence looks like.
+  Future<List<(HealthDataPoint, WorkoutHealthValue)>> _readWorkoutPoints({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    await _health.configure();
+    final points = await _health.getHealthDataFromTypes(
+      types: _importTypes,
+      startTime: start,
+      endTime: end,
+    );
+    return [
+      for (final point in points)
+        if (point.value case final WorkoutHealthValue value) (point, value),
+    ];
+  }
+
   @override
   Future<List<HealthRunRecord>> readRunSessions({
     required DateTime start,
     required DateTime end,
   }) async {
     try {
-      await _health.configure();
-      final points = await _health.getHealthDataFromTypes(
-        types: _importTypes,
-        startTime: start,
-        endTime: end,
-      );
-
       final records = <HealthRunRecord>[];
-      for (final point in points) {
-        final value = point.value;
-        if (value is! WorkoutHealthValue) continue;
-
+      for (final (point, value)
+          in await _readWorkoutPoints(start: start, end: end)) {
         final activity = value.workoutActivityType;
         final isTreadmill =
             activity == HealthWorkoutActivityType.RUNNING_TREADMILL;
         // The one place a third-party activity taxonomy is consulted.
-        // Everything not named here — swims, rows, gym sessions — is dropped,
-        // because the drafts list can only offer back sessions this app knows
-        // how to save.
+        // Everything not named here — swims, rows, gym sessions — is left to
+        // [readWorkoutSessions], because the drafts list can only offer back
+        // sessions this app knows how to save as runs.
         final kind = _activityKindFor(activity);
         if (kind == null) continue;
 
@@ -420,6 +434,119 @@ class HealthService implements RunSessionSource {
     } catch (_) {
       return const [];
     }
+  }
+
+  /// Gym-shaped sessions in the window: everything [readRunSessions] leaves
+  /// behind. Strength work, HIIT, yoga, a rowing machine, a stationary bike.
+  ///
+  /// The complement rather than a second allow-list, so no activity can fall
+  /// between the two readers: a session is either a run, a hike or a ride, or
+  /// it is a workout. Walks land here too — there is no walk log, and a
+  /// recorded walk is more use on the Training Log than nowhere.
+  @override
+  Future<List<HealthWorkoutRecord>> readWorkoutSessions({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    try {
+      final records = <HealthWorkoutRecord>[];
+      for (final (point, value)
+          in await _readWorkoutPoints(start: start, end: end)) {
+        final activity = value.workoutActivityType;
+        if (_activityKindFor(activity) != null) continue;
+
+        records.add(
+          HealthWorkoutRecord(
+            externalId: point.uuid,
+            startedAt: point.dateFrom,
+            endedAt: point.dateTo,
+            activityName: workoutActivityName(activity),
+            calories: _kilocaloriesFrom(
+              value.totalEnergyBurned,
+              value.totalEnergyBurnedUnit,
+            ),
+            sourceId: point.sourceId,
+            sourceName: point.sourceName,
+          ),
+        );
+      }
+      return records;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Active energy recorded inside a window by one writer, in kilocalories.
+  ///
+  /// The calorie twin of [readDistanceMeters], with the same source
+  /// restriction for the same reason. Null when nothing was recorded.
+  @override
+  Future<int?> readActiveCalories({
+    required DateTime start,
+    required DateTime end,
+    required String sourceId,
+  }) async {
+    try {
+      await _health.configure();
+      final points = await _health.getHealthDataFromTypes(
+        types: const [HealthDataType.ACTIVE_ENERGY_BURNED],
+        startTime: start,
+        endTime: end,
+      );
+
+      var kcal = 0.0;
+      for (final point in points) {
+        if (point.sourceId != sourceId) continue;
+        final value = point.value;
+        if (value is! NumericHealthValue) continue;
+        kcal += _kilocaloriesFrom(value.numericValue, point.unit) ?? 0;
+      }
+      return kcal > 0 ? kcal.round() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// What a Health Connect activity type is called on a form.
+  ///
+  /// The enum names are shouted and underscored, and a few are mouthfuls no
+  /// one says — "High intensity interval training" is HIIT to everyone who
+  /// does it. Named overrides for those; the rest are the enum, humanised.
+  static String workoutActivityName(HealthWorkoutActivityType activity) {
+    const named = <HealthWorkoutActivityType, String>{
+      HealthWorkoutActivityType.HIGH_INTENSITY_INTERVAL_TRAINING: 'HIIT',
+      HealthWorkoutActivityType.STRENGTH_TRAINING: 'Strength training',
+      HealthWorkoutActivityType.TRADITIONAL_STRENGTH_TRAINING:
+          'Strength training',
+      HealthWorkoutActivityType.FUNCTIONAL_STRENGTH_TRAINING:
+          'Functional training',
+      HealthWorkoutActivityType.WEIGHTLIFTING: 'Weightlifting',
+      HealthWorkoutActivityType.BIKING_STATIONARY: 'Indoor cycling',
+      HealthWorkoutActivityType.ROWING_MACHINE: 'Rowing',
+      HealthWorkoutActivityType.STAIR_CLIMBING_MACHINE: 'Stair climber',
+      HealthWorkoutActivityType.WALKING_TREADMILL: 'Treadmill walk',
+      HealthWorkoutActivityType.SWIMMING_POOL: 'Swimming',
+      HealthWorkoutActivityType.SWIMMING_OPEN_WATER: 'Open water swim',
+      HealthWorkoutActivityType.OTHER: 'Workout',
+    };
+    if (named[activity] case final name?) return name;
+    final words = activity.name.toLowerCase().split('_');
+    return words.first[0].toUpperCase() +
+        words.first.substring(1) +
+        (words.length > 1 ? ' ${words.skip(1).join(' ')}' : '');
+  }
+
+  /// Energy in kilocalories, whatever unit it arrived in. Null for nothing.
+  static int? _kilocaloriesFrom(num? value, HealthDataUnit? unit) {
+    if (value == null) return null;
+    final amount = value.toDouble();
+    final kcal = switch (unit) {
+      HealthDataUnit.SMALL_CALORIE => amount / 1000,
+      HealthDataUnit.JOULE => amount / 4184,
+      // KILOCALORIE, LARGE_CALORIE, and the null a workout record gives.
+      _ => amount,
+    };
+    return kcal.round();
   }
 
   /// Distance recorded inside a window, for a workout that carried none.

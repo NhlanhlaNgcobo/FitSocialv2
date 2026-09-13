@@ -5,6 +5,7 @@ import 'package:fitsocial_app/app/theme/app_theme.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/main/domain/shared_post.dart';
 import 'package:fitsocial_app/shared/services/run_card_exporter.dart';
+import 'package:fitsocial_app/shared/services/workout_card_exporter.dart';
 import 'package:fitsocial_app/shared/widgets/share_sheet.dart';
 
 const _route = [
@@ -26,16 +27,34 @@ const _card = RunCardExport(
   durationLabel: '28:14',
 );
 
+const _workoutCard = WorkoutCardExport(
+  activity: 'Workout',
+  workoutData: {
+    'title': 'Legs',
+    'exercises': [
+      {'name': 'Squat', 'sets': 5, 'reps': 8},
+    ],
+  },
+);
+
 /// Opens the share sheet and leaves it up.
-Future<void> openSheet(WidgetTester tester, {RunCardExport? runCard}) async {
+Future<void> openSheet(
+  WidgetTester tester, {
+  RunCardExport? runCard,
+  WorkoutCardExport? workoutCard,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.darkTheme,
       home: Scaffold(
         body: Builder(
           builder: (context) => TextButton(
-            onPressed: () =>
-                showPostShareSheet(context, _post, runCard: runCard),
+            onPressed: () => showPostShareSheet(
+              context,
+              _post,
+              runCard: runCard,
+              workoutCard: workoutCard,
+            ),
             child: const Text('open'),
           ),
         ),
@@ -57,6 +76,13 @@ void main() {
       tester.getTopLeft(find.text('Save image')).dy,
       greaterThan(tester.getTopLeft(find.text('Copy link')).dy),
     );
+  });
+
+  testWidgets('offers to save the image on a post that draws a workout card',
+      (tester) async {
+    await openSheet(tester, workoutCard: _workoutCard);
+
+    expect(find.text('Save image'), findsOneWidget);
   });
 
   testWidgets('leaves the row out when there is no card to draw',
