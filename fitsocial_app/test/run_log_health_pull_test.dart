@@ -78,9 +78,10 @@ void main() {
     expect(distance.controller!.text, '10.01');
     expect(duration.controller!.text, '50.42');
 
-    // The form is complete, so the summary is up — with the real seconds.
+    // The form is complete, so the summary is up. The clock itself only shows
+    // on the card preview, which waits for a photo; the confirmation below is
+    // what carries the real seconds.
     expect(find.text('AVG PACE'), findsOneWidget);
-    expect(find.text('50:25'), findsWidgets);
     expect(find.text('Filled from Samsung Health'), findsWidgets);
     expect(find.textContaining('10.01 km in 50:25'), findsOneWidget);
   });

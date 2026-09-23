@@ -128,9 +128,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AVG PACE'), findsOneWidget);
-    // 50.42 min over 10.01 km. Minutes carry their seconds now, so the card's
-    // clock reads the actual time rather than the whole minutes.
-    expect(find.text('50:25'), findsWidgets);
+    // 50.42 min over 10.01 km is 5:02 /km — only reachable if both commas
+    // were read as decimal points.
+    expect(find.text('5:02 /km'), findsWidgets);
     expect(find.textContaining('before saving'), findsNothing);
   });
 

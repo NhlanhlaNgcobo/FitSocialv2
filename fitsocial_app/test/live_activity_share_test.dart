@@ -90,7 +90,9 @@ void main() {
   });
 
   group('LiveActivityShare.fromMap', () {
-    final startedAt = DateTime(2026, 9, 12, 6, 30);
+    // Relative to now, not a fixed date: a share expires a set lifetime after
+    // it starts, so a hard-coded start quietly expires once that date passes.
+    final startedAt = DateTime.now().subtract(const Duration(minutes: 30));
 
     Map<String, dynamic> doc({
       String status = 'live',
