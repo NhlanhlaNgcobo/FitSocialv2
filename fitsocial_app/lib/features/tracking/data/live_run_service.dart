@@ -286,6 +286,7 @@ class RunFixStats {
     this.duplicates = 0,
     this.lastAccuracyMeters,
     this.medianFixInterval,
+    this.sinceLastFix,
   });
 
   static const empty = RunFixStats();
@@ -318,14 +319,32 @@ class RunFixStats {
   /// Typical gap between delivered fixes; null until a few have arrived.
   final Duration? medianFixInterval;
 
+  /// Wall-clock time since the platform last delivered anything; null while
+  /// paused or before the first fix.
+  final Duration? sinceLastFix;
+
   /// Beyond this, the stream is not keeping up with the 1 Hz that was asked
   /// for by anything like enough to trust the distance: the route becomes a
   /// handful of long straight chords and every bend between them is cut.
   static const starvedAbove = Duration(seconds: 5);
 
+  /// Silence longer than this is a stalled stream, whatever the median says.
+  static const stalledAfter = Duration(seconds: 15);
+
+  /// Whether the stream has stopped delivering outright.
+  ///
+  /// The median cannot see this: it is built from gaps between fixes that
+  /// arrived, so a stream that dies after an hour at 1 Hz goes on reporting
+  /// 1 Hz forever. That is how a run could stop counting at 8 km with nothing
+  /// on the screen to say so.
+  bool get isStalled {
+    final since = sinceLastFix;
+    return since != null && since > stalledAfter;
+  }
+
   bool get isStarved {
     final median = medianFixInterval;
-    return median != null && median > starvedAbove;
+    return isStalled || (median != null && median > starvedAbove);
   }
 
   /// The delivery rate, phrased whichever way round reads better.
@@ -344,7 +363,8 @@ class RunFixStats {
       'drift=$rejectedAsDrift teleport=$rejectedAsTeleport '
       'paused=$staleFromPause dup=$duplicates) '
       'cadence=$cadenceLabel '
-      'accuracy=${lastAccuracyMeters?.toStringAsFixed(1) ?? "?"}m';
+      'accuracy=${lastAccuracyMeters?.toStringAsFixed(1) ?? "?"}m'
+      '${isStalled ? " STALLED ${sinceLastFix!.inSeconds}s" : ""}';
 }
 
 /// What the phone's own motion sensors contributed to a run.
@@ -400,12 +420,28 @@ class LiveRunService {
     Stream<Position> Function(LocationSettings)? openPositionStream,
     Stream<int> Function()? openStepStream,
     Stream<double> Function()? openMotionStream,
+    Future<Position> Function()? fetchCurrentPosition,
     DateTime Function()? now,
   })  : _checkpoints = checkpointStore ?? const NoopRunCheckpointStore(),
         _openPositionStream = openPositionStream ?? _geolocatorPositions,
         _openStepStream = openStepStream,
         _openMotionStream = openMotionStream,
+        // Defaulted only alongside the real stream: a test that fakes the
+        // stream but not this must not have the heartbeat reach for a plugin.
+        _fetchCurrentPosition = fetchCurrentPosition ??
+            (openPositionStream == null ? _geolocatorCurrent : null),
         _now = now ?? DateTime.now;
+
+  /// A one-off fix, asked for when the stream has gone quiet. Null to never
+  /// ask — see the constructor.
+  final Future<Position> Function()? _fetchCurrentPosition;
+
+  static Future<Position> _geolocatorCurrent() => Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.bestForNavigation,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
 
   /// The phone's hardware step counter, as a since-boot cumulative count, or
   /// null where there is nothing to fuse with — the web build, and any test
@@ -504,6 +540,30 @@ class LiveRunService {
   // straight line over the seconds involved here — beyond that the step count
   // is measuring something other than running.
   static const _maxStepTopUp = 2.0;
+  // Over a long starved gap that cap is the wrong shape. Ten minutes of fixes
+  // lost on a winding or out-and-back route can leave a chord a fraction of
+  // what was run, and "twice the chord" then throws most of the steps away —
+  // the difference between a run reading 18 km and 8. So a segment that long
+  // may be credited from steps up to what a runner could cover in the time,
+  // provided the step count itself is plausible running.
+  static const _maxStepSpeed = 6.0; // m/s, sub-2:50/km
+  static const _maxStepsPerSecond = 4.0; // above an elite sprinter's cadence
+  static const _minMovingStepsPerSecond = 1.0; // a slow walk
+  // How much trusted GPS the stride is measured over. A single trusted segment
+  // is a couple of seconds, so its chord is dominated by where the noise put
+  // its two ends — and because a segment is only kept once its chord clears
+  // the drift floor, the samples that fill the calibrator are the ones the
+  // noise shortened. That taught strides a quarter too short, and a stride a
+  // quarter too short made the step fill-in never exceed the chord at all.
+  static const _calibrationWindowMeters = 10.0;
+  // When the stream has said nothing for this long, ask for a fix directly
+  // rather than wait for one. Spaced by the same interval so a phone that
+  // cannot get a fix is not asked continuously.
+  static const _stallPollEvery = Duration(seconds: 10);
+  // When the app comes back to the foreground to a stream silent for this
+  // long, the stream is reopened. Only then: restarting the location service
+  // from the background is exactly what Android 12+ refuses to do.
+  static const _reopenStreamAfter = Duration(seconds: 30);
   // How long a run waits for its first step before deciding this phone has no
   // step counter and falling back to the accelerometer. Long enough that a
   // slow first stride or a late sensor start does not trip it, short enough
@@ -521,6 +581,7 @@ class LiveRunService {
   StreamSubscription<Position>? _positionSub;
   Timer? _ticker;
   Timer? _checkpointTimer;
+
   /// Guards against a slow write queueing behind itself on a busy disk.
   bool _isCheckpointing = false;
   _LifecycleWatcher? _lifecycleWatcher;
@@ -543,6 +604,17 @@ class LiveRunService {
   /// Gaps between the last few delivered fixes, oldest first.
   final List<Duration> _fixIntervals = [];
   DateTime? _lastFixAt;
+
+  /// Wall-clock moment the platform last delivered a fix, or the run last
+  /// (re)started. [_lastFixAt] is the fix's own timestamp and cannot tell a
+  /// silent stream from a slow one; this can.
+  DateTime? _lastDeliveryAt;
+  DateTime? _lastStallPollAt;
+  bool _isStallPolling = false;
+
+  /// Trusted GPS and steps collected towards the next stride sample.
+  double _calibrationMeters = 0;
+  int _calibrationSteps = 0;
 
   /// When the last manual pause ended. Fixes older than this were produced
   /// while the run was stopped and are not part of it.
@@ -700,11 +772,9 @@ class LiveRunService {
     // for one recovered from disk they are not — the run began an hour ago but
     // the process was dead for part of it, and dead time is nobody's duration.
     _countingSince = _now();
+    _lastDeliveryAt = _now();
 
-    _positionSub = _openPositionStream(_locationSettings()).listen(
-      _onPosition,
-      onError: (Object e) => _controller.addError(e),
-    );
+    _listenForPositions();
     // 1 Hz heartbeat: refreshes the UI and re-checks auto-pause. It does not
     // own the clock (see [MovingTimeClock]), so a tick the OS drops while the
     // phone is locked costs a frame, not a second of the run.
@@ -829,9 +899,50 @@ class LiveRunService {
     }
   }
 
+  void _listenForPositions() {
+    _positionSub = _openPositionStream(_locationSettings()).listen(
+      _onPosition,
+      onError: (Object e) => _controller.addError(e),
+    );
+  }
+
   void _onTick() {
+    _pollIfStalled();
     _settleClock();
     _emit();
+  }
+
+  Duration? get _sinceLastDelivery {
+    final last = _lastDeliveryAt;
+    if (last == null || !_isTracking || _isPaused) return null;
+    return _now().difference(last);
+  }
+
+  /// Asks for a fix directly when the stream has gone quiet.
+  ///
+  /// Some phones quietly stop delivering to a locked app's stream — the
+  /// foreground service is still up, the notification still showing, and not
+  /// one fix arrives. A one-off request is served through that same running
+  /// service, so it works where reopening the stream from the background
+  /// would be refused. Every fix it gets goes through the same filters as a
+  /// streamed one, so a stalled run keeps its route and its distance instead
+  /// of freezing at the moment the stream died.
+  void _pollIfStalled() {
+    final fetch = _fetchCurrentPosition;
+    final since = _sinceLastDelivery;
+    if (fetch == null || since == null || _isStallPolling) return;
+    if (since < _stallPollEvery) return;
+    final lastPoll = _lastStallPollAt;
+    if (lastPoll != null && _now().difference(lastPoll) < _stallPollEvery) {
+      return;
+    }
+    _isStallPolling = true;
+    _lastStallPollAt = _now();
+    unawaited(fetch().then((position) {
+      if (_isTracking && !_isPaused) _onPosition(position);
+    }).catchError((Object e) {
+      debugPrint('[live-run] stall poll failed: $e');
+    }).whenComplete(() => _isStallPolling = false));
   }
 
   void _settleClock() {
@@ -873,6 +984,8 @@ class LiveRunService {
     // [RunFixStats.starvedAbove] and can put the weak-GPS warning on a stream
     // that is keeping up perfectly well.
     _lastFixAt = null;
+    // Nor is a pause a stalled stream: silence is only counted from here.
+    _lastDeliveryAt = _now();
     // The pause's steps are no more part of the run than the pause's ground is.
     _stepsSinceSegment = 0;
     _positionSub?.resume();
@@ -907,6 +1020,16 @@ class LiveRunService {
   void syncFromBackground() {
     if (!_isTracking) return;
     _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
+    // Back in the foreground is the one moment a dead stream can safely be
+    // replaced: Android refuses to restart a location service from the
+    // background, so this is not attempted from the heartbeat.
+    final since = _sinceLastDelivery;
+    if (since != null && since > _reopenStreamAfter) {
+      debugPrint('[live-run] stream silent ${since.inSeconds}s, reopening');
+      _positionSub?.cancel();
+      _listenForPositions();
+      _lastDeliveryAt = _now();
+    }
     _settleClock();
     _emit();
   }
@@ -997,6 +1120,7 @@ class LiveRunService {
     }
 
     _fixesReceived++;
+    _lastDeliveryAt = _now();
     _lastAccuracyMeters = position.accuracy;
     _noteFixInterval(position.timestamp);
     if (_fixesReceived % 25 == 0) {
@@ -1042,6 +1166,7 @@ class LiveRunService {
       _rebaseNextFix = false;
       _points.add(point);
       _stepsSinceSegment = 0;
+      _resetCalibrationWindow();
       _emit();
       return;
     }
@@ -1051,6 +1176,7 @@ class LiveRunService {
       // we see real displacement.
       _points.add(point);
       _stepsSinceSegment = 0;
+      _resetCalibrationWindow();
       _emit();
       return;
     }
@@ -1085,8 +1211,14 @@ class LiveRunService {
     // Stationary-drift rejection: a real step must clear both a minimum
     // distance and the GPS accuracy radius, and imply at least a slow walk.
     // Otherwise the phone is standing still and the "movement" is noise.
+    //
+    // Over a long gap the speed half of that test stops meaning anything: ten
+    // minutes round a loop can end 300 m from where it began, which averages
+    // under a walk. There the step counter answers instead — steps at a
+    // running cadence the whole way are movement, and the chord clearing the
+    // drift floor still has to show it went somewhere.
     final isRealMovement = segment >= _driftFloorFor(position) &&
-        speed >= _profile.driftRejectSpeed;
+        (speed >= _profile.driftRejectSpeed || _stepsShowMovement(dt));
 
     if (isRealMovement) {
       // Only on a fix that already passed every distance filter. A phone
@@ -1162,15 +1294,49 @@ class LiveRunService {
         position.accuracy <= _trustedAccuracyMeters;
     if (trusted) {
       // Both numbers describe the same stretch of running and the GPS one is
-      // reliable here, so this is where the runner's stride is learned.
-      _calibrator.observe(meters: segment, steps: _stepsSinceSegment);
+      // reliable here, so this is where the runner's stride is learned — over
+      // a run of consecutive trusted segments, not one at a time; see
+      // [_calibrationWindowMeters].
+      _calibrationMeters += segment;
+      _calibrationSteps += _stepsSinceSegment;
+      if (_calibrationMeters >= _calibrationWindowMeters) {
+        _calibrator.observe(
+          meters: _calibrationMeters,
+          steps: _calibrationSteps,
+        );
+        _resetCalibrationWindow();
+      }
       return segment;
     }
+    _resetCalibrationWindow();
     if (_stepsSinceSegment <= 0) return segment;
     final fromSteps = _stepsSinceSegment * _calibrator.strideMeters;
-    final credited = fromSteps.clamp(segment, segment * _maxStepTopUp);
+    final seconds = dtMillis / 1000.0;
+    final plausibleCadence =
+        seconds > 0 && _stepsSinceSegment / seconds <= _maxStepsPerSecond;
+    final ceiling = plausibleCadence
+        ? math.max(segment * _maxStepTopUp, seconds * _maxStepSpeed)
+        : segment * _maxStepTopUp;
+    final credited =
+        fromSteps.clamp(segment, math.max(segment, ceiling)).toDouble();
     _metersFromSteps += credited - segment;
     return credited;
+  }
+
+  /// Whether the steps since the last segment say the runner kept moving
+  /// across a gap too long for the GPS speed to say so. Only for gaps: over a
+  /// couple of seconds the GPS speed is the better witness.
+  bool _stepsShowMovement(int dtMillis) {
+    if (!_profile.usesStepFusion) return false;
+    if (dtMillis <= RunFixStats.starvedAbove.inMilliseconds) return false;
+    final perSecond = _stepsSinceSegment / (dtMillis / 1000.0);
+    return perSecond >= _minMovingStepsPerSecond &&
+        perSecond <= _maxStepsPerSecond;
+  }
+
+  void _resetCalibrationWindow() {
+    _calibrationMeters = 0;
+    _calibrationSteps = 0;
   }
 
   /// How far this fix has to have moved before the displacement counts as
@@ -1268,6 +1434,7 @@ class LiveRunService {
         duplicates: _duplicateFixes,
         lastAccuracyMeters: _lastAccuracyMeters,
         medianFixInterval: _medianFixInterval,
+        sinceLastFix: _sinceLastDelivery,
       );
 
   RunFusionStats get _fusionStats => RunFusionStats(
@@ -1330,6 +1497,9 @@ class LiveRunService {
     _lastAccuracyMeters = null;
     _fixIntervals.clear();
     _lastFixAt = null;
+    _lastDeliveryAt = null;
+    _lastStallPollAt = null;
+    _resetCalibrationWindow();
     _resumedAt = null;
     _rebaseNextFix = false;
     _isPaused = false;
