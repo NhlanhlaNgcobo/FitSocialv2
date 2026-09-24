@@ -666,3 +666,18 @@ for (const [name, handler] of Object.entries(require("./push"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }
+
+// --- Safety -----------------------------------------------------------------
+//
+// Safety contacts, panic fan-out and location-share expiry. After push.js,
+// whose token pruning it reuses.
+for (const [name, handler] of Object.entries(require("./safety"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+// Email safety contacts: the add/remove callables and the web pages behind
+// the confirmation and tracking links (Hosting rewrites /s/** to safetyWeb).
+for (const [name, handler] of Object.entries(require("./safety_email"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}

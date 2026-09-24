@@ -93,6 +93,12 @@ function messageFor(data) {
       return `joined ${challengeNoun(data.challengeTitle)}`;
     case "challengeCompleted":
       return `You finished ${challengeNoun(data.challengeTitle)}`;
+    case "safetyInvite":
+      return "asked you to be their safety contact";
+    case "safetyAccepted":
+      return "is now one of your safety contacts";
+    case "safetyRevoked":
+      return "is no longer your safety contact";
     default:
       return null;
   }
@@ -124,6 +130,10 @@ function routeFor(data) {
       const challengeId = String(data.challengeId ?? "");
       return challengeId === "" ? null : `/challenge/board/${challengeId}`;
     }
+    case "safetyInvite":
+    case "safetyAccepted":
+    case "safetyRevoked":
+      return "/safety/contacts";
     default:
       return null;
   }

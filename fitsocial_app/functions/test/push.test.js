@@ -90,6 +90,9 @@ const EVERY_TYPE = [
     "challengeCompleted",
     { challengeId: "ch1", challengeTitle: "September 100" },
   ],
+  ["safetyInvite", {}],
+  ["safetyAccepted", {}],
+  ["safetyRevoked", {}],
 ];
 
 test("every notification type says something", async () => {

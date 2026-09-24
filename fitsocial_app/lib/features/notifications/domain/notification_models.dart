@@ -46,7 +46,17 @@ enum FitNotificationType {
   /// notification from the challenge's creator — this app has no system actor,
   /// and inventing one for a single row would mean every avatar, name and route
   /// in the list learning about a user who does not exist.
-  challengeCompleted;
+  challengeCompleted,
+
+  /// Someone asked you to be one of their safety contacts.
+  safetyInvite,
+
+  /// Someone accepted your request to be a safety contact.
+  safetyAccepted,
+
+  /// One of your safety contacts stopped being one. Always told: a hole in
+  /// the safety net the owner does not know about is worse than no net.
+  safetyRevoked;
 
   /// Stored form. Explicit rather than [name] so renaming the enum can never
   /// silently orphan the documents already written.
@@ -70,6 +80,12 @@ enum FitNotificationType {
         return 'challengeAccepted';
       case FitNotificationType.challengeCompleted:
         return 'challengeCompleted';
+      case FitNotificationType.safetyInvite:
+        return 'safetyInvite';
+      case FitNotificationType.safetyAccepted:
+        return 'safetyAccepted';
+      case FitNotificationType.safetyRevoked:
+        return 'safetyRevoked';
     }
   }
 
@@ -93,6 +109,12 @@ enum FitNotificationType {
         return FitNotificationType.challengeAccepted;
       case 'challengeCompleted':
         return FitNotificationType.challengeCompleted;
+      case 'safetyInvite':
+        return FitNotificationType.safetyInvite;
+      case 'safetyAccepted':
+        return FitNotificationType.safetyAccepted;
+      case 'safetyRevoked':
+        return FitNotificationType.safetyRevoked;
       default:
         return null;
     }
@@ -229,6 +251,12 @@ class FitNotification {
         // Addressed to the recipient about their own achievement, which is why
         // this one reads as a statement rather than as something the actor did.
         return 'You finished $_challengeNoun';
+      case FitNotificationType.safetyInvite:
+        return 'asked you to be their safety contact';
+      case FitNotificationType.safetyAccepted:
+        return 'is now one of your safety contacts';
+      case FitNotificationType.safetyRevoked:
+        return 'is no longer your safety contact';
     }
   }
 
@@ -277,6 +305,10 @@ class FitNotification {
       case FitNotificationType.challengeCompleted:
         final id = challengeId;
         return (id == null || id.isEmpty) ? null : '/challenge/board/$id';
+      case FitNotificationType.safetyInvite:
+      case FitNotificationType.safetyAccepted:
+      case FitNotificationType.safetyRevoked:
+        return '/safety/contacts';
     }
   }
 }

@@ -422,6 +422,50 @@ service cloud.firestore {
                            && request.auth.uid == userId;
       }
 
+      // Safety contacts: people this user asked to watch over them. See
+      // functions/safety.js.
+      //
+      // The client may only open an invite (status pending) or withdraw one of
+      // its own rows. Every transition after that -- accept, decline, revoke --
+      // is made by a callable that writes both sides at once, because this
+      // relationship is what decides who receives emergency alerts, and a
+      // client that could mark its own contact "accepted" could aim those
+      // alerts at a stranger.
+      match /safetyContacts/{contactId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null
+                      && request.auth.uid == userId
+                      && contactId != userId
+                      && request.resource.data.keys().hasOnly(
+                           ['contactUid', 'status', 'invitedAt', 'displayName',
+                            'handle', 'avatarUrl', 'respondedAt'])
+                      && request.resource.data.contactUid == contactId
+                      && request.resource.data.status == 'pending'
+                      && request.resource.data.invitedAt == request.time
+                      && exists(/databases/$(database)/documents/users/$(contactId));
+        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow update: if false;
+      }
+
+      // The mirror: people who asked this user. Written by the function only.
+      match /safetyContactOf/{ownerId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+
+      // Safety contacts reached by email: people without FitSocial. Readable
+      // by their owner only -- these are other people's email addresses.
+      // Written only by the addEmailSafetyContact callable and the
+      // confirmation page, so a client can never mark an address confirmed.
+      // See functions/safety_email.js.
+      //
+      // The tracking and confirmation tokens live in /emailLinks, which has
+      // no rule at all: closed to every client, read by the Admin SDK only.
+      match /emailContacts/{contactId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+
       // Entry-link taps: which races this user has tapped through to enter.
       //
       // Private to its owner, and the only write the client makes for
@@ -1361,6 +1405,121 @@ service cloud.firestore {
       match /attributions/{activityId} {
         allow read: if request.auth != null && isOnChallenge(challengeId);
         allow write: if false;
+      }
+    }
+
+    // --- Safety: location shares and panic events -------------------------
+    //
+    // See functions/safety.js and spec part A.
+
+    // Whether [uid] is one of [ownerId]'s ACCEPTED safety contacts. A get on a
+    // missing document errors, and an error denies -- which is the answer
+    // wanted for a stranger.
+    function isAcceptedSafetyContact(ownerId, uid) {
+      return get(/databases/$(database)/documents/users/$(ownerId)/safetyContacts/$(uid)).data.status == 'accepted';
+    }
+
+    // Every viewer of a share must be an accepted contact. Rules cannot loop,
+    // so the three slots are spelled out; three is the contact cap
+    // (maxAcceptedSafetyContacts), and the size check refuses anything longer.
+    function viewersAreAccepted(ownerId, viewers) {
+      return viewers is list
+             && viewers.size() >= 1 && viewers.size() <= 3
+             && isAcceptedSafetyContact(ownerId, viewers[0])
+             && (viewers.size() < 2 || isAcceptedSafetyContact(ownerId, viewers[1]))
+             && (viewers.size() < 3 || isAcceptedSafetyContact(ownerId, viewers[2]));
+    }
+
+    // A bounded, foreground-only position share. Four hours at most, set at
+    // creation and never extendable; a scheduled function closes stale ones.
+    match /locationShares/{shareId} {
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.status == 'active'
+                    && request.resource.data.startedAt == request.time
+                    && request.resource.data.expiresAt is timestamp
+                    && request.resource.data.expiresAt > request.time
+                    // Four hours, plus five minutes' slack: expiresAt is
+                    // computed on the phone, and a clock a minute fast must
+                    // not refuse the share outright.
+                    && request.resource.data.expiresAt <= request.time + duration.value(245, 'm')
+                    && request.resource.data.get('endedAt', null) == null
+                    && viewersAreAccepted(request.auth.uid, request.resource.data.viewerIds);
+      allow read: if request.auth != null
+                  && (resource.data.ownerId == request.auth.uid
+                      || request.auth.uid in resource.data.viewerIds);
+      // Position ticks and stopping. Who can see it, and until when, are fixed
+      // at creation.
+      allow update: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid
+                    && resource.data.status == 'active'
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['current', 'status', 'endedAt'])
+                    && request.resource.data.status in ['active', 'ended'];
+      allow delete: if false;
+    }
+
+    // One document per panic. The client writes who raised it and where they
+    // are -- never who to tell. notifiedUserIds must arrive empty; the
+    // function fills it from accepted contacts, and this rule is the first of
+    // two locks on that door.
+    match /panicEvents/{eventId} {
+      allow create: if request.auth != null
+                    && request.resource.data.keys().hasOnly(
+                         ['userId', 'status', 'duress', 'location',
+                          'batteryPercent', 'notifiedUserIds', 'raisedAt',
+                          'closedAt', 'clientRaisedAtMillis'])
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'active'
+                    && request.resource.data.duress == false
+                    && request.resource.data.raisedAt == request.time
+                    && request.resource.data.get('closedAt', null) == null
+                    && request.resource.data.get('notifiedUserIds', []).size() == 0;
+      allow read: if request.auth != null
+                  && (resource.data.userId == request.auth.uid
+                      || request.auth.uid in resource.data.get('notifiedUserIds', []));
+      // Only the raiser, and only while the event is open. Three writes:
+      //
+      //   - the live position, every 30 seconds, for as long as it is open --
+      //     through a duress cancel too, which is when it matters most;
+      //   - active -> duress: the duress PIN, which leaves the event open;
+      //   - active or duress -> resolved: the safe PIN. From duress this is the
+      //     user ending it later, once really safe. The PIN is checked on the
+      //     phone; these rules cannot see it.
+      //
+      // Nothing reopens a resolved event, and nothing here touches who was
+      // notified.
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid
+                    && resource.data.status in ['active', 'duress']
+                    && ((request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['current'])
+                         && request.resource.data.current.keys().hasOnly(
+                              ['lat', 'lng', 'accuracy', 'batteryPercent', 'updatedAt'])
+                         && request.resource.data.current.updatedAt == request.time)
+                        || (resource.data.status == 'active'
+                            && request.resource.data.diff(resource.data).affectedKeys()
+                                 .hasOnly(['status', 'duress'])
+                            && request.resource.data.status == 'duress'
+                            && request.resource.data.duress == true)
+                        || (request.resource.data.diff(resource.data).affectedKeys()
+                              .hasOnly(['status', 'closedAt'])
+                            && request.resource.data.status == 'resolved'
+                            && request.resource.data.closedAt == request.time));
+      allow delete: if false;
+
+      // "I'm responding". Only someone the alert was actually sent to, and
+      // only as themselves. Readable by the raiser and the other contacts.
+      match /acknowledgements/{uid} {
+        allow create: if request.auth != null
+                      && request.auth.uid == uid
+                      && request.auth.uid in get(/databases/$(database)/documents/panicEvents/$(eventId)).data.get('notifiedUserIds', [])
+                      && request.resource.data.keys().hasOnly(['displayName', 'acknowledgedAt'])
+                      && request.resource.data.acknowledgedAt == request.time;
+        allow read: if request.auth != null
+                    && (get(/databases/$(database)/documents/panicEvents/$(eventId)).data.userId == request.auth.uid
+                        || request.auth.uid in get(/databases/$(database)/documents/panicEvents/$(eventId)).data.get('notifiedUserIds', []));
+        allow update, delete: if false;
       }
     }
 
