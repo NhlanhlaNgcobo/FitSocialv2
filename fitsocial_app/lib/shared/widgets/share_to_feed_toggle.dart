@@ -4,18 +4,25 @@ import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 
 /// An animated card-style toggle used to control whether a logged
-/// activity is shared to the user's feed.
+/// activity is shared to the user's feed — and, dressed with its own title and
+/// icons, any other on/off choice about what a post reveals.
 class ShareToFeedToggle extends StatelessWidget {
   const ShareToFeedToggle({
     required this.value,
     required this.onChanged,
+    this.title = 'Share to Feed',
     this.subtitle = 'Post this to your profile activity',
+    this.onIcon = Icons.public_rounded,
+    this.offIcon = Icons.lock_outline_rounded,
     super.key,
   });
 
   final bool value;
   final ValueChanged<bool> onChanged;
+  final String title;
   final String subtitle;
+  final IconData onIcon;
+  final IconData offIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +61,7 @@ class ShareToFeedToggle extends StatelessWidget {
                 transitionBuilder: (child, animation) =>
                     ScaleTransition(scale: animation, child: child),
                 child: Icon(
-                  value ? Icons.public_rounded : Icons.lock_outline_rounded,
+                  value ? onIcon : offIcon,
                   key: ValueKey(value),
                   color: value ? palette.brand : palette.muted,
                 ),
@@ -65,9 +72,9 @@ class ShareToFeedToggle extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Share to Feed',
-                    style: TextStyle(fontWeight: FontWeight.w700),
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(

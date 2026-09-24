@@ -7,6 +7,7 @@ import 'app_photo.dart';
 import 'fit_social_logo.dart';
 import 'liquid_glass.dart';
 import 'network_photo_aspect.dart';
+import 'picture_ratio.dart';
 import 'run_summary_card.dart' show runCardExportGround;
 
 /// A logged workout drawn as the page it came from: a ruled log sheet.
@@ -329,7 +330,7 @@ class WorkoutSummaryCard extends StatelessWidget {
                 // so paint the ground the lens would have shown.
                 ? ColoredBox(
                     color: runCardExportGround(palette),
-                    child: content,
+                    child: _Portrait(child: content),
                   )
                 : LiquidGlass(
                     // With no photo there is nothing for the card to sit on,
@@ -340,7 +341,7 @@ class WorkoutSummaryCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(19),
                     // The ClipRRect above already holds this shape.
                     clip: false,
-                    child: content,
+                    child: _Portrait(child: content),
                   )
             : _PhotoBacked(
                 image: photo,
@@ -392,7 +393,9 @@ class _PhotoBacked extends StatelessWidget {
   Widget build(BuildContext context) {
     final pinned = pinnedRatio;
     final url = imageUrl;
-    if (pinned != null || url == null) return _build(context, pinned ?? 1);
+    if (pinned != null || url == null) {
+      return _build(context, pinned ?? kPictureAspectRatio);
+    }
     return NetworkPhotoAspect(imageUrl: url, builder: _build);
   }
 
@@ -455,6 +458,35 @@ class _PhotoBacked extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// The sheet with no photo behind it, at least 9:16 tall.
+///
+/// A minimum, as on a photo: a long session still grows the card rather than
+/// losing rows, and a short one has the room to stay unhurried.
+class _Portrait extends StatelessWidget {
+  const _Portrait({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: constraints.maxWidth / kPictureAspectRatio,
+        ),
+        // A Column for the same reason the photo-backed sheet uses one: the
+        // height above the minimum is unbounded, and a Column sizes itself to
+        // its child, is clamped up to the minimum, and keeps the log at the
+        // top of the space.
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [child],
+        ),
+      ),
     );
   }
 }

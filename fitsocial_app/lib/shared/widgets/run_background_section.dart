@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/app_models.dart';
+import 'picture_ratio.dart';
 import 'background_picker.dart';
 import 'form_section_header.dart';
 import 'run_summary_card.dart';
@@ -28,6 +30,8 @@ class RunBackgroundSection extends StatelessWidget {
     this.distanceLabel,
     this.durationLabel,
     this.paceLabel,
+    this.showMap = false,
+    this.onMapReady,
     super.key,
   });
 
@@ -50,6 +54,13 @@ class RunBackgroundSection extends StatelessWidget {
   final String? durationLabel;
   final String? paceLabel;
 
+  /// Whether the preview draws the route on the real map. While it does, the
+  /// map is the backdrop and there is no photo to pick.
+  final bool showMap;
+
+  /// The preview map's controller, for capturing it on the way out.
+  final ValueChanged<GoogleMapController>? onMapReady;
+
   @override
   Widget build(BuildContext context) {
     final path = imagePath;
@@ -68,15 +79,25 @@ class RunBackgroundSection extends StatelessWidget {
             distanceLabel: distanceLabel,
             durationLabel: durationLabel,
             paceLabel: paceLabel,
-            background: path == null ? null : localBackgroundImage(path),
+            // With the map on, the preview is the live map, which is what gets
+            // captured; a photo picked earlier waits for the map to go off.
+            background:
+                path == null || showMap ? null : localBackgroundImage(path),
+            showMap: showMap,
+            onMapReady: onMapReady,
+            // Portrait, because this map is what gets captured, and the
+            // posted picture is always 9:16.
+            aspectRatio: showMap ? kPictureAspectRatio : null,
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
-        BackgroundPickerRow(
-          hasImage: path != null,
-          onPick: onPick,
-          onRemove: onRemove,
-        ),
+        if (!showMap) ...[
+          BackgroundPickerRow(
+            hasImage: path != null,
+            onPick: onPick,
+            onRemove: onRemove,
+          ),
+        ],
       ],
     );
   }

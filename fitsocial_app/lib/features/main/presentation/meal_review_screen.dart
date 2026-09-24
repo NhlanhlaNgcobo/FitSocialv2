@@ -23,6 +23,7 @@ import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/macro_ring.dart';
 import '../../../shared/widgets/network_photo_aspect.dart';
+import '../../../shared/widgets/picture_ratio.dart';
 import '../../../shared/widgets/save_meal_card_row.dart';
 import '../../../shared/services/meal_card_exporter.dart';
 
@@ -374,7 +375,7 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
           ? SizedBox(height: 224, width: double.infinity, child: stack)
           : NetworkPhotoAspect(
               imageUrl: imageUrl,
-              fallbackAspectRatio: 4 / 3,
+              fallbackAspectRatio: kPictureAspectRatio,
               builder: (context, aspectRatio) => AspectRatio(
                 aspectRatio: aspectRatio,
                 child: stack,

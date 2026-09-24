@@ -261,6 +261,9 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   /// comes back is already feed-spec — the same path a post photo takes.
   Future<void> _pickBackground(ImageSource source) async {
     final path = await InstagramPhotoPicker.pickAndCrop(
+      // A card's backdrop: 9:16 by default, and the card follows
+      // whichever shape the photo is cropped to.
+      otherShapes: true,
       context: context,
       source: source,
     );

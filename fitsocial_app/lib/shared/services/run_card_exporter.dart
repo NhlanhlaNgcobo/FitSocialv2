@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import '../../app/theme/app_palette.dart';
 import '../../features/main/domain/app_models.dart';
 import '../widgets/fit_social_logo.dart';
+import '../widgets/picture_ratio.dart';
 import '../widgets/route_sparkline.dart';
 import '../widgets/run_summary_card.dart';
 import 'held_image.dart';
@@ -112,7 +113,7 @@ Future<Uint8List> renderRunCardPng(
     // never a forced crop, and it is what gets handed to the card so it does
     // not have to resolve the same image a second time inside the overlay.
     final background = spec.background;
-    var ratio = 1.0;
+    var ratio = kPictureAspectRatio;
     if (background != null) {
       try {
         final backgroundHeld = await holdImage(background, configuration);

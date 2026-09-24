@@ -94,6 +94,7 @@ class PostDetailSheet extends StatelessWidget {
                   workoutData: post.workoutData,
                   mealData: post.mealData,
                   routePoints: post.routePoints,
+                  showRouteMap: post.showRouteMap,
                   authorAvatarUrl: post.authorAvatarUrl,
                   imageAspectRatio: post.imageAspectRatio,
                   taggedUsers: post.taggedUsers,

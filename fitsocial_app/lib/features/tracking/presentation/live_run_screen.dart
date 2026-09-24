@@ -279,6 +279,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
               elevationGainMeters: result.elevationGainMeters,
               startedAt: result.startedAt,
               routePoints: route,
+              showRouteMap: choice.showRouteMap,
               backgroundImagePath: choice.backgroundImagePath,
               heartRate: heartRate.hasData ? heartRate : null,
             ),

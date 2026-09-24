@@ -100,23 +100,22 @@ void main() {
   // there is no tester in there to pump for it.
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  testWidgets('comes out 1080 wide at whatever height the sheet needs',
-      (tester) async {
+  testWidgets('comes out 1080 wide and at least 9:16 tall', (tester) async {
     final (image, _) = await capture(tester);
 
     expect(image.width, 1080);
-    // Not a fixed shape: a ruled sheet is as tall as its rows, and two rows
-    // plus the totals strip is a good deal shorter than square.
-    expect(image.height, greaterThan(0));
-    expect(image.height, lessThan(1080));
+    // Two rows plus the totals strip need far less than that, so the app's
+    // 9:16 is what sets the file. A few pixels short of 1920 at most: the
+    // minimum is measured inside the card's one-pixel stroke.
+    expect(image.height, closeTo(1920, 6));
   });
 
   testWidgets('is at least the photo\'s own shape when there is one',
       (tester) async {
-    // 8 by 16: a 1:2 photo, which the feed clamps to 4:5. Two rows of log
-    // need far less than that in height, so the photo's minimum is what sets
-    // the file — and the ratio came from the exporter's own decode, since the
-    // card cannot measure a MemoryImage by URL.
+    // 8 by 16: a 1:2 photo, which is clamped to the app's 9:16. Two rows of
+    // log need far less than that in height, so the photo's minimum is what
+    // sets the file — and the ratio came from the exporter's own decode, since
+    // the card cannot measure a MemoryImage by URL.
     final photo = MemoryImage(
       await solidPng(const Color(0xFF00AA44), width: 8, height: 16),
     );
@@ -124,9 +123,9 @@ void main() {
     final (image, _) = await capture(tester, spec: _spec.withBackground(photo));
 
     expect(image.width, 1080);
-    // Within a pixel: the minimum is a division at layout width, not an
-    // AspectRatio, so it can land a float short of the exact figure.
-    expect(image.height, closeTo(1350, 1));
+    // Within a few pixels: the minimum is a division at layout width inside
+    // the card's stroke, not an AspectRatio, so it lands a little short.
+    expect(image.height, closeTo(1920, 6));
   });
 
   testWidgets('grows past a short photo rather than clipping the log',

@@ -1,40 +1,14 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../app/theme/app_colors.dart';
-
-/// Instagram's three supported feed-photo shapes.
-///
-/// Instagram accepts feed photos only between 1.91:1 (landscape) and 4:5
-/// (portrait); anything outside that range gets cropped on their side. Offering
-/// exactly these presets means what the user frames is what everyone sees.
-class InstagramCropRatio implements CropAspectRatioPresetData {
-  const InstagramCropRatio._(this.name, this.data);
-
-  @override
-  final String name;
-
-  @override
-  final (int, int)? data;
-
-  /// 1080x1350 — the default, and the shape that claims the most feed space.
-  static const portrait = InstagramCropRatio._('4:5', (4, 5));
-
-  /// 1080x1080.
-  static const square = InstagramCropRatio._('1:1', (1, 1));
-
-  /// 1080x566. Expressed as 191:100 because the preset takes integers.
-  static const landscape = InstagramCropRatio._('1.91:1', (191, 100));
-
-  /// Order matters — it's the order of the tabs in the crop UI.
-  static const all = <CropAspectRatioPresetData>[portrait, square, landscape];
-}
+import '../widgets/crop_photo_screen.dart';
+import 'photo_crop.dart';
 
 /// The device refused to store a cropped photo where the app can keep it.
 ///
@@ -51,92 +25,74 @@ class PhotoStorageException implements Exception {
       'try again.';
 }
 
-/// Picks a photo and lets the user frame it to an Instagram feed ratio.
+/// Picks a photo and lets the user frame it on FitSocial's own crop screen,
+/// 9:16 portrait by default.
 ///
 /// The crop step also does the downscaling and JPEG encoding, so the file that
-/// comes back is already upload-ready at Instagram's spec: 1080px wide, quality
-/// 80, never taller than 4:5.
+/// comes back is already upload-ready: at most 1080 wide and 1920 tall,
+/// quality 80.
 abstract final class InstagramPhotoPicker {
-  /// Instagram's standard feed width.
-  static const int _maxWidth = 1080;
-
-  /// Tallest legal feed image (4:5 at [_maxWidth]).
-  static const int _maxHeight = 1350;
-
-  /// Matches InstagramImageSpec.jpegQuality.
-  static const int _quality = 80;
-
   /// Returns the cropped file's path, or null if the user backed out of either
-  /// the picker or the cropper.
+  /// the picker or the crop screen.
   ///
-  /// [context] is required by the web cropper implementation, which renders a
-  /// Flutter dialog rather than a native screen.
+  /// [otherShapes] offers the three feed shapes beside 9:16. Every upload in
+  /// the app passes it; without it the screen is 9:16 only.
   static Future<String?> pickAndCrop({
     required BuildContext context,
     required ImageSource source,
+    bool otherShapes = false,
   }) async {
     final picked = await ImagePicker().pickImage(source: source);
-    if (picked == null) return null;
-    if (!context.mounted) return null;
-
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: picked.path,
-      // Bounds and encoding applied by the platform's native cropper, which
-      // keeps this working identically on Android, iOS and web.
-      maxWidth: _maxWidth,
-      maxHeight: _maxHeight,
-      compressFormat: ImageCompressFormat.jpg,
-      compressQuality: _quality,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: 'Crop photo',
-          toolbarColor: AppColors.mediaBackdrop,
-          toolbarWidgetColor: AppColors.onMedia,
-          backgroundColor: AppColors.mediaBackdrop,
-          activeControlsWidgetColor: AppColors.orangeBright,
-          cropFrameColor: AppColors.orangeBright,
-          cropGridColor: AppColors.cropGrid,
-          statusBarLight: false,
-          navBarLight: false,
-          initAspectRatio: InstagramCropRatio.portrait,
-          // Users pick a shape from the presets; free-form would let them
-          // produce a ratio Instagram-style feeds can't display consistently.
-          lockAspectRatio: true,
-          hideBottomControls: false,
-          aspectRatioPresets: InstagramCropRatio.all,
-        ),
-        IOSUiSettings(
-          title: 'Crop photo',
-          aspectRatioLockEnabled: true,
-          resetAspectRatioEnabled: false,
-          aspectRatioPickerButtonHidden: false,
-          aspectRatioPresets: InstagramCropRatio.all,
-        ),
-        if (kIsWeb)
-          WebUiSettings(
-            context: context,
-            presentStyle: WebPresentStyle.dialog,
-          ),
-      ],
+    if (picked == null || !context.mounted) return null;
+    return crop(
+      context: context,
+      file: picked,
+      shapes: otherShapes ? CropShape.all : CropShape.storyOnly,
     );
-
-    if (cropped == null) return null;
-    return _moveOutOfCache(cropped.path);
   }
 
-  /// Moves a freshly cropped file from the platform cache into app storage.
+  /// Opens the crop screen on a photo that is already in hand — one the
+  /// picker just returned, or one Android handed back after closing the app
+  /// mid-pick — and returns the stored result's path, or null if the user
+  /// backed out.
   ///
-  /// The cropper writes into the cache directory, which Android may clear at
-  /// any moment — including while the user is still writing their caption or
-  /// tagging people. App support storage is only cleared with the app itself,
-  /// so a photo moved there survives until the upload reads it, even across an
-  /// app restart for the flows that upload in the background.
+  /// Every photo the app uploads comes through here, so every one is framed
+  /// on the same screen and stored the same way.
+  static Future<String?> crop({
+    required BuildContext context,
+    required XFile file,
+    List<CropShape> shapes = CropShape.storyOnly,
+    String title = 'Crop photo',
+    int quality = 80,
+  }) async {
+    final bytes = await file.readAsBytes();
+    if (!context.mounted) return null;
+
+    final cropped = await CropPhotoScreen.open(
+      context,
+      bytes,
+      shapes: shapes,
+      title: title,
+      quality: quality,
+    );
+    if (cropped == null) return null;
+    return _store(cropped);
+  }
+
+  /// Writes the cropped photo into app storage and returns its path.
   ///
-  /// On web the path is a blob URL, not a file, so it is returned untouched.
-  /// A cache path is never handed back: if the photo cannot be secured the
-  /// caller gets a [PhotoStorageException] now, not a vanished file later.
-  static Future<String> _moveOutOfCache(String croppedPath) async {
-    if (kIsWeb) return croppedPath;
+  /// App support storage, not the cache: Android may clear the cache at any
+  /// moment — including while the user is still writing their caption or
+  /// tagging people — while this is only cleared with the app itself, so the
+  /// photo survives until the upload reads it, even across an app restart for
+  /// the flows that upload in the background.
+  ///
+  /// On web there is no file system, so the photo is handed back as a blob URL,
+  /// which is what every caller already reads on web.
+  static Future<String> _store(Uint8List jpeg) async {
+    if (kIsWeb) {
+      return XFile.fromData(jpeg, mimeType: 'image/jpeg').path;
+    }
     final Directory dir;
     final String target;
     try {
@@ -144,14 +100,7 @@ abstract final class InstagramPhotoPicker {
       dir = Directory('${support.path}/pending_photos');
       await dir.create(recursive: true);
       target = '${dir.path}/photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final source = File(croppedPath);
-      try {
-        await source.rename(target);
-      } on FileSystemException {
-        // rename fails across filesystems; fall back to copy + delete.
-        await source.copy(target);
-        await source.delete();
-      }
+      await File(target).writeAsBytes(jpeg, flush: true);
     } on FileSystemException catch (error) {
       throw PhotoStorageException(error);
     }
@@ -160,7 +109,7 @@ abstract final class InstagramPhotoPicker {
     return target;
   }
 
-  /// Nothing else deletes moved photos (an upload may be retried), so drop
+  /// Nothing else deletes stored photos (an upload may be retried), so drop
   /// anything old enough that no compose flow could still be holding it.
   static Future<void> _sweepStale(Directory dir, {required String keep}) async {
     final cutoff = DateTime.now().subtract(const Duration(days: 1));

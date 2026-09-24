@@ -12,12 +12,14 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/services/photo_crop.dart';
 import '../../../shared/widgets/fit_social_pulse_mark.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
+import '../../../shared/widgets/picture_ratio.dart';
 
 /// Where a meal analysis has got to. Drives the overlay's caption, so what the
 /// user is told is what is actually happening rather than one blanket message.
@@ -42,6 +44,7 @@ class MealUploadScreen extends ConsumerStatefulWidget {
 
 class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   final ImagePicker _picker = ImagePicker();
+
   /// The photo, held in memory from the moment it is picked. The upload sends
   /// these bytes rather than re-reading a file the OS may have cleared while
   /// the user was on this screen.
@@ -65,7 +68,15 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
       final LostDataResponse response = await _picker.retrieveLostData();
       if (response.isEmpty) return;
       final file = response.file;
-      if (file != null) await _holdPhoto(file.path);
+      if (file == null || !mounted) return;
+      // Framed like any other pick, rather than uploaded uncropped at full
+      // size just because Android closed the app while the gallery was open.
+      final path = await InstagramPhotoPicker.crop(
+        context: context,
+        file: file,
+        shapes: CropShape.all,
+      );
+      if (path != null) await _holdPhoto(path);
     } catch (_) {
       // Lost-data recovery is best-effort only.
     }
@@ -138,6 +149,9 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
   /// Returns the cropped file's path, or null if the user backed out.
   Future<String?> _pickDownscaled(ImageSource source) {
     return InstagramPhotoPicker.pickAndCrop(
+      // A card's backdrop: 9:16 by default, and the card follows
+      // whichever shape the photo is cropped to.
+      otherShapes: true,
       context: context,
       source: source,
     );
@@ -305,13 +319,13 @@ class _MealUploadScreenState extends ConsumerState<MealUploadScreen> {
             borderRadius: BorderRadius.circular(AppRadius.card),
             child: Stack(
               children: [
-                // A fixed 4:5 frame — the crop step's default and most-used
-                // ratio — rather than a box sized to the photo. It holds its
+                // A fixed 9:16 frame — the crop step's default — rather than a
+                // box sized to the photo. It holds its
                 // height while the file decodes, so the page doesn't jump, and
                 // `contain` means a square or landscape crop is letterboxed on
                 // the media backdrop instead of being cut into.
                 AspectRatio(
-                  aspectRatio: 4 / 5,
+                  aspectRatio: kPictureAspectRatio,
                   child: ColoredBox(
                     color: AppColors.mediaBackdrop,
                     child: Image.memory(_imageBytes!, fit: BoxFit.contain),

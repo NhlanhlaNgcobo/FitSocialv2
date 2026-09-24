@@ -108,12 +108,12 @@ void main() {
   // there is no tester in there to pump for it.
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
-  testWidgets('comes out 1080 square with no photo to take a shape from',
+  testWidgets('comes out 1080 by 1920 with no photo to take a shape from',
       (tester) async {
     final (image, _) = await capture(tester);
 
     expect(image.width, 1080);
-    expect(image.height, 1080); // no background: falls back to 1:1
+    expect(image.height, 1920); // no background: the app's 9:16
   });
 
   testWidgets('takes the photo\'s own shape instead of a forced crop',

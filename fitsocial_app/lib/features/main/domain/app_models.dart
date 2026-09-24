@@ -83,6 +83,7 @@ class FeedPost {
     this.workoutData,
     this.mealData,
     this.routePoints = const [],
+    this.showRouteMap = false,
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
@@ -126,6 +127,11 @@ class FeedPost {
   /// Completed run route, for the map preview on run posts. Empty on every
   /// other post type.
   final List<RoutePoint> routePoints;
+
+  /// Whether the author chose to show the real map under their route. Off
+  /// unless they switched it on: a map names the streets a run started on,
+  /// so it is the runner's call, never a default.
+  final bool showRouteMap;
 
   /// Author's profile photo as it was when the post was created. Null for
   /// posts written before avatars were stored, and for authors without one.
@@ -181,6 +187,7 @@ class FeedPost {
       workoutData: workoutData,
       mealData: mealData,
       routePoints: routePoints,
+      showRouteMap: showRouteMap,
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
       taggedUsers: taggedUsers,
@@ -206,6 +213,7 @@ class FeedPost {
     Map<String, dynamic>? workoutData,
     Map<String, dynamic>? mealData,
     List<RoutePoint>? routePoints,
+    bool? showRouteMap,
     String? authorAvatarUrl,
     double? imageAspectRatio,
     List<TaggedUser>? taggedUsers,
@@ -229,6 +237,7 @@ class FeedPost {
       workoutData: workoutData ?? this.workoutData,
       mealData: mealData ?? this.mealData,
       routePoints: routePoints ?? this.routePoints,
+      showRouteMap: showRouteMap ?? this.showRouteMap,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       imageAspectRatio: imageAspectRatio ?? this.imageAspectRatio,
       taggedUsers: taggedUsers ?? this.taggedUsers,
@@ -667,6 +676,7 @@ class RunLogDraft {
     this.activityKind = ActivityKind.run,
     this.elevationGainMeters,
     this.routePoints = const [],
+    this.showRouteMap = false,
     this.startedAt,
     this.backgroundImagePath,
     this.heartRate,
@@ -693,6 +703,10 @@ class RunLogDraft {
   /// GPS trace of the run. Empty for manually entered runs, which have no
   /// recorded route — consumers must treat an empty route as "no map".
   final List<RoutePoint> routePoints;
+
+  /// Whether the shared post shows the real map under the route rather than
+  /// the bare line. The runner's choice, off unless they ask for it.
+  final bool showRouteMap;
 
   /// When the run began, when known (GPS-tracked runs only).
   final DateTime? startedAt;

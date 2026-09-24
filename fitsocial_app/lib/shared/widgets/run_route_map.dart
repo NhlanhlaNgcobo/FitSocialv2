@@ -44,6 +44,8 @@ class RunRouteMap extends StatefulWidget {
     this.borderRadius = const BorderRadius.all(Radius.circular(20)),
     this.padding = EdgeInsets.zero,
     this.onTap,
+    this.framePadding = 32,
+    this.onMapReady,
   });
 
   /// Ordered GPS trace. Fewer than two points draws no line (there is nothing
@@ -71,6 +73,15 @@ class RunRouteMap extends StatefulWidget {
   /// inside it, so a [GestureDetector] wrapped around the outside never hears
   /// this — it has to come from the map.
   final VoidCallback? onTap;
+
+  /// Space kept between a finished route and the edge of the map when it is
+  /// framed, for anything drawn over the top of it.
+  final double framePadding;
+
+  /// Hands the map's controller to whoever needs more from it than a picture
+  /// on screen — the finish sheet, which captures it to post. Only valid until
+  /// this widget is disposed.
+  final ValueChanged<GoogleMapController>? onMapReady;
 
   @override
   State<RunRouteMap> createState() => _RunRouteMapState();
@@ -149,7 +160,8 @@ class _RunRouteMapState extends State<RunRouteMap> {
     if (_hasFramedRoute || widget.route.length < 2) return;
     _hasFramedRoute = true;
     await map.animateCamera(
-      CameraUpdate.newLatLngBounds(_boundsOf(widget.route), 32),
+      CameraUpdate.newLatLngBounds(
+          _boundsOf(widget.route), widget.framePadding),
     );
   }
 
@@ -259,6 +271,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
               onMapCreated: (controller) {
                 _map = controller;
                 _syncCamera();
+                widget.onMapReady?.call(controller);
               },
             ),
             if (widget.showBadge)

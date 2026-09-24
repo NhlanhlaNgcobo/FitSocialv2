@@ -23,6 +23,7 @@ import '../domain/app_models.dart';
 import 'tag_people_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
+import '../../../shared/widgets/picture_ratio.dart';
 
 class PostComposeScreen extends ConsumerStatefulWidget {
   const PostComposeScreen({super.key});
@@ -90,6 +91,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     final path = await InstagramPhotoPicker.pickAndCrop(
       context: context,
       source: source,
+      // 9:16 first, and the post is shown at whichever shape is picked.
+      otherShapes: true,
     );
     // Null means the user backed out of the picker or the cropper — leave any
     // previously chosen photo alone rather than clearing it.
@@ -423,9 +426,9 @@ class _SelectedPhoto extends StatelessWidget {
       child: Stack(
         children: [
           AspectRatio(
-            // 4:5 only stands in when the decode failed; the cropper's own
-            // default is the same shape, so the fallback is never a surprise.
-            aspectRatio: aspectRatio ?? 4 / 5,
+            // 9:16 only stands in when the decode failed; it is the crop
+            // screen's default, so the fallback is never a surprise.
+            aspectRatio: aspectRatio ?? kPictureAspectRatio,
             child: ColoredBox(
               color: AppColors.mediaBackdrop,
               // Rendered from the same bytes the upload sends, so the
