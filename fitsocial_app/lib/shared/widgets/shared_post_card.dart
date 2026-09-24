@@ -212,6 +212,9 @@ class _Body extends StatelessWidget {
           ),
         );
         if (!post.hasImage) return _Tile(child: line);
+        // The runner's map, with the route already drawn on it.
+        // Contained rather than cropped: the branding sits in its corners.
+        if (post.routeOnImage) return _Photo(post: post, fit: BoxFit.contain);
         // The runner's backdrop with the line over it and no scrim — what the
         // feed shows for this post. The photo sets the shape, as it does
         // there, so the line lands where the runner saw it land.
@@ -265,9 +268,10 @@ class _Body extends StatelessWidget {
 /// as it decodes, the way the feed's run card measures it — so a null ratio
 /// here means "the photo's own", not "square".
 class _Photo extends StatelessWidget {
-  const _Photo({required this.post});
+  const _Photo({required this.post, this.fit = BoxFit.cover});
 
   final SharedPostRef post;
+  final BoxFit fit;
 
   /// Same clamp the feed card uses, so neither a malformed stored ratio nor a
   /// very tall photo can produce a card taller than the frame it sits in.
@@ -288,7 +292,7 @@ class _Photo extends StatelessWidget {
       maxRatio: _maxRatio,
       child: Image(
         image: image,
-        fit: BoxFit.cover,
+        fit: fit,
         errorBuilder: (_, __, ___) => const _Placeholder(
           icon: Icons.broken_image_rounded,
           label: 'Photo unavailable',

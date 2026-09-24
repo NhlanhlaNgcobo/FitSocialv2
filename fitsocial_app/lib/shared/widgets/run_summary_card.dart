@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
@@ -11,6 +12,8 @@ import '../../features/main/domain/app_models.dart';
 import 'fit_social_logo.dart';
 import 'route_sparkline.dart';
 import 'liquid_glass.dart';
+import 'picture_ratio.dart';
+import 'run_route_map.dart';
 
 /// A photo that has not been uploaded yet, as something [Image] can draw.
 ///
@@ -35,12 +38,19 @@ Color runCardExportGround(AppPalette palette) =>
 /// A finished run drawn the way it is shared: the route as a bare orange line,
 /// the two numbers that describe it, and the wordmark.
 ///
-/// Deliberately not a map. A map answers "where", and the streets it names are
-/// the runner's own address half the time — the shape of the run is what is
-/// worth showing, and it reads better as one line on the runner's own photo
-/// than as a polyline over somebody else's tiles. It is also far cheaper: the
-/// map is a platform view, and a feed scrolling past a dozen runs was spinning
-/// up a dozen of them.
+/// Not a map by default. A map answers "where", and the streets it names are
+/// the runner's own address half the time — so the map is something the runner
+/// opts in to with [showMap], never something they have to opt out of. Without
+/// it the shape of the run is drawn as one line on the runner's own photo,
+/// which is also far cheaper: the map is a platform view, and a feed scrolling
+/// past a dozen runs would spin up a dozen of them.
+///
+/// With [showMap] the map is the backdrop and draws the route itself. On a
+/// posted run [background] is then a finished 9:16 picture of that map with
+/// the branding already on it, captured once on the runner's phone when they
+/// posted, so the feed pays for an image rather than a live map per card and
+/// draws nothing over it. Without one — the finish sheet's preview, or a post
+/// whose capture failed — the map is drawn live under the photo chips.
 ///
 /// With a [background] the line and the numbers sit directly on the user's
 /// photo — no scrim, no crop. The card takes the photo's own shape rather than
@@ -55,6 +65,8 @@ class RunSummaryCard extends StatelessWidget {
     this.durationLabel,
     this.paceLabel,
     this.background,
+    this.showMap = false,
+    this.onMapReady,
     this.margin = EdgeInsets.zero,
     this.aspectRatio,
     this.forExport = false,
@@ -78,6 +90,15 @@ class RunSummaryCard extends StatelessWidget {
   /// The photo behind the card. Null keeps the themed gradient.
   final ImageProvider? background;
 
+  /// Whether to show the route on the map instead of as a bare line. With a
+  /// [background] that background *is* the map; without one the map is drawn
+  /// live, as long as there is a route to put on it.
+  final bool showMap;
+
+  /// The live map's controller, for a caller that captures it. Never called
+  /// when the map is a picture.
+  final ValueChanged<GoogleMapController>? onMapReady;
+
   final EdgeInsetsGeometry margin;
 
   /// Pins the card's shape instead of letting it find the photo's own ratio.
@@ -88,6 +109,8 @@ class RunSummaryCard extends StatelessWidget {
   /// exporter passes this: it has already decoded the photo before the card is
   /// built and hands the measured ratio straight in, rather than asking the
   /// card to resolve the same image a second time inside an offscreen overlay.
+  /// The finish sheet pins it too while the map is on, so the map it captures
+  /// is already the shape of the posted picture.
   final double? aspectRatio;
 
   /// Draw the card for a file rather than for the screen.
@@ -140,9 +163,16 @@ class RunSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final onPhoto = background != null;
-    final skin = _RunSkin.resolve(palette, onPhoto: onPhoto);
     final hasRoute = RouteSparkline.canDraw(route);
+    // A map already captured to a picture. The route and the branding were
+    // drawn into it when it was posted, so it is shown as it is: no line, no
+    // chips and no live map on top.
+    final mapPicture = showMap && background != null;
+    final liveMap = showMap && hasRoute && !mapPicture;
+    // A live map wears the same frosted chips a photo does, because that is
+    // how its picture is branded when it is captured.
+    final onPhoto = liveMap || (!showMap && background != null);
+    final skin = _RunSkin.resolve(palette, onPhoto: onPhoto);
 
     return Container(
       margin: margin,
@@ -157,15 +187,42 @@ class RunSummaryCard extends StatelessWidget {
         child: PhotoAspectRatio(
           background: background,
           pinned: aspectRatio,
+          // Portrait with no photo; a photo of another shape sets its own.
+          fallback: kPictureAspectRatio,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _Backdrop(
-                background: background,
-                skin: skin,
-                forExport: forExport,
-              ),
-              if (hasRoute)
+              if (mapPicture)
+                Image(
+                  image: background!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      ColoredBox(color: skin.photoFallback),
+                )
+              else if (liveMap)
+                // The map is a backdrop, not a control: the card's own taps
+                // and the feed's scroll pass straight over it.
+                IgnorePointer(
+                  child: RunRouteMap(
+                    route: [
+                      for (final point in route)
+                        LatLng(point.latitude, point.longitude),
+                    ],
+                    mode: RunRouteMapMode.completed,
+                    showBadge: false,
+                    // Room for the wordmark chip above and the stat chips
+                    // below, so the framed route clears both.
+                    framePadding: 64,
+                    onMapReady: onMapReady,
+                  ),
+                )
+              else
+                _Backdrop(
+                  background: background,
+                  skin: skin,
+                  forExport: forExport,
+                ),
+              if (hasRoute && !showMap)
                 Padding(
                   // Keeps the line clear of the branding chips in every
                   // corner, so the two never collide on a route that happens
@@ -183,36 +240,37 @@ class RunSummaryCard extends StatelessWidget {
                     onMedia: onPhoto,
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: onPhoto
-                    ? _PhotoBranding(
-                        skin: skin,
-                        distanceLabel: distanceLabel,
-                        durationLabel: durationLabel,
-                        paceLabel: paceLabel,
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Same lockup and the same size as the one in the
-                          // app bar, so a run shared out of the app is signed
-                          // the way the app signs itself.
-                          FitSocialLogo(
-                            size: 15,
-                            animated: false,
-                            color: skin.wordmark,
-                          ),
-                          const Spacer(),
-                          _StatRow(
-                            distanceLabel: distanceLabel,
-                            durationLabel: durationLabel,
-                            paceLabel: paceLabel,
-                            skin: skin,
-                          ),
-                        ],
-                      ),
-              ),
+              if (!mapPicture)
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: onPhoto
+                      ? _PhotoBranding(
+                          skin: skin,
+                          distanceLabel: distanceLabel,
+                          durationLabel: durationLabel,
+                          paceLabel: paceLabel,
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Same lockup and the same size as the one in the
+                            // app bar, so a run shared out of the app is
+                            // signed the way the app signs itself.
+                            FitSocialLogo(
+                              size: 15,
+                              animated: false,
+                              color: skin.wordmark,
+                            ),
+                            const Spacer(),
+                            _StatRow(
+                              distanceLabel: distanceLabel,
+                              durationLabel: durationLabel,
+                              paceLabel: paceLabel,
+                              skin: skin,
+                            ),
+                          ],
+                        ),
+                ),
             ],
           ),
         ),
@@ -240,12 +298,16 @@ class PhotoAspectRatio extends StatefulWidget {
     required this.child,
     this.minRatio,
     this.maxRatio,
+    this.fallback = 1,
     super.key,
   });
 
   final ImageProvider? background;
   final double? pinned;
   final Widget child;
+
+  /// The shape with no photo, and while a photo is still decoding.
+  final double fallback;
 
   /// Bounds on the measured ratio, for a card that sits inside a frame it
   /// must not outgrow. Null leaves the photo's own shape alone, which is what
@@ -258,7 +320,7 @@ class PhotoAspectRatio extends StatefulWidget {
 }
 
 class _PhotoAspectRatioState extends State<PhotoAspectRatio> {
-  double _resolved = 1;
+  late double _resolved = widget.fallback;
   ImageStream? _stream;
   ImageStreamListener? _listener;
 
@@ -276,7 +338,7 @@ class _PhotoAspectRatioState extends State<PhotoAspectRatio> {
       return;
     }
     _unsubscribe();
-    _resolved = 1;
+    _resolved = widget.fallback;
     _subscribe();
   }
 
@@ -326,7 +388,8 @@ class _PhotoAspectRatioState extends State<PhotoAspectRatio> {
 
   @override
   Widget build(BuildContext context) {
-    var ratio = widget.pinned ?? (widget.background == null ? 1.0 : _resolved);
+    var ratio = widget.pinned ??
+        (widget.background == null ? widget.fallback : _resolved);
     if (widget.minRatio case final min? when ratio < min) ratio = min;
     if (widget.maxRatio case final max? when ratio > max) ratio = max;
     return AspectRatio(aspectRatio: ratio, child: widget.child);

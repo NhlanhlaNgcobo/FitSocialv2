@@ -1,13 +1,16 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/services/route_map_snapshot.dart';
 import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../../../shared/widgets/route_sparkline.dart';
 import '../../../shared/widgets/run_background_section.dart';
 import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/save_run_card_row.dart';
@@ -21,6 +24,7 @@ class FinishRunChoice {
     required this.shareToFeed,
     this.backgroundImagePath,
     this.discard = false,
+    this.showRouteMap = false,
   });
 
   /// What the sheet falls back to when it is dismissed by the system back
@@ -28,7 +32,8 @@ class FinishRunChoice {
   ///
   /// Dismissing must never cost the run: the clock has already been stopped by
   /// the time this sheet opens, so there is nothing to go back to. It saves and
-  /// shares, which is exactly what Finish did before the sheet existed.
+  /// shares, which is exactly what Finish did before the sheet existed — and
+  /// without the map, which only ever goes out when the runner asked for it.
   static const dismissed = FinishRunChoice(shareToFeed: true);
 
   /// The runner asked for the run to be thrown away. Only ever produced by the
@@ -40,8 +45,12 @@ class FinishRunChoice {
   /// True when nothing should be saved: not to the feed, not to drafts.
   final bool discard;
 
+  /// Whether the post shows the route on the real map. Off unless the runner
+  /// switched it on.
+  final bool showRouteMap;
+
   /// Local path of the photo to sit behind the run card, or null for the
-  /// gradient.
+  /// gradient. With [showRouteMap] this is the picture of the map instead.
   final String? backgroundImagePath;
 }
 
@@ -104,8 +113,54 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
   String? _backgroundPath;
   bool _shareToFeed = true;
 
+  /// Off to start with: the map names where the run began, so it is shown
+  /// only when the runner decides to show it.
+  bool _showMap = false;
+
+  /// Offline, the map has no tiles to draw and a draft has nowhere to keep
+  /// the choice, so the switch is only offered to a run that posts now.
+  bool get _canShowMap =>
+      !widget.saveToDrafts && RouteSparkline.canDraw(widget.route);
+
+  /// The preview's live map, while it is showing.
+  GoogleMapController? _map;
+
+  /// True while the map is being captured, so Save cannot be pressed twice.
+  bool _saving = false;
+
+  Future<void> _save() async {
+    String? backgroundPath = _backgroundPath;
+    if (_showMap) {
+      final map = _map;
+      setState(() => _saving = true);
+      // The picture of the map is what the post carries. If it cannot be
+      // taken, the post still records the choice and draws the map live.
+      backgroundPath = map == null
+          ? null
+          : await captureRouteMap(
+              context,
+              map,
+              distanceLabel: widget.distanceLabel,
+              durationLabel: widget.durationLabel,
+              paceLabel: widget.paceLabel,
+            );
+      if (!mounted) return;
+    }
+
+    Navigator.of(context).pop(
+      FinishRunChoice(
+        shareToFeed: _shareToFeed,
+        backgroundImagePath: backgroundPath,
+        showRouteMap: _showMap,
+      ),
+    );
+  }
+
   Future<void> _pickBackground(ImageSource source) async {
     final path = await InstagramPhotoPicker.pickAndCrop(
+      // A card's backdrop: 9:16 by default, and the card follows
+      // whichever shape the photo is cropped to.
+      otherShapes: true,
       context: context,
       source: source,
     );
@@ -195,12 +250,14 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                   distanceLabel: widget.distanceLabel,
                   durationLabel: widget.durationLabel,
                   paceLabel: widget.paceLabel,
+                  showMap: _showMap,
+                  onMapReady: (controller) => _map = controller,
                   onPick: _pickBackground,
                   onRemove: () => setState(() => _backgroundPath = null),
                 ),
                 // Close to the preview rather than a full gap away: this acts
                 // on the card above it, not on the decision below it.
-                if (!kIsWeb) ...[
+                if (!kIsWeb && !_showMap) ...[
                   const SizedBox(height: AppSpacing.sm),
                   SaveRunCardRow(
                     card: RunCardExport(
@@ -212,6 +269,23 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                           ? null
                           : localBackgroundImage(_backgroundPath!),
                     ),
+                  ),
+                ],
+                if (_canShowMap) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  ShareToFeedToggle(
+                    value: _showMap,
+                    title: 'Show map',
+                    subtitle: _showMap
+                        ? 'Anyone who sees this run sees where it was'
+                        : 'Only the shape of your route is shared',
+                    onIcon: Icons.map_outlined,
+                    offIcon: Icons.route_rounded,
+                    onChanged: (value) => setState(() {
+                      _showMap = value;
+                      // The map goes with the switch; a new one reports in.
+                      if (!value) _map = null;
+                    }),
                   ),
                 ],
                 const SizedBox(height: AppSpacing.lg),
@@ -234,17 +308,14 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                   // One label either way when it is going to drafts: sharing
                   // is not what this button does now, so offering "& Share"
                   // would be describing the wrong step.
-                  label: widget.saveToDrafts
-                      ? 'Save to Drafts'
-                      : _shareToFeed
-                          ? 'Save Run & Share'
-                          : 'Save Run',
-                  onPressed: () => Navigator.of(context).pop(
-                    FinishRunChoice(
-                      shareToFeed: _shareToFeed,
-                      backgroundImagePath: _backgroundPath,
-                    ),
-                  ),
+                  label: _saving
+                      ? 'Saving…'
+                      : widget.saveToDrafts
+                          ? 'Save to Drafts'
+                          : _shareToFeed
+                              ? 'Save Run & Share'
+                              : 'Save Run',
+                  onPressed: _saving ? null : _save,
                 ),
                 // Under the primary action and in the muted colour, so it is
                 // there for the runner who wants it without competing with

@@ -26,6 +26,7 @@ import 'comments_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
+import '../../../shared/widgets/network_photo_aspect.dart';
 
 /// A single post on its own page.
 ///
@@ -394,9 +395,8 @@ class _AuthorRow extends ConsumerWidget {
 
 /// The photo, the run card or the workout block — whichever this post carries.
 ///
-/// A photo runs to both edges of the screen. There is only one post here, so a
-/// margin around it would frame it as a card in a list it isn't in; the two
-/// summary cards keep their margin because they are already cards.
+/// Each one sits inset from the screen's edges with rounded corners — every
+/// picture in FitSocial is shown the way it was cropped, as a rounded card.
 class _MediaBlock extends StatelessWidget {
   const _MediaBlock({required this.post, required this.kind});
 
@@ -415,6 +415,7 @@ class _MediaBlock extends StatelessWidget {
           background: post.imageUrl == null || post.imageUrl!.isEmpty
               ? null
               : appPhoto(post.imageUrl!),
+          showMap: post.showRouteMap,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         );
       case _MediaKind.photo:
@@ -446,56 +447,65 @@ class _Photo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The shape the user cropped to, clamped to Instagram's legal range so a
-    // malformed value can't produce an absurdly tall card. Square is the
-    // fallback for posts saved before the ratio was recorded.
-    final ratio = (post.imageAspectRatio ?? 1.0).clamp(0.8, 1.91);
-
-    return AspectRatio(
-      aspectRatio: ratio,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // The post's own gradient sits behind the photo, so the space is
-          // never a blank hole while the image loads.
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: post.backgroundColors,
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-          Image(
-            image: appPhoto(post.imageUrl!),
-            fit: BoxFit.cover,
-            // Both fallbacks land on the dark gradient behind the photo, not
-            // on the page, so they take the on-media register.
-            errorBuilder: (_, __, ___) => const Center(
-              child: Icon(
-                Icons.broken_image_rounded,
-                color: AppColors.onMediaMuted,
-                size: 48,
-              ),
-            ),
-            loadingBuilder: (_, child, progress) {
-              if (progress == null) return child;
-              return Center(
-                child: CircularProgressIndicator(
-                  value: progress.expectedTotalBytes != null
-                      ? progress.cumulativeBytesLoaded /
-                          progress.expectedTotalBytes!
-                      : null,
-                  color: AppColors.orangeBright,
-                  strokeWidth: 2,
+    // At the shape the author cropped to, as in the feed, or measured off the
+    // photo when the post never stored one. Inset and rounded like the run,
+    // workout and meal cards on this page.
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x38F7F7F7)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(19),
+        child: PhotoPostAspectRatio(
+          storedRatio: post.imageAspectRatio,
+          imageUrl: post.imageUrl,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // The post's own gradient sits behind the photo, so the space is
+              // never a blank hole while the image loads.
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: post.backgroundColors,
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
                 ),
-              );
-            },
+              ),
+              Image(
+                image: appPhoto(post.imageUrl!),
+                fit: BoxFit.cover,
+                // Both fallbacks land on the dark gradient behind the photo, not
+                // on the page, so they take the on-media register.
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(
+                    Icons.broken_image_rounded,
+                    color: AppColors.onMediaMuted,
+                    size: 48,
+                  ),
+                ),
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: progress.expectedTotalBytes != null
+                          ? progress.cumulativeBytesLoaded /
+                              progress.expectedTotalBytes!
+                          : null,
+                      color: AppColors.orangeBright,
+                      strokeWidth: 2,
+                    ),
+                  );
+                },
+              ),
+              // No metrics burnt over the photo here: the strip below the image
+              // says the same numbers where they can actually be read.
+            ],
           ),
-          // No metrics burnt over the photo here: the strip below the image
-          // says the same numbers where they can actually be read.
-        ],
+        ),
       ),
     );
   }

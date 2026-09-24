@@ -70,6 +70,7 @@ class SharedPostRef {
     this.imageUrl,
     this.aspectRatio,
     this.route = const [],
+    this.routeOnImage = false,
     this.workoutData,
   });
 
@@ -95,6 +96,7 @@ class SharedPostRef {
     List<RoutePoint> route = const [],
     Map<String, dynamic>? workoutData,
     bool hasWorkout = false,
+    bool routeOnImage = false,
   }) {
     final image = (imageUrl ?? '').trim();
     final trace = _thin(route);
@@ -124,6 +126,8 @@ class SharedPostRef {
       // other kind they would be weight on the Pulse document that nothing
       // draws.
       route: kind == SharedPostKind.route ? trace : const [],
+      routeOnImage:
+          routeOnImage && kind == SharedPostKind.route && image.isNotEmpty,
       workoutData: kind == SharedPostKind.workout ? log : null,
     );
   }
@@ -161,6 +165,11 @@ class SharedPostRef {
   /// Empty on everything that isn't a run, and on shares written before the
   /// card knew how to draw one — those still get the placeholder.
   final List<RoutePoint> route;
+
+  /// True when [imageUrl] is a picture of the run on its map, with the route
+  /// already in it — the card shows the picture alone rather than laying a
+  /// second line over the first.
+  final bool routeOnImage;
 
   /// The workout's log — title, duration, calories and the exercises with
   /// their sets, reps and loads — so the card can draw the sheet the feed
@@ -207,6 +216,7 @@ class SharedPostRef {
       route: post.routePoints,
       workoutData: post.workoutData,
       hasWorkout: post.postType == PostType.workout,
+      routeOnImage: post.showRouteMap,
     );
   }
 
@@ -283,6 +293,7 @@ class SharedPostRef {
         if (aspectRatio != null) 'aspectRatio': aspectRatio,
         if (route.isNotEmpty)
           'route': [for (final point in route) point.toMap()],
+        if (routeOnImage) 'routeOnImage': true,
         if (workoutData != null) 'workoutData': workoutData,
       };
 
@@ -315,6 +326,7 @@ class SharedPostRef {
       // Thinned again on the way back in: the length is capped on write, but
       // the document was written by a client and this is drawn on every frame.
       route: _thin(RoutePoint.listFromFirestore(value['route'])),
+      routeOnImage: value['routeOnImage'] == true && image.isNotEmpty,
       // Thinned again on the way back in, for the same reason the route is:
       // the document was written by a client, and the sheet is drawn from
       // this on every frame of playback.

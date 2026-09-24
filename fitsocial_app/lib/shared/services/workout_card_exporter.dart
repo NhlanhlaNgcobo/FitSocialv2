@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../app/theme/app_palette.dart';
 import '../widgets/fit_social_logo.dart';
+import '../widgets/picture_ratio.dart';
 import '../widgets/run_summary_card.dart' show runCardExportGround;
 import '../widgets/workout_summary_card.dart';
 import 'held_image.dart';
@@ -130,8 +131,9 @@ Future<Uint8List> renderWorkoutCardPng(
         // Clamped to the same range the feed uses, so the file has the shape
         // the post does.
         ratio = decoded == null || decoded.height == 0
-            ? 1.0
-            : (decoded.width / decoded.height).clamp(0.8, 1.91);
+            ? kPictureAspectRatio
+            : (decoded.width / decoded.height)
+                .clamp(kPictureAspectRatio, kWidestPictureRatio);
       } on Object {
         throw const WorkoutCardExportException(
           "Couldn't load your photo — try again in a moment.",

@@ -1511,6 +1511,8 @@ class FirestoreContentRepository implements ContentRepository {
       // Denormalised onto the post so the feed renders the route from the
       // documents it already streams, with no extra read per card.
       routePoints: route,
+      // Only meaningful with a trace to put on it; a manual run has none.
+      showRouteMap: draft.showRouteMap && route.length >= 2,
     );
     await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(runsDelta: 1, runDistanceKm: recordDistanceKm);
@@ -1791,6 +1793,7 @@ class FirestoreContentRepository implements ContentRepository {
     Map<String, dynamic>? workoutData,
     Map<String, dynamic>? mealData,
     List<Map<String, double>> routePoints = const [],
+    bool showRouteMap = false,
     double? imageAspectRatio,
     List<TaggedUser> taggedUsers = const [],
   }) async {
@@ -1820,6 +1823,7 @@ class FirestoreContentRepository implements ContentRepository {
       workoutData: workoutData,
       mealData: mealData,
       routePoints: RoutePoint.listFromFirestore(routePoints),
+      showRouteMap: showRouteMap,
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
       // The author can't tag themselves — their name is already on the post —
@@ -1859,6 +1863,9 @@ class FirestoreContentRepository implements ContentRepository {
       if (record.workoutData != null) 'workoutData': record.workoutData,
       if (record.mealData != null) 'mealData': record.mealData,
       if (routePoints.isNotEmpty) 'routePoints': routePoints,
+      // Written only when chosen, so a post without it is shaped exactly like
+      // every run shared before the choice existed.
+      if (showRouteMap) 'showRouteMap': true,
       if (record.taggedUsers.isNotEmpty)
         'taggedUsers': record.taggedUsers
             .map((tagged) => tagged.toMap())

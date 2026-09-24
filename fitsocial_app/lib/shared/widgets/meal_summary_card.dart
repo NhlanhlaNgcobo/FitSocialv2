@@ -6,6 +6,7 @@ import 'app_photo.dart';
 import 'fit_social_logo.dart';
 import 'macro_ring.dart';
 import 'network_photo_aspect.dart';
+import 'picture_ratio.dart';
 
 /// A logged meal drawn the way it is shared: the photo, the FitSocial
 /// wordmark, the calorie total and a macro ring apiece for protein, carbs and
@@ -17,7 +18,7 @@ class MealSummaryCard extends StatelessWidget {
     required this.activity,
     this.backgroundImageUrl,
     this.backgroundImage,
-    this.aspectRatio = 1,
+    this.aspectRatio = kPictureAspectRatio,
     this.margin = EdgeInsets.zero,
     super.key,
   });
@@ -40,8 +41,8 @@ class MealSummaryCard extends StatelessWidget {
   final ImageProvider? backgroundImage;
 
   /// Used only while the real photo hasn't resolved its shape yet, and as the
-  /// shape outright when there is no photo — a meal post has never recorded
-  /// the crop ratio the user picked, so this stays square.
+  /// shape outright when there is no photo — the app's 9:16, since a meal post
+  /// has never recorded the crop ratio the user picked.
   final double aspectRatio;
 
   final EdgeInsetsGeometry margin;

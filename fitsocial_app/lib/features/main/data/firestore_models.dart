@@ -119,6 +119,7 @@ class FirestorePostRecord {
       workoutData: (data['workoutData'] as Map<String, dynamic>?),
       mealData: (data['mealData'] as Map<String, dynamic>?),
       routePoints: RoutePoint.listFromFirestore(data['routePoints']),
+      showRouteMap: (data['showRouteMap'] as bool?) ?? false,
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
       imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
       taggedUsers: TaggedUser.listFrom(data['taggedUsers']),
@@ -146,6 +147,7 @@ class FirestorePostRecord {
     this.workoutData,
     this.mealData,
     this.routePoints = const [],
+    this.showRouteMap = false,
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
@@ -184,6 +186,10 @@ class FirestorePostRecord {
 
   /// GPS route for run posts; empty for everything else.
   final List<RoutePoint> routePoints;
+
+  /// Whether the author opted in to showing the map under [routePoints].
+  /// Absent — every post written before the choice existed — reads as false.
+  final bool showRouteMap;
 
   /// Author's profile photo at the time of posting.
   ///

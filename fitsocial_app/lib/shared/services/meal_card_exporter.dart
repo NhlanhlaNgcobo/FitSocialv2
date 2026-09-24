@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 
 import '../widgets/fit_social_logo.dart';
 import '../widgets/meal_summary_card.dart';
+import '../widgets/picture_ratio.dart';
 import 'held_image.dart';
 
 /// Everything the meal card needs to draw itself into a file.
@@ -104,14 +105,15 @@ Future<Uint8List> renderMealCardPng(
     // and it is what gets handed to the card so it does not have to resolve
     // the same image a second time inside the overlay.
     final background = spec.background;
-    var ratio = 1.0;
+    var ratio = kPictureAspectRatio;
     if (background != null) {
       try {
         final backgroundHeld = await holdImage(background, configuration);
         held.add(backgroundHeld);
         final decoded = backgroundHeld.image;
         if (decoded != null && decoded.height != 0) {
-          ratio = (decoded.width / decoded.height).clamp(0.8, 1.91);
+          ratio = (decoded.width / decoded.height)
+              .clamp(kPictureAspectRatio, kWidestPictureRatio);
         }
       } on Object {
         throw const MealCardExportException(

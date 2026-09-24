@@ -16,6 +16,7 @@ import 'avatar.dart';
 import 'confirm_destructive_sheet.dart';
 import 'liquid_glass.dart';
 import 'mention_text.dart';
+import 'network_photo_aspect.dart';
 import 'post_action_icons.dart';
 import 'profile_link.dart';
 import 'quick_toast.dart';
@@ -47,6 +48,7 @@ class PostCard extends StatelessWidget {
     this.workoutData,
     this.mealData,
     this.routePoints = const [],
+    this.showRouteMap = false,
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
@@ -84,6 +86,9 @@ class PostCard extends StatelessWidget {
   /// Completed run route. When non-empty the card renders a map preview of the
   /// finished run instead of the plain gradient tile.
   final List<RoutePoint> routePoints;
+
+  /// Whether the author chose to show [routePoints] on the real map.
+  final bool showRouteMap;
 
   /// Author's profile photo, denormalised onto the post. Null falls back to
   /// the initials avatar.
@@ -164,6 +169,7 @@ class PostCard extends StatelessWidget {
         route: routePoints,
         workoutData: workoutData,
         hasWorkout: postType == PostType.workout,
+        routeOnImage: showRouteMap,
       );
 
   /// Whether there is anything to draw between the header and the actions.
@@ -435,6 +441,7 @@ class PostCard extends StatelessWidget {
       durationLabel: RunSummaryCard.durationFrom(metricLabels),
       paceLabel: RunSummaryCard.paceFrom(metricLabels),
       background: imageUrl == null ? null : appPhoto(imageUrl!),
+      showMap: showRouteMap,
       margin: const EdgeInsets.symmetric(horizontal: _gutter),
     );
   }
@@ -445,91 +452,98 @@ class PostCard extends StatelessWidget {
     return const SizedBox.shrink();
   }
 
-  // ── IMAGE payload (AspectRatio 4:5 clamped) ───────────────────────────────
+  // ── IMAGE payload (at the shape it was cropped to) ─────────────────────────
 
   Widget _buildImagePayload(AppPalette palette) {
-    // Render at the shape the user cropped to. Clamped to Instagram's legal
-    // range so a malformed value can't produce an absurdly tall or wide card;
-    // square is the fallback for posts saved before the ratio was recorded.
-    final ratio = (imageAspectRatio ?? 1.0).clamp(0.8, 1.91);
-
-    return AspectRatio(
-      aspectRatio: ratio,
+    // At the shape the author cropped to, or measured off the photo when the
+    // post never stored one. Inset and rounded like the run, workout and meal
+    // cards: every picture in FitSocial has the same rounded corners, the
+    // ones it was cropped in.
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: _gutter),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x38F7F7F7)),
+      ),
       child: ClipRRect(
-        // Square corners: media runs edge to edge, so rounding would read as
-        // an inset card rather than a continuous feed.
-        borderRadius: BorderRadius.zero,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Gradient background while image loads
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: backgroundColors,
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-            if (imageUrl != null)
-              Image(
-                image: appPhoto(imageUrl!),
-                fit: BoxFit.cover,
-                // Both fallbacks land on the dark gradient behind the photo,
-                // not on the card, so they take the on-media register.
-                errorBuilder: (_, __, ___) => const Center(
-                  child: Icon(
-                    Icons.broken_image_rounded,
-                    color: AppColors.onMediaMuted,
-                    size: 48,
+        // Inset by the border width so the photo stops at the inside edge of
+        // the stroke rather than painting over it.
+        borderRadius: BorderRadius.circular(19),
+        child: PhotoPostAspectRatio(
+          storedRatio: imageAspectRatio,
+          imageUrl: imageUrl,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Gradient background while image loads
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: backgroundColors,
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
                   ),
                 ),
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: progress.expectedTotalBytes != null
-                          ? progress.cumulativeBytesLoaded /
-                              progress.expectedTotalBytes!
-                          : null,
-                      color: AppColors.orangeBright,
-                      strokeWidth: 2,
-                    ),
-                  );
-                },
               ),
-            // Bottom gradient overlay for metric labels
-            if (metricLabels.isNotEmpty)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Color(0xCC050505),
+              if (imageUrl != null)
+                Image(
+                  image: appPhoto(imageUrl!),
+                  fit: BoxFit.cover,
+                  // Both fallbacks land on the dark gradient behind the photo,
+                  // not on the card, so they take the on-media register.
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Icon(
+                      Icons.broken_image_rounded,
+                      color: AppColors.onMediaMuted,
+                      size: 48,
+                    ),
+                  ),
+                  loadingBuilder: (_, child, progress) {
+                    if (progress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: progress.expectedTotalBytes != null
+                            ? progress.cumulativeBytesLoaded /
+                                progress.expectedTotalBytes!
+                            : null,
+                        color: AppColors.orangeBright,
+                        strokeWidth: 2,
+                      ),
+                    );
+                  },
+                ),
+              // Bottom gradient overlay for metric labels
+              if (metricLabels.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Color(0xCC050505),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _metricDivider(),
+                        _metricRow(),
                       ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
                     ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _metricDivider(),
-                      _metricRow(),
-                    ],
-                  ),
                 ),
-              ),
-            // No activity badge over the photo: the activity now reads as the
-            // subtitle under the author's name, and repeating it on the media
-            // was the same words twice.
-          ],
+              // No activity badge over the photo: the activity now reads as the
+              // subtitle under the author's name, and repeating it on the media
+              // was the same words twice.
+            ],
+          ),
         ),
       ),
     );

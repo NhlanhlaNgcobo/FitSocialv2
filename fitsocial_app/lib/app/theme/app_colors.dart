@@ -40,7 +40,11 @@ abstract final class AppColors {
   /// like.
   static const Color mediaBackdrop = Color(0xFF050505);
 
-  /// Rule-of-thirds lines in the photo cropper. Part of that same always-dark
-  /// chrome, and drawn over the photo rather than over any app surface.
-  static const Color cropGrid = Color(0xFF2B2B2B);
+  /// Rule-of-thirds lines in the photo cropper. Drawn over the photo itself,
+  /// so a faint light line: a solid dark one scored the picture into nine
+  /// panes.
+  static const Color cropGrid = Color(0x59F7F7F7);
+
+  /// What the cropper lays over the part of the photo being cut away.
+  static const Color cropDimmed = Color(0xCC050505);
 }
