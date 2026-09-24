@@ -12,7 +12,7 @@ import 'location_share_controller.dart';
 import 'panic_controller.dart';
 
 /// The signed-in user's panic settings, live. Defaults while loading or
-/// signed out — which leaves the alarm stoppable without a PIN, the safe
+/// signed out — which leaves the alert endable without a PIN, the safe
 /// failure.
 final safetySettingsProvider = StreamProvider<SafetySettings>((ref) {
   ref.watch(appSessionProvider);
@@ -60,7 +60,7 @@ final acceptedSafetyContactsProvider = Provider<List<SafetyContact>>((ref) {
   return all.where((c) => c.isAccepted).toList(growable: false);
 });
 
-/// One panic at a time, app-wide. Not auto-disposed: an alarm must never be
+/// One panic at a time, app-wide. Not auto-disposed: an alert must never be
 /// torn down because the widget that started it left the tree.
 final panicControllerProvider =
     StateNotifierProvider<PanicController, PanicState>((ref) {

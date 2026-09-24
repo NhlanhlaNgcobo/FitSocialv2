@@ -158,7 +158,7 @@ class FirestorePanicRepository
   FirestorePanicRepository(this._firestore);
 
   /// How long [raise] waits for the server before settling for the offline
-  /// queue. Short: the alarm is held until this returns.
+  /// queue. Short: the panic screen waits on this before showing the alert as active.
   static const Duration queueWait = Duration(milliseconds: 1500);
 
   final FirebaseFirestore _firestore;

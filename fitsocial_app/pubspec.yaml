@@ -86,10 +86,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
-    # The panic siren, for iOS (PanicBridge.swift finds it by asset key).
-    # Android plays its own copy from res/raw. Both are written by
-    # tool/generate_panic_siren.py.
-    - assets/sounds/panic_siren.wav
     - assets/images/welcome_reference_athlete.png
   shaders:
     - assets/shaders/liquid_glass.frag

@@ -120,57 +120,36 @@ int usedSafetySlots(
   return app + emailContacts.where((c) => c.takesSlot).length;
 }
 
-/// The panic preferences and PIN hashes kept in the `safety` map on the user
-/// document. See spec A.2.
+/// The two panic PIN hashes, kept owner-only under
+/// `users/{uid}/private/safety`.
+///
+/// There are no alarm options: a panic is silent. Documents written before
+/// that may still carry siren and flash fields; they are ignored.
 @immutable
 class SafetySettings {
   const SafetySettings({
     this.pinSalt,
     this.safePinHash,
     this.duressPinHash,
-    this.sirenEnabled = true,
-    this.screenStrobeEnabled = true,
-    this.torchEnabled = true,
-    this.steadyLightMode = false,
-    this.countdownSeconds = defaultCountdownSeconds,
   });
 
   factory SafetySettings.fromMap(Map<String, dynamic>? map) {
     if (map == null) return defaults;
-    final countdown = map['countdownSeconds'];
     return SafetySettings(
       pinSalt: map['pinSalt'] as String?,
       safePinHash: map['safePinHash'] as String?,
       duressPinHash: map['duressPinHash'] as String?,
-      sirenEnabled: map['sirenEnabled'] as bool? ?? true,
-      screenStrobeEnabled: map['screenStrobeEnabled'] as bool? ?? true,
-      torchEnabled: map['torchEnabled'] as bool? ?? true,
-      steadyLightMode: map['steadyLightMode'] as bool? ?? false,
-      countdownSeconds: countdown is num
-          ? countdown.toInt().clamp(0, 30)
-          : defaultCountdownSeconds,
     );
   }
-
-  static const int defaultCountdownSeconds = 5;
 
   static const SafetySettings defaults = SafetySettings();
 
   final String? pinSalt;
   final String? safePinHash;
   final String? duressPinHash;
-  final bool sirenEnabled;
-  final bool screenStrobeEnabled;
-  final bool torchEnabled;
 
-  /// Hold the screen and torch on instead of flashing them. The photosensitive
-  /// alternative to the strobe; see spec A.8.6.
-  final bool steadyLightMode;
-
-  final int countdownSeconds;
-
-  /// Whether both PINs are set. When they are not, the alarm stops without
-  /// one — a user must never be left holding a phone they cannot silence.
+  /// Whether both PINs are set. When they are not, an alert ends without
+  /// one — a user must never be left unable to end their own alert.
   bool get hasPins =>
       (pinSalt?.isNotEmpty ?? false) &&
       (safePinHash?.isNotEmpty ?? false) &&
@@ -180,21 +159,11 @@ class SafetySettings {
     String? pinSalt,
     String? safePinHash,
     String? duressPinHash,
-    bool? sirenEnabled,
-    bool? screenStrobeEnabled,
-    bool? torchEnabled,
-    bool? steadyLightMode,
-    int? countdownSeconds,
   }) {
     return SafetySettings(
       pinSalt: pinSalt ?? this.pinSalt,
       safePinHash: safePinHash ?? this.safePinHash,
       duressPinHash: duressPinHash ?? this.duressPinHash,
-      sirenEnabled: sirenEnabled ?? this.sirenEnabled,
-      screenStrobeEnabled: screenStrobeEnabled ?? this.screenStrobeEnabled,
-      torchEnabled: torchEnabled ?? this.torchEnabled,
-      steadyLightMode: steadyLightMode ?? this.steadyLightMode,
-      countdownSeconds: countdownSeconds ?? this.countdownSeconds,
     );
   }
 
@@ -202,11 +171,6 @@ class SafetySettings {
         'pinSalt': pinSalt,
         'safePinHash': safePinHash,
         'duressPinHash': duressPinHash,
-        'sirenEnabled': sirenEnabled,
-        'screenStrobeEnabled': screenStrobeEnabled,
-        'torchEnabled': torchEnabled,
-        'steadyLightMode': steadyLightMode,
-        'countdownSeconds': countdownSeconds,
       };
 }
 

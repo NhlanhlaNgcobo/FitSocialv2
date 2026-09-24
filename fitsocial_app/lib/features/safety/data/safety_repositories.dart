@@ -89,7 +89,7 @@ class UnconfiguredSafetyRepository implements SafetyRepository {
 }
 
 /// Without a backend a panic cannot be sent. [raise] throws, which the
-/// controller reports as a failed delivery — and the alarm still sounds.
+/// controller reports as a failed delivery on the panic screen.
 class UnconfiguredPanicRepository
     implements PanicRepository, PanicAlertRepository {
   const UnconfiguredPanicRepository();

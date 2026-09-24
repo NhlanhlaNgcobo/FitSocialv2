@@ -50,9 +50,6 @@
 		     this the strap would stop reporting the moment the phone locked and
 		     the saved average would come from the first thirty seconds. -->
 		<string>bluetooth-central</string>
-		<!-- The panic siren keeps sounding when the screen locks or the app is
-		     backgrounded. See PanicBridge.swift. -->
-		<string>audio</string>
 	</array>
 	<!-- Step counting and workout data for run stats. -->
 	<key>NSMotionUsageDescription</key>
@@ -68,7 +65,7 @@
 	<string>FitSocial connects to Bluetooth heart-rate monitors to show your live BPM and record it against your runs, including while the screen is off.</string>
 	<!-- Post photos. -->
 	<key>NSCameraUsageDescription</key>
-	<string>FitSocial uses your camera to take photos for your posts and meal logs, and its flash as a strobe light when you raise a panic alarm.</string>
+	<string>FitSocial uses your camera to take photos for your posts and meal logs.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>FitSocial saves your run card to your photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

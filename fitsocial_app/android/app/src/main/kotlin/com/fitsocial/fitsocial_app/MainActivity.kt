@@ -107,12 +107,12 @@ class MainActivity : FlutterFragmentActivity() {
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
         )
-        // Application context for audio, camera and battery; the activity only
-        // for the window it owns (brightness, keep-screen-on), held weakly.
+        // The battery level for panic alerts. Application context: it reads
+        // a system service and nothing tied to this activity.
         panic = PanicBridge(
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
-        ).also { it.attach(this) }
+        )
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {

@@ -16,12 +16,6 @@
          progress" notification. Tracking still works if it is refused — only
          the lock-screen readout is lost. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Panic siren: raises the ALARM stream to its maximum while the alarm
-         sounds, and restores it after. See PanicBridge.kt. -->
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-    <!-- The panic torch strobe. Optional: a phone without a flash still gets
-         the siren and the screen strobe, and must still be able to install. -->
-    <uses-feature android:name="android.hardware.camera.flash" android:required="false"/>
     <!-- Activity recognition: needed to use the hardware step counter sensor (Android 10+) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <!-- Body sensors: heart-rate via device/wearable sensors -->

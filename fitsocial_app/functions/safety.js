@@ -430,7 +430,7 @@ async function handlePanicUpdated(eventId, before, after, fcm) {
     await pushTo(
       recipients,
       {
-        title: `${name}'s alarm was cancelled under pressure`,
+        title: `${name}'s alert was cancelled under pressure`,
         body: `${name} used their duress code. The alert is still active.`,
         data: { type: "panicDuress", eventId, route: `/safety/alert/${eventId}` },
       },

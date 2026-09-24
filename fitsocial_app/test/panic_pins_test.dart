@@ -97,12 +97,16 @@ void main() {
       pinSalt: 's',
       safePinHash: 'a',
       duressPinHash: 'b',
-      torchEnabled: false,
-      steadyLightMode: true,
-      countdownSeconds: 8,
     );
     final back = SafetySettings.fromMap(s.toMap());
     expect(back.toMap(), s.toMap());
-    expect(SafetySettings.fromMap(null).sirenEnabled, isTrue);
+    // Documents from before the panic went silent still carry alarm fields.
+    final legacy = SafetySettings.fromMap({
+      ...s.toMap(),
+      'sirenEnabled': true,
+      'countdownSeconds': 5,
+    });
+    expect(legacy.hasPins, isTrue);
+    expect(SafetySettings.fromMap(null).hasPins, isFalse);
   });
 }

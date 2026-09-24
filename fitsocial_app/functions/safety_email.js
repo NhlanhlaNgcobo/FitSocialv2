@@ -184,15 +184,15 @@ ${button(link, `See where ${ownerName} is now`)}
 function duressEmail(ownerName, link) {
   const name = escapeHtml(ownerName);
   return {
-    subject: `URGENT: ${ownerName}'s alarm was cancelled under pressure`,
+    subject: `URGENT: ${ownerName}'s alert was cancelled under pressure`,
     html: emailShell(
-      `${name}'s alarm was cancelled under pressure`,
-      `<p style="font-size:16px;line-height:1.5">${name} used their emergency code to cancel the alarm. This means they may have been forced to. <b>The alert is still active</b> and their location is still being shared.</p>
+      `${name}'s alert was cancelled under pressure`,
+      `<p style="font-size:16px;line-height:1.5">${name} used their emergency code to cancel the alert. This means they may have been forced to. <b>The alert is still active</b> and their location is still being shared.</p>
 ${button(link, `See where ${ownerName} is now`)}
 <p style="font-size:16px;line-height:1.5">If you think ${name} is in danger, call <b>10111</b> or <b>112</b>.</p>`
     ),
     text:
-      `${ownerName} used their emergency code to cancel the alarm. They may have been forced to. The alert is still active.\n\n` +
+      `${ownerName} used their emergency code to cancel the alert. They may have been forced to. The alert is still active.\n\n` +
       `See where they are now: ${link}\n\nCall 10111 or 112 if you think they are in danger.\n`,
   };
 }
@@ -541,7 +541,7 @@ async function load(){
   for(const id of["mapwrap","respond","nav","facts"])document.getElementById(id).style.display="none";return;}
  document.getElementById("title").innerHTML=n+" needs help";
  document.getElementById("sub").innerHTML=s.status==="duress"
-  ?'<span class="pill red" style="color:#fff">Alarm cancelled under pressure</span> The alert is still active.'
+  ?'<span class="pill red" style="color:#fff">Alert cancelled under pressure</span> The alert is still active.'
   :"Alert raised "+ago(s.raisedAt)+".";
  const f=[];if(s.batteryPercent!=null)f.push("Battery: "+esc(s.batteryPercent)+"%");
  f.push(s.responders.length?"Responding: "+s.responders.map(esc).join(", "):"Nobody has responded yet.");

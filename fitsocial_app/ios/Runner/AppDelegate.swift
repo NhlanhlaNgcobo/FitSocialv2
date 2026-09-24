@@ -4,7 +4,7 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  /// The panic siren, torch and screen. Held for the life of the engine.
+  /// The battery level for panic alerts. Held for the life of the engine.
   private var panic: PanicBridge?
 
   override func application(
@@ -31,13 +31,8 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
-    // The siren ships as a Flutter asset (assets/sounds/panic_siren.wav), so
-    // no Xcode resource entry is needed; the registrar knows where it landed.
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PanicBridge") {
-      panic = PanicBridge(
-        messenger: registrar.messenger(),
-        sirenAssetKey: registrar.lookupKey(forAsset: "assets/sounds/panic_siren.wav")
-      )
+      panic = PanicBridge(messenger: registrar.messenger())
     }
   }
 }

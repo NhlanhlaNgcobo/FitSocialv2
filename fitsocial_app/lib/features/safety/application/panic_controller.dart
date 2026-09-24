@@ -10,13 +10,13 @@ import '../domain/panic_pins.dart';
 import '../domain/safety_alerts.dart';
 import '../domain/safety_models.dart';
 
-/// Where a panic stands. See the state machine in spec A.5.
+/// Where a panic stands.
 ///
 /// There is one [stopped] phase, not a "resolved" and a "duress". Whichever
-/// PIN ended the alarm, the screen that follows must be indistinguishable to
+/// PIN ended the alert, the screen that follows must be indistinguishable to
 /// someone looking over the user's shoulder, and the surest way to guarantee
 /// that is for the UI never to be told which it was.
-enum PanicPhase { idle, countdown, dispatching, active, stopped }
+enum PanicPhase { idle, dispatching, active, stopped }
 
 /// How far the event document got.
 enum PanicDelivery {
@@ -29,8 +29,7 @@ enum PanicDelivery {
   /// The server has the event. The Cloud Function takes it from there.
   sent,
 
-  /// The write was refused, or could not be made at all (signed out). The
-  /// alarm still runs.
+  /// The write was refused, or could not be made at all (signed out).
   failed,
 }
 
@@ -38,15 +37,9 @@ enum PanicDelivery {
 class PanicState {
   const PanicState({
     this.phase = PanicPhase.idle,
-    this.secondsLeft = 0,
     this.delivery = PanicDelivery.none,
     this.alertedContacts,
     this.acknowledgements = const [],
-    this.sirenOn = false,
-    this.torchOn = false,
-    this.screenStrobeOn = false,
-    this.steadyLight = false,
-    this.downgraded = false,
     this.requiresPin = true,
     this.rejectedPins = 0,
   });
@@ -58,32 +51,16 @@ class PanicState {
 
   final PanicPhase phase;
 
-  /// Seconds remaining on the countdown.
-  final int secondsLeft;
-
   final PanicDelivery delivery;
 
-  /// How many accepted contacts the alert is addressed to. Null until known.
-  /// Zero means the event was recorded on this phone only.
+  /// How many contacts the alert is addressed to. Null until known. Zero means
+  /// the event was recorded on this phone only.
   final int? alertedContacts;
 
   final List<PanicAcknowledgement> acknowledgements;
 
-  final bool sirenOn;
-  final bool torchOn;
-
-  /// Whether the panic screen should flash. Drawn by the widget, at
-  /// [PanicController.strobePeriod].
-  final bool screenStrobeOn;
-
-  /// Hold the screen fully lit instead of flashing it.
-  final bool steadyLight;
-
-  /// Torch and strobe were shed for heat or battery; the siren carries on.
-  final bool downgraded;
-
-  /// False when no PINs were ever set, in which case the alarm stops with a
-  /// plain button. Never trap a user with a phone they cannot silence.
+  /// False when no PINs were ever set, in which case the alert ends with a
+  /// plain button. Never trap a user in an alert they cannot end.
   final bool requiresPin;
 
   /// Bumped on every wrong PIN, so the keypad can shake once per attempt.
@@ -91,51 +68,40 @@ class PanicState {
 
   PanicState copyWith({
     PanicPhase? phase,
-    int? secondsLeft,
     PanicDelivery? delivery,
     int? alertedContacts,
     List<PanicAcknowledgement>? acknowledgements,
-    bool? sirenOn,
-    bool? torchOn,
-    bool? screenStrobeOn,
-    bool? steadyLight,
-    bool? downgraded,
     bool? requiresPin,
     int? rejectedPins,
   }) {
     return PanicState(
       phase: phase ?? this.phase,
-      secondsLeft: secondsLeft ?? this.secondsLeft,
       delivery: delivery ?? this.delivery,
       alertedContacts: alertedContacts ?? this.alertedContacts,
       acknowledgements: acknowledgements ?? this.acknowledgements,
-      sirenOn: sirenOn ?? this.sirenOn,
-      torchOn: torchOn ?? this.torchOn,
-      screenStrobeOn: screenStrobeOn ?? this.screenStrobeOn,
-      steadyLight: steadyLight ?? this.steadyLight,
-      downgraded: downgraded ?? this.downgraded,
       requiresPin: requiresPin ?? this.requiresPin,
       rejectedPins: rejectedPins ?? this.rejectedPins,
     );
   }
 }
 
-/// Runs a panic from trigger to stop, and keeps the user's live position
-/// flowing to their contacts until the safe PIN ends it.
+/// Runs a silent panic: the alert goes out the moment the button is pressed,
+/// and the user's live position follows until the safe PIN ends it.
 ///
-/// Live location outlives the alarm on purpose. The duress PIN silences the
-/// phone and shows the same screen as the safe PIN, but tracking carries on —
-/// a forced cancel is exactly when contacts most need to see where the user
-/// is. Only the safe PIN stops it: on the panic screen, or later through
-/// [endOpenEvents].
+/// Silent by design. Nothing sounds, flashes or lights up on the user's phone.
+/// A siren does not only startle an attacker — someone relying on staying
+/// unnoticed may turn violent the moment the phone draws attention. The help
+/// this gives is the alert and the live location reaching the user's
+/// contacts, not a scene on the street.
 ///
-/// The one ordering rule that matters: **nothing is lit or sounded until the
-/// event write has resolved or been queued.** A phone can be taken or switched
-/// off in about two seconds. The alarm helps for the next thirty seconds; the
-/// alert helps for the next thirty minutes, and committing it first is what
-/// lets it outlive the phone. If the write fails outright the alarm still
-/// starts — it is not held hostage to the network — but only after the
-/// attempt.
+/// Speed over precision at the start: the event is written with the phone's
+/// last known position rather than waiting for a fresh fix, and live tracking
+/// replaces it within seconds.
+///
+/// Live location outlives the panic screen. The duress PIN shows the same
+/// "ended" screen as the safe PIN, but tracking carries on and contacts are
+/// told the cancel was forced. Only the safe PIN stops it: on the panic
+/// screen, or later through [endOpenEvents].
 class PanicController extends StateNotifier<PanicState> {
   PanicController({
     required PanicRepository repository,
@@ -154,23 +120,9 @@ class PanicController extends StateNotifier<PanicState> {
         _now = now ?? DateTime.now,
         super(PanicState.idle);
 
-  /// The longest dispatch waits for a fresh fix before using the last known.
-  static const Duration fixTimeout = Duration(seconds: 4);
-
-  /// The longest dispatch waits for the cached fix. It is normally instant.
+  /// The longest dispatch waits for the phone's cached position. It is
+  /// normally instant; a phone that cannot answer sends without one.
   static const Duration lastKnownTimeout = Duration(seconds: 1);
-
-  /// One strobe cycle. 3 Hz is the WCAG 2.3.1 ceiling; this is not
-  /// configurable, and must never be made faster. See spec A.8.6.
-  static const Duration strobePeriod = Duration(milliseconds: 334);
-
-  /// After this long the torch and strobe are shed for heat.
-  static const Duration downgradeAfter = Duration(minutes: 10);
-
-  /// Below this the torch and strobe are shed for battery.
-  static const int lowBatteryPercent = 15;
-
-  static const Duration batteryPollInterval = Duration(minutes: 1);
 
   /// How often the live position is written, however often fixes arrive.
   static const Duration trackInterval = Duration(seconds: 30);
@@ -184,66 +136,29 @@ class PanicController extends StateNotifier<PanicState> {
   final DateTime Function() _now;
 
   /// Settings read at the trigger and held for the whole panic, so a sync
-  /// arriving mid-alarm cannot change which PINs stop it.
+  /// arriving mid-alert cannot change which PINs end it.
   SafetySettings _active = SafetySettings.defaults;
 
-  Timer? _countdown;
-  Timer? _downgradeTimer;
-  Timer? _batteryPoll;
   StreamSubscription<List<PanicAcknowledgement>>? _ackSub;
   String? _eventId;
-  bool _backgrounded = false;
 
   StreamSubscription<PanicPosition>? _trackSub;
   String? _trackedEventId;
   DateTime? _lastTrackWrite;
   bool _trackWriting = false;
 
-  /// IDLE → COUNTDOWN. Nothing is sent and nothing is lit yet.
-  void trigger() {
+  /// The panic button. Sends the alert straight away — there is no countdown.
+  Future<void> trigger() async {
     if (state.phase != PanicPhase.idle && state.phase != PanicPhase.stopped) {
       return;
     }
     _active = _settings();
-    final seconds = _active.countdownSeconds;
-    if (seconds <= 0) {
-      state = const PanicState(phase: PanicPhase.countdown);
-      unawaited(_dispatch());
-      return;
-    }
     state = PanicState(
-      phase: PanicPhase.countdown,
-      secondsLeft: seconds,
+      phase: PanicPhase.dispatching,
       requiresPin: _active.hasPins,
     );
-    _countdown = Timer.periodic(const Duration(seconds: 1), (_) {
-      final left = state.secondsLeft - 1;
-      if (left <= 0) {
-        unawaited(_dispatch());
-      } else {
-        state = state.copyWith(secondsLeft: left);
-      }
-    });
-  }
 
-  /// "I'm fine — cancel". No PIN: nothing has happened yet.
-  void cancelCountdown() {
-    if (state.phase != PanicPhase.countdown) return;
-    _countdown?.cancel();
-    _countdown = null;
-    state = PanicState.idle;
-  }
-
-  /// "Start now": skip the rest of the countdown.
-  Future<void> startNow() => _dispatch();
-
-  Future<void> _dispatch() async {
-    if (state.phase != PanicPhase.countdown) return;
-    _countdown?.cancel();
-    _countdown = null;
-    state = state.copyWith(phase: PanicPhase.dispatching, secondsLeft: 0);
-
-    final position = await _resolvePosition();
+    final position = await _lastKnownPosition();
     final battery = await _device.batteryPercent();
     final userId = _userId();
 
@@ -257,26 +172,18 @@ class PanicController extends StateNotifier<PanicState> {
           clientRaisedAt: _now(),
         ));
       } catch (_) {
-        // Could not even be queued. Fall through to the alarm anyway.
+        // Could not even be queued. The screen says so.
       }
     }
     if (!mounted) return;
 
-    // ---- The write has resolved, queued or failed. Deterrents from here. ----
-
     _eventId = raised?.eventId;
-    // Live location starts with the event. Not a deterrent, so the ordering
-    // rule above does not hold it back — but it has an event to write to only
-    // now. A new panic takes tracking over from any older one still open.
+    // A new panic takes tracking over from any older one still open.
     if (raised != null) _startTracking(raised.eventId);
     state = state.copyWith(
       phase: PanicPhase.active,
       delivery: raised == null ? PanicDelivery.failed : PanicDelivery.queued,
-      requiresPin: _active.hasPins,
     );
-    final lowBattery = battery != null && battery < lowBatteryPercent;
-    await _startDeterrent(shed: lowBattery);
-    _startGuards();
 
     if (raised != null && userId != null) {
       unawaited(raised.delivered.then((ok) {
@@ -302,13 +209,7 @@ class PanicController extends StateNotifier<PanicState> {
     }
   }
 
-  Future<PanicPosition?> _resolvePosition() async {
-    try {
-      final fresh = await _locator.current().timeout(fixTimeout);
-      if (fresh != null) return fresh;
-    } catch (_) {
-      // Timed out or failed; fall back to the cached fix.
-    }
+  Future<PanicPosition?> _lastKnownPosition() async {
     try {
       return await _locator.lastKnown().timeout(lastKnownTimeout);
     } catch (_) {
@@ -316,55 +217,11 @@ class PanicController extends StateNotifier<PanicState> {
     }
   }
 
-  Future<void> _startDeterrent({required bool shed}) async {
-    final s = _active;
-    final torch = s.torchEnabled && !shed && !_backgrounded;
-    if (s.sirenEnabled) await _device.startSiren();
-    if (torch) {
-      await _device.startTorch(
-        periodMs: strobePeriod.inMilliseconds,
-        steady: s.steadyLightMode,
-      );
-    }
-    await _device.acquireScreen();
-    if (!mounted || state.phase != PanicPhase.active) return;
-    state = state.copyWith(
-      sirenOn: s.sirenEnabled,
-      torchOn: torch,
-      screenStrobeOn: s.screenStrobeEnabled && !s.steadyLightMode && !shed,
-      steadyLight: s.steadyLightMode,
-      downgraded: shed,
-    );
-  }
-
-  void _startGuards() {
-    _downgradeTimer = Timer(downgradeAfter, _downgrade);
-    _batteryPoll = Timer.periodic(batteryPollInterval, (_) async {
-      final battery = await _device.batteryPercent();
-      if (battery != null && battery < lowBatteryPercent) _downgrade();
-    });
-  }
-
-  /// Sheds the torch and the screen strobe. The siren and the event stay.
-  void _downgrade() {
-    if (!mounted || state.phase != PanicPhase.active || state.downgraded) {
-      return;
-    }
-    _downgradeTimer?.cancel();
-    _batteryPoll?.cancel();
-    unawaited(_device.stopTorch());
-    state = state.copyWith(
-      torchOn: false,
-      screenStrobeOn: false,
-      downgraded: true,
-    );
-  }
-
-  /// A PIN typed on the active screen.
+  /// A PIN typed on the panic screen.
   ///
-  /// Safe and duress stop the deterrent identically and at the same moment;
-  /// only the write that follows differs. A wrong PIN changes nothing but the
-  /// shake counter — no lockout, and the alarm keeps going.
+  /// Safe and duress end in the same state at the same moment; only what
+  /// follows differs. A wrong PIN changes nothing but the shake counter, and
+  /// never locks the user out.
   void submitPin(String pin) {
     if (state.phase != PanicPhase.active) return;
     switch (PanicPins.check(_active, pin)) {
@@ -380,11 +237,30 @@ class PanicController extends StateNotifier<PanicState> {
     }
   }
 
-  /// Stops the alarm when no PINs were ever set. Refused when they were.
-  void stopWithoutPin() {
+  /// Ends the alert when no PINs were ever set. Refused when they were.
+  void endWithoutPin() {
     if (state.phase != PanicPhase.active || _active.hasPins) return;
     _stopTracking();
     _stop(onEvent: _repository.resolve);
+  }
+
+  void _stop({required Future<void> Function(String eventId) onEvent}) {
+    final eventId = _eventId;
+    _ackSub?.cancel();
+    _ackSub = null;
+    _eventId = null;
+    state = PanicState.stopped;
+    if (eventId != null) {
+      // Not awaited: the screen must not wait on the network, and the time it
+      // would take is exactly the kind of difference an observer notices.
+      unawaited(onEvent(eventId).catchError((_) {}));
+    }
+  }
+
+  /// Leaves the stopped screen.
+  void dismiss() {
+    if (state.phase != PanicPhase.stopped) return;
+    state = PanicState.idle;
   }
 
   /// Ends every open event — including one left running by the duress PIN —
@@ -397,11 +273,7 @@ class PanicController extends StateNotifier<PanicState> {
   /// look identical; only the safe PIN actually ends anything. Returns false
   /// for a wrong PIN. With no PINs configured, any entry ends it.
   Future<bool> endOpenEvents(String pin) async {
-    if (state.phase == PanicPhase.countdown ||
-        state.phase == PanicPhase.dispatching ||
-        state.phase == PanicPhase.active) {
-      return false;
-    }
+    if (state.phase == PanicPhase.dispatching) return false;
     final settings = _settings();
     if (settings.hasPins) {
       switch (PanicPins.check(settings, pin)) {
@@ -415,6 +287,12 @@ class PanicController extends StateNotifier<PanicState> {
       }
     }
     _stopTracking();
+    if (state.phase == PanicPhase.active) {
+      _ackSub?.cancel();
+      _ackSub = null;
+      _eventId = null;
+      state = PanicState.stopped;
+    }
     final userId = _userId();
     if (userId == null) return true;
     try {
@@ -422,8 +300,8 @@ class PanicController extends StateNotifier<PanicState> {
         await _repository.resolve(id);
       }
     } catch (_) {
-      // Queued offline or refused; the safe screen shows either way, and an
-      // unclosed event is the recoverable failure here.
+      // Queued offline or refused; an unclosed event is the recoverable
+      // failure here.
     }
     return true;
   }
@@ -492,68 +370,10 @@ class PanicController extends StateNotifier<PanicState> {
     _lastTrackWrite = null;
   }
 
-  void _stop({required Future<void> Function(String eventId) onEvent}) {
-    final eventId = _eventId;
-    _teardown();
-    state = PanicState.stopped;
-    if (eventId != null) {
-      // Not awaited: the screen must not wait on the network, and the time
-      // it would take is exactly the kind of difference an observer notices.
-      unawaited(onEvent(eventId).catchError((_) {}));
-    }
-  }
-
-  /// Leaves the stopped screen.
-  void dismiss() {
-    if (state.phase != PanicPhase.stopped) return;
-    state = PanicState.idle;
-  }
-
-  /// The app went behind another app or the lock screen. The torch cannot be
-  /// driven from the background on iOS, so it is stopped on both platforms
-  /// alike; the siren carries on through background audio. See spec A.8.5.
-  void onBackgrounded() {
-    _backgrounded = true;
-    if (state.phase != PanicPhase.active || !state.torchOn) return;
-    unawaited(_device.stopTorch());
-    state = state.copyWith(torchOn: false);
-  }
-
-  void onForegrounded() {
-    _backgrounded = false;
-    if (state.phase != PanicPhase.active ||
-        state.torchOn ||
-        state.downgraded ||
-        !_active.torchEnabled) {
-      return;
-    }
-    unawaited(_device.startTorch(
-      periodMs: strobePeriod.inMilliseconds,
-      steady: _active.steadyLightMode,
-    ));
-    state = state.copyWith(torchOn: true);
-  }
-
-  void _teardown() {
-    _countdown?.cancel();
-    _downgradeTimer?.cancel();
-    _batteryPoll?.cancel();
-    _ackSub?.cancel();
-    _countdown = null;
-    _downgradeTimer = null;
-    _batteryPoll = null;
-    _ackSub = null;
-    _eventId = null;
-    unawaited(_device.stopSiren());
-    unawaited(_device.stopTorch());
-    unawaited(_device.releaseScreen());
-  }
-
   @override
   void dispose() {
-    if (state.phase == PanicPhase.active) _teardown();
+    _ackSub?.cancel();
     _stopTracking();
-    _countdown?.cancel();
     super.dispose();
   }
 }
