@@ -21,9 +21,7 @@ const REACTION_EMOJI = {
   love: "\u{1F9E1}",
   fire: "\u{1F525}",
   respect: "\u{1F4AF}",
-  // Explicit medium skin-tone modifier, as on the Dart side, so every viewer
-  // sees the same arm.
-  strong: "\u{1F4AA}\u{1F3FD}",
+  strong: "\u{1F4AA}",
   champion: "\u{1F3C6}",
   celebrate: "\u{1F973}",
   rocket: "\u{1F680}",
@@ -87,6 +85,8 @@ function messageFor(data) {
       return "replied to your comment";
     case "tag":
       return `tagged you in a ${noun}`;
+    case "pulseShare":
+      return `shared your ${noun} to their Pulse`;
     case "challengeInvite":
       return `invited you to ${challengeNoun(data.challengeTitle)}`;
     case "challengeAccepted":
@@ -120,7 +120,8 @@ function routeFor(data) {
     case "mention":
     case "comment":
     case "reply":
-    case "tag": {
+    case "tag":
+    case "pulseShare": {
       const postId = String(data.postId ?? "");
       return postId === "" ? null : `/post/${postId}`;
     }

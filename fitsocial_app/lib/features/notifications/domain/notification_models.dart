@@ -33,6 +33,9 @@ enum FitNotificationType {
   /// Someone attached you to a post from its composer.
   tag,
 
+  /// Someone shared a post of yours to their Pulse.
+  pulseShare,
+
   /// Someone asked you onto a running challenge they created.
   challengeInvite,
 
@@ -74,6 +77,8 @@ enum FitNotificationType {
         return 'reply';
       case FitNotificationType.tag:
         return 'tag';
+      case FitNotificationType.pulseShare:
+        return 'pulseShare';
       case FitNotificationType.challengeInvite:
         return 'challengeInvite';
       case FitNotificationType.challengeAccepted:
@@ -103,6 +108,8 @@ enum FitNotificationType {
         return FitNotificationType.reply;
       case 'tag':
         return FitNotificationType.tag;
+      case 'pulseShare':
+        return FitNotificationType.pulseShare;
       case 'challengeInvite':
         return FitNotificationType.challengeInvite;
       case 'challengeAccepted':
@@ -141,6 +148,11 @@ abstract final class NotificationIds {
       'mention_${sourceId}_$actorId';
 
   static String tag(String postId, String actorId) => 'tag_${postId}_$actorId';
+
+  /// Keyed by post and sharer, so sharing the same post to Pulse twice in a
+  /// day surfaces once, freshly dated, rather than stacking.
+  static String pulseShare(String postId, String actorId) =>
+      'pulseShare_${postId}_$actorId';
 
   /// A comment and a reply are keyed by the comment that was written rather
   /// than by the post or the actor: every one of them is its own event, and
@@ -243,6 +255,8 @@ class FitNotification {
         return 'replied to your comment';
       case FitNotificationType.tag:
         return 'tagged you in a $_likedNoun';
+      case FitNotificationType.pulseShare:
+        return 'shared your $_likedNoun to their Pulse';
       case FitNotificationType.challengeInvite:
         return 'invited you to $_challengeNoun';
       case FitNotificationType.challengeAccepted:
@@ -298,6 +312,7 @@ class FitNotification {
       case FitNotificationType.comment:
       case FitNotificationType.reply:
       case FitNotificationType.tag:
+      case FitNotificationType.pulseShare:
         final id = postId;
         return (id == null || id.isEmpty) ? null : '/post/$id';
       case FitNotificationType.challengeInvite:

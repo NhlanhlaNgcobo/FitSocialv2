@@ -61,9 +61,7 @@ enum FitReaction {
       case FitReaction.respect:
         return '\u{1F4AF}';
       case FitReaction.strong:
-        // Carries an explicit medium skin-tone modifier rather than the
-        // default yellow, so every viewer sees the same arm.
-        return '\u{1F4AA}\u{1F3FD}';
+        return '\u{1F4AA}';
       case FitReaction.champion:
         return '\u{1F3C6}';
       case FitReaction.celebrate:

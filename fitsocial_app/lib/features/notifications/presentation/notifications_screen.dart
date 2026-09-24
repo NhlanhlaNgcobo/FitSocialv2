@@ -233,6 +233,8 @@ Color _accentFor(FitNotification notification, AppPalette palette) {
     case FitNotificationType.mention:
     case FitNotificationType.tag:
       return palette.accent(const Color(0xFF3AA9C9));
+    case FitNotificationType.pulseShare:
+      return palette.brand;
     // Words rather than your name: green keeps a comment from reading as one
     // more row of the same blue @ that a mention already owns.
     case FitNotificationType.comment:
@@ -501,6 +503,8 @@ class _ActorAvatar extends StatelessWidget {
       case FitNotificationType.mention:
       case FitNotificationType.tag:
         return Icons.alternate_email_rounded;
+      case FitNotificationType.pulseShare:
+        return Icons.bolt_rounded;
       // A reply carries the curved arrow — the same glyph the button that
       // wrote it has, so the row points back at the action.
       case FitNotificationType.comment:

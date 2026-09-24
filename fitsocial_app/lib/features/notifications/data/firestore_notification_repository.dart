@@ -247,6 +247,29 @@ class NotificationWrites {
     );
   }
 
+  /// Someone shared the recipient's post to their Pulse.
+  Map<String, dynamic> pulseSharePayload({
+    required String actorId,
+    required String actorName,
+    required String postId,
+    String? actorAvatarUrl,
+    String? postImageUrl,
+    String? postType,
+  }) {
+    return _payload(
+      type: FitNotificationType.pulseShare,
+      actorId: actorId,
+      actorName: actorName,
+      actorAvatarUrl: actorAvatarUrl,
+      extra: {
+        'postId': postId,
+        if (postImageUrl != null && postImageUrl.isNotEmpty)
+          'postImageUrl': postImageUrl,
+        if (postType != null && postType.isNotEmpty) 'postType': postType,
+      },
+    );
+  }
+
   Map<String, dynamic> _payload({
     required FitNotificationType type,
     required String actorId,

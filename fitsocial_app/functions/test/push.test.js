@@ -84,6 +84,7 @@ const EVERY_TYPE = [
   ["comment", { postId: "p1", commentId: "c1", postType: "meal" }],
   ["reply", { postId: "p1", commentId: "c1" }],
   ["tag", { postId: "p1", postType: "workout" }],
+  ["pulseShare", { postId: "p1", postType: "run" }],
   ["challengeInvite", { challengeId: "ch1", challengeTitle: "September 100" }],
   ["challengeAccepted", { challengeId: "ch1", challengeTitle: "September 100" }],
   [

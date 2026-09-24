@@ -4,12 +4,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../shared/async/combine_latest.dart';
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../../main/domain/app_models.dart' show Comment, PublicAuthorName;
 import '../../main/domain/shared_post.dart';
+import '../../notifications/data/firestore_notification_repository.dart';
+import '../../notifications/domain/notification_models.dart';
 import '../domain/pulse_music.dart';
 import '../domain/pulse_models.dart';
 import '../domain/pulse_text_style.dart';
@@ -198,6 +201,16 @@ class FirestorePulseRepository implements PulseRepository {
       'expiresAt': Timestamp.fromDate(expiresAt),
     });
 
+    final shared = draft.sharedPost;
+    if (shared != null && shared.authorId != user.uid) {
+      await _notifySharedPostAuthor(
+        shared,
+        actorId: user.uid,
+        actorName: authorName,
+        actorAvatarUrl: authorAvatarUrl,
+      );
+    }
+
     return PulseSegment(
       id: document.id,
       authorId: user.uid,
@@ -215,6 +228,52 @@ class FirestorePulseRepository implements PulseRepository {
       sharedPost: draft.sharedPost,
       music: draft.music,
     );
+  }
+
+  /// Tells a post's author that it was shared to someone's Pulse.
+  ///
+  /// After the Pulse rather than batched with it, and swallowed on failure:
+  /// the Pulse is what the user asked for, and a lost alert must not take it
+  /// down.
+  Future<void> _notifySharedPostAuthor(
+    SharedPostRef post, {
+    required String actorId,
+    required String actorName,
+    String? actorAvatarUrl,
+  }) async {
+    try {
+      final notifications = NotificationWrites(_firestore);
+      await notifications
+          .ref(post.authorId, NotificationIds.pulseShare(post.postId, actorId))
+          .set(
+            notifications.pulseSharePayload(
+              actorId: actorId,
+              actorName: actorName,
+              actorAvatarUrl: actorAvatarUrl,
+              postId: post.postId,
+              postImageUrl: post.imageUrl,
+              postType: _notificationPostType(post.kind),
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (error) {
+      debugPrint('Pulse published, but its author was not told: $error');
+    }
+  }
+
+  /// The feed's `postType` for a shared card, which is what the notification
+  /// sentence is built from.
+  static String _notificationPostType(SharedPostKind kind) {
+    switch (kind) {
+      case SharedPostKind.photo:
+        return 'image';
+      case SharedPostKind.route:
+        return 'run';
+      case SharedPostKind.workout:
+        return 'workout';
+      case SharedPostKind.text:
+        return 'text';
+    }
   }
 
   @override
