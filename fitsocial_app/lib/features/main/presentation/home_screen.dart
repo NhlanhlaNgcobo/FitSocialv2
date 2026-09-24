@@ -17,14 +17,54 @@ import '../../../shared/widgets/post_card.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
+import '../../../shared/layout/tab_reselect.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _scroll = ScrollController();
+  final _refreshIndicator = GlobalKey<RefreshIndicatorState>();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Home tapped while already on Home: back to the top, then a refresh.
+  ///
+  /// The refresh goes through the pull-to-refresh indicator rather than
+  /// straight to [_refresh], so the spinner shows under the top bar exactly as
+  /// it does when the feed is pulled — the same refresh, reached a second way.
+  Future<void> _backToTopAndRefresh() async {
+    if (_scroll.hasClients && _scroll.offset > 0) {
+      // A long way down, most of the distance is skipped so the glide back is
+      // one short movement rather than a long spin through every post.
+      final screen = _scroll.position.viewportDimension;
+      if (_scroll.offset > screen * 3) _scroll.jumpTo(screen * 1.5);
+      await _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (!mounted) return;
+    await _refreshIndicator.currentState?.show();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<int>(
+      homeTabReselectProvider,
+      (_, __) => _backToTopAndRefresh(),
+    );
     final posts = ref.watch(feedPostsProvider);
     final rows = _rows(posts, ref);
 
@@ -57,6 +97,7 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
+        key: _refreshIndicator,
         onRefresh: () => _refresh(ref),
         color: context.palette.brand,
         backgroundColor: context.palette.surface,
@@ -65,6 +106,7 @@ class HomeScreen extends ConsumerWidget {
         // it is the one thing on this screen that should not be refracted.
         displacement: GlassTopBar.clearance(context) + AppSpacing.sm,
         child: ListView.builder(
+          controller: _scroll,
           // Without this the gesture is only available once the feed is long
           // enough to scroll — which is exactly when a stale feed is least
           // worth refreshing, and an empty one could never be recovered.
@@ -125,7 +167,8 @@ class HomeScreen extends ConsumerWidget {
       ...posts.when(
         data: (feed) => _buildFeed(feed, ref),
         loading: () => const [_SectionPlaceholder(label: 'Loading feed...')],
-        error: (_, __) => const [_SectionPlaceholder(label: 'Feed unavailable')],
+        error: (_, __) =>
+            const [_SectionPlaceholder(label: 'Feed unavailable')],
       ),
     ];
   }

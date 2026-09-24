@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_palette.dart';
@@ -8,17 +9,21 @@ import '../../features/tracking/application/run_import_sync.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/offline_banner.dart';
 import 'nav_visibility.dart';
+import 'tab_reselect.dart';
 
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
+  /// Home's place in the nav bar.
+  static const int _homeIndex = 0;
+
   /// Drives whether the nav is on screen, from scroll direction.
   ///
   /// Exposes a notifier rather than calling setState so a scroll rebuilds only
@@ -43,10 +48,13 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _onTap(int index) {
-    widget.navigationShell.goBranch(
-      index,
-      initialLocation: index == widget.navigationShell.currentIndex,
-    );
+    final reselected = index == widget.navigationShell.currentIndex;
+    // Home tapped while already on Home: the feed scrolls back to the top and
+    // refreshes. From any other tab, Home only switches back to it.
+    if (reselected && index == _homeIndex) {
+      ref.read(homeTabReselectProvider.notifier).state++;
+    }
+    widget.navigationShell.goBranch(index, initialLocation: reselected);
   }
 
   @override
