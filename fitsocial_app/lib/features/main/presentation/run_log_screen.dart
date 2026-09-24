@@ -30,6 +30,7 @@ import '../../tracking/domain/run_pace.dart';
 import '../application/activity_actions.dart';
 import '../domain/activity_kind.dart';
 import '../domain/app_models.dart';
+import 'tag_people_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
@@ -67,6 +68,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   /// seconds all the way to the post.
   Duration _elapsed = Duration.zero;
   bool _shareToFeed = true;
+  List<TaggedUser> _taggedUsers = const [];
   bool _isSaving = false;
 
   /// The health-store session the form was filled from, if it was. Carried
@@ -273,6 +275,14 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
     setState(() => _backgroundPath = path);
   }
 
+  /// Null is a dismissal and leaves the selection alone; an empty list is a
+  /// deliberate "nobody".
+  Future<void> _pickTaggedPeople() async {
+    final picked = await showTagPeopleSheet(context, selected: _taggedUsers);
+    if (picked == null || !mounted) return;
+    setState(() => _taggedUsers = picked);
+  }
+
   Future<void> _saveRun() async {
     if (!_isComplete) {
       setState(() {
@@ -301,6 +311,7 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
               // no start worth recording beyond "now".
               startedAt: _healthPrefill?.record.startedAt,
               heartRate: _healthPrefill?.heartRate,
+              taggedUsers: _shareToFeed ? _taggedUsers : const [],
             ),
           );
       if (!mounted) return;
@@ -537,6 +548,13 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
               },
             ),
           ),
+          if (_shareToFeed) ...[
+            const SizedBox(height: AppSpacing.md),
+            TagPeopleRow(
+              tagged: _taggedUsers,
+              onTap: _isSaving ? null : _pickTaggedPeople,
+            ),
+          ],
           if (_errorMessage != null) ...[
             const SizedBox(height: AppSpacing.md),
             _ErrorBanner(message: _errorMessage!),

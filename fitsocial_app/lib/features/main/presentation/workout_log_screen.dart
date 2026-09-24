@@ -28,6 +28,7 @@ import '../application/activity_actions.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import 'exercise_editor_sheet.dart';
+import 'tag_people_sheet.dart';
 
 /// The training log.
 ///
@@ -58,6 +59,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   final List<ExerciseEntry> _exercises = [];
 
   bool _shareToFeed = true;
+  List<TaggedUser> _taggedUsers = const [];
   bool _isSaving = false;
   String? _errorMessage;
 
@@ -129,6 +131,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
         shareToFeed: _shareToFeed,
         backgroundImagePath: _backgroundPath,
         loggedAt: _loggedAt,
+        taggedUsers: _shareToFeed ? _taggedUsers : const [],
       );
 
   /// Whether there is a card worth saving yet. A photo or a lift is enough;
@@ -264,6 +267,14 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     setState(() => _backgroundPath = path);
   }
 
+  /// Null is a dismissal and leaves the selection alone; an empty list is a
+  /// deliberate "nobody".
+  Future<void> _pickTaggedPeople() async {
+    final picked = await showTagPeopleSheet(context, selected: _taggedUsers);
+    if (picked == null || !mounted) return;
+    setState(() => _taggedUsers = picked);
+  }
+
   Future<void> _saveWorkout() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
@@ -378,6 +389,13 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                       ? null
                       : () => setState(() => _backgroundPath = null),
                 ),
+                if (_shareToFeed) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  TagPeopleRow(
+                    tagged: _taggedUsers,
+                    onTap: _isSaving ? null : _pickTaggedPeople,
+                  ),
+                ],
                 // The card as a file, the way the run and meal screens offer
                 // theirs. Under the photo row because the photo is the one
                 // thing here that changes what the card looks like rather

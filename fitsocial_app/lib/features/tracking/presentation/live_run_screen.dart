@@ -284,6 +284,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
               showRouteMap: choice.showRouteMap,
               backgroundImagePath: choice.backgroundImagePath,
               heartRate: heartRate.hasData ? heartRate : null,
+              taggedUsers: choice.taggedUsers,
             ),
           );
       // Only now: if the app dies between stop() and here, the run is still

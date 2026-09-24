@@ -31,6 +31,56 @@ Future<List<TaggedUser>?> showTagPeopleSheet(
   );
 }
 
+/// "Tag people", and who has been tagged so far.
+///
+/// Sits inside whatever is being written — the composer card, the finish
+/// sheet, the log form — rather than in a separate panel, because tagging is
+/// part of writing the post.
+class TagPeopleRow extends StatelessWidget {
+  const TagPeopleRow({required this.tagged, required this.onTap, super.key});
+
+  final List<TaggedUser> tagged;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: [
+          Icon(Icons.alternate_email_rounded,
+              size: 18, color: palette.brandText),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tagged.isEmpty ? 'Tag people' : _names(tagged),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: tagged.isEmpty ? palette.muted : palette.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, size: 20, color: palette.muted),
+        ],
+      ),
+    );
+  }
+
+  /// The handles, or a count once the list is too long to read at a glance.
+  static String _names(List<TaggedUser> tagged) {
+    if (tagged.length > 3) return '${tagged.length} people tagged';
+    return tagged
+        .map((it) => it.handle.isEmpty ? it.displayName : '@${it.handle}')
+        .join(', ');
+  }
+}
+
 class _TagPeopleSheet extends ConsumerStatefulWidget {
   const _TagPeopleSheet({required this.initial});
 

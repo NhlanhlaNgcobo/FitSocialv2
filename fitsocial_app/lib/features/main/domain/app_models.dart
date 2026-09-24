@@ -496,9 +496,14 @@ class WorkoutLogDraft {
     required this.shareToFeed,
     this.backgroundImagePath,
     this.loggedAt,
+    this.taggedUsers = const [],
   });
 
   final String title;
+
+  /// The people attached to the shared post. Ignored when [shareToFeed] is
+  /// off: with no post there is nothing to tag them in.
+  final List<TaggedUser> taggedUsers;
 
   /// When the session happened. Null means "now", which is every workout
   /// typed in by hand; a session pulled from the health store carries its own
@@ -680,9 +685,14 @@ class RunLogDraft {
     this.startedAt,
     this.backgroundImagePath,
     this.heartRate,
+    this.taggedUsers = const [],
   });
 
   final double distanceKm;
+
+  /// The people attached to the shared post. Ignored when [shareToFeed] is
+  /// off, same as [WorkoutLogDraft.taggedUsers].
+  final List<TaggedUser> taggedUsers;
   final Duration elapsed;
 
   /// The headline second metric, already formatted: a pace ("5:26 /km") on

@@ -16,6 +16,7 @@ import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/save_run_card_row.dart';
 import '../../../shared/widgets/share_to_feed_toggle.dart';
 import '../../main/domain/app_models.dart';
+import '../../main/presentation/tag_people_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// What the runner decided on the way out of a tracked run.
@@ -25,6 +26,7 @@ class FinishRunChoice {
     this.backgroundImagePath,
     this.discard = false,
     this.showRouteMap = false,
+    this.taggedUsers = const [],
   });
 
   /// What the sheet falls back to when it is dismissed by the system back
@@ -52,6 +54,10 @@ class FinishRunChoice {
   /// Local path of the photo to sit behind the run card, or null for the
   /// gradient. With [showRouteMap] this is the picture of the map instead.
   final String? backgroundImagePath;
+
+  /// The people tagged in the shared post. Always empty for a run going to
+  /// drafts: tagging needs to search accounts, which needs a connection.
+  final List<TaggedUser> taggedUsers;
 }
 
 /// The last step of a tracked run: see the card, optionally put a photo behind
@@ -112,6 +118,7 @@ class _FinishRunSheet extends StatefulWidget {
 class _FinishRunSheetState extends State<_FinishRunSheet> {
   String? _backgroundPath;
   bool _shareToFeed = true;
+  List<TaggedUser> _taggedUsers = const [];
 
   /// Off to start with: the map names where the run began, so it is shown
   /// only when the runner decides to show it.
@@ -152,8 +159,15 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
         shareToFeed: _shareToFeed,
         backgroundImagePath: backgroundPath,
         showRouteMap: _showMap,
+        taggedUsers: _shareToFeed ? _taggedUsers : const [],
       ),
     );
+  }
+
+  Future<void> _pickTaggedPeople() async {
+    final picked = await showTagPeopleSheet(context, selected: _taggedUsers);
+    if (picked == null || !mounted) return;
+    setState(() => _taggedUsers = picked);
   }
 
   Future<void> _pickBackground(ImageSource source) async {
@@ -300,6 +314,13 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                       : 'Post this run to your profile activity',
                   onChanged: (value) => setState(() => _shareToFeed = value),
                 ),
+                if (_shareToFeed && !widget.saveToDrafts) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  TagPeopleRow(
+                    tagged: _taggedUsers,
+                    onTap: _saving ? null : _pickTaggedPeople,
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 PrimaryButton(
                   icon: widget.saveToDrafts

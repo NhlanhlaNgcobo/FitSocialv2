@@ -1352,6 +1352,7 @@ class FirestoreContentRepository implements ContentRepository {
       postType: 'workout',
       imageUrl: backgroundUrl,
       workoutData: draft.workoutData,
+      taggedUsers: draft.taggedUsers,
     );
     await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(workoutsDelta: 1);
@@ -1513,6 +1514,7 @@ class FirestoreContentRepository implements ContentRepository {
       routePoints: route,
       // Only meaningful with a trace to put on it; a manual run has none.
       showRouteMap: draft.showRouteMap && route.length >= 2,
+      taggedUsers: draft.taggedUsers,
     );
     await _linkLogToPost(logRef, result.post.id);
     await _incrementUser(runsDelta: 1, runDistanceKm: recordDistanceKm);

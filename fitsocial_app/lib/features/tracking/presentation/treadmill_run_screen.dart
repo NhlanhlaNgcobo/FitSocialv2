@@ -185,6 +185,7 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
               // No trace to record: the run happened on the spot.
               backgroundImagePath: choice.backgroundImagePath,
               heartRate: heartRate.hasData ? heartRate : null,
+              taggedUsers: choice.taggedUsers,
             ),
           );
       if (!mounted) return;
