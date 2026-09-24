@@ -44,3 +44,11 @@ application_default_credentials.json
 # Local editor/agent workspace settings. Per-machine tool configuration that
 # carries no project meaning and differs for every collaborator.
 .claude/
+
+# Scratch files for credentials. Keys belong in Secret Manager
+# (firebase functions:secrets:set NAME), never in the repository. These names
+# are listed so a key pasted into one of them can never be committed.
+firebase.txt
+*api key*.txt
+*key vs*.txt
+*.key.txt
