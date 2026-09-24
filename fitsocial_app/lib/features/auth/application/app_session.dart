@@ -318,6 +318,30 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  /// Whether Settings should offer to add a password. See
+  /// [AuthRepository.canAddPassword].
+  bool get canAddPassword => authRepository.canAddPassword();
+
+  /// Adds a password to the signed-in account. Returns true only when Firebase
+  /// accepted it; on false, [errorMessage] says why.
+  ///
+  /// Uses [_setLoading] like the other account actions, but never changes the
+  /// stage: the user is already in, and this only adds another way back.
+  Future<bool> addPassword(String password) async {
+    _setLoading(true);
+    _errorMessage = null;
+    try {
+      await authRepository.addPassword(password);
+      return true;
+    } catch (error) {
+      _errorMessage = describeAuthError(error);
+      return false;
+    } finally {
+      _setLoading(false, shouldNotify: false);
+      notifyListeners();
+    }
+  }
+
   Future<void> signOut() async {
     _errorMessage = null;
     try {

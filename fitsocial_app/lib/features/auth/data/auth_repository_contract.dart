@@ -48,6 +48,22 @@ abstract class AuthRepository {
 
   Future<String> continueWithProvider(String providerName);
 
+  /// Whether the signed-in account can have a password added to it: it has an
+  /// email address, and no password yet.
+  ///
+  /// False for most accounts. It is true for anyone who only ever used Google,
+  /// and for anyone whose password Firebase removed when they first signed in
+  /// with Google on an unverified address. For those accounts Forgot Password
+  /// is no help: there is no password to reset, and no email is sent.
+  bool canAddPassword();
+
+  /// Adds [password] to the signed-in account, so it can also be opened with
+  /// its email (or username) and that password.
+  ///
+  /// Throws if Firebase refuses. The usual reason is that the sign-in is too
+  /// old for an action like this, and the fix is to sign in again.
+  Future<void> addPassword(String password);
+
   /// Sends a Firebase password-reset email to [email].
   Future<void> sendPasswordResetEmail(String email);
 

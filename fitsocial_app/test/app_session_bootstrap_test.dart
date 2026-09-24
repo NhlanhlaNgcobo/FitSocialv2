@@ -175,6 +175,12 @@ class _FakeAuth implements AuthRepository {
   int signOutCount = 0;
 
   @override
+  bool canAddPassword() => false;
+
+  @override
+  Future<void> addPassword(String password) async {}
+
+  @override
   String? currentUserId() => 'uid_test';
 
   @override

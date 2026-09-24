@@ -16,6 +16,7 @@ import '../../music/presentation/music_island_action.dart';
 import '../../notifications/application/push_providers.dart';
 import '../../tracking/application/run_draft_providers.dart';
 import 'delete_account_sheet.dart';
+import 'set_password_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// One accent per row, following the Create screen's rule: a hue identifies
@@ -36,7 +37,8 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(appSessionProvider).profile;
+    final session = ref.watch(appSessionProvider);
+    final profile = session.profile;
     final displayName = profile?.displayName ?? 'FitSocial User';
 
     return Scaffold(
@@ -79,6 +81,17 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Badges you have earned so far',
                 onTap: () => context.push('/achievements'),
               ),
+              // Only for accounts with no password — usually Google-only ones.
+              // For them Forgot Password silently sends nothing, so without
+              // this the account has exactly one way in.
+              if (session.canAddPassword)
+                _SettingsTile(
+                  icon: Icons.password_rounded,
+                  accent: _kProfileAccent,
+                  label: 'Set a password',
+                  subtitle: 'So you can also log in with your email',
+                  onTap: () => _setPassword(context),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -202,6 +215,18 @@ class SettingsScreen extends ConsumerWidget {
       icon: Icons.error_outline_rounded,
       tone: ToastTone.danger,
       visibleFor: const Duration(milliseconds: 4000),
+    );
+  }
+
+  Future<void> _setPassword(BuildContext context) async {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final added = await showSetPasswordSheet(context);
+    if (!added) return;
+    showQuickToastOn(
+      overlay,
+      'Password set. You can now log in with it.',
+      icon: Icons.check_circle_outline_rounded,
+      tone: ToastTone.success,
     );
   }
 

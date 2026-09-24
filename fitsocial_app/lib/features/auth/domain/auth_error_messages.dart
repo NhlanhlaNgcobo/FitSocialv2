@@ -63,7 +63,13 @@ String describeAuthError(Object error) {
       case 'account-exists-with-different-credential':
         return 'That email is already registered with a different sign-in method.';
       case 'requires-recent-login':
-        return 'Please log in again to continue.';
+        // Most often hit by an account-security change on a session that is
+        // days old. "Log in again" alone reads as though they were logged out.
+        return 'For your security, sign out and sign back in, then try again.';
+      case 'provider-already-linked':
+        return 'This account already has a password.';
+      case 'credential-already-in-use':
+        return 'That sign-in is already used by another account.';
       default:
         return error.message ?? 'Something went wrong. Please try again.';
     }

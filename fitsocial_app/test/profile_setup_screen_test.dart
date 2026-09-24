@@ -172,6 +172,12 @@ Future<void> _pumpScreen(
 
 class _FakeAuth implements AuthRepository {
   @override
+  bool canAddPassword() => false;
+
+  @override
+  Future<void> addPassword(String password) async {}
+
+  @override
   String? currentUserId() => 'uid_test';
 
   @override

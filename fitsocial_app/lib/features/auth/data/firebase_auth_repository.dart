@@ -187,6 +187,31 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  bool canAddPassword() {
+    final user = _firebaseAuth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) return false;
+    return !user.providerData.any(
+      (info) => info.providerId == EmailAuthProvider.PROVIDER_ID,
+    );
+  }
+
+  @override
+  Future<void> addPassword(String password) async {
+    final user = _firebaseAuth.currentUser;
+    final email = user?.email;
+    if (user == null || email == null || email.isEmpty) {
+      throw StateError('This account has no email to attach a password to.');
+    }
+    await user.linkWithCredential(
+      EmailAuthProvider.credential(email: email, password: password),
+    );
+    // linkWithCredential updates the server, not the providerData cached on
+    // this user object. Reloading is what makes canAddPassword say false.
+    await user.reload();
+  }
+
+  @override
   Future<void> sendPasswordResetEmail(String email) {
     return _firebaseAuth.sendPasswordResetEmail(email: email.trim());
   }

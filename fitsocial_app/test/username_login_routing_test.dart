@@ -127,6 +127,12 @@ class _RecordingAuth implements AuthRepository {
   final List<String> usernameSignIns = [];
 
   @override
+  bool canAddPassword() => false;
+
+  @override
+  Future<void> addPassword(String password) async {}
+
+  @override
   String? currentUserId() => 'uid_test';
 
   @override

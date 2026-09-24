@@ -201,6 +201,12 @@ class _FakeAuth implements AuthRepository {
   final List<String> events = [];
 
   @override
+  bool canAddPassword() => false;
+
+  @override
+  Future<void> addPassword(String password) async {}
+
+  @override
   String? currentUserId() => email == null ? null : 'uid_test';
 
   @override

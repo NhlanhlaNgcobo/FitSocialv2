@@ -47,6 +47,14 @@ class UnconfiguredAuthRepository implements AuthRepository {
   }
 
   @override
+  bool canAddPassword() => false;
+
+  @override
+  Future<void> addPassword(String password) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<void> sendPasswordResetEmail(String email) async {
     throw StateError(_firebaseSetupMessage);
   }
