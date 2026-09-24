@@ -8,6 +8,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/comment_composer.dart';
+import '../../../shared/widgets/double_tap_react.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/mention_text.dart';
 import '../../../shared/widgets/post_card.dart';
@@ -220,10 +221,12 @@ class _PostPageState extends ConsumerState<_PostPage> {
               ),
               child: TaggedUsersLine(tagged: post.taggedUsers),
             ),
-          if (media == _MediaKind.none)
-            _TextHero(post: post)
-          else
-            _MediaBlock(post: post, kind: media),
+          DoubleTapReact(
+            postId: post.id,
+            child: media == _MediaKind.none
+                ? _TextHero(post: post)
+                : _MediaBlock(post: post, kind: media),
+          ),
           // Only the numbers the block above hasn't already shown — a workout
           // spells out its own duration and calories, and a run card carries
           // its distance and time, so a full strip underneath either is the

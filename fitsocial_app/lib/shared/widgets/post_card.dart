@@ -14,6 +14,7 @@ import '../identity/profile_identity.dart';
 import 'app_photo.dart';
 import 'avatar.dart';
 import 'confirm_destructive_sheet.dart';
+import 'double_tap_react.dart';
 import 'liquid_glass.dart';
 import 'mention_text.dart';
 import 'network_photo_aspect.dart';
@@ -229,10 +230,13 @@ class PostCard extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 8),
                 child: TaggedUsersLine(tagged: taggedUsers),
               ),
-            if (_hasPayload)
-              _buildPayload(palette)
-            else
-              _buildBodyText(palette),
+            // Double-tap the body — media or words — for a 🧡.
+            DoubleTapReact(
+              postId: postId,
+              child: _hasPayload
+                  ? _buildPayload(palette)
+                  : _buildBodyText(palette),
+            ),
             PostInteractionRow(
               post: _shareRef,
               runCard: _runCardExport,
