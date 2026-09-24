@@ -4,7 +4,7 @@ import '../../../app/theme/app_colors.dart';
 
 /// What a logged session is.
 ///
-/// The three GPS kinds all live in the `runs` collection and share one document
+/// The four GPS kinds all live in the `runs` collection and share one document
 /// shape — a route, a distance, a duration. `activityType` on the document is
 /// what tells them apart, and a document with no such field is a [run], because
 /// that is every run logged before the field existed. Absence is the migration;
@@ -13,7 +13,7 @@ import '../../../app/theme/app_colors.dart';
 /// [workout] is the odd one out: a form, in its own collection, with no route
 /// and no GPS. [ActivityKindX.isGps] is the line between them, and it is the
 /// test to reach for rather than `!= workout` or `== run`.
-enum ActivityKind { run, hike, ride, workout }
+enum ActivityKind { walk, run, hike, ride, workout }
 
 extension ActivityKindX on ActivityKind {
   /// Whether this kind is recorded by following the user around: a route, a
@@ -76,7 +76,7 @@ class ActivityDescriptor {
 
   final ActivityKind kind;
 
-  /// "Run", "Hike", "Ride", "Workout". Used for session titles and for the
+  /// "Walk", "Run", "Hike", "Ride", "Workout". Used for session titles and for the
   /// `activity` label written onto a shared post.
   final String singular;
   final String plural;
@@ -109,6 +109,20 @@ class ActivityDescriptor {
     accent: Color(0xFF2ECBFF),
     usesPace: true,
     kcalPerKm: kcalPerKilometre,
+    kcalPerHour: 0,
+  );
+
+  static const _walk = ActivityDescriptor._(
+    kind: ActivityKind.walk,
+    singular: 'Walk',
+    plural: 'Walks',
+    icon: Icons.directions_walk_rounded,
+    // Violet: clear of the run's blue and the hike's green, which are the two
+    // it will most often sit beside.
+    accent: Color(0xFFA98BFF),
+    usesPace: true,
+    // A little under a hike: same legs, no climb and no pack.
+    kcalPerKm: 50,
     kcalPerHour: 0,
   );
 
@@ -154,14 +168,16 @@ class ActivityDescriptor {
   );
 
   static ActivityDescriptor of(ActivityKind kind) => switch (kind) {
+        ActivityKind.walk => _walk,
         ActivityKind.run => _run,
         ActivityKind.hike => _hike,
         ActivityKind.ride => _ride,
         ActivityKind.workout => _workout,
       };
 
-  /// The three kinds offered by the GPS tracker, in the order they are shown.
+  /// The four kinds offered by the GPS tracker, in the order they are shown.
   static const List<ActivityKind> gpsKinds = [
+    ActivityKind.walk,
     ActivityKind.run,
     ActivityKind.hike,
     ActivityKind.ride,

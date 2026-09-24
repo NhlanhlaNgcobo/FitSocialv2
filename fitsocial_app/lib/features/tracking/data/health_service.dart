@@ -364,6 +364,7 @@ class HealthService implements RunSessionSource, WorkoutSessionSource {
       HealthWorkoutActivityType.RUNNING ||
       HealthWorkoutActivityType.RUNNING_TREADMILL =>
         ActivityKind.run,
+      HealthWorkoutActivityType.WALKING => ActivityKind.walk,
       HealthWorkoutActivityType.HIKING => ActivityKind.hike,
       // BIKING is what Health Connect calls an outdoor ride; on iOS the same
       // constant is HealthKit's CYCLING. A stationary bike is

@@ -85,6 +85,20 @@ class GpsActivityProfile {
     notificationText: 'Tracking your distance, time and route.',
   );
 
+  static const walk = GpsActivityProfile(
+    kind: ActivityKind.walk,
+    teleportMaxSpeed: 12,
+    driftRejectSpeed: 0.6,
+    // ~1.4 km/h. A stroll is slower than a run's stationary threshold, and a
+    // walk should not pause itself every time the pace eases off; the drift
+    // threshold above still rejects standing still.
+    autoPauseSpeed: 0.4,
+    minSegmentMeters: 4,
+    usesStepFusion: true,
+    notificationTitle: 'FitSocial — walk in progress',
+    notificationText: 'Tracking your distance, time and route.',
+  );
+
   static const hike = GpsActivityProfile(
     kind: ActivityKind.hike,
     teleportMaxSpeed: 12,
@@ -118,6 +132,7 @@ class GpsActivityProfile {
   /// A workout never reaches here — it has no GPS — but returning the run
   /// profile is the safe answer if one ever does.
   static GpsActivityProfile forKind(ActivityKind kind) => switch (kind) {
+        ActivityKind.walk => walk,
         ActivityKind.run => run,
         ActivityKind.hike => hike,
         ActivityKind.ride => ride,

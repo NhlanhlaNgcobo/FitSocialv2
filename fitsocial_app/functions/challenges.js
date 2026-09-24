@@ -100,8 +100,8 @@ const TASK_KEYS = Object.keys(TASKS);
  * Which entries in the `runs` collection count toward the runWalk task.
  *
  * `runs` holds every GPS activity, not only runs: an `activityType` field of
- * "run", "hike" or "ride" discriminates them. 75 Hard's rule is a walk *or* a
- * run, so a hike counts; a bike ride is neither and does not.
+ * "walk", "run", "hike" or "ride" discriminates them. 75 Hard's rule is a walk
+ * *or* a run, so a walk and a hike count; a bike ride is neither and does not.
  *
  * A missing value means "run". Every document written before activityType
  * existed has no such field, and `doc.get()` returns undefined for those —
@@ -115,7 +115,7 @@ const TASK_KEYS = Object.keys(TASKS);
  * FAILED_PRECONDITION inside the Promise.all below — the outage described at
  * length above activityInDay. The filter is not worth that risk.
  */
-const FOOT_ACTIVITIES = new Set(["run", "hike"]);
+const FOOT_ACTIVITIES = new Set(["walk", "run", "hike"]);
 
 function isFootActivity(activityType) {
   return (

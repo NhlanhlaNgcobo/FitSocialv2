@@ -108,6 +108,7 @@ test("isFootActivity: absent, empty and unknown values all read as a run", () =>
   assert.equal(isFootActivity(""), true);
 
   assert.equal(isFootActivity("run"), true);
+  assert.equal(isFootActivity("walk"), true);
   assert.equal(isFootActivity("hike"), true);
   assert.equal(isFootActivity("ride"), false);
 });
