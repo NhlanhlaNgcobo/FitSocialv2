@@ -26,6 +26,7 @@ import '../domain/run_draft.dart';
 import '../data/treadmill_run_service.dart';
 import 'finish_run_sheet.dart';
 import 'run_session_widgets.dart';
+import 'start_countdown.dart';
 import '../../../shared/widgets/form_section_header.dart';
 import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -79,8 +80,9 @@ class _TreadmillRunScreenState extends ConsumerState<TreadmillRunScreen>
     super.dispose();
   }
 
-  void _start() {
+  Future<void> _start() async {
     setState(() => _errorMessage = null);
+    if (!await showStartCountdown(context) || !mounted) return;
     ref.read(treadmillRunServiceProvider).start();
     ref
         .read(heartRateRecorderProvider)

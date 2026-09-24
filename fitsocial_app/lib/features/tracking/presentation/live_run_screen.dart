@@ -34,6 +34,7 @@ import 'live_share_card.dart';
 import 'recover_run_sheet.dart';
 import 'run_map_readout.dart';
 import 'run_session_widgets.dart';
+import 'start_countdown.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
@@ -168,6 +169,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
 
   Future<void> _start() async {
     setState(() => _errorMessage = null);
+    if (!await showStartCountdown(context) || !mounted) return;
     try {
       final service = ref.read(liveRunServiceProvider);
       // Gives the stride estimate a starting point from the runner's own
@@ -439,7 +441,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Run'),
+        title: Text('Live ${widget.kind.descriptor.singular}'),
         actions: [
           const MusicIslandAction(),
           RunHeartRateAction(
@@ -569,7 +571,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                   isTracking: runState.isTracking,
                   isPaused: runState.isPaused,
                   isSaving: _isSaving,
-                  startLabel: 'Start GPS Run',
+                  startLabel: 'Start ${widget.kind.descriptor.singular}',
                   onStart: _start,
                   onPause: () => ref.read(liveRunServiceProvider).pause(),
                   onResume: () => ref.read(liveRunServiceProvider).resume(),

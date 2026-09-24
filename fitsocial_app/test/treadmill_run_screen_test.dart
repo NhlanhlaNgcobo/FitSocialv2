@@ -25,6 +25,17 @@ void main() {
 
   void advance(Duration by) => now = now.add(by);
 
+  /// Presses Start and lets the 3 · 2 · 1 · GO countdown run out, so the run
+  /// is recording by the time the test looks at it.
+  Future<void> tapStart(WidgetTester tester) async {
+    await tester.tap(find.text('Start Treadmill Run'));
+    await tester.pump();
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.pump(const Duration(milliseconds: 300));
+  }
+
   setUp(() {
     now = DateTime(2026, 8, 16, 7);
     service = TreadmillRunService(now: () => now);
@@ -128,7 +139,7 @@ void main() {
   testWidgets('start runs the clock off the wall clock, not off frames',
       (tester) async {
     await pumpScreen(tester);
-    await tester.tap(find.text('Start Treadmill Run'));
+    await tapStart(tester);
     await tester.pump();
 
     expect(find.text('LIVE'), findsOneWidget);
@@ -145,7 +156,7 @@ void main() {
 
   testWidgets('pausing holds the clock and offers to resume', (tester) async {
     await pumpScreen(tester);
-    await tester.tap(find.text('Start Treadmill Run'));
+    await tapStart(tester);
     advance(const Duration(minutes: 4));
     await tester.pump(const Duration(seconds: 1));
 
@@ -164,7 +175,7 @@ void main() {
 
   testWidgets('the typed distance drives the pace on the card', (tester) async {
     await pumpScreen(tester);
-    await tester.tap(find.text('Start Treadmill Run'));
+    await tapStart(tester);
     advance(const Duration(minutes: 30));
     await tester.pump(const Duration(seconds: 1));
 
@@ -180,7 +191,7 @@ void main() {
   testWidgets('finishing without a distance keeps the run alive',
       (tester) async {
     await pumpScreen(tester);
-    await tester.tap(find.text('Start Treadmill Run'));
+    await tapStart(tester);
     advance(const Duration(minutes: 20));
     await tester.pump(const Duration(seconds: 1));
 
@@ -212,7 +223,7 @@ void main() {
 
     await pumpSaveableScreen(tester, strap: strap, actions: actions);
 
-    await tester.tap(find.text('Start Treadmill Run'));
+    await tapStart(tester);
     await tester.pump();
 
     // A strap reporting steadily across the run.
@@ -245,7 +256,7 @@ void main() {
 
     await pumpSaveableScreen(tester, strap: strap, actions: actions);
 
-    await tester.tap(find.text('Start Treadmill Run'));
+    await tapStart(tester);
     await tester.pump();
     advance(const Duration(minutes: 30));
     await tester.pump(const Duration(seconds: 1));
