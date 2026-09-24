@@ -87,11 +87,11 @@ abstract final class AppTheme {
         ),
       ),
       dialogTheme: DialogThemeData(
-        // Transparent, because every dialog is wrapped in liquid glass and the
-        // lens supplies the surface. One shape for all of them, set here rather
-        // than site by site — an inconsistency that was invisible while they
-        // were opaque slabs and obvious once they are panes.
-        backgroundColor: Colors.transparent,
+        // Solid, not glass. A dialog route fills the screen, so wrapping one in
+        // LiquidGlass tints the whole page instead of the card and leaves the
+        // card see-through over whatever it interrupted. One shape for all of
+        // them, set here rather than site by site.
+        backgroundColor: palette.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(22),

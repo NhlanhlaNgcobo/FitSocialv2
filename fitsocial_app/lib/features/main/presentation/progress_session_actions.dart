@@ -266,32 +266,27 @@ class SessionMenu extends ConsumerWidget {
     final palette = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => LiquidGlass(
-        // A dialog interrupts a page, so there is always something
-        // behind it -- which makes it glass like everything else.
-        borderRadius: BorderRadius.circular(22),
-        child: AlertDialog(
-          title: const Text('Delete this log?'),
-          content: Text(
-            session.sharedToFeed
-                // Said out loud, because the two are easy to conflate and only
-                // one of them is about to happen.
-                ? 'The session is removed from your progress and its squares. '
-                    'The post you shared stays on the feed.'
-                : 'The session is removed from your progress and its squares. '
-                    'This cannot be undone.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text('Delete', style: TextStyle(color: palette.danger)),
-            ),
-          ],
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this log?'),
+        content: Text(
+          session.sharedToFeed
+              // Said out loud, because the two are easy to conflate and only
+              // one of them is about to happen.
+              ? 'The session is removed from your progress and its squares. '
+                  'The post you shared stays on the feed.'
+              : 'The session is removed from your progress and its squares. '
+                  'This cannot be undone.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Delete', style: TextStyle(color: palette.danger)),
+          ),
+        ],
       ),
     );
 

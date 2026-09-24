@@ -173,26 +173,21 @@ class _PulseCommentRow extends ConsumerWidget {
     final palette = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => LiquidGlass(
-        // A dialog interrupts a page, so there is always something
-        // behind it -- which makes it glass like everything else.
-        borderRadius: BorderRadius.circular(22),
-        child: AlertDialog(
-          title: const Text('Delete this comment?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Keep'),
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this comment?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: palette.danger),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(
-                'Delete',
-                style: TextStyle(color: palette.danger),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
     if (confirmed != true || !context.mounted) return;

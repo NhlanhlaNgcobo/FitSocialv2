@@ -24,7 +24,6 @@ import 'pulse_reactions_sheet.dart';
 import 'pulse_photo_frame.dart';
 import 'pulse_text.dart';
 import 'pulse_viewers_sheet.dart';
-import '../../../shared/widgets/liquid_glass.dart';
 
 /// Full-screen Pulse playback.
 ///
@@ -347,29 +346,24 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
     _setPaused(true);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => LiquidGlass(
-        // A dialog interrupts a page, so there is always something
-        // behind it -- which makes it glass like everything else.
-        borderRadius: BorderRadius.circular(22),
-        child: AlertDialog(
-          title: const Text('Delete this Pulse?'),
-          content: const Text(
-            "It will disappear for everyone straight away. This can't be undone.",
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Keep'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(
-                'Delete',
-                style: TextStyle(color: context.palette.danger),
-              ),
-            ),
-          ],
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this Pulse?'),
+        content: const Text(
+          "It will disappear for everyone straight away. This can't be undone.",
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: context.palette.danger),
+            ),
+          ),
+        ],
       ),
     );
 

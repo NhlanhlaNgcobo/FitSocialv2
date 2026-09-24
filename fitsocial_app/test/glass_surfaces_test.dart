@@ -266,13 +266,25 @@ void main() {
     });
 
     test('no theme paints a ground that would cover it', () {
-      // Every pane of glass in the app bends this one backdrop. A Scaffold or
-      // dialog that painted its own opaque surface would cover it, and that
-      // screen's glass would have nothing behind it to bend.
+      // Every pane of glass in the app bends this one backdrop. A Scaffold
+      // that painted its own opaque surface would cover it, and that screen's
+      // glass would have nothing behind it to bend.
       for (final theme in [AppTheme.darkTheme, AppTheme.lightTheme]) {
         expect(theme.scaffoldBackgroundColor, Colors.transparent);
-        expect(theme.dialogTheme.backgroundColor, Colors.transparent);
       }
+    });
+
+    test('a dialog is a solid card, not a see-through one', () {
+      // A dialog paints only its card, so a solid one covers nothing the
+      // glass needs -- and a transparent one floats its text over the page.
+      expect(
+        AppTheme.darkTheme.dialogTheme.backgroundColor,
+        AppPalette.dark.surface,
+      );
+      expect(
+        AppTheme.lightTheme.dialogTheme.backgroundColor,
+        AppPalette.light.surface,
+      );
     });
   });
 

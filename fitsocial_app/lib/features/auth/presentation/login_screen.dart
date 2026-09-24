@@ -830,56 +830,54 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return LiquidGlass(
-      // A dialog interrupts a page, so there is always something
-      // behind it -- which makes it glass like everything else.
-      borderRadius: BorderRadius.circular(22),
-      child: AlertDialog(
-        title: const Text(
-          'Reset your password',
-          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "We'll email you a link to set a new password.",
-              style: TextStyle(color: palette.muted, height: 1.4),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _controller,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              autocorrect: false,
-              autofocus: true,
-              onSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                hintText: 'you@example.com',
-                errorText: _errorText,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(foregroundColor: palette.muted),
-            child: const Text('Cancel'),
+    return AlertDialog(
+      title: const Text(
+        'Reset your password',
+        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "We'll email you a link to set a new password.",
+            style: TextStyle(color: palette.muted, height: 1.4),
           ),
-          TextButton(
-            onPressed: _submit,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.orangeBright,
-            ),
-            child: const Text(
-              'Send Link',
-              style: TextStyle(fontWeight: FontWeight.w700),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _controller,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            autocorrect: false,
+            autofocus: true,
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              hintText: 'you@example.com',
+              errorText: _errorText,
+              // The theme fills fields with `surface`, which is also the
+              // dialog's own colour -- lifted so the field still reads.
+              fillColor: palette.surfaceHigh,
             ),
           ),
         ],
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          style: TextButton.styleFrom(foregroundColor: palette.muted),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.orangeBright,
+          ),
+          child: const Text(
+            'Send Link',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }

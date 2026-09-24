@@ -210,33 +210,28 @@ class SettingsScreen extends ConsumerWidget {
     final palette = context.palette;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => LiquidGlass(
-        // A dialog interrupts a page, so there is always something
-        // behind it -- which makes it glass like everything else.
-        borderRadius: BorderRadius.circular(22),
-        child: AlertDialog(
-          title: const Text('Sign out?'),
-          content: Text(
-            "You'll need your email and password to get back in.",
-            style: TextStyle(color: palette.muted),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(
-                'Cancel',
-                style: TextStyle(color: palette.muted),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: Text(
-                'Sign out',
-                style: TextStyle(color: palette.danger),
-              ),
-            ),
-          ],
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: Text(
+          "You'll need your email and password to get back in.",
+          style: TextStyle(color: palette.muted),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: palette.muted),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Sign out',
+              style: TextStyle(color: palette.danger),
+            ),
+          ),
+        ],
       ),
     );
 

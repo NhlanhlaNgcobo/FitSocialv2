@@ -240,36 +240,31 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen>
     final palette = context.palette;
     final shouldSignOut = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => LiquidGlass(
-        // A dialog interrupts a page, so there is always something
-        // behind it -- which makes it glass like everything else.
-        borderRadius: BorderRadius.circular(22),
-        child: AlertDialog(
-          title: const Text(
-            'Sign out?',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
-          ),
-          content: Text(
-            "Your account stays put — you'll just need to log in again to "
-            'finish setting up your profile.',
-            style: TextStyle(color: palette.muted, height: 1.4),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              style: TextButton.styleFrom(foregroundColor: palette.muted),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              style: TextButton.styleFrom(foregroundColor: palette.danger),
-              child: const Text(
-                'Sign out',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
+      builder: (dialogContext) => AlertDialog(
+        title: const Text(
+          'Sign out?',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
         ),
+        content: Text(
+          "Your account stays put — you'll just need to log in again to "
+          'finish setting up your profile.',
+          style: TextStyle(color: palette.muted, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            style: TextButton.styleFrom(foregroundColor: palette.muted),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(foregroundColor: palette.danger),
+            child: const Text(
+              'Sign out',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
 
