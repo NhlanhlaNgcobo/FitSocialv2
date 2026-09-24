@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart'
     show FirebaseFunctionsException;
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
 
+import 'auth_models.dart';
 import 'username.dart';
 
 /// Turns whatever the auth layer threw into a sentence worth showing someone.
@@ -12,6 +13,11 @@ import 'username.dart';
 String describeAuthError(Object error) {
   if (error is UsernameTakenException) {
     return '@${error.username} is already taken. Try another one.';
+  }
+
+  if (error is ProviderLinkRequiredException) {
+    return '${error.email} already has a password. Log in with it once and '
+        'Google will be connected to the same account.';
   }
 
   if (error is UsernameChangeTooSoonException) {

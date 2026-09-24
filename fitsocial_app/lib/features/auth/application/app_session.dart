@@ -51,6 +51,10 @@ class AppSession extends ChangeNotifier {
   UserProfileDraft? _profile;
   String? _errorMessage;
 
+  /// A Google sign-in that stopped because the email already has a password.
+  /// Finished by the next successful password login on that same address.
+  ProviderLinkRequiredException? _pendingLink;
+
   /// Guards [reloadProfile] against overlapping reads — the profile page can
   /// ask more than once before the first answer lands.
   bool _isReloadingProfile = false;
@@ -60,6 +64,10 @@ class AppSession extends ChangeNotifier {
   String? get email => _email;
   UserProfileDraft? get profile => _profile;
   String? get errorMessage => _errorMessage;
+
+  /// The email a social sign-in is waiting to be linked to, or null. The login
+  /// screen watches it to put the password form in front of the user.
+  String? get pendingLinkEmail => _pendingLink?.email;
 
   /// Rehydrates the session on cold start. Firebase Auth persists the
   /// signed-in user across launches; we ask for it, load the profile, and
@@ -145,17 +153,18 @@ class AppSession extends ChangeNotifier {
     final trimmed = identifier.trim();
     if (trimmed.isEmpty || password.trim().isEmpty) return;
 
-    await _authenticate(() {
-      if (looksLikeEmail(trimmed)) {
-        return authRepository.signInWithEmail(
-          email: trimmed,
-          password: password,
-        );
-      }
-      return authRepository.signInWithUsername(
-        username: trimmed,
-        password: password,
-      );
+    await _authenticate(() async {
+      final email = looksLikeEmail(trimmed)
+          ? await authRepository.signInWithEmail(
+              email: trimmed,
+              password: password,
+            )
+          : await authRepository.signInWithUsername(
+              username: trimmed,
+              password: password,
+            );
+      await _finishPendingLink(email);
+      return email;
     });
   }
 
@@ -164,9 +173,14 @@ class AppSession extends ChangeNotifier {
     required String password,
   }) async {
     if (email.trim().isEmpty || password.trim().isEmpty) return;
-    await _authenticate(
-      () => authRepository.signInWithEmail(email: email, password: password),
-    );
+    await _authenticate(() async {
+      final signedIn = await authRepository.signInWithEmail(
+        email: email,
+        password: password,
+      );
+      await _finishPendingLink(signedIn);
+      return signedIn;
+    });
   }
 
   Future<void> signUpWithEmail({
@@ -180,9 +194,31 @@ class AppSession extends ChangeNotifier {
   }
 
   Future<void> continueWithProvider(String providerName) {
+    // A fresh attempt supersedes whatever the last one left waiting.
+    _pendingLink = null;
     return _authenticate(
       () => authRepository.continueWithProvider(providerName),
     );
+  }
+
+  /// Attaches the provider a stalled social sign-in left behind, now that the
+  /// password has proved who owns the account.
+  ///
+  /// Only when [signedInEmail] is the address the provider claimed: someone
+  /// who gave up on Google and logged into a *different* account must not
+  /// have that Google identity bolted onto it. Failure is logged and
+  /// swallowed — the login itself worked, and they can still use the
+  /// password; Google will simply ask again next time.
+  Future<void> _finishPendingLink(String signedInEmail) async {
+    final pending = _pendingLink;
+    if (pending == null) return;
+    _pendingLink = null;
+    if (pending.email.toLowerCase() != signedInEmail.toLowerCase()) return;
+    try {
+      await pending.linkToCurrentUser();
+    } catch (error) {
+      debugPrint('Linking the social sign-in failed: $error');
+    }
   }
 
   /// The shared tail of every way into the app.
@@ -204,6 +240,7 @@ class AppSession extends ChangeNotifier {
         _profile == null ? AuthStage.profileSetup : AuthStage.authenticated,
       );
     } catch (error) {
+      if (error is ProviderLinkRequiredException) _pendingLink = error;
       _errorMessage = describeAuthError(error);
     } finally {
       _setLoading(false, shouldNotify: false);
@@ -294,6 +331,7 @@ class AppSession extends ChangeNotifier {
       crashReporter.setUserId(null);
       _email = null;
       _profile = null;
+      _pendingLink = null;
       _stage = AuthStage.unauthenticated;
       _isLoading = false;
     } catch (error) {

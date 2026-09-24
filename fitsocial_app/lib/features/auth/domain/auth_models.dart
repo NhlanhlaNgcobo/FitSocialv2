@@ -33,3 +33,24 @@ class UserProfileDraft {
   /// would strand a new user with a typo for a fortnight.
   final DateTime? handleChangedAt;
 }
+
+/// Thrown when a social sign-in lands on an email that already belongs to a
+/// password account, and Firebase refuses to merge the two on its own.
+///
+/// Carries the half-finished sign-in as [linkToCurrentUser] rather than the
+/// provider credential itself, so no Firebase type leaks past the data layer.
+/// Once the owner proves the account is theirs by logging in with the
+/// password, calling it attaches the provider — after which either way in
+/// opens the same account.
+class ProviderLinkRequiredException implements Exception {
+  const ProviderLinkRequiredException({
+    required this.email,
+    required this.linkToCurrentUser,
+  });
+
+  final String email;
+  final Future<void> Function() linkToCurrentUser;
+
+  @override
+  String toString() => '$email already has a password sign-in.';
+}

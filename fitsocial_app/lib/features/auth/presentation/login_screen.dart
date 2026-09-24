@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import '../../../shared/widgets/brand_image_tile.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
+import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/app_session.dart';
 import '../data/auth_repository.dart';
 import '../domain/username.dart';
@@ -24,11 +26,16 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
   late final TextEditingController _confirmController;
+  // One-shot arrival stagger, same convention as profile_setup_screen — this
+  // screen used to snap into existence while every other stop on this flow
+  // (splash, welcome, profile setup) settles in.
+  late final AnimationController _entranceController;
   // Seeded from the route, then owned locally so "Log in ⇄ Sign up" can swap
   // in place without a navigation that would wipe what has been typed.
   late bool _isLoginMode;
@@ -43,15 +50,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailController = TextEditingController();
     _passwordController = TextEditingController();
     _confirmController = TextEditingController();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+  }
+
+  /// The "Continue with Email" step: reveals the form, nothing else. Kept
+  /// separate from `_submit` so one button never means two different things.
+  void _revealEmailForm() {
+    setState(() => _showEmailForm = true);
   }
 
   void _submit(AppSession session) {
     if (session.isLoading) return;
 
-    if (!_showEmailForm) {
-      setState(() => _showEmailForm = true);
-      return;
-    }
     // Validates before hitting the network, so an empty field or a typo'd
     // confirmation is caught here rather than coming back as a Firebase error.
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -137,6 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -201,6 +215,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final palette = context.palette;
     final session = ref.watch(appSessionProvider);
 
+    // Google stopped on an email that already has a password. The error
+    // banner says what to do; this puts the form for doing it in front of
+    // them, already addressed, rather than leaving them to find it.
+    ref.listen(
+      appSessionProvider.select((s) => s.pendingLinkEmail),
+      (_, email) {
+        if (email == null) return;
+        setState(() {
+          _isLoginMode = true;
+          _showEmailForm = true;
+          _emailController.text = email;
+          _passwordController.clear();
+          _confirmController.clear();
+        });
+      },
+    );
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -208,202 +239,362 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconButton(
-                onPressed: () => context.go('/welcome'),
-                icon: const Icon(Icons.arrow_back_rounded),
+              StaggeredFadeIn(
+                controller: _entranceController,
+                index: 0,
+                itemCount: 5,
+                child: IconButton(
+                  onPressed: () => context.go('/welcome'),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
+              // The hero and the panel below it used to be two `Expanded`
+              // siblings whose `flex` flipped between 5:2 and 2:5 — a value
+              // `RenderFlex` cannot interpolate, so the hero visibly jump-cut
+              // size the instant the email form revealed. A `LayoutBuilder`
+              // hands both an explicit share of the same measured height, so
+              // the hero can animate its own height instead.
               Expanded(
-                flex: _showEmailForm ? 2 : 5,
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(32),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF191919), Color(0xFF090909)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    border: Border.all(color: palette.stroke),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    children: [
-                      const Positioned.fill(
-                        child: BrandImageTile(
-                          tile: AppVisualTile.groupTraining,
-                          borderRadius: BorderRadius.all(Radius.circular(32)),
-                          overlay: Color(0x78050505),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          height: 120,
-                          decoration: BoxDecoration(
-                            borderRadius: const BorderRadius.vertical(
-                                bottom: Radius.circular(32)),
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.orangeBright.withValues(alpha: 0.2),
-                                Colors.transparent,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final heroHeight = constraints.maxHeight *
+                        (_showEmailForm ? 2 / 7 : 5 / 7);
+                    return Column(
+                      children: [
+                        StaggeredFadeIn(
+                          controller: _entranceController,
+                          index: 1,
+                          itemCount: 5,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 260),
+                            curve: Curves.easeOutCubic,
+                            width: double.infinity,
+                            height: heroHeight,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(32),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF191919), Color(0xFF090909)],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                              border: Border.all(color: palette.stroke),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  // groupTraining's cell crops toward its
+                                  // bottom-right corner, which — once the
+                                  // panel shrinks to a short, wide banner
+                                  // for the email form — leaves only one
+                                  // person awkwardly tight-cropped.
+                                  // coastalRunner's composition is already
+                                  // horizontal (skyline, water, road), so it
+                                  // holds together at that aspect instead.
+                                  child: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 260),
+                                    switchInCurve: Curves.easeOutCubic,
+                                    switchOutCurve: Curves.easeOutCubic,
+                                    child: BrandImageTile(
+                                      key: ValueKey(_showEmailForm),
+                                      tile: _showEmailForm
+                                          ? AppVisualTile.coastalRunner
+                                          : AppVisualTile.groupTraining,
+                                      borderRadius: const BorderRadius.all(
+                                          Radius.circular(32)),
+                                      overlay: const Color(0x78050505),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: Container(
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      borderRadius: const BorderRadius.vertical(
+                                          bottom: Radius.circular(32)),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.orangeBright
+                                              .withValues(alpha: 0.2),
+                                          Colors.transparent,
+                                        ],
+                                        begin: Alignment.bottomCenter,
+                                        end: Alignment.topCenter,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 28,
+                                  left: 24,
+                                  right: 24,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // This whole header sits on the athlete
+                                      // photo and its dark scrim, which are the
+                                      // same in both themes — so nothing in it
+                                      // takes the palette. FittedBox lets the
+                                      // wordmark scale down on a narrow phone
+                                      // instead of overflowing the card — the
+                                      // same guard profile_setup_screen uses.
+                                      const FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: FitSocialLogo(
+                                          size: 36,
+                                          color: AppColors.onMedia,
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppSpacing.lg),
+                                      // Crossfaded rather than swapped instantly
+                                      // — Log In ⇄ Sign Up used to snap the copy
+                                      // the moment the mode toggled.
+                                      AnimatedSwitcher(
+                                        duration:
+                                            const Duration(milliseconds: 220),
+                                        switchInCurve: Curves.easeOutCubic,
+                                        switchOutCurve: Curves.easeOutCubic,
+                                        layoutBuilder:
+                                            (currentChild, previousChildren) =>
+                                                Stack(
+                                          alignment: Alignment.centerLeft,
+                                          children: [
+                                            ...previousChildren,
+                                            if (currentChild != null)
+                                              currentChild,
+                                          ],
+                                        ),
+                                        child: Text(
+                                          _isLoginMode
+                                              ? 'Welcome back'
+                                              : 'Create your account',
+                                          key: ValueKey(_isLoginMode),
+                                          style: const TextStyle(
+                                            color: AppColors.onMedia,
+                                            fontSize: 30,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      AnimatedSwitcher(
+                                        duration:
+                                            const Duration(milliseconds: 220),
+                                        switchInCurve: Curves.easeOutCubic,
+                                        switchOutCurve: Curves.easeOutCubic,
+                                        layoutBuilder:
+                                            (currentChild, previousChildren) =>
+                                                Stack(
+                                          alignment: Alignment.centerLeft,
+                                          children: [
+                                            ...previousChildren,
+                                            if (currentChild != null)
+                                              currentChild,
+                                          ],
+                                        ),
+                                        child: Text(
+                                          _isLoginMode
+                                              ? 'Log in to continue.'
+                                              : 'Join the fitness community.',
+                                          key: ValueKey(_isLoginMode),
+                                          style: const TextStyle(
+                                            color: AppColors.onMediaMuted,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Positioned(
+                                  right: 24,
+                                  bottom: 26,
+                                  child: Icon(
+                                    Icons.arrow_outward_rounded,
+                                    size: 58,
+                                    color: AppColors.orangeBright,
+                                  ),
+                                ),
                               ],
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        top: 28,
-                        left: 24,
-                        right: 24,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // This whole header sits on the athlete photo and
-                            // its dark scrim, which are the same in both
-                            // themes — so nothing in it takes the palette.
-                            const FitSocialLogo(
-                              size: 36,
-                              color: AppColors.onMedia,
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            Text(
-                              _isLoginMode
-                                  ? 'Welcome back'
-                                  : 'Create your account',
-                              style: const TextStyle(
-                                color: AppColors.onMedia,
-                                fontSize: 30,
-                                fontWeight: FontWeight.w800,
+                        const SizedBox(height: AppSpacing.lg),
+                        // Shares leftover height with the hero above exactly
+                        // like the fields did before — it can shrink and
+                        // scroll instead of overflowing on a short screen or
+                        // with the keyboard up. AnimatedSize only smooths its
+                        // own growth from zero to full.
+                        Expanded(
+                          child: StaggeredFadeIn(
+                            controller: _entranceController,
+                            index: 2,
+                            itemCount: 5,
+                            child: SingleChildScrollView(
+                              child: AnimatedSize(
+                                duration: const Duration(milliseconds: 260),
+                                curve: Curves.easeOutCubic,
+                                alignment: Alignment.topCenter,
+                                child: _showEmailForm
+                                    ? _EmailPanel(
+                                        formKey: _formKey,
+                                        emailController: _emailController,
+                                        passwordController: _passwordController,
+                                        confirmController: _confirmController,
+                                        isLoginMode: _isLoginMode,
+                                        obscurePassword: _obscurePassword,
+                                        obscureConfirm: _obscureConfirm,
+                                        onTogglePassword: () => setState(
+                                          () => _obscurePassword =
+                                              !_obscurePassword,
+                                        ),
+                                        onToggleConfirm: () => setState(
+                                          () => _obscureConfirm =
+                                              !_obscureConfirm,
+                                        ),
+                                        validateEmail: _validateIdentifier,
+                                        validatePassword: _validatePassword,
+                                        validateConfirm: _validateConfirm,
+                                        onSubmitted: () => _submit(session),
+                                        // Only offered when logging in — there
+                                        // is no password to reset while
+                                        // creating an account.
+                                        onForgotPassword: _isLoginMode
+                                            ? _handleForgotPassword
+                                            : null,
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _isLoginMode
-                                  ? 'Log in to continue.'
-                                  : 'Join the fitness community.',
-                              style: const TextStyle(
-                                color: AppColors.onMediaMuted,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Positioned(
-                        right: 24,
-                        bottom: 26,
-                        child: Icon(
-                          Icons.arrow_outward_rounded,
-                          size: 58,
-                          color: AppColors.orangeBright,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              // Email fields appear ABOVE the primary CTA once revealed, so
-              // the flow reads top-to-bottom: enter details, then submit.
-              if (_showEmailForm) ...[
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: _EmailPanel(
-                      formKey: _formKey,
-                      emailController: _emailController,
-                      passwordController: _passwordController,
-                      confirmController: _confirmController,
-                      isLoginMode: _isLoginMode,
-                      obscurePassword: _obscurePassword,
-                      obscureConfirm: _obscureConfirm,
-                      onTogglePassword: () => setState(
-                        () => _obscurePassword = !_obscurePassword,
-                      ),
-                      onToggleConfirm: () => setState(
-                        () => _obscureConfirm = !_obscureConfirm,
-                      ),
-                      validateEmail: _validateIdentifier,
-                      validatePassword: _validatePassword,
-                      validateConfirm: _validateConfirm,
-                      onSubmitted: () => _submit(session),
-                      // Only offered when logging in — there is no password to
-                      // reset while creating an account.
-                      onForgotPassword:
-                          _isLoginMode ? _handleForgotPassword : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (session.errorMessage != null) ...[
-                LiquidGlass(
-                  // Painted by the lens rather than by a fill of its own: a pane
-                  // over the app backdrop, like every other card.
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: palette.stroke),
-                    ),
-                    child: Text(
-                      session.errorMessage!,
-                      style: const TextStyle(
-                        color: AppColors.orangeBright,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              PrimaryButton(
-                label: session.isLoading
-                    ? 'Please wait…'
-                    : _showEmailForm
-                        ? (_isLoginMode ? 'Log In' : 'Create Account')
-                        : 'Use Email',
-                onPressed: session.isLoading ? null : () => _submit(session),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _SocialButton(
-                icon: Icons.mail_outline_rounded,
-                label: _isLoginMode
-                    ? 'Continue with Google'
-                    : 'Sign up with Google',
-                loading: session.isLoading,
-                onPressed: () {
-                  ref.read(appSessionProvider).continueWithProvider('google');
-                },
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Center(
-                child: TextButton(
-                  onPressed:
-                      session.isLoading ? null : () => _toggleMode(session),
-                  child: RichText(
-                    text: TextSpan(
-                      style: TextStyle(color: palette.muted, fontSize: 14),
-                      children: [
-                        TextSpan(
-                          text: _isLoginMode
-                              ? "Don't have an account? "
-                              : 'Already have an account? ',
-                        ),
-                        TextSpan(
-                          text: _isLoginMode ? 'Sign up' : 'Log in',
-                          style: const TextStyle(
-                            color: AppColors.orangeBright,
-                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // The reveal ("Continue with Email") and the submit ("Log In" /
+              // "Create Account") are two distinct buttons, never the same
+              // control relabelled — so a tap always does what it currently
+              // says. Only how they're presented (a crossfade) changed.
+              StaggeredFadeIn(
+                controller: _entranceController,
+                index: 2,
+                itemCount: 5,
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: session.errorMessage == null
+                      ? const SizedBox(width: double.infinity)
+                      : Column(
+                          key: ValueKey(session.errorMessage),
+                          children: [
+                            LiquidGlass(
+                              // Painted by the lens rather than by a fill of
+                              // its own: a pane over the app backdrop, like
+                              // every other card.
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: palette.stroke),
+                                ),
+                                child: Text(
+                                  session.errorMessage!,
+                                  style: const TextStyle(
+                                    color: AppColors.orangeBright,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                        ),
+                ),
+              ),
+              StaggeredFadeIn(
+                controller: _entranceController,
+                index: 2,
+                itemCount: 5,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeOutCubic,
+                  child: PrimaryButton(
+                    key: ValueKey(
+                      '$_showEmailForm-$_isLoginMode-${session.isLoading}',
+                    ),
+                    label: !_showEmailForm
+                        ? 'Continue with Email'
+                        : (session.isLoading
+                            ? 'Please wait…'
+                            : (_isLoginMode ? 'Log In' : 'Create Account')),
+                    onPressed: session.isLoading
+                        ? null
+                        : (!_showEmailForm
+                            ? _revealEmailForm
+                            : () => _submit(session)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              StaggeredFadeIn(
+                controller: _entranceController,
+                index: 3,
+                itemCount: 5,
+                child: _SocialButton(
+                  icon: SvgPicture.asset(
+                    'assets/images/google_logo.svg',
+                    width: 20,
+                    height: 20,
+                  ),
+                  label: _isLoginMode
+                      ? 'Continue with Google'
+                      : 'Sign up with Google',
+                  loading: session.isLoading,
+                  onPressed: () {
+                    ref.read(appSessionProvider).continueWithProvider('google');
+                  },
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              StaggeredFadeIn(
+                controller: _entranceController,
+                index: 4,
+                itemCount: 5,
+                child: Center(
+                  child: TextButton(
+                    onPressed:
+                        session.isLoading ? null : () => _toggleMode(session),
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(color: palette.muted, fontSize: 14),
+                        children: [
+                          TextSpan(
+                            text: _isLoginMode
+                                ? "Don't have an account? "
+                                : 'Already have an account? ',
+                          ),
+                          TextSpan(
+                            text: _isLoginMode ? 'Sign up' : 'Log in',
+                            style: const TextStyle(
+                              color: AppColors.orangeBright,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -701,7 +892,7 @@ class _SocialButton extends StatelessWidget {
     required this.onPressed,
   });
 
-  final IconData icon;
+  final Widget icon;
   final String label;
   final bool loading;
   final VoidCallback onPressed;
@@ -721,7 +912,7 @@ class _SocialButton extends StatelessWidget {
           ),
         ),
         onPressed: loading ? null : onPressed,
-        icon: Icon(icon),
+        icon: icon,
         label: Text(label),
       ),
     );

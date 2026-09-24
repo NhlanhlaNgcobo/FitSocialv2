@@ -1,9 +1,10 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/config/functions_region.dart';
+import '../domain/auth_models.dart';
 import '../domain/username.dart';
 import 'auth_repository_contract.dart';
 
@@ -100,6 +101,18 @@ class FirebaseAuthRepository implements AuthRepository {
       email: email.trim(),
       password: password,
     );
+
+    // An unverified address is one Firebase will hand to the first trusted
+    // provider that claims it: signing in with Google on the same email later
+    // silently deletes this password from the account. Verifying is what makes
+    // the password survive. Best-effort — a mail hiccup is no reason to fail a
+    // signup that has already succeeded.
+    try {
+      await credential.user?.sendEmailVerification();
+    } catch (error) {
+      debugPrint('Sending the verification email failed: $error');
+    }
+
     return credential.user?.email ?? email.trim();
   }
 
@@ -117,7 +130,7 @@ class FirebaseAuthRepository implements AuthRepository {
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
-        final result = await _firebaseAuth.signInWithCredential(credential);
+        final result = await _signInOrRequestLink(credential);
         return result.user?.email ?? googleUser.email;
 
       case 'apple':
@@ -141,6 +154,35 @@ class FirebaseAuthRepository implements AuthRepository {
 
       default:
         throw UnsupportedError('Unsupported provider: $providerName');
+    }
+  }
+
+  /// Signs in with a provider [credential], converting Firebase's refusal to
+  /// merge accounts into something the session can finish.
+  ///
+  /// Firebase throws `account-exists-with-different-credential` when the email
+  /// already belongs to a password account it will not overwrite. Left as-is
+  /// that is a dead end — the owner is told their own account is in the way.
+  /// The pending credential comes back on the error, so it is held here until
+  /// they log in with the password and it can be linked.
+  Future<UserCredential> _signInOrRequestLink(AuthCredential credential) async {
+    try {
+      return await _firebaseAuth.signInWithCredential(credential);
+    } on FirebaseAuthException catch (error) {
+      final email = error.email;
+      final pending = error.credential ?? credential;
+      if (error.code != 'account-exists-with-different-credential' ||
+          email == null) {
+        rethrow;
+      }
+      throw ProviderLinkRequiredException(
+        email: email,
+        linkToCurrentUser: () async {
+          final user = _firebaseAuth.currentUser;
+          if (user == null) return;
+          await user.linkWithCredential(pending);
+        },
+      );
     }
   }
 
