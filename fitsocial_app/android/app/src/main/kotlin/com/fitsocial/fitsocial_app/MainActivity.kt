@@ -24,10 +24,38 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterFragmentActivity() {
 
     private var mediaSession: MediaSessionBridge? = null
+    private var panic: PanicBridge? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createSocialNotificationChannel()
+        createPanicNotificationChannel()
+    }
+
+    /**
+     * The channel panic alerts land on — separate from Social, so that muting
+     * likes can never mute an emergency. The id must match PANIC_CHANNEL_ID in
+     * functions/safety.js, which names it on every panic push.
+     *
+     * High importance, alarm-style sound and a strong vibration. Bypassing Do
+     * Not Disturb is not set: Android only honours it once the user has granted
+     * notification-policy access, and asking for that is a separate, explicit
+     * step in the safety setup rather than something done silently here.
+     */
+    private fun createPanicNotificationChannel() {
+        val channel = NotificationChannel(
+            getString(R.string.fcm_channel_panic_id),
+            getString(R.string.fcm_channel_panic_name),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = getString(R.string.fcm_channel_panic_description)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 800, 300, 800, 300, 800)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        }
+
+        getSystemService(NotificationManager::class.java)
+            ?.createNotificationChannel(channel)
     }
 
     /**
@@ -79,6 +107,12 @@ class MainActivity : FlutterFragmentActivity() {
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
         )
+        // Application context for audio, camera and battery; the activity only
+        // for the window it owns (brightness, keep-screen-on), held weakly.
+        panic = PanicBridge(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+        ).also { it.attach(this) }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -87,6 +121,8 @@ class MainActivity : FlutterFragmentActivity() {
         // what stops that.
         mediaSession?.dispose()
         mediaSession = null
+        panic?.dispose()
+        panic = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

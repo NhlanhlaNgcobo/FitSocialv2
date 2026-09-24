@@ -18,4 +18,11 @@
     <string name="fcm_channel_social_id" translatable="false">fitsocial_social</string>
     <string name="fcm_channel_social_name">Social</string>
     <string name="fcm_channel_social_description">Follows, reactions, comments, mentions and challenge updates</string>
+
+    <!-- Panic alerts from safety contacts. Its own channel so that quietening
+         Social never silences an emergency. The id is named by
+         functions/safety.js on every panic push and created in MainActivity.kt. -->
+    <string name="fcm_channel_panic_id" translatable="false">panic_alerts</string>
+    <string name="fcm_channel_panic_name">Safety alerts</string>
+    <string name="fcm_channel_panic_description">Panic alerts from people who chose you as a safety contact</string>
 </resources>
