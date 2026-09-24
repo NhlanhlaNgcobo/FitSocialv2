@@ -29,6 +29,7 @@ const Color _kProfileAccent = AppColors.orangeBright;
 const Color _kAchievementAccent = Color(0xFFF2B01E);
 const Color _kHealthAccent = Color(0xFFFF5C7A);
 const Color _kNotifyAccent = Color(0xFF2ECBFF);
+const Color _kSafetyAccent = Color(0xFF2E9C94);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -100,6 +101,19 @@ class SettingsScreen extends ConsumerWidget {
             accent: _kHealthAccent,
             text: 'A run your watch recorded turns up on the Create page as a '
                 'draft. It stays on your phone until you post it.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const _SectionLabel('Safety'),
+          _SettingsGroup(
+            children: [
+              _SettingsTile(
+                icon: Icons.shield_outlined,
+                accent: _kSafetyAccent,
+                label: 'Safety',
+                subtitle: 'Panic alert, safety contacts and PINs',
+                onTap: () => context.push('/safety'),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Notifications'),

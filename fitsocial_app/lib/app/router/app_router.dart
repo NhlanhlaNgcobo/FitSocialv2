@@ -41,6 +41,11 @@ import '../../features/races/presentation/race_detail_screen.dart';
 import '../../features/races/presentation/races_screen.dart';
 import '../../features/races/presentation/saved_races_screen.dart';
 import '../../features/races/presentation/submit_race_screen.dart';
+import '../../features/safety/presentation/panic_alert_screen.dart';
+import '../../features/safety/presentation/panic_screen.dart';
+import '../../features/safety/presentation/pin_setup_screen.dart';
+import '../../features/safety/presentation/safety_contacts_screen.dart';
+import '../../features/safety/presentation/safety_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/pulse/domain/pulse_music.dart';
 import '../../features/pulse/presentation/pulse_composer_screen.dart';
@@ -212,6 +217,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      // Safety. Outside the shell: destinations you come back from. The panic
+      // screen in particular must cover the tab bar, so nothing on screen can
+      // navigate away from an active alert.
+      GoRoute(
+        path: '/safety',
+        builder: (context, state) => const SafetyScreen(),
+      ),
+      GoRoute(
+        path: '/safety/contacts',
+        builder: (context, state) => const SafetyContactsScreen(),
+      ),
+      GoRoute(
+        path: '/safety/pins',
+        builder: (context, state) => const PinSetupScreen(),
+      ),
+      GoRoute(
+        path: '/safety/panic',
+        builder: (context, state) => const PanicScreen(),
+      ),
+      // An alert somebody else raised, opened from its push notification.
+      GoRoute(
+        path: '/safety/alert/:eventId',
+        builder: (context, state) => PanicAlertScreen(
+          eventId: state.pathParameters['eventId']!,
+        ),
       ),
       // Your followers and the people you follow.
       //

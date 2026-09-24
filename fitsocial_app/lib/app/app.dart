@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/bootstrap/bootstrap_status.dart';
 import '../features/notifications/application/push_tap_router.dart';
+import '../features/safety/application/safety_providers.dart';
 import '../shared/widgets/liquid_backdrop.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
@@ -14,16 +16,40 @@ class FitSocialApp extends ConsumerStatefulWidget {
   ConsumerState<FitSocialApp> createState() => _FitSocialAppState();
 }
 
-class _FitSocialAppState extends ConsumerState<FitSocialApp> {
+class _FitSocialAppState extends ConsumerState<FitSocialApp>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // A panic still open from before the app was closed -- including one kept
+    // running by the duress PIN -- picks its live location back up. Only from
+    // the foreground: neither platform lets background location start there.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resumeSafety());
     // Started here rather than lazily from a screen, because the case it exists
     // for is the one where no screen has been built yet: a notification tapped
     // while the app was not running. `getInitialMessage` has an answer waiting
     // from the moment the engine starts, and asking late means asking after the
     // router has already sent the user to the feed.
     ref.read(pushTapRouterProvider).start();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _resumeSafety();
+  }
+
+  void _resumeSafety() {
+    // A build without Firebase has no alerts to resume, and asking who is
+    // signed in would throw.
+    if (!ref.read(bootstrapStatusProvider).canUseFirebase) return;
+    ref.read(panicControllerProvider.notifier).resumeOpenEvent();
   }
 
   @override

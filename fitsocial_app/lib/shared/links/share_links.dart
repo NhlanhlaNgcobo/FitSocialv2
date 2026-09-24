@@ -144,6 +144,20 @@ abstract final class FitSocialLinks {
     // Checked undecoded, unlike [isShareableRoute]: `_isSafeId` rejects `%`
     // outright, so a percent-escape could never pass anyway, and decoding a
     // malformed one throws.
+    // Safety: an alert raised by someone who chose this user as a contact,
+    // and the contacts page an invite or a revocation lands on.
+    if (segments.length == 2 &&
+        segments[0] == 'safety' &&
+        segments[1] == 'contacts') {
+      return true;
+    }
+    if (segments.length == 3 &&
+        segments[0] == 'safety' &&
+        segments[1] == 'alert' &&
+        _isSafeId(segments[2])) {
+      return true;
+    }
+
     return segments.length == 3 &&
         segments[0].toLowerCase() == 'challenge' &&
         segments[1].toLowerCase() == 'board' &&

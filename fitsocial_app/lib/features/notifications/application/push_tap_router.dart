@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,6 +32,14 @@ class PushTapRouter {
   final Ref _ref;
 
   StreamSubscription<RemoteMessage>? _taps;
+  StreamSubscription<RemoteMessage>? _foreground;
+
+  /// Push types that open their screen on arrival when the app is already in
+  /// the foreground. Android draws no banner for a foreground app, so without
+  /// this a contact looking at the feed would never learn someone needs help.
+  /// Only safety alerts: a like arriving mid-scroll must not yank the screen.
+  static const _openOnArrival = {'panic', 'panicDuress'};
+  final _openedOnArrival = <String>{};
 
   /// Where a tap wanted to go, held while the session is still restoring or
   /// while nobody is signed in yet.
@@ -54,6 +63,17 @@ class PushTapRouter {
       _taps ??= FirebaseMessaging.onMessageOpenedApp.listen(
         (message) => _open(message, wasRunning: true),
       );
+      _foreground ??= FirebaseMessaging.onMessage.listen((message) {
+        final type = message.data['type'];
+        if (!_openOnArrival.contains(type)) return;
+        // The server re-sends an unanswered alert every minute. Open each
+        // alert once per kind -- the first alert, then the duress notice --
+        // rather than stacking a fresh copy of the screen every minute.
+        final key = '$type:${message.data['eventId']}';
+        if (!_openedOnArrival.add(key)) return;
+        HapticFeedback.heavyImpact();
+        _open(message, wasRunning: true);
+      });
 
       // Answers null on a launch that was not a notification tap, which is
       // almost every launch.
@@ -69,6 +89,8 @@ class PushTapRouter {
   void dispose() {
     _taps?.cancel();
     _taps = null;
+    _foreground?.cancel();
+    _foreground = null;
     _stopWaiting();
   }
 

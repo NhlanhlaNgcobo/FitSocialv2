@@ -130,6 +130,14 @@ void main() {
       expect(FitSocialLinks.isShareableRoute('/challenge/board/ch1'), isFalse);
     });
 
+    test('a push may open a safety alert and the contacts page', () {
+      expect(FitSocialLinks.isPushRoute('/safety/alert/evt123'), isTrue);
+      expect(FitSocialLinks.isPushRoute('/safety/contacts'), isTrue);
+      expect(FitSocialLinks.isShareableRoute('/safety/alert/evt123'), isFalse);
+      expect(FitSocialLinks.isPushRoute('/safety/alert/../settings'), isFalse);
+      expect(FitSocialLinks.isPushRoute('/safety/panic'), isFalse);
+    });
+
     test('everything a shared link may open, a push may open too', () {
       expect(FitSocialLinks.isPushRoute('/post/p1'), isTrue);
       expect(FitSocialLinks.isPushRoute('/user/u1'), isTrue);
