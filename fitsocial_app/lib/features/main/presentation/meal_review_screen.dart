@@ -458,8 +458,6 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
                     children: [
                       Text(
                         name.isEmpty ? 'Untitled meal' : _titleCase(name),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: name.isEmpty
                               ? AppColors.onMediaMuted
@@ -472,30 +470,41 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(text: '$calories'),
-                                const TextSpan(
-                                  text: ' kcal',
-                                  style: TextStyle(
-                                    color: AppColors.onMediaMuted,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+                          // Shrinks into the room the rings leave rather than
+                          // running off the edge on a narrow screen.
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.bottomLeft,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.bottomLeft,
+                                child: Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(text: '$calories'),
+                                      const TextSpan(
+                                        text: ' kcal',
+                                        style: TextStyle(
+                                          color: AppColors.onMediaMuted,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  style: const TextStyle(
+                                    color: AppColors.onMedia,
+                                    fontSize: 30,
+                                    height: 1,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.8,
+                                    shadows: onMediaTextShadows,
                                   ),
                                 ),
-                              ],
-                            ),
-                            style: const TextStyle(
-                              color: AppColors.onMedia,
-                              fontSize: 30,
-                              height: 1,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.8,
-                              shadows: onMediaTextShadows,
+                              ),
                             ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 10),
                           MacroRing(
                             label: 'Protein',
                             grams: protein,

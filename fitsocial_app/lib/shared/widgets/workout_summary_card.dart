@@ -298,8 +298,6 @@ class WorkoutSummaryCard extends StatelessWidget {
                       // longer "Heaviest 60 kg · Bench press" ellipsised the
                       // name off the end, which is the half worth keeping.
                       '${heaviest.name} · ${_trimmed(heaviest.weightKg!)} kg',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
                       style: TextStyle(fontSize: 11.5, color: skin.muted),
                     ),
@@ -591,47 +589,78 @@ class _StatCell extends StatelessWidget {
       crossAxisAlignment: align,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          stat.label.toUpperCase(),
-          // Never wrapped. A label that breaks mid-word — CALORIE / S — takes
-          // the whole strip out of alignment, and it is a heading, not content.
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.3,
-            color: skin.muted,
+        // Never wrapped and never cut short: a label that breaks mid-word —
+        // CALORIE / S — takes the whole strip out of alignment, and one that
+        // ellipsises leaves a figure nobody can name. Too wide, it shrinks.
+        _ShrinkToFit(
+          align: align,
+          child: Text(
+            stat.label.toUpperCase(),
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.3,
+              color: skin.muted,
+            ),
           ),
         ),
         const SizedBox(height: 4),
-        Text.rich(
-          TextSpan(
-            text: stat.value,
-            children: [
-              if (stat.unit != null)
-                TextSpan(
-                  text: ' ${stat.unit}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: skin.muted,
+        _ShrinkToFit(
+          align: align,
+          child: Text.rich(
+            TextSpan(
+              text: stat.value,
+              children: [
+                if (stat.unit != null)
+                  TextSpan(
+                    text: ' ${stat.unit}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: skin.muted,
+                    ),
                   ),
-                ),
-            ],
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.4,
-            color: skin.text,
-            fontFeatures: const [FontFeature.tabularFigures()],
+              ],
+            ),
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: skin.text,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One line of text scaled down, never up, until it fits the width it is given.
+///
+/// What the card uses in place of an ellipsis for anything that must stay on
+/// one line: a figure a few percent smaller is still the whole figure.
+class _ShrinkToFit extends StatelessWidget {
+  const _ShrinkToFit({required this.align, required this.child});
+
+  final CrossAxisAlignment align;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final alignment = switch (align) {
+      CrossAxisAlignment.end => AlignmentDirectional.centerEnd,
+      CrossAxisAlignment.center => AlignmentDirectional.center,
+      _ => AlignmentDirectional.centerStart,
+    };
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: alignment,
+      child: child,
     );
   }
 }
@@ -692,10 +721,10 @@ class _ExerciseRow extends StatelessWidget {
             children: [
               ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: nameMax),
+                // Wraps onto a second line rather than ellipsising — the card
+                // is shared as a picture, and a cut-off name cannot be read.
                 child: Text(
                   exercise.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
@@ -706,18 +735,23 @@ class _ExerciseRow extends StatelessWidget {
               const SizedBox(width: _gapBeforeLeader),
               Expanded(child: _DottedLeader(color: skin.stroke)),
               const SizedBox(width: _gapAfterLeader),
+              // Past the worst case the columns were sized for, a figure
+              // shrinks to fit its column rather than losing its last digits.
               SizedBox(
                 width: _setsWidth,
-                child: Text(
-                  setsAndReps ?? '',
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: skin.muted,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                child: _ShrinkToFit(
+                  align: CrossAxisAlignment.end,
+                  child: Text(
+                    setsAndReps ?? '',
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: skin.muted,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
                   ),
                 ),
               ),
@@ -725,19 +759,23 @@ class _ExerciseRow extends StatelessWidget {
                 const SizedBox(width: _gapBeforeLoad),
                 SizedBox(
                   width: _loadWidth,
-                  child: Text(
-                    exercise.weightKg == null
-                        ? '—'
-                        : '${WorkoutSummaryCard._trimmed(exercise.weightKg!)}'
-                            ' kg',
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: exercise.weightKg == null ? skin.muted : skin.text,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                  child: _ShrinkToFit(
+                    align: CrossAxisAlignment.end,
+                    child: Text(
+                      exercise.weightKg == null
+                          ? '—'
+                          : '${WorkoutSummaryCard._trimmed(exercise.weightKg!)}'
+                              ' kg',
+                      textAlign: TextAlign.right,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color:
+                            exercise.weightKg == null ? skin.muted : skin.text,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ),
                 ),

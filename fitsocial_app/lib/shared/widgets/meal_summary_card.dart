@@ -142,10 +142,10 @@ class MealSummaryCard extends StatelessWidget {
                       color: AppColors.onMedia,
                     ),
                     const Spacer(),
+                    // Wraps rather than ellipsises: the picture is what gets
+                    // shared, and a name cut short in it cannot be read back.
                     Text(
                       activity,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.onMedia,
                         fontSize: 20,
@@ -156,30 +156,42 @@ class MealSummaryCard extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(text: '$calories'),
-                              const TextSpan(
-                                text: ' kcal',
-                                style: TextStyle(
-                                  color: AppColors.onMediaMuted,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
+                        // Takes the room the rings leave and shrinks to it,
+                        // so a big total on a narrow card is never pushed off
+                        // the edge.
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomLeft,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.bottomLeft,
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(text: '$calories'),
+                                    const TextSpan(
+                                      text: ' kcal',
+                                      style: TextStyle(
+                                        color: AppColors.onMediaMuted,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                style: const TextStyle(
+                                  color: AppColors.onMedia,
+                                  fontSize: 30,
+                                  height: 1,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.8,
+                                  shadows: onMediaTextShadows,
                                 ),
                               ),
-                            ],
-                          ),
-                          style: const TextStyle(
-                            color: AppColors.onMedia,
-                            fontSize: 30,
-                            height: 1,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.8,
-                            shadows: onMediaTextShadows,
+                            ),
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 10),
                         MacroRing(
                           label: 'Protein',
                           grams: protein,
