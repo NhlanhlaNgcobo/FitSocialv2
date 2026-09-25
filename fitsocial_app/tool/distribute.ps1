@@ -82,7 +82,8 @@ if (-not (Test-Path $apk)) {
 # this: with no android/key.properties the release build silently falls back to
 # the debug certificate, installs fine locally, and is blocked on the tester's
 # phone. Catch it here rather than after the upload.
-$buildTools = Get-ChildItem "$env:LOCALAPPDATA\Android\sdk\build-tools" -Directory |
+$sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "$env:LOCALAPPDATA\Android\sdk" }
+$buildTools = Get-ChildItem "$sdk\build-tools" -Directory |
               Sort-Object Name -Descending | Select-Object -First 1
 $apksigner = Join-Path $buildTools.FullName "apksigner.bat"
 if (Test-Path $apksigner) {
