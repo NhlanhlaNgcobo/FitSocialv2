@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +9,10 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../application/safety_providers.dart';
 import '../domain/safety_models.dart';
+import '../data/safety_repositories.dart';
+import '../../main/application/content_providers.dart'
+    show currentUserIdProvider;
+import 'hold_to_alert.dart';
 import 'pin_pad.dart';
 import 'safety_widgets.dart';
 
@@ -52,13 +57,7 @@ class SafetyScreen extends ConsumerWidget {
           AppSpacing.xl,
         ),
         children: [
-          _PanicButton(
-            onPressed: () {
-              // A second press while an alert is running just reopens it.
-              ref.read(panicControllerProvider.notifier).trigger();
-              context.push('/safety/panic');
-            },
-          ),
+          const HoldToAlertButton(),
           const SizedBox(height: AppSpacing.sm),
           SafetyNote(
             ready == 0
@@ -113,6 +112,48 @@ class SafetyScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.lg),
+          const SafetySectionLabel('Other ways to send'),
+          SafetyCard(
+            children: [
+              const SafetyRow(
+                icon: Icons.touch_app_rounded,
+                title: 'From the app icon',
+                subtitle: 'Long-press the FitSocial icon on your home screen '
+                    'and tap Send alert',
+              ),
+              const SafetyRow(
+                icon: Icons.directions_run_rounded,
+                title: 'During a run or walk',
+                subtitle: 'Hold the shield at the top of the live screen for '
+                    '2 seconds',
+              ),
+              if (defaultTargetPlatform == TargetPlatform.android)
+                MergeSemantics(
+                  child: SafetyRow(
+                    icon: Icons.volume_up_rounded,
+                    title: 'Volume buttons',
+                    subtitle: 'Up, down, up, down within 2 seconds. Only '
+                        'works while FitSocial is open on screen.',
+                    trailing: Switch(
+                      value: settings.volumeShortcutEnabled,
+                      onChanged: (v) => _saveVolumeShortcut(ref, settings, v),
+                    ),
+                    onTap: () => _saveVolumeShortcut(
+                      ref,
+                      settings,
+                      !settings.volumeShortcutEnabled,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (defaultTargetPlatform == TargetPlatform.android)
+            const SafetyNote(
+              'The volume shortcut cannot work with the phone locked or with '
+              'FitSocial closed. No app is allowed to watch the volume buttons '
+              'then. You feel one short vibration when it sends.',
+            ),
           const SizedBox(height: AppSpacing.lg),
           const SafetySectionLabel('After an alert'),
           SafetyCard(
@@ -178,48 +219,16 @@ class _Limits extends StatelessWidget {
   }
 }
 
-class _PanicButton extends StatelessWidget {
-  const _PanicButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Send silent alert. Sends immediately.',
-      child: Material(
-        color: const Color(0xFFB3261E),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          onTap: onPressed,
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 28, horizontal: 20),
-            child: Column(
-              children: [
-                Icon(Icons.sos_rounded, color: Colors.white, size: 48),
-                SizedBox(height: AppSpacing.sm),
-                Text(
-                  'Send silent alert',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Sends straight away. Nothing sounds on your phone.',
-                  style: TextStyle(color: Color(0xDDFFFFFF)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+Future<void> _saveVolumeShortcut(
+  WidgetRef ref,
+  SafetySettings settings,
+  bool enabled,
+) async {
+  final uid = ref.read(currentUserIdProvider);
+  if (uid == null) return;
+  await ref
+      .read(safetyRepositoryProvider)
+      .saveSettings(uid, settings.copyWith(volumeShortcutEnabled: enabled));
 }
 
 /// "I'm safe now": ends any open alert, including one left running by the

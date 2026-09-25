@@ -73,6 +73,10 @@ dependencies:
   spotify_sdk: ^3.0.2
   share_plus: ^12.0.2
   url_launcher: ^6.3.2
+  # The "Send alert" entry on the app icon's long-press menu. The Flutter
+  # team's own package, over Android app shortcuts and iOS Home Screen Quick
+  # Actions: the one silent-alert trigger that works the same on both.
+  quick_actions: ^1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

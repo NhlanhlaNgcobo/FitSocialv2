@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:uuid/uuid.dart';
 
+import '../../safety/presentation/hold_to_alert.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/connectivity/backend_reachability.dart';
@@ -444,6 +445,10 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       appBar: AppBar(
         title: Text('Live ${widget.kind.descriptor.singular}'),
         actions: [
+          // Hold for two seconds to send a silent alert. An icon among the
+          // others rather than a red button: out on a run, nothing on screen
+          // should announce that help is being called.
+          const HoldToAlertButton(compact: true),
           const MusicIslandAction(),
           RunHeartRateAction(
             bpm: liveBpm,

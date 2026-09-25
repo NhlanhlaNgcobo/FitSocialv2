@@ -120,8 +120,8 @@ int usedSafetySlots(
   return app + emailContacts.where((c) => c.takesSlot).length;
 }
 
-/// The two panic PIN hashes, kept owner-only under
-/// `users/{uid}/private/safety`.
+/// The two panic PIN hashes and the volume-button shortcut, kept owner-only
+/// under `users/{uid}/private/safety`.
 ///
 /// There are no alarm options: a panic is silent. Documents written before
 /// that may still carry siren and flash fields; they are ignored.
@@ -131,6 +131,7 @@ class SafetySettings {
     this.pinSalt,
     this.safePinHash,
     this.duressPinHash,
+    this.volumeShortcutEnabled = false,
   });
 
   factory SafetySettings.fromMap(Map<String, dynamic>? map) {
@@ -139,6 +140,7 @@ class SafetySettings {
       pinSalt: map['pinSalt'] as String?,
       safePinHash: map['safePinHash'] as String?,
       duressPinHash: map['duressPinHash'] as String?,
+      volumeShortcutEnabled: map['volumeShortcutEnabled'] as bool? ?? false,
     );
   }
 
@@ -147,6 +149,11 @@ class SafetySettings {
   final String? pinSalt;
   final String? safePinHash;
   final String? duressPinHash;
+
+  /// Volume up, down, up, down sends a silent alert. Android only, and only
+  /// with FitSocial on screen; off unless the user turns it on, so nobody
+  /// sends an alert by accident with a shortcut they never chose.
+  final bool volumeShortcutEnabled;
 
   /// Whether both PINs are set. When they are not, an alert ends without
   /// one — a user must never be left unable to end their own alert.
@@ -159,11 +166,14 @@ class SafetySettings {
     String? pinSalt,
     String? safePinHash,
     String? duressPinHash,
+    bool? volumeShortcutEnabled,
   }) {
     return SafetySettings(
       pinSalt: pinSalt ?? this.pinSalt,
       safePinHash: safePinHash ?? this.safePinHash,
       duressPinHash: duressPinHash ?? this.duressPinHash,
+      volumeShortcutEnabled:
+          volumeShortcutEnabled ?? this.volumeShortcutEnabled,
     );
   }
 
@@ -171,6 +181,7 @@ class SafetySettings {
         'pinSalt': pinSalt,
         'safePinHash': safePinHash,
         'duressPinHash': duressPinHash,
+        'volumeShortcutEnabled': volumeShortcutEnabled,
       };
 }
 

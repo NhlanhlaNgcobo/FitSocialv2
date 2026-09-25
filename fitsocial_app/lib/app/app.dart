@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/bootstrap/bootstrap_status.dart';
 import '../features/notifications/application/push_tap_router.dart';
 import '../features/safety/application/safety_providers.dart';
+import '../features/safety/application/safety_shortcuts.dart';
 import '../shared/widgets/liquid_backdrop.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
@@ -26,6 +27,11 @@ class _FitSocialAppState extends ConsumerState<FitSocialApp>
     // running by the duress PIN -- picks its live location back up. Only from
     // the foreground: neither platform lets background location start there.
     WidgetsBinding.instance.addPostFrameCallback((_) => _resumeSafety());
+    // The app-icon "Send alert" shortcut and the volume-button pattern. Early,
+    // like push taps: a shortcut that launched the app is waiting to be read.
+    if (ref.read(bootstrapStatusProvider).canUseFirebase) {
+      ref.read(safetyShortcutsProvider).start();
+    }
     // Started here rather than lazily from a screen, because the case it exists
     // for is the one where no screen has been built yet: a notification tapped
     // while the app was not running. `getInitialMessage` has an answer waiting
