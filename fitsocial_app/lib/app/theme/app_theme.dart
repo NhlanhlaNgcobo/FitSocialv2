@@ -4,6 +4,7 @@ import '../router/page_transitions.dart';
 import 'app_colors.dart';
 import 'app_palette.dart';
 import 'app_spacing.dart';
+import 'app_typography.dart';
 
 abstract final class AppTheme {
   static ThemeData get darkTheme => _build(AppPalette.dark);
@@ -71,11 +72,7 @@ abstract final class AppTheme {
         elevation: 0,
         centerTitle: false,
         iconTheme: IconThemeData(color: palette.text),
-        titleTextStyle: TextStyle(
-          color: palette.text,
-          fontSize: 20,
-          fontWeight: FontWeight.w700,
-        ),
+        titleTextStyle: AppTypography.title.copyWith(color: palette.text),
       ),
       cardTheme: CardThemeData(
         color: palette.surface,

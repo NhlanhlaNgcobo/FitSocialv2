@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../app/theme/app_typography.dart';
 import 'app_photo.dart';
 import 'fit_social_logo.dart';
 import 'liquid_glass.dart';
@@ -626,13 +627,7 @@ class _StatCell extends StatelessWidget {
             ),
             maxLines: 1,
             softWrap: false,
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: skin.text,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+            style: AppTypography.statNumeralCompact.copyWith(color: skin.text),
           ),
         ),
       ],

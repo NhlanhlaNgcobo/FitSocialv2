@@ -440,10 +440,10 @@ class PostCard extends StatelessWidget {
                         // blank second line.
                         if (subtitle.isNotEmpty) ...[
                           const SizedBox(height: 2),
+                          // Wraps rather than ellipsises: on a meal or a
+                          // workout this is the name of what was logged.
                           Text(
                             subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12.5,
                               height: 1.2,

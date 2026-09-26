@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_motion.dart';
 import '../../app/theme/app_palette.dart';
 import '../reactions/fit_reaction.dart';
 
@@ -102,13 +103,28 @@ class _ReactionTriggerState extends State<ReactionTrigger>
 
   FitReaction? _hovered;
 
+  /// Whether the tray that is about to open (or the one already open) should
+  /// keep its overshoot and full timing. Snapshotted in [_openTray], the same
+  /// way [_palette] is: nothing restyles the gesture mid-press, so reading it
+  /// once is as correct as subscribing and far simpler.
+  bool _reduceMotion = false;
+
+  static const Duration _revealDuration = Duration(milliseconds: 260);
+  static const Duration _closeDuration = Duration(milliseconds: 140);
+
+  /// Shorter, and paired with a non-overshooting curve in [_ReactionTray] and
+  /// [_TrayReaction] — the tray still opens and closes, it just stops
+  /// springing past its rest size to get there.
+  static const Duration _reducedRevealDuration = Duration(milliseconds: 140);
+  static const Duration _reducedCloseDuration = Duration(milliseconds: 90);
+
   @override
   void initState() {
     super.initState();
     _reveal = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 260),
-      reverseDuration: const Duration(milliseconds: 140),
+      duration: _revealDuration,
+      reverseDuration: _closeDuration,
     );
   }
 
@@ -170,6 +186,10 @@ class _ReactionTriggerState extends State<ReactionTrigger>
     );
     _hovered = null;
     _palette = context.palette;
+    _reduceMotion = context.reduceMotion;
+    _reveal.duration = _reduceMotion ? _reducedRevealDuration : _revealDuration;
+    _reveal.reverseDuration =
+        _reduceMotion ? _reducedCloseDuration : _closeDuration;
 
     _tray = OverlayEntry(builder: (context) => _buildTray());
     overlay.insert(_tray!);
@@ -263,6 +283,7 @@ class _ReactionTriggerState extends State<ReactionTrigger>
               itemExtent: _itemExtent,
               padding: _trayPadding,
               palette: palette,
+              reduceMotion: _reduceMotion,
             ),
           ),
         ),
@@ -287,6 +308,7 @@ class _ReactionTray extends StatelessWidget {
     required this.itemExtent,
     required this.padding,
     required this.palette,
+    required this.reduceMotion,
   });
 
   /// Built once and shared, so the engine can keep the blur's layer instead of
@@ -302,6 +324,7 @@ class _ReactionTray extends StatelessWidget {
   final double itemExtent;
   final double padding;
   final AppPalette palette;
+  final bool reduceMotion;
 
   double get _radius => (itemExtent + padding * 2) / 2;
 
@@ -398,6 +421,7 @@ class _ReactionTray extends StatelessWidget {
                           entrance: _staggered(i),
                           isHovered: FitReaction.all[i] == hovered,
                           isSelected: FitReaction.all[i] == selected,
+                          reduceMotion: reduceMotion,
                         ),
                     ],
                   ),
@@ -411,12 +435,18 @@ class _ReactionTray extends StatelessWidget {
   }
 
   /// One reaction's share of the reveal, offset so the row arrives in order.
+  ///
+  /// Reduce motion keeps the stagger — it's what makes seven reactions read
+  /// as one row rather than one blob — but drops the overshoot each one pops
+  /// past on arrival.
   double _staggered(int index) {
     const step = 0.06;
     final start = index * step;
     final span = 1 - (step * (FitReaction.all.length - 1));
     final local = ((reveal - start) / span).clamp(0.0, 1.0);
-    return Curves.easeOutBack.transform(local);
+    return reduceMotion
+        ? Curves.easeOut.transform(local)
+        : Curves.easeOutBack.transform(local);
   }
 
   /// The name of the aimed-at reaction, in a capsule above the row — the only
@@ -518,6 +548,7 @@ class _TrayReaction extends StatelessWidget {
     required this.entrance,
     required this.isHovered,
     required this.isSelected,
+    required this.reduceMotion,
   });
 
   final FitReaction reaction;
@@ -525,6 +556,7 @@ class _TrayReaction extends StatelessWidget {
   final double entrance;
   final bool isHovered;
   final bool isSelected;
+  final bool reduceMotion;
 
   /// How much of its slot the emoji fills at rest.
   ///
@@ -545,11 +577,11 @@ class _TrayReaction extends StatelessWidget {
         // leaves behind is as much of the signal as the size is.
         offset: isHovered ? const Offset(0, -0.3) : Offset.zero,
         duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOutBack,
+        curve: reduceMotion ? Curves.easeOut : Curves.easeOutBack,
         child: AnimatedScale(
           scale: isHovered ? _hoveredScale : 1,
           duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutBack,
+          curve: reduceMotion ? Curves.easeOut : Curves.easeOutBack,
           child: Transform.scale(
             scale: entrance,
             child: Stack(

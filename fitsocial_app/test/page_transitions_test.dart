@@ -380,5 +380,70 @@ void main() {
       await tester.pumpAndSettle();
       expect(GlassMotion.settled.value, isTrue);
     });
+
+    testWidgets('reduce motion collapses the rise', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        () => tester.platformDispatcher.clearAccessibilityFeaturesTestValue(),
+      );
+
+      await tester.pumpWidget(pushable());
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      // The push itself needs a frame before the new route's widgets exist
+      // in the tree at all; a single millisecond keeps this at the start of
+      // the transition rather than mid-flight.
+      await tester.pump(const Duration(milliseconds: 1));
+
+      // Checked at the start of the transition rather than mid-flight:
+      // AnimationBehavior.normal already runs this route's own controller at
+      // a fraction of its set duration once disableAnimations is true, so
+      // there is no frame guaranteed to land strictly between 0 and 1. What
+      // proves the tween itself was swapped for a zero-distance one is that
+      // its value is Offset.zero even here, at the first frame -- a real
+      // rise tween would read Offset(0, _rise) at this same point.
+      final slides = find.ancestor(
+        of: find.text('pushed', skipOffstage: false),
+        matching: find.byType(SlideTransition),
+      );
+      final rise = tester.widgetList<SlideTransition>(slides).first;
+      expect(rise.position.value, Offset.zero);
+
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('reduce motion still crossfades, just faster', (tester) async {
+      // Flutter's own AnimationController already runs at a fraction of its
+      // set duration once SemanticsBinding.disableAnimations is true -- see
+      // AnimationBehavior.normal -- so the route's own fade completes in a
+      // handful of milliseconds rather than the usual 300. That is a good
+      // thing (Apple's guidance is to shorten, not only to simplify), but it
+      // means there is no frame left to catch the fade strictly mid-flight;
+      // what this asserts instead is that the mechanism survives at all --
+      // a FadeTransition still sits over the route, rather than the crossfade
+      // having been swapped out for an instant cut.
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        () => tester.platformDispatcher.clearAccessibilityFeaturesTestValue(),
+      );
+
+      await tester.pumpWidget(pushable());
+      await tester.tap(find.text('open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(
+        find.ancestor(
+          of: find.text('pushed', skipOffstage: false),
+          matching: find.byType(FadeTransition),
+        ),
+        findsWidgets,
+      );
+
+      await tester.pumpAndSettle();
+      expect(find.text('pushed'), findsOneWidget);
+    });
   });
 }

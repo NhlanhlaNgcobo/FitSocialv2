@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/widgets/glass_motion.dart';
+import '../theme/app_motion.dart';
 
 /// How one screen gives way to the next, everywhere in the app.
 ///
@@ -111,6 +112,17 @@ class _SmoothPageTransitionState extends State<_SmoothPageTransition> {
     begin: Offset.zero,
     end: const Offset(0, -_recede),
   );
+
+  /// What [_riseTween]/[_recedeTween] become for someone who has asked for
+  /// less motion: no distance at all, so the transition is left as the plain
+  /// crossfade the two fades already carry — Apple's own reduce-motion
+  /// guidance replaces a slide with a crossfade rather than removing feedback
+  /// outright, and the fade is that feedback.
+  static final Tween<Offset> _stillTween = Tween<Offset>(
+    begin: Offset.zero,
+    end: Offset.zero,
+  );
+
   static final Tween<double> _fadeOutTween = Tween<double>(begin: 1, end: 0);
 
   late CurvedAnimation _fadeInDriver;
@@ -126,10 +138,25 @@ class _SmoothPageTransitionState extends State<_SmoothPageTransition> {
   /// Whether this screen is currently counted against [GlassMotion].
   bool _holding = false;
 
+  /// Cached rather than read fresh in [_attach]: [_attach] runs from
+  /// [initState], where an [InheritedWidget] dependency isn't safe to
+  /// register yet. [didChangeDependencies] corrects it before the first
+  /// frame ever paints, so nothing here is visibly wrong even for a moment.
+  bool _reduceMotion = false;
+
   @override
   void initState() {
     super.initState();
     _attach();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = context.reduceMotion;
+    if (reduceMotion == _reduceMotion) return;
+    _reduceMotion = reduceMotion;
+    _rebuildOffsetAnimations();
   }
 
   @override
@@ -176,12 +203,21 @@ class _SmoothPageTransitionState extends State<_SmoothPageTransition> {
 
     _fadeIn = _fadeInDriver;
     _fadeOut = _fadeOutTween.animate(_fadeOutDriver);
-    _riseOffset = _riseTween.animate(_riseDriver);
-    _recedeOffset = _recedeTween.animate(_recedeDriver);
+    _rebuildOffsetAnimations();
 
     _fadeIn.addListener(_syncMotion);
     _fadeOut.addListener(_syncMotion);
     _syncMotion();
+  }
+
+  /// The one part of [_attach] that depends on [_reduceMotion], split out so
+  /// [didChangeDependencies] can redo just this when the setting changes
+  /// without tearing down and rebuilding the drivers above it.
+  void _rebuildOffsetAnimations() {
+    final riseTween = _reduceMotion ? _stillTween : _riseTween;
+    final recedeTween = _reduceMotion ? _stillTween : _recedeTween;
+    _riseOffset = riseTween.animate(_riseDriver);
+    _recedeOffset = recedeTween.animate(_recedeDriver);
   }
 
   void _detach() {
