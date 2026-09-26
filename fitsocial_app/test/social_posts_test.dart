@@ -353,7 +353,7 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expect(
-        find.textContaining("go-to post-run meal", findRichText: true),
+        find.textContaining('go-to post-run meal', findRichText: true),
         findsOneWidget,
       );
     });
