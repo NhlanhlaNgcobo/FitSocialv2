@@ -655,6 +655,16 @@ for (const [name, handler] of Object.entries(require("./running_challenges"))) {
   exports[name] = handler;
 }
 
+// --- Milestones -------------------------------------------------------------
+//
+// Streaks, badges and personal bests, posted to the feed as their own cards so
+// there is something to cheer that nobody had to write. A third trigger on
+// runs/{runId}, for the same reason running_challenges.js adds a second one.
+for (const [name, handler] of Object.entries(require("./milestones"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+
 // --- Push -------------------------------------------------------------------
 //
 // One trigger on the notification inbox, turning the rows every other module
