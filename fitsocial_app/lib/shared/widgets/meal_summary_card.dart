@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../app/theme/app_typography.dart';
 import 'app_photo.dart';
 import 'fit_social_logo.dart';
 import 'macro_ring.dart';
@@ -179,12 +180,8 @@ class MealSummaryCard extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                style: const TextStyle(
+                                style: AppTypography.statNumeralLarge.copyWith(
                                   color: AppColors.onMedia,
-                                  fontSize: 30,
-                                  height: 1,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.8,
                                   shadows: onMediaTextShadows,
                                 ),
                               ),

@@ -8,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../app/theme/app_typography.dart';
 import '../../features/main/domain/app_models.dart';
 import 'fit_social_logo.dart';
 import 'route_sparkline.dart';
@@ -676,13 +677,7 @@ class _Stat extends StatelessWidget {
               ],
             ),
             maxLines: 1,
-            style: TextStyle(
-              color: skin.text,
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-              height: 1,
-              letterSpacing: -0.8,
-            ),
+            style: AppTypography.statNumeralLarge.copyWith(color: skin.text),
           ),
         ),
         const SizedBox(height: 4),
