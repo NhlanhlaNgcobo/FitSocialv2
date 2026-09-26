@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/theme/app_motion.dart';
 import '../../features/auth/application/app_session.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
@@ -30,9 +31,15 @@ class DoubleTapReact extends ConsumerStatefulWidget {
 
 class _DoubleTapReactState extends ConsumerState<DoubleTapReact>
     with SingleTickerProviderStateMixin {
+  static const Duration _burstDuration = Duration(milliseconds: 700);
+
+  /// Shorter, and without the overshoot pop below — see [_onDoubleTap] and the
+  /// builder in [build].
+  static const Duration _reducedBurstDuration = Duration(milliseconds: 260);
+
   late final AnimationController _burst = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 700),
+    duration: _burstDuration,
   );
 
   @override
@@ -43,6 +50,8 @@ class _DoubleTapReactState extends ConsumerState<DoubleTapReact>
 
   Future<void> _onDoubleTap() async {
     HapticFeedback.lightImpact();
+    _burst.duration =
+        context.reduceMotion ? _reducedBurstDuration : _burstDuration;
     _burst.forward(from: 0);
 
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -75,10 +84,14 @@ class _DoubleTapReactState extends ConsumerState<DoubleTapReact>
                   builder: (context, _) {
                     if (!_burst.isAnimating) return const SizedBox.shrink();
                     final t = _burst.value;
-                    // Pops past full size, settles, then fades out.
-                    final scale = t < 0.3
-                        ? Curves.easeOutBack.transform(t / 0.3) * 1.15
-                        : 1.15 - 0.15 * ((t - 0.3) / 0.7);
+                    // Reduce motion drops the overshoot pop — a plain scale-in
+                    // and fade-out still confirms the reaction landed, without
+                    // the spring past full size.
+                    final scale = context.reduceMotion
+                        ? Curves.easeOut.transform(t.clamp(0.0, 1.0))
+                        : (t < 0.3
+                            ? Curves.easeOutBack.transform(t / 0.3) * 1.15
+                            : 1.15 - 0.15 * ((t - 0.3) / 0.7));
                     final opacity = t < 0.6 ? 1.0 : 1 - (t - 0.6) / 0.4;
                     return Opacity(
                       opacity: opacity.clamp(0.0, 1.0),

@@ -32,6 +32,10 @@ class HoldToAlertButton extends ConsumerStatefulWidget {
 
 class _HoldToAlertButtonState extends ConsumerState<HoldToAlertButton>
     with SingleTickerProviderStateMixin {
+  // Deliberately not branched on reduce-motion: this ring is the hold's
+  // progress, not a decoration of it — the two seconds it takes to fill *is*
+  // the safeguard against a pocket or a careless thumb. Shortening or
+  // simplifying it would remove information, not motion for its own sake.
   late final AnimationController _hold = AnimationController(
     vsync: this,
     duration: holdToAlertDuration,

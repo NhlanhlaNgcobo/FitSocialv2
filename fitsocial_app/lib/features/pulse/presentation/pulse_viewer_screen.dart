@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_motion.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/reactions/fit_reaction.dart';
@@ -15,6 +16,7 @@ import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/reaction_bar.dart';
 import '../../../shared/widgets/shared_post_card.dart';
+import '../../../shared/widgets/velocity_spring.dart';
 import '../application/pulse_providers.dart';
 import '../domain/pulse_models.dart';
 import '../domain/pulse_text_style.dart';
@@ -41,9 +43,26 @@ class PulseViewerScreen extends ConsumerStatefulWidget {
 }
 
 class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final PageController _pageController;
   late final AnimationController _frameProgress;
+
+  /// How far the swipe-to-dismiss has carried the frame downward, in logical
+  /// pixels. Zero at rest; only ever positive — the gesture drags away from
+  /// the viewer, never toward it.
+  double _dragDy = 0;
+
+  /// The velocity-driven settle that takes over once the finger lifts —
+  /// spring back to zero, or continue the fling off-screen. Rebuilt per
+  /// release rather than reused, since start, end and velocity are different
+  /// every time.
+  AnimationController? _dismissSpring;
+
+  /// A flung swipe below this speed is read as a drag that didn't mean to
+  /// dismiss; the drop-distance threshold below is the other half of that
+  /// decision, for a slow but deliberate drag that never picks up speed.
+  static const double _flingVelocity = 700;
+  static const double _dismissDistanceFraction = 0.22;
 
   /// The tray as it stood when the viewer opened.
   ///
@@ -105,6 +124,7 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
   @override
   void dispose() {
     _frameProgress.dispose();
+    _dismissSpring?.dispose();
     _videoController?.removeListener(_onVideoTick);
     _videoController?.dispose();
     _pageController.dispose();
@@ -332,6 +352,55 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
     if (mounted && context.canPop()) context.pop();
   }
 
+  /// Follows the finger 1:1 while a swipe-to-dismiss is live. Ignored while a
+  /// spring from a previous release is still settling — [_dragDy] is already
+  /// being driven by that spring's own listener, and a fresh drag starting
+  /// mid-settle is read as another release rather than a grab.
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_dismissSpring != null) return;
+    setState(() => _dragDy = math.max(0, _dragDy + details.delta.dy));
+  }
+
+  void _onDragEnd(DragEndDetails details, BoxConstraints constraints) {
+    final velocity = details.primaryVelocity ?? 0;
+    final dismiss =
+        _dragDy > constraints.maxHeight * _dismissDistanceFraction ||
+            velocity > _flingVelocity;
+
+    _runDismissSpring(
+      to: dismiss ? constraints.maxHeight + 200 : 0,
+      velocity: velocity,
+      thenClose: dismiss,
+    );
+  }
+
+  /// Carries the release velocity into whichever of the two outcomes
+  /// [_onDragEnd] decided on: spring back to rest, wobbling if the release
+  /// was slow, or continue the fling off-screen at the same speed before the
+  /// route actually pops — so the frame has already left by the time the
+  /// page transition's own crossfade begins.
+  void _runDismissSpring({
+    required double to,
+    required double velocity,
+    required bool thenClose,
+  }) {
+    _dismissSpring?.dispose();
+    final controller = AnimationController.unbounded(vsync: this);
+    _dismissSpring = controller;
+
+    final simulation =
+        VelocitySpring.to(start: _dragDy, end: to, velocity: velocity);
+    controller.addListener(() {
+      if (!mounted) return;
+      setState(() => _dragDy = controller.value);
+    });
+    controller.animateWith(simulation).whenComplete(() {
+      if (!mounted) return;
+      _dismissSpring = null;
+      if (thenClose) _close();
+    });
+  }
+
   void _handleTap(TapUpDetails details, BoxConstraints constraints) {
     // Instagram's split: a narrow strip on the left goes back, the rest
     // advances, because forward is by far the more common intent.
@@ -446,28 +515,46 @@ class _PulseViewerScreenState extends ConsumerState<PulseViewerScreen>
       backgroundColor: AppColors.mediaBackdrop,
       body: LayoutBuilder(
         builder: (context, constraints) {
+          final reduceMotion = context.reduceMotion;
+          final pages = PageView.builder(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            itemCount: _entries.length,
+            itemBuilder: (context, index) {
+              return _CubePage(
+                controller: _pageController,
+                index: index,
+                fallbackPage: _entryIndex,
+                child: _buildEntry(index),
+              );
+            },
+          );
+
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTapUp: (details) => _handleTap(details, constraints),
             onLongPressStart: (_) => _setHeld(true),
             onLongPressEnd: (_) => _setHeld(false),
             onLongPressCancel: () => _setHeld(false),
-            onVerticalDragEnd: (details) {
-              if ((details.primaryVelocity ?? 0) > 220) _close();
-            },
-            child: PageView.builder(
-              controller: _pageController,
-              onPageChanged: _onPageChanged,
-              itemCount: _entries.length,
-              itemBuilder: (context, index) {
-                return _CubePage(
-                  controller: _pageController,
-                  index: index,
-                  fallbackPage: _entryIndex,
-                  child: _buildEntry(index),
-                );
-              },
-            ),
+            // Reduced motion keeps the exact original gesture: a bare
+            // threshold on release, no drag-follow and no spring — a
+            // continuous fling is exactly the motion that setting exists to
+            // remove.
+            onVerticalDragUpdate: reduceMotion ? null : _onDragUpdate,
+            onVerticalDragEnd: reduceMotion
+                ? (details) {
+                    if ((details.primaryVelocity ?? 0) > 220) _close();
+                  }
+                : (details) => _onDragEnd(details, constraints),
+            child: reduceMotion || _dragDy == 0
+                ? pages
+                : Transform.translate(
+                    offset: Offset(0, _dragDy),
+                    child: Opacity(
+                      opacity: (1 - _dragDy / 400).clamp(0.15, 1.0),
+                      child: pages,
+                    ),
+                  ),
           );
         },
       ),

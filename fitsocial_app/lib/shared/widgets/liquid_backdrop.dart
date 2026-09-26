@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme/app_motion.dart';
 import '../../app/theme/app_palette.dart';
 import 'glass_motion.dart';
 
@@ -83,8 +84,9 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
   /// a double will notice inside one run of the app.
   double _from = LiquidBackdrop.rest;
 
-  /// Whether the system has been asked for less motion, read once per
-  /// dependency change rather than on every frame.
+  /// Whether less motion has been asked for — by the system, or by the app's
+  /// own override, see [AppMotionX] — read once per dependency change rather
+  /// than on every frame.
   bool _stilled = false;
 
   double get _phase => _from + LiquidBackdrop.shift * _curve.value;
@@ -99,9 +101,9 @@ class _LiquidBackdropState extends State<LiquidBackdrop>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Someone who has asked the system for less motion gets a ground that never
-    // moves at all. The light is the point; the shift is a bonus.
-    _stilled = MediaQuery.disableAnimationsOf(context);
+    // Someone who has asked for less motion gets a ground that never moves at
+    // all. The light is the point; the shift is a bonus.
+    _stilled = context.reduceMotion;
     if (_stilled) _hold();
   }
 

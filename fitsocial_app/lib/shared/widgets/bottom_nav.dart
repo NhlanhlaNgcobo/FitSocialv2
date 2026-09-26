@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_colors.dart';
+import '../../app/theme/app_motion.dart';
 import '../../app/theme/app_palette.dart';
 import 'liquid_glass.dart';
 import 'nav_icons.dart';
@@ -115,11 +116,35 @@ class _FitSocialBottomNavState extends State<FitSocialBottomNav>
     value: widget.hidden ? 0 : 1,
   );
 
-  late final Animation<double> _visibility = CurvedAnimation(
-    parent: _controller,
-    curve: FitSocialBottomNav._revealCurve,
-    reverseCurve: FitSocialBottomNav._hideCurve,
-  );
+  /// Rebuilt whenever reduce-motion changes — see [didChangeDependencies] —
+  /// so it isn't `late final`. Nullable only until the first build gives it a
+  /// value; nothing reads it before then.
+  CurvedAnimation? _visibilityCurve;
+
+  Animation<double> get _visibility => _visibilityCurve!;
+
+  /// Cached rather than read fresh each build, so a rebuild for an unrelated
+  /// reason doesn't tear down and recreate the curve for nothing.
+  bool _reduceMotion = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = context.reduceMotion;
+    if (_visibilityCurve != null && reduceMotion == _reduceMotion) return;
+    _reduceMotion = reduceMotion;
+    _visibilityCurve?.dispose();
+    _visibilityCurve = CurvedAnimation(
+      parent: _controller,
+      // The overshoot is the one part of this motion that is purely
+      // decorative — the show/hide itself is the information, the pop past
+      // rest is the flourish — so reduce motion keeps the former and drops
+      // the latter rather than making the bar simply vanish and appear.
+      curve:
+          _reduceMotion ? Curves.easeOutCubic : FitSocialBottomNav._revealCurve,
+      reverseCurve: FitSocialBottomNav._hideCurve,
+    );
+  }
 
   @override
   void didUpdateWidget(FitSocialBottomNav oldWidget) {
@@ -137,6 +162,7 @@ class _FitSocialBottomNavState extends State<FitSocialBottomNav>
 
   @override
   void dispose() {
+    _visibilityCurve?.dispose();
     _controller.dispose();
     super.dispose();
   }
