@@ -18,6 +18,7 @@ import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/services/workout_card_exporter.dart';
 import '../../../shared/widgets/meal_summary_card.dart';
 import '../../../shared/widgets/milestone_card.dart';
+import '../../../shared/widgets/social_post_cards.dart';
 import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../application/content_providers.dart';
@@ -222,6 +223,16 @@ class _PostPageState extends ConsumerState<_PostPage> {
               ),
               child: TaggedUsersLine(tagged: post.taggedUsers),
             ),
+          if (post.prompt case final prompt?)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: PromptAnswerLine(prompt: prompt),
+            ),
           DoubleTapReact(
             postId: post.id,
             child: media == _MediaKind.none
@@ -247,8 +258,9 @@ class _PostPageState extends ConsumerState<_PostPage> {
             iconSize: 24,
             onCommentTapped: _startCommenting,
           ),
-          // A milestone's caption repeats its card, for builds without one.
-          if (media != _MediaKind.none && media != _MediaKind.milestone)
+          // A milestone's, poll's or meetup's caption repeats its card, for
+          // builds without one.
+          if (media != _MediaKind.none && !media.captionIsFallback)
             _Caption(post: post),
           _Timestamp(post: post),
           const _SectionRule(),
@@ -270,6 +282,8 @@ List<String> _strip(FeedPost post, _MediaKind media) {
     case _MediaKind.workout:
     case _MediaKind.meal:
     case _MediaKind.milestone:
+    case _MediaKind.poll:
+    case _MediaKind.meetup:
       return const [];
     case _MediaKind.run:
       final shown = {
@@ -295,8 +309,19 @@ enum _MediaKind {
   /// A streak, badge or personal best, posted by the server.
   milestone,
 
+  /// A question with answers to vote on.
+  poll,
+
+  /// A session to join.
+  meetup,
+
   /// Words only — the caption becomes the hero instead.
   none;
+
+  /// Whether the post's caption only restates this block, for builds that
+  /// can't draw it.
+  bool get captionIsFallback =>
+      this == milestone || this == poll || this == meetup;
 
   static _MediaKind of(FeedPost post) {
     final hasRoute = post.routePoints.length >= 2;
@@ -304,6 +329,12 @@ enum _MediaKind {
 
     if (post.postType == PostType.milestone && post.milestone != null) {
       return _MediaKind.milestone;
+    }
+    if (post.postType == PostType.poll && post.poll != null) {
+      return _MediaKind.poll;
+    }
+    if (post.postType == PostType.meetup && post.meetup != null) {
+      return _MediaKind.meetup;
     }
 
     // A run outranks its photo, exactly as the feed card decides it: the photo
@@ -449,6 +480,20 @@ class _MediaBlock extends StatelessWidget {
       case _MediaKind.milestone:
         return MilestoneCard(
           milestone: post.milestone!,
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        );
+      case _MediaKind.poll:
+        return PollCard(
+          postId: post.id,
+          authorId: post.authorId,
+          poll: post.poll!,
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        );
+      case _MediaKind.meetup:
+        return MeetupCard(
+          postId: post.id,
+          authorId: post.authorId,
+          meetup: post.meetup!,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         );
       case _MediaKind.none:

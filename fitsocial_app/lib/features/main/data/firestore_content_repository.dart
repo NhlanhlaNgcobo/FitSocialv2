@@ -1703,6 +1703,7 @@ class FirestoreContentRepository implements ContentRepository {
       postType: draft.imageUrl != null ? 'image' : 'text',
       imageAspectRatio: draft.imageAspectRatio,
       taggedUsers: draft.taggedUsers,
+      prompt: draft.prompt,
     );
     return ActivitySaveResult(
       message: result.synced
@@ -1711,6 +1712,136 @@ class FirestoreContentRepository implements ContentRepository {
       createdPost: result.post,
     );
   }
+
+  @override
+  Future<ActivitySaveResult> createPoll(
+    UserProfileDraft? profile,
+    PollDraft draft,
+  ) async {
+    final question = draft.question.trim();
+    final options = draft.options
+        .map((option) => option.trim())
+        .where((option) => option.isNotEmpty)
+        .take(PostPoll.maxOptions)
+        .toList(growable: false);
+    if (question.isEmpty || options.length < PostPoll.minOptions) {
+      throw ArgumentError('A poll needs a question and two answers.');
+    }
+
+    final result = await _createPost(
+      profile: profile,
+      activity: 'Poll',
+      // What a build without the poll card shows: the question, and the
+      // answers as a list, so it can at least be answered in the comments.
+      caption:
+          [question, '', for (final option in options) '• $option'].join('\n'),
+      metricLabels: const [],
+      themeKey: 'sunset',
+      postType: 'poll',
+      poll: PostPoll(question: question, options: options),
+    );
+    return ActivitySaveResult(
+      message: result.synced
+          ? 'Poll posted.'
+          : "Poll saved. It'll post once you're back online.",
+      createdPost: result.post,
+    );
+  }
+
+  @override
+  Future<ActivitySaveResult> createMeetup(
+    UserProfileDraft? profile,
+    MeetupDraft draft,
+  ) async {
+    final meetup = PostMeetup(
+      title: draft.title.trim(),
+      place: draft.place.trim(),
+      startsAt: draft.startsAt,
+      note: draft.note.trim(),
+    );
+    if (meetup.title.isEmpty) {
+      throw ArgumentError('A meetup needs a name.');
+    }
+
+    final when = PostMeetup.whenLabel(meetup.startsAt, DateTime.now());
+    final result = await _createPost(
+      profile: profile,
+      activity: 'Join me',
+      // Standalone for a build without the meetup card. Says the day as a date
+      // rather than "Tomorrow", which would be wrong by the time it is read.
+      caption: [
+        '📍 ${meetup.title}',
+        [
+          PostMeetup.whenLabel(meetup.startsAt, DateTime(1970)),
+          if (meetup.place.isNotEmpty) meetup.place,
+        ].join(' · '),
+        if (meetup.note.isNotEmpty) ...['', meetup.note],
+      ].join('\n'),
+      metricLabels: const [],
+      themeKey: 'sunset',
+      postType: 'meetup',
+      meetup: meetup,
+    );
+    return ActivitySaveResult(
+      message: result.synced
+          ? 'Posted. $when'
+          : "Saved. It'll post once you're back online.",
+      createdPost: result.post,
+    );
+  }
+
+  @override
+  Future<void> setPollVote(String postId, String userId, int? option) {
+    // One key, never the whole map: the rules let a voter touch exactly their
+    // own entry, and a read-modify-write would race other voters anyway.
+    return postsCollection.doc(postId).update({
+      'pollVotes.$userId': option ?? FieldValue.delete(),
+    });
+  }
+
+  @override
+  Future<void> setMeetupRsvp(
+    String postId,
+    String userId, {
+    required bool going,
+  }) {
+    return postsCollection.doc(postId).update({
+      'rsvps.$userId':
+          going ? FieldValue.serverTimestamp() : FieldValue.delete(),
+    });
+  }
+
+  @override
+  Stream<FeedPost?> watchPost(String postId) {
+    return postsCollection.doc(postId).snapshots().map((snapshot) {
+      if (!snapshot.exists) return null;
+      return FirestoreMapper.toFeedPost(
+        FirestorePostRecord.fromMap(snapshot.id, snapshot.data() ?? const {}),
+      );
+    });
+  }
+
+  @override
+  Future<List<FeedPost>> fetchPromptAnswers(String promptId) async {
+    // No orderBy: equality alone rides the single-field index Firestore keeps
+    // for every field, where adding an order would need a composite one. A
+    // day's answers are few enough to sort here.
+    final snapshot = await postsCollection
+        .where('promptId', isEqualTo: promptId)
+        .limit(_promptAnswerLimit)
+        .get();
+    final records = snapshot.docs
+        .map((doc) => FirestorePostRecord.fromMap(doc.id, doc.data()))
+        .toList();
+    return _withLiveAuthors(
+      newestFirst(records, limit: _promptAnswerLimit)
+          .map(FirestoreMapper.toFeedPost)
+          .toList(growable: false),
+    );
+  }
+
+  /// A busy day's worth of answers to one question.
+  static const int _promptAnswerLimit = 100;
 
   Future<FirestoreUserRecord> _loadUserRecord() async {
     final user = _requireCurrentUser();
@@ -1798,6 +1929,9 @@ class FirestoreContentRepository implements ContentRepository {
     bool showRouteMap = false,
     double? imageAspectRatio,
     List<TaggedUser> taggedUsers = const [],
+    PostPoll? poll,
+    PostMeetup? meetup,
+    PostPrompt? prompt,
   }) async {
     final user = _requireCurrentUser();
     final userId = user.uid;
@@ -1831,6 +1965,9 @@ class FirestoreContentRepository implements ContentRepository {
       // The author can't tag themselves — their name is already on the post —
       // and a duplicate entry would draw the same chip twice.
       taggedUsers: _dedupeTags(taggedUsers, userId),
+      poll: poll,
+      meetup: meetup,
+      prompt: prompt,
       // Local clock, only for the copy handed straight back to the feed — the
       // stored value is the server timestamp written below.
       createdAt: DateTime.now(),
@@ -1876,6 +2013,23 @@ class FirestoreContentRepository implements ContentRepository {
       // tagged in" is an array-contains away, which a list of maps is not.
       if (taggedIds.isNotEmpty) 'taggedUserIds': taggedIds,
       if (mentioned.isNotEmpty) 'mentionedUserIds': mentioned,
+      // The question and its answers. Votes start absent and are written one
+      // key at a time by the voters — see setPollVote.
+      if (poll != null)
+        'poll': {'question': poll.question, 'options': poll.options},
+      if (meetup != null)
+        'meetup': {
+          'title': meetup.title,
+          'place': meetup.place,
+          'startsAt': Timestamp.fromDate(meetup.startsAt),
+          if (meetup.note.isNotEmpty) 'note': meetup.note,
+        },
+      // Flat rather than a map, so "every answer to today's question" is a
+      // single equality query on an index Firestore builds by itself.
+      if (prompt != null) ...{
+        'promptId': prompt.id,
+        'promptText': prompt.text,
+      },
       'createdAt': FieldValue.serverTimestamp(),
     }));
     await _incrementUser(postsDelta: 1);

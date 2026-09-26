@@ -76,9 +76,7 @@ class FirestoreMapper {
         post.likesCount,
       ),
       reactionsBy: _parseReactionsBy(post.reactionsBy),
-      postType: post.milestone == null && post.postType == 'milestone'
-          ? PostType.text
-          : _parsePostType(post.postType),
+      postType: _readablePostType(post),
       imageUrl: post.imageUrl,
       workoutData: post.workoutData,
       mealData: post.mealData,
@@ -87,10 +85,25 @@ class FirestoreMapper {
       authorAvatarUrl: post.authorAvatarUrl,
       imageAspectRatio: post.imageAspectRatio,
       taggedUsers: post.taggedUsers,
-      // A milestone post with no readable milestone reads as text (above),
-      // where its caption — written to stand on its own — is the whole story.
       milestone: post.milestone,
+      poll: post.poll,
+      meetup: post.meetup,
+      prompt: post.prompt,
     );
+  }
+
+  /// The post's type, or text for a milestone, poll or meetup whose own data
+  /// can't be read — its caption, written to stand on its own, is then the
+  /// whole story, which beats an empty card.
+  static PostType _readablePostType(FirestorePostRecord post) {
+    final type = _parsePostType(post.postType);
+    final unreadable = switch (type) {
+      PostType.milestone => post.milestone == null,
+      PostType.poll => post.poll == null,
+      PostType.meetup => post.meetup == null,
+      _ => false,
+    };
+    return unreadable ? PostType.text : type;
   }
 
   /// Placeholder metrics written by the old share flow, before plain photo
@@ -154,6 +167,10 @@ class FirestoreMapper {
         return PostType.meal;
       case 'milestone':
         return PostType.milestone;
+      case 'poll':
+        return PostType.poll;
+      case 'meetup':
+        return PostType.meetup;
       case 'text':
       default:
         return PostType.text;

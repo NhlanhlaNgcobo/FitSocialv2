@@ -19,6 +19,223 @@ enum PostType {
   /// best, posted under the name of the person who earned it. See
   /// functions/milestones.js.
   milestone,
+
+  /// A question with two to four answers, voted on in the card.
+  poll,
+
+  /// "Join me": a session at a time and a place, with an I'm-in button.
+  meetup,
+}
+
+/// A poll's answers and who picked which.
+///
+/// Votes live on the post as `pollVotes: {uid: optionIndex}` rather than as
+/// counters: a map the rules can check one key of is a vote nobody can stuff,
+/// and the counts are a fold over it. One vote per person, changeable.
+class PostPoll {
+  const PostPoll({
+    required this.question,
+    required this.options,
+    this.votes = const {},
+  });
+
+  static const int minOptions = 2;
+  static const int maxOptions = 4;
+  static const int maxOptionLength = 40;
+  static const int maxQuestionLength = 140;
+
+  final String question;
+  final List<String> options;
+  final Map<String, int> votes;
+
+  int get total => votes.length;
+
+  int countFor(int option) =>
+      votes.values.where((vote) => vote == option).length;
+
+  /// Share of the vote for [option], 0 when nobody has voted.
+  double shareOf(int option) => total == 0 ? 0 : countFor(option) / total;
+
+  int? voteOf(String? userId) => userId == null ? null : votes[userId];
+
+  PostPoll withVote(String userId, int? option) {
+    final next = Map<String, int>.from(votes)..remove(userId);
+    if (option != null) next[userId] = option;
+    return PostPoll(question: question, options: options, votes: next);
+  }
+
+  /// Null without a question, or with too few readable options to vote
+  /// between.
+  static PostPoll? fromMap(Object? poll, Object? votes) {
+    if (poll is! Map) return null;
+    final question = (poll['question'] ?? '').toString().trim();
+    if (question.isEmpty) return null;
+    final raw = poll['options'];
+    if (raw is! List) return null;
+    final options = raw
+        .map((option) => option.toString().trim())
+        .where((option) => option.isNotEmpty)
+        .toList(growable: false);
+    if (options.length < minOptions) return null;
+
+    final parsed = <String, int>{};
+    if (votes is Map) {
+      for (final entry in votes.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        // A vote for an option that isn't there is dropped rather than
+        // counted somewhere it doesn't belong.
+        if (key is String &&
+            value is num &&
+            value >= 0 &&
+            value < options.length) {
+          parsed[key] = value.toInt();
+        }
+      }
+    }
+    return PostPoll(question: question, options: options, votes: parsed);
+  }
+}
+
+/// A session somebody is inviting people to.
+///
+/// Who's in is `rsvps: {uid: joinedAt}` on the post, for the same reason
+/// [PostPoll] keeps its votes as a map. The host is never in it: hosting is
+/// going, and the card says so.
+class PostMeetup {
+  const PostMeetup({
+    required this.title,
+    required this.place,
+    required this.startsAt,
+    this.note = '',
+    this.going = const [],
+  });
+
+  static const int maxTitleLength = 60;
+  static const int maxPlaceLength = 80;
+
+  /// How long after the start a meetup still reads as on. Long enough to
+  /// cover the session itself, so "I'm in" isn't taken away mid-warm-up.
+  static const Duration runsFor = Duration(hours: 3);
+
+  final String title;
+  final String place;
+  final DateTime startsAt;
+  final String note;
+
+  /// Everyone who said they're in, earliest first.
+  final List<String> going;
+
+  bool isOver(DateTime now) => now.isAfter(startsAt.add(runsFor));
+
+  bool isGoing(String? userId) => userId != null && going.contains(userId);
+
+  /// "Today · 06:00", "Tomorrow · 17:30", "Sat 4 Oct · 06:00".
+  ///
+  /// Relative only for the two days where it is quicker to read than a date;
+  /// past that the weekday and date together are what people plan by.
+  static String whenLabel(DateTime startsAt, DateTime now) {
+    final local = startsAt.toLocal();
+    final time = '${_two(local.hour)}:${_two(local.minute)}';
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(local.year, local.month, local.day);
+    final days = day.difference(today).inHours ~/ 24;
+    if (days == 0) return 'Today · $time';
+    if (days == 1) return 'Tomorrow · $time';
+    if (days == -1) return 'Yesterday · $time';
+    return '${_weekdays[local.weekday - 1]} ${local.day} '
+        '${_months[local.month - 1]} · $time';
+  }
+
+  static String _two(int value) => value.toString().padLeft(2, '0');
+
+  static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  PostMeetup withRsvp(String userId, {required bool going}) {
+    final next = [...this.going]..remove(userId);
+    if (going) next.add(userId);
+    return PostMeetup(
+      title: title,
+      place: place,
+      startsAt: startsAt,
+      note: note,
+      going: next,
+    );
+  }
+
+  /// Null for anything without a title or a readable start.
+  static PostMeetup? fromMap(Object? meetup, Object? rsvps) {
+    if (meetup is! Map) return null;
+    final title = (meetup['title'] ?? '').toString().trim();
+    final startsAt = _dateOf(meetup['startsAt']);
+    if (title.isEmpty || startsAt == null) return null;
+
+    final joined = <(String, DateTime)>[];
+    if (rsvps is Map) {
+      for (final entry in rsvps.entries) {
+        final key = entry.key;
+        if (key is! String) continue;
+        // A pending server timestamp reads back as null for a moment; it is
+        // the newest RSVP, so it sorts last.
+        joined.add((key, _dateOf(entry.value) ?? _farFuture));
+      }
+    }
+    joined.sort((a, b) => a.$2.compareTo(b.$2));
+
+    return PostMeetup(
+      title: title,
+      place: (meetup['place'] ?? '').toString().trim(),
+      startsAt: startsAt,
+      note: (meetup['note'] ?? '').toString().trim(),
+      going: [for (final entry in joined) entry.$1],
+    );
+  }
+
+  static final DateTime _farFuture = DateTime(9999);
+
+  /// A Firestore Timestamp or a DateTime, read without importing the plugin.
+  static DateTime? _dateOf(Object? value) {
+    if (value is DateTime) return value;
+    if (value == null) return null;
+    try {
+      return (value as dynamic).toDate() as DateTime;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// The day's question, which a post can be written in answer to.
+///
+/// [id] is the local day it was asked on, `YYYY-MM-DD`: every answer to a day's
+/// question shares it, which is the whole of how answers are found again.
+class PostPrompt {
+  const PostPrompt({required this.id, required this.text});
+
+  final String id;
+  final String text;
+
+  /// Null for a post that wasn't answering anything.
+  static PostPrompt? fromFields(Object? id, Object? text) {
+    final promptId = (id ?? '').toString().trim();
+    final promptText = (text ?? '').toString().trim();
+    if (promptId.isEmpty || promptText.isEmpty) return null;
+    return PostPrompt(id: promptId, text: promptText);
+  }
 }
 
 /// What a milestone post celebrates.
@@ -133,6 +350,9 @@ class FeedPost {
     this.imageAspectRatio,
     this.taggedUsers = const [],
     this.milestone,
+    this.poll,
+    this.meetup,
+    this.prompt,
   });
 
   final String id;
@@ -194,6 +414,15 @@ class FeedPost {
   /// What a [PostType.milestone] post celebrates. Null on every other post.
   final PostMilestone? milestone;
 
+  /// The question and its votes, on a [PostType.poll] post.
+  final PostPoll? poll;
+
+  /// The when, where and who's in, on a [PostType.meetup] post.
+  final PostMeetup? meetup;
+
+  /// The day's question this post answers, if it answers one.
+  final PostPrompt? prompt;
+
   /// What [userId] reacted with, or null if they haven't reacted.
   ///
   /// Falls back to the default reaction for someone who is named in [likedBy]
@@ -241,6 +470,9 @@ class FeedPost {
       imageAspectRatio: imageAspectRatio,
       taggedUsers: taggedUsers,
       milestone: milestone,
+      poll: poll,
+      meetup: meetup,
+      prompt: prompt,
     );
   }
 
@@ -267,6 +499,8 @@ class FeedPost {
     String? authorAvatarUrl,
     double? imageAspectRatio,
     List<TaggedUser>? taggedUsers,
+    PostPoll? poll,
+    PostMeetup? meetup,
   }) {
     return FeedPost(
       id: id ?? this.id,
@@ -292,6 +526,9 @@ class FeedPost {
       imageAspectRatio: imageAspectRatio ?? this.imageAspectRatio,
       taggedUsers: taggedUsers ?? this.taggedUsers,
       milestone: milestone,
+      poll: poll ?? this.poll,
+      meetup: meetup ?? this.meetup,
+      prompt: prompt,
     );
   }
 }
@@ -1128,6 +1365,7 @@ class PostDraft {
     this.imageUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
+    this.prompt,
   });
 
   final String caption;
@@ -1147,6 +1385,32 @@ class PostDraft {
   /// mentions inside [caption]: a tag is a deliberate attachment, a mention is
   /// something written in a sentence, and the two are notified differently.
   final List<TaggedUser> taggedUsers;
+
+  /// The day's question this post answers, when it was written as an answer.
+  final PostPrompt? prompt;
+}
+
+/// A poll as written in its composer.
+class PollDraft {
+  const PollDraft({required this.question, required this.options});
+
+  final String question;
+  final List<String> options;
+}
+
+/// A meetup as written in its composer.
+class MeetupDraft {
+  const MeetupDraft({
+    required this.title,
+    required this.place,
+    required this.startsAt,
+    this.note = '',
+  });
+
+  final String title;
+  final String place;
+  final DateTime startsAt;
+  final String note;
 }
 
 class ProgressMetric {

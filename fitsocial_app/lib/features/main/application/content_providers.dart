@@ -9,6 +9,7 @@ import '../../auth/domain/auth_models.dart';
 import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
+import '../domain/daily_prompts.dart';
 import '../domain/explore_models.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
@@ -476,6 +477,25 @@ final displayNameProvider =
   final names =
       await ref.watch(contentRepositoryProvider).displayNamesOf([userId]);
   return names[userId];
+});
+
+/// One post, live — for poll and meetup cards, whose votes and who's-in other
+/// people change while the card is on screen. The card renders what the feed
+/// loaded until this lands, so it costs nothing to show.
+final livePostProvider =
+    StreamProvider.autoDispose.family<FeedPost?, String>((ref, postId) {
+  return ref.watch(contentRepositoryProvider).watchPost(postId);
+});
+
+/// Today's question, which rolls over at local midnight.
+final todaysPromptProvider = Provider<PostPrompt>((ref) {
+  return DailyPrompts.forDay(DateTime.now());
+});
+
+/// Everything written in answer to the question asked on [promptId].
+final promptAnswersProvider = FutureProvider.autoDispose
+    .family<List<FeedPost>, String>((ref, promptId) {
+  return ref.watch(contentRepositoryProvider).fetchPromptAnswers(promptId);
 });
 
 /// Whether the signed-in user's streaks, badges and bests are posted to the

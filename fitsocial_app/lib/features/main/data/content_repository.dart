@@ -289,6 +289,43 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<ActivitySaveResult> createPoll(
+    UserProfileDraft? profile,
+    PollDraft draft,
+  ) {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<ActivitySaveResult> createMeetup(
+    UserProfileDraft? profile,
+    MeetupDraft draft,
+  ) {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> setPollVote(String postId, String userId, int? option) {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> setMeetupRsvp(
+    String postId,
+    String userId, {
+    required bool going,
+  }) {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Stream<FeedPost?> watchPost(String postId) => const Stream.empty();
+
+  @override
+  Future<List<FeedPost>> fetchPromptAnswers(String promptId) async =>
+      const [];
+
+  @override
   Future<List<Comment>> fetchCommentPreview(String postId, {int limit = 2}) {
     throw StateError(_firebaseSetupMessage);
   }

@@ -36,6 +36,18 @@ class ActivityActions {
     );
   }
 
+  Future<ActivitySaveResult> createPoll(PollDraft draft) {
+    return _saveAndRefresh(
+      (repository, profile) => repository.createPoll(profile, draft),
+    );
+  }
+
+  Future<ActivitySaveResult> createMeetup(MeetupDraft draft) {
+    return _saveAndRefresh(
+      (repository, profile) => repository.createMeetup(profile, draft),
+    );
+  }
+
   Future<ActivitySaveResult> _saveAndRefresh(
     Future<ActivitySaveResult> Function(
       ContentRepository repository,
@@ -63,7 +75,10 @@ class ActivityActions {
       ..invalidate(recentWorkoutsProvider)
       // And the meal history, so a meal logged from the tracking page appears
       // in today's totals rather than after a restart.
-      ..invalidate(loggedMealsProvider);
+      ..invalidate(loggedMealsProvider)
+      // And the day's question, whose card counts the answers and says
+      // whether this user has given one.
+      ..invalidate(promptAnswersProvider);
     return result;
   }
 }

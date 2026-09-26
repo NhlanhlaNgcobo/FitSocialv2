@@ -14,6 +14,26 @@ import '../domain/app_models.dart';
 import '../domain/comment_threads.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
+/// Opens a post's comments over the current screen, with the keyboard already
+/// up when [compose] is set.
+///
+/// On the root navigator: a sheet pushed onto a shell branch's nested one only
+/// covers that branch, and the floating bottom nav would paint straight over it
+/// and escape the modal barrier.
+Future<void> showCommentsSheet(
+  BuildContext context,
+  String postId, {
+  bool compose = false,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    useRootNavigator: true,
+    builder: (_) => CommentsSheet(postId: postId, autofocus: compose),
+  );
+}
+
 class CommentsSheet extends ConsumerStatefulWidget {
   const CommentsSheet({
     required this.postId,

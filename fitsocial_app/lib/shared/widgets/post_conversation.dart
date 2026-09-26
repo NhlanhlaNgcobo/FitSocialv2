@@ -320,6 +320,7 @@ class PostQuickReply extends ConsumerStatefulWidget {
     required this.postId,
     required this.authorId,
     this.isMilestone = false,
+    this.offerQuickReplies = true,
     this.onCompose,
     super.key,
   });
@@ -327,6 +328,11 @@ class PostQuickReply extends ConsumerStatefulWidget {
   final String postId;
   final String authorId;
   final bool isMilestone;
+
+  /// Off for posts that carry their own one-tap answer — a poll's vote, a
+  /// meetup's I'm-in — where a 🔥 beside it would compete with the thing the
+  /// post is actually asking for.
+  final bool offerQuickReplies;
 
   /// Opens the full comment box with the keyboard up.
   final VoidCallback? onCompose;
@@ -392,7 +398,9 @@ class _PostQuickReplyState extends ConsumerState<PostQuickReply> {
         (ref.watch(commentPreviewProvider(widget.postId)).valueOrNull ??
                 const <Comment>[])
             .any((comment) => comment.authorId == viewerId);
-    final offerReplies = viewerId != widget.authorId && !alreadySaidSomething;
+    final offerReplies = widget.offerQuickReplies &&
+        viewerId != widget.authorId &&
+        !alreadySaidSomething;
 
     final box = GestureDetector(
       onTap: widget.onCompose,
