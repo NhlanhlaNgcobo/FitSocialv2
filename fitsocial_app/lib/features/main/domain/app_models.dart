@@ -1031,7 +1031,7 @@ class ActivityCalendar {
     final days = <ActivityDay>[];
     for (var cursor = start;
         !cursor.isAfter(end);
-        cursor = cursor.add(const Duration(days: 1))) {
+        cursor = addDays(cursor, 1)) {
       days.add(byDate[cursor] ?? ActivityDay(date: cursor));
     }
     return ActivityCalendar(range: range, days: days, today: now);
@@ -1080,7 +1080,7 @@ class ActivityCalendar {
     // The week view is anchored to the Monday just gone rather than to a
     // rolling seven days, so the first square is always the start of the week.
     if (range == ActivityRange.week) return mondayOf(now);
-    return mondayOf(now.subtract(Duration(days: range.lookbackDays - 1)));
+    return mondayOf(addDays(now, -(range.lookbackDays - 1)));
   }
 
   /// The last day the window covers.
@@ -1090,7 +1090,7 @@ class ActivityCalendar {
   static DateTime endOfWindow(ActivityRange range, DateTime today) {
     final now = dateOnly(today);
     if (range == ActivityRange.week) {
-      return mondayOf(now).add(const Duration(days: 6));
+      return addDays(mondayOf(now), 6);
     }
     return now;
   }
@@ -1100,8 +1100,17 @@ class ActivityCalendar {
     final day = dateOnly(date);
     // DateTime.weekday is 1 (Mon) to 7 (Sun), so subtracting weekday - 1
     // always lands on that week's Monday.
-    return day.subtract(Duration(days: day.weekday - DateTime.monday));
+    return addDays(day, DateTime.monday - day.weekday);
   }
+
+  /// [days] calendar days on from [date], at local midnight.
+  ///
+  /// Deliberately not `add(Duration(days: n))`: a Duration is elapsed time, so
+  /// stepping across a daylight-saving change shifts the wall clock by an hour
+  /// and lands on 23:00 the day before. The constructor normalises an
+  /// out-of-range day instead, which keeps every step on local midnight.
+  static DateTime addDays(DateTime date, int days) =>
+      DateTime(date.year, date.month, date.day + days);
 
   /// Strips the time component so days compare and hash by calendar date.
   static DateTime dateOnly(DateTime value) =>

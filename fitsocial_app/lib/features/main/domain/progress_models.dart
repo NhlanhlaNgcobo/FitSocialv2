@@ -133,13 +133,16 @@ class ProgressWindow {
 
     final (DateTime start, DateTime end) = switch (period) {
       ProgressPeriod.day => (
-          now.add(Duration(days: steps)),
-          now.add(Duration(days: steps)),
+          ActivityCalendar.addDays(now, steps),
+          ActivityCalendar.addDays(now, steps),
         ),
+      // Stepped by calendar days rather than by a Duration: paging far enough
+      // back to cross a daylight-saving change would otherwise slide the whole
+      // week onto 23:00 the previous Sunday.
       ProgressPeriod.week => () {
-          final monday =
-              ActivityCalendar.mondayOf(now).add(Duration(days: steps * 7));
-          return (monday, monday.add(const Duration(days: 6)));
+          final monday = ActivityCalendar.addDays(
+              ActivityCalendar.mondayOf(now), steps * 7);
+          return (monday, ActivityCalendar.addDays(monday, 6));
         }(),
       // Day 0 of the following month is the last day of this one, which is
       // what keeps February honest without a leap-year branch.
@@ -189,7 +192,14 @@ class ProgressWindow {
   }
 
   /// Days in the window, counting both ends.
-  int get dayCount => end.difference(start).inDays + 1;
+  ///
+  /// Counted in UTC so a daylight-saving change inside the window cannot make
+  /// the elapsed difference an hour short of a whole day and lose one.
+  int get dayCount =>
+      DateTime.utc(end.year, end.month, end.day)
+          .difference(DateTime.utc(start.year, start.month, start.day))
+          .inDays +
+      1;
 
   /// How the date navigator reads, e.g. "2 – 8 May 2026".
   String get label {
