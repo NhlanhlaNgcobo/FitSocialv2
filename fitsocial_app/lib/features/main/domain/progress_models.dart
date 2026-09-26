@@ -171,6 +171,9 @@ class ProgressWindow {
           ActivityCalendar.addDays(now, steps),
           ActivityCalendar.addDays(now, steps),
         ),
+      // Stepped by calendar days rather than by a Duration: paging far enough
+      // back to cross a daylight-saving change would otherwise slide the whole
+      // week onto 23:00 the previous Sunday.
       ProgressPeriod.week => () {
           final monday = ActivityCalendar.addDays(
             ActivityCalendar.mondayOf(now),
