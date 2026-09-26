@@ -179,6 +179,36 @@ abstract class ContentRepository {
     PostDraft draft,
   );
 
+  /// Posts a question with two to four answers for the feed to vote on.
+  Future<ActivitySaveResult> createPoll(
+    UserProfileDraft? profile,
+    PollDraft draft,
+  );
+
+  /// Posts a session at a time and a place for people to join.
+  Future<ActivitySaveResult> createMeetup(
+    UserProfileDraft? profile,
+    MeetupDraft draft,
+  );
+
+  /// Sets [userId]'s vote on a poll to [option], or takes it back with null.
+  Future<void> setPollVote(String postId, String userId, int? option);
+
+  /// Says [userId] is in for a meetup, or takes it back.
+  Future<void> setMeetupRsvp(
+    String postId,
+    String userId, {
+    required bool going,
+  });
+
+  /// One post, live — for the cards whose state other people change while it
+  /// is on screen: a poll's votes, a meetup's who's-in. Null once deleted.
+  Stream<FeedPost?> watchPost(String postId);
+
+  /// Every post written in answer to the day's question [promptId], newest
+  /// first.
+  Future<List<FeedPost>> fetchPromptAnswers(String promptId);
+
   /// Permanently removes a post the caller authored, along with its comments
   /// and its uploaded image. Throws if the caller is not the author.
   Future<void> deletePost(String postId);

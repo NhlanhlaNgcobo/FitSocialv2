@@ -108,6 +108,33 @@ service cloud.firestore {
           && movesLikesCount(previous, current);
     }
 
+    // A vote on a poll: the voter's own entry in pollVotes and nothing else,
+    // set to one of the poll's answers or removed. Votes are counted from the
+    // map itself, so there is no counter here for anyone to inflate.
+    function isOwnPollVote() {
+      let before = resource.data.get('pollVotes', {});
+      let after = request.resource.data.get('pollVotes', {});
+      let uid = request.auth.uid;
+      return resource.data.get('postType', '') == 'poll'
+          && after.diff(before).affectedKeys().hasOnly([uid])
+          && (!(uid in after)
+              || (after[uid] is int
+                  && after[uid] >= 0
+                  && after[uid] < resource.data.poll.options.size()));
+    }
+
+    // Saying you're in for a meetup, or taking it back: the caller's own entry
+    // in rsvps and nothing else, stamped with the server's clock so the
+    // who's-in order can't be jumped.
+    function isOwnRsvp() {
+      let before = resource.data.get('rsvps', {});
+      let after = request.resource.data.get('rsvps', {});
+      let uid = request.auth.uid;
+      return resource.data.get('postType', '') == 'meetup'
+          && after.diff(before).affectedKeys().hasOnly([uid])
+          && (!(uid in after) || after[uid] == request.time);
+    }
+
     // Adding a comment bumps commentsCount on the parent post. Allow that
     // for any signed-in user, but only as an exact +1 so the counter can't
     // be set to an arbitrary value.
@@ -710,7 +737,15 @@ service cloud.firestore {
                         || (request.resource.data.diff(resource.data)
                               .affectedKeys()
                               .hasOnly(['commentsCount'])
-                            && isCommentCountIncrement()));
+                            && isCommentCountIncrement())
+                        || (request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['pollVotes'])
+                            && isOwnPollVote())
+                        || (request.resource.data.diff(resource.data)
+                              .affectedKeys()
+                              .hasOnly(['rsvps'])
+                            && isOwnRsvp()));
       allow delete: if request.auth != null
                     && resource.data.authorId == request.auth.uid;
 

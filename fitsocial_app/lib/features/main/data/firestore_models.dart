@@ -124,6 +124,9 @@ class FirestorePostRecord {
       imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
       taggedUsers: TaggedUser.listFrom(data['taggedUsers']),
       milestone: PostMilestone.fromMap(data['milestone']),
+      poll: PostPoll.fromMap(data['poll'], data['pollVotes']),
+      meetup: PostMeetup.fromMap(data['meetup'], data['rsvps']),
+      prompt: PostPrompt.fromFields(data['promptId'], data['promptText']),
       createdAt: rawCreatedAt == null
           ? null
           : (rawCreatedAt as dynamic).toDate() as DateTime,
@@ -153,6 +156,9 @@ class FirestorePostRecord {
     this.imageAspectRatio,
     this.taggedUsers = const [],
     this.milestone,
+    this.poll,
+    this.meetup,
+    this.prompt,
     this.createdAt,
   });
 
@@ -211,6 +217,12 @@ class FirestorePostRecord {
 
   /// What a milestone post celebrates. Null on every other post.
   final PostMilestone? milestone;
+
+  /// A poll's answers and votes, a meetup's details and who's in, and the
+  /// day's question a post answers. Each null on every post without one.
+  final PostPoll? poll;
+  final PostMeetup? meetup;
+  final PostPrompt? prompt;
 
   /// When the post was written, per the server clock.
   ///
