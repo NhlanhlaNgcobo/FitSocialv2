@@ -15,9 +15,17 @@ import '../domain/comment_threads.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 class CommentsSheet extends ConsumerStatefulWidget {
-  const CommentsSheet({required this.postId, super.key});
+  const CommentsSheet({
+    required this.postId,
+    this.autofocus = false,
+    super.key,
+  });
 
   final String postId;
+
+  /// Opens with the keyboard up, for "Add a comment…" on a card — somebody
+  /// who tapped a box to type in should not then have to tap it again.
+  final bool autofocus;
 
   @override
   ConsumerState<CommentsSheet> createState() => _CommentsSheetState();
@@ -32,6 +40,18 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   /// banner saying "Replying to Bear" over a keyboard that never came up is
   /// half an action.
   final _composerFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autofocus) {
+      // After the first frame: focus asked for before the field is laid out
+      // is dropped, and the keyboard never comes up.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _composerFocus.requestFocus();
+      });
+    }
+  }
 
   @override
   void dispose() {

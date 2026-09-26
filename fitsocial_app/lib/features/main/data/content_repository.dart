@@ -287,6 +287,23 @@ class UnconfiguredContentRepository implements ContentRepository {
   Stream<List<Comment>> watchComments(String postId) {
     return const Stream.empty();
   }
+
+  @override
+  Future<List<Comment>> fetchCommentPreview(String postId, {int limit = 2}) {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<Map<String, String>> displayNamesOf(Iterable<String> userIds) async =>
+      const {};
+
+  @override
+  Stream<bool> watchShareMilestones(String userId) => Stream.value(true);
+
+  @override
+  Future<void> setShareMilestones(String userId, {required bool enabled}) {
+    throw StateError(_firebaseSetupMessage);
+  }
 }
 
 const _firebaseSetupMessage =

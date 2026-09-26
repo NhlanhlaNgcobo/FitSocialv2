@@ -98,21 +98,33 @@ class PostDetailSheet extends StatelessWidget {
                   authorAvatarUrl: post.authorAvatarUrl,
                   imageAspectRatio: post.imageAspectRatio,
                   taggedUsers: post.taggedUsers,
-                  onCommentTapped: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      useRootNavigator: true,
-                      builder: (_) => CommentsSheet(postId: post.id),
-                    );
-                  },
+                  reactions: post.reactions,
+                  reactionsBy: post.reactionsBy,
+                  likedBy: post.likedBy,
+                  milestone: post.milestone,
+                  onCommentTapped: () => _openComments(context, post.id),
+                  onComposeTapped: () =>
+                      _openComments(context, post.id, compose: true),
                 ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  static void _openComments(
+    BuildContext context,
+    String postId, {
+    bool compose = false,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useRootNavigator: true,
+      builder: (_) => CommentsSheet(postId: postId, autofocus: compose),
     );
   }
 }

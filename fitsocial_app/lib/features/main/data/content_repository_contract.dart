@@ -230,6 +230,23 @@ abstract class ContentRepository {
   /// Real-time stream of comments for a post, ordered by createdAt ascending.
   Stream<List<Comment>> watchComments(String postId);
 
+  /// The newest [limit] comments that start a thread, oldest of them first —
+  /// what a feed card shows under the post. Replies are left out: one line
+  /// answering a comment the card doesn't show reads as a non sequitur.
+  Future<List<Comment>> fetchCommentPreview(String postId, {int limit = 2});
+
+  /// Current public names for [userIds]. Anyone who can't be read is absent
+  /// from the result rather than named with a placeholder.
+  Future<Map<String, String>> displayNamesOf(Iterable<String> userIds);
+
+  /// Whether [userId]'s streaks, badges and personal bests are posted to the
+  /// feed for them. On unless they have turned it off.
+  Stream<bool> watchShareMilestones(String userId);
+
+  /// Turns milestone posts on or off for [userId]. Affects only what is earned
+  /// from now on; milestones already posted stay until deleted.
+  Future<void> setShareMilestones(String userId, {required bool enabled});
+
   /// Uploads a meal photo to Firebase Storage and returns the download URL.
   Future<String> uploadMealImage(String localFilePath);
 

@@ -142,7 +142,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// the pull only re-runs the one-shot reads: the feed itself, and the streak
   /// grid above it.
   Future<void> _refresh(WidgetRef ref) async {
-    ref.invalidate(activitySessionsProvider);
+    ref
+      ..invalidate(activitySessionsProvider)
+      // The comment lines under each card are their own reads, and a refresh
+      // that left them as they were would show new counts over old comments.
+      ..invalidate(commentPreviewProvider);
     await ref.read(feedPostsProvider.notifier).refresh();
   }
 
@@ -201,6 +205,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ];
   }
 
+  void _openComments(WidgetRef ref, String postId, {bool compose = false}) {
+    showModalBottomSheet(
+      context: ref.context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      // Push onto the root navigator, not the shell branch's nested one. A
+      // branch-level route only covers AppShell's body, so the floating bottom
+      // nav — a sibling in the Scaffold — would paint straight over the sheet
+      // and escape the modal barrier.
+      useRootNavigator: true,
+      builder: (_) => CommentsSheet(postId: postId, autofocus: compose),
+    );
+  }
+
   List<Widget> _buildPosts(List<FeedPost> posts, WidgetRef ref) {
     final items = <Widget>[];
     for (var i = 0; i < posts.length; i++) {
@@ -226,19 +244,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           authorAvatarUrl: post.authorAvatarUrl,
           imageAspectRatio: post.imageAspectRatio,
           taggedUsers: post.taggedUsers,
-          onCommentTapped: () {
-            showModalBottomSheet(
-              context: ref.context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              // Push onto the root navigator, not the shell branch's nested
-              // one. A branch-level route only covers AppShell's body, so the
-              // floating bottom nav — a sibling in the Scaffold — would paint
-              // straight over the sheet and escape the modal barrier.
-              useRootNavigator: true,
-              builder: (_) => CommentsSheet(postId: post.id),
-            );
-          },
+          reactions: post.reactions,
+          reactionsBy: post.reactionsBy,
+          likedBy: post.likedBy,
+          milestone: post.milestone,
+          onCommentTapped: () => _openComments(ref, post.id),
+          onComposeTapped: () => _openComments(ref, post.id, compose: true),
         ),
       );
       if (i != posts.length - 1) {

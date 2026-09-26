@@ -11,6 +11,7 @@ import '../../features/main/data/content_repository.dart';
 import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
+import '../reactions/fit_reaction.dart';
 import 'app_photo.dart';
 import 'avatar.dart';
 import 'confirm_destructive_sheet.dart';
@@ -26,6 +27,8 @@ import '../services/meal_card_exporter.dart';
 import '../services/run_card_exporter.dart';
 import '../services/workout_card_exporter.dart';
 import 'meal_summary_card.dart';
+import 'milestone_card.dart';
+import 'post_conversation.dart';
 import 'run_summary_card.dart';
 import 'share_sheet.dart';
 import 'workout_summary_card.dart';
@@ -53,6 +56,11 @@ class PostCard extends StatelessWidget {
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
+    this.reactions = FitReactionSummary.empty,
+    this.reactionsBy = const {},
+    this.likedBy = const [],
+    this.milestone,
+    this.onComposeTapped,
     super.key,
   });
 
@@ -102,6 +110,21 @@ class PostCard extends StatelessWidget {
   /// People the author attached to the post, drawn as a "with @…" line under
   /// the header. Empty on every post nobody was tagged in.
   final List<TaggedUser> taggedUsers;
+
+  /// The reactions as loaded, for the "Thabo and 3 others" line under the
+  /// actions. [likes] stays the total.
+  final FitReactionSummary reactions;
+  final Map<String, FitReaction> reactionsBy;
+  final List<String> likedBy;
+
+  /// What a milestone post celebrates; null on every other post.
+  final PostMilestone? milestone;
+
+  /// Opens the comment box ready to type. Falls back to [onCommentTapped] —
+  /// the same sheet, without the keyboard — when not given.
+  final VoidCallback? onComposeTapped;
+
+  bool get _isMilestone => postType == PostType.milestone && milestone != null;
 
   /// A polyline needs at least two fixes; a single point is not a route.
   bool get _hasRoute => routePoints.length >= 2;
@@ -179,6 +202,7 @@ class PostCard extends StatelessWidget {
   /// promises, so a manually entered run — typed `run`, but with no GPS trace
   /// and no photo — reads as a text post instead of reserving an empty band.
   bool get _hasPayload =>
+      _isMilestone ||
       _hasRoute ||
       imageUrl != null ||
       workoutData != null ||
@@ -244,12 +268,31 @@ class PostCard extends StatelessWidget {
               workoutCard: _workoutCardExport,
               likes: likes,
               comments: comments,
+              loadedReactions: (reactionsBy: reactionsBy, likedBy: likedBy),
               onCommentTapped: onCommentTapped,
             ),
+            PostReactionLine(
+              postId: postId,
+              likes: likes,
+              reactions: reactions,
+              reactionsBy: reactionsBy,
+              likedBy: likedBy,
+            ),
             // A text post's words are already the body, so there's no caption
-            // line to repeat underneath.
-            if (_hasPayload) _buildCaption(palette),
-            _buildCommentLink(palette),
+            // line to repeat underneath — and a milestone's caption is the
+            // card's own words again, kept only for builds without the card.
+            if (_hasPayload && !_isMilestone) _buildCaption(palette),
+            PostCommentPreview(
+              postId: postId,
+              comments: comments,
+              onOpenComments: onCommentTapped,
+            ),
+            PostQuickReply(
+              postId: postId,
+              authorId: authorId,
+              isMilestone: _isMilestone,
+              onCompose: onComposeTapped ?? onCommentTapped,
+            ),
             _buildTimestamp(palette),
           ],
         ),
@@ -354,26 +397,6 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  /// "View all 12 comments" — the tap target that opens the same sheet as the
-  /// comment icon. Hidden when there is nothing to view.
-  Widget _buildCommentLink(AppPalette palette) {
-    if (comments <= 0) return const SizedBox.shrink();
-    final label =
-        comments == 1 ? 'View 1 comment' : 'View all $comments comments';
-
-    return GestureDetector(
-      onTap: onCommentTapped,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(_gutter, 6, _gutter, 0),
-        child: Text(
-          label,
-          style: TextStyle(fontSize: 13, color: palette.muted),
-        ),
-      ),
-    );
-  }
-
   /// Age of the post, the quietest line on the card and always its last.
   Widget _buildTimestamp(AppPalette palette) {
     return Padding(
@@ -412,6 +435,13 @@ class PostCard extends StatelessWidget {
 
   /// Selects the correct visual payload based on [postType].
   Widget _buildPayload(AppPalette palette) {
+    if (_isMilestone) {
+      return MilestoneCard(
+        milestone: milestone!,
+        margin: const EdgeInsets.symmetric(horizontal: _gutter),
+      );
+    }
+
     // A run outranks the type and outranks its photo: the photo is a backdrop
     // for the run's shape and its numbers, not a photo post.
     if (_hasRunCard) return _buildRunPayload();
@@ -430,6 +460,9 @@ class PostCard extends StatelessWidget {
         return _buildWorkoutPayload();
       // A run with no route has nothing to draw; _hasPayload has already
       // routed it to the text body.
+      // A milestone without its card data never reaches here: the mapper
+      // reads it as text.
+      case PostType.milestone:
       case PostType.run:
       case PostType.text:
         return _buildTextPayload();
@@ -641,6 +674,7 @@ class PostInteractionRow extends ConsumerWidget {
     this.runCard,
     this.mealCard,
     this.workoutCard,
+    this.loadedReactions,
     this.onCommentTapped,
     this.horizontalPadding = PostCard._gutter - 10,
     this.iconSize = 22,
@@ -666,6 +700,15 @@ class PostInteractionRow extends ConsumerWidget {
   final int comments;
   final VoidCallback? onCommentTapped;
 
+  /// Who had reacted, and with what, when [likes] was counted. Given, the
+  /// count follows the viewer's taps instead of staying at the loaded total
+  /// until a refresh: it is what says whether the viewer is already in
+  /// [likes], so their own reaction is never counted twice.
+  final ({
+    Map<String, FitReaction> reactionsBy,
+    List<String> likedBy
+  })? loadedReactions;
+
   String get postId => post.postId;
 
   /// Inset of the row itself. The default lines the *glyphs* up with the card's
@@ -680,7 +723,17 @@ class PostInteractionRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Treated as "not reacted yet" while it loads, so the row is usable from
     // the first frame instead of showing a spinner where a control should be.
-    final reaction = ref.watch(postReactionProvider(postId)).valueOrNull;
+    final live = ref.watch(postReactionProvider(postId));
+    final reaction = live.valueOrNull;
+    final loaded = loadedReactions;
+    var count = likes;
+    if (loaded != null && live.hasValue) {
+      final viewerId = ref.watch(currentUserIdProvider);
+      final counted = viewerId != null &&
+          (loaded.reactionsBy.containsKey(viewerId) ||
+              loaded.likedBy.contains(viewerId));
+      count = likes - (counted ? 1 : 0) + (reaction == null ? 0 : 1);
+    }
     final isBookmarked =
         ref.watch(postBookmarkStatusProvider(postId)).valueOrNull ?? false;
     final palette = context.palette;
@@ -699,7 +752,7 @@ class PostInteractionRow extends ConsumerWidget {
           // until the user acts.
           PostReactionIcon(
             selected: reaction,
-            count: likes,
+            count: count < 0 ? 0 : count,
             size: iconSize,
             restingColor: palette.muted,
             onChanged: (picked) async {

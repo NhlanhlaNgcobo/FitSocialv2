@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -445,6 +447,45 @@ final followingIdsProvider = StreamProvider<Set<String>>((ref) {
   final currentUserId = ref.watch(currentUserIdProvider);
   if (currentUserId == null) return Stream.value(const <String>{});
   return ref.watch(contentRepositoryProvider).watchFollowingIds(currentUserId);
+});
+
+/// The last couple of comments a feed card shows under its post.
+///
+/// A one-shot read rather than a listener: thirty cards holding thirty live
+/// queries open is a lot to pay for a line of text, and the card is re-read
+/// whenever it matters — the feed refreshing, or a comment being posted from
+/// it. Kept for a couple of minutes after the card scrolls away, so scrolling
+/// back up doesn't read the same comments again.
+final commentPreviewProvider =
+    FutureProvider.autoDispose.family<List<Comment>, String>((ref, postId) {
+  final link = ref.keepAlive();
+  final timer = Timer(const Duration(minutes: 2), link.close);
+  ref.onDispose(timer.cancel);
+  return ref
+      .watch(contentRepositoryProvider)
+      .fetchCommentPreview(postId, limit: 2);
+});
+
+/// The current public name of [userId], or null when it can't be read.
+///
+/// Backed by the repository's identity cache, so the names under a feed full
+/// of reactions cost one read per person rather than one per card.
+final displayNameProvider =
+    FutureProvider.family<String?, String>((ref, userId) async {
+  if (userId.isEmpty) return null;
+  final names =
+      await ref.watch(contentRepositoryProvider).displayNamesOf([userId]);
+  return names[userId];
+});
+
+/// Whether the signed-in user's streaks, badges and bests are posted to the
+/// feed. On until they switch it off, which is also what the server assumes.
+final shareMilestonesProvider = StreamProvider<bool>((ref) {
+  final currentUserId = ref.watch(currentUserIdProvider);
+  if (currentUserId == null) return Stream.value(true);
+  return ref
+      .watch(contentRepositoryProvider)
+      .watchShareMilestones(currentUserId);
 });
 
 /// Whether the signed-in user has push notifications turned on for

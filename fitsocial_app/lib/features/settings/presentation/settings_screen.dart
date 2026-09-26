@@ -11,6 +11,8 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
+import '../../main/application/content_providers.dart';
+import '../../main/data/content_repository.dart';
 import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../notifications/application/push_providers.dart';
@@ -31,6 +33,7 @@ const Color _kAchievementAccent = Color(0xFFF2B01E);
 const Color _kHealthAccent = Color(0xFFFF5C7A);
 const Color _kNotifyAccent = Color(0xFF2ECBFF);
 const Color _kSafetyAccent = Color(0xFF2E9C94);
+const Color _kMilestoneAccent = Color(0xFFF2B01E);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -114,6 +117,17 @@ class SettingsScreen extends ConsumerWidget {
             accent: _kHealthAccent,
             text: 'A run your watch recorded turns up on the Create page as a '
                 'draft. It stays on your phone until you post it.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const _SectionLabel('Feed'),
+          const _SettingsGroup(children: [_MilestoneSharingTile()]),
+          const SizedBox(height: AppSpacing.sm),
+          const _SettingsNote(
+            icon: Icons.emoji_events_outlined,
+            accent: _kMilestoneAccent,
+            text: 'Streaks, badges and personal bests show up in your '
+                "followers' feeds so they can cheer you on. Personal bests "
+                'only come from runs you shared.',
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Safety'),
@@ -591,6 +605,58 @@ class _RunImportTile extends ConsumerWidget {
       value: ref.watch(runImportEnabledProvider),
       onChanged: (next) =>
           ref.read(runImportEnabledProvider.notifier).set(enabled: next),
+    );
+  }
+}
+
+/// Whether streaks, badges and personal bests are posted for the user.
+///
+/// Stored on the profile document, where the server reads it before posting.
+/// The switch answers at once and the write follows; a failure puts it back.
+class _MilestoneSharingTile extends ConsumerStatefulWidget {
+  const _MilestoneSharingTile();
+
+  @override
+  ConsumerState<_MilestoneSharingTile> createState() =>
+      _MilestoneSharingTileState();
+}
+
+class _MilestoneSharingTileState extends ConsumerState<_MilestoneSharingTile> {
+  /// What the switch shows while its write is in flight.
+  bool? _pending;
+
+  Future<void> _change(bool enabled) async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    final overlay = Overlay.of(context, rootOverlay: true);
+    setState(() => _pending = enabled);
+    try {
+      await ref
+          .read(contentRepositoryProvider)
+          .setShareMilestones(userId, enabled: enabled);
+    } catch (error) {
+      debugPrint('Changing milestone sharing failed: $error');
+      showQuickToastOn(
+        overlay,
+        "Couldn't change that. Try again.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
+      );
+    } finally {
+      if (mounted) setState(() => _pending = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stored = ref.watch(shareMilestonesProvider).valueOrNull ?? true;
+    return _SettingsSwitchTile(
+      icon: Icons.emoji_events_outlined,
+      accent: _kMilestoneAccent,
+      label: 'Share my milestones',
+      subtitle: 'Post streaks, badges and personal bests to the feed',
+      value: _pending ?? stored,
+      onChanged: _pending != null ? null : _change,
     );
   }
 }

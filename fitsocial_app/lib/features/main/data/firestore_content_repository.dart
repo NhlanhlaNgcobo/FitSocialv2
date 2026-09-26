@@ -2475,10 +2475,13 @@ class FirestoreContentRepository implements ContentRepository {
 
     // Adjust the counter directly rather than through _incrementUser, which
     // also advances the daily streak — deleting a post must not count as
-    // activity.
-    await usersCollection.doc(user.uid).update({
-      'postsCount': FieldValue.increment(-1),
-    });
+    // activity. A milestone was posted by the server and never counted, so
+    // removing one leaves the count where it is.
+    if (data['postType'] != 'milestone') {
+      await usersCollection.doc(user.uid).update({
+        'postsCount': FieldValue.increment(-1),
+      });
+    }
 
     // Best effort: the image is orphaned the moment the post is gone and keeps
     // costing storage. A failure here shouldn't report the delete as failed,
@@ -2557,6 +2560,60 @@ class FirestoreContentRepository implements ContentRepository {
                   .map(FirestoreMapper.toComment)
                   .toList(),
             ));
+  }
+
+  @override
+  Future<List<Comment>> fetchCommentPreview(
+    String postId, {
+    int limit = 2,
+  }) async {
+    // Over-fetched, because replies are filtered out here rather than in the
+    // query: a top-level comment is one *without* `parentCommentId`, and
+    // Firestore cannot filter on a field being absent. A busy thread can still
+    // crowd the window, and then the card shows fewer — never a reply.
+    final snapshot = await postsCollection
+        .doc(postId)
+        .collection('comments')
+        .orderBy('createdAt', descending: true)
+        .limit(limit * 4)
+        .get();
+
+    final newestFirst = snapshot.docs
+        .map((doc) => FirestoreCommentRecord.fromMap(doc.id, doc.data()))
+        .map(FirestoreMapper.toComment)
+        .where((comment) => !comment.isReply)
+        .take(limit)
+        .toList();
+
+    return _withLiveCommentAuthors(newestFirst.reversed.toList());
+  }
+
+  @override
+  Future<Map<String, String>> displayNamesOf(Iterable<String> userIds) async {
+    final identities = await _authorIdentities.resolve(userIds);
+    return {
+      for (final entry in identities.entries)
+        if (entry.value.displayName case final name?
+            when name.trim().isNotEmpty)
+          entry.key: PublicAuthorName.sanitize(name),
+    };
+  }
+
+  @override
+  Stream<bool> watchShareMilestones(String userId) {
+    return usersCollection
+        .doc(userId)
+        .snapshots()
+        // Absent means on: the server posts unless told not to, so the switch
+        // has to show the same default it acts on.
+        .map((snapshot) => snapshot.data()?['shareMilestones'] != false);
+  }
+
+  @override
+  Future<void> setShareMilestones(String userId, {required bool enabled}) {
+    return usersCollection
+        .doc(userId)
+        .set({'shareMilestones': enabled}, SetOptions(merge: true));
   }
 
   /// How long an image the user is actually posting gets to upload.

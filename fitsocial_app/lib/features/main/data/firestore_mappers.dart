@@ -76,7 +76,9 @@ class FirestoreMapper {
         post.likesCount,
       ),
       reactionsBy: _parseReactionsBy(post.reactionsBy),
-      postType: _parsePostType(post.postType),
+      postType: post.milestone == null && post.postType == 'milestone'
+          ? PostType.text
+          : _parsePostType(post.postType),
       imageUrl: post.imageUrl,
       workoutData: post.workoutData,
       mealData: post.mealData,
@@ -85,6 +87,9 @@ class FirestoreMapper {
       authorAvatarUrl: post.authorAvatarUrl,
       imageAspectRatio: post.imageAspectRatio,
       taggedUsers: post.taggedUsers,
+      // A milestone post with no readable milestone reads as text (above),
+      // where its caption — written to stand on its own — is the whole story.
+      milestone: post.milestone,
     );
   }
 
@@ -147,6 +152,8 @@ class FirestoreMapper {
         return PostType.run;
       case 'meal':
         return PostType.meal;
+      case 'milestone':
+        return PostType.milestone;
       case 'text':
       default:
         return PostType.text;

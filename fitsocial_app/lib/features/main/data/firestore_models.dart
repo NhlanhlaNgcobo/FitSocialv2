@@ -123,6 +123,7 @@ class FirestorePostRecord {
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
       imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
       taggedUsers: TaggedUser.listFrom(data['taggedUsers']),
+      milestone: PostMilestone.fromMap(data['milestone']),
       createdAt: rawCreatedAt == null
           ? null
           : (rawCreatedAt as dynamic).toDate() as DateTime,
@@ -151,6 +152,7 @@ class FirestorePostRecord {
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
+    this.milestone,
     this.createdAt,
   });
 
@@ -206,6 +208,9 @@ class FirestorePostRecord {
   /// line. The uids are also stored flat as `taggedUserIds` on the document,
   /// which is the queryable half; this is the renderable one.
   final List<TaggedUser> taggedUsers;
+
+  /// What a milestone post celebrates. Null on every other post.
+  final PostMilestone? milestone;
 
   /// When the post was written, per the server clock.
   ///

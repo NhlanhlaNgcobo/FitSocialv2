@@ -17,6 +17,7 @@ import '../../../shared/services/meal_card_exporter.dart';
 import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/services/workout_card_exporter.dart';
 import '../../../shared/widgets/meal_summary_card.dart';
+import '../../../shared/widgets/milestone_card.dart';
 import '../../../shared/widgets/run_summary_card.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../application/content_providers.dart';
@@ -246,7 +247,9 @@ class _PostPageState extends ConsumerState<_PostPage> {
             iconSize: 24,
             onCommentTapped: _startCommenting,
           ),
-          if (media != _MediaKind.none) _Caption(post: post),
+          // A milestone's caption repeats its card, for builds without one.
+          if (media != _MediaKind.none && media != _MediaKind.milestone)
+            _Caption(post: post),
           _Timestamp(post: post),
           const _SectionRule(),
           _CommentList(postId: post.id, onReply: _startReply),
@@ -266,6 +269,7 @@ List<String> _strip(FeedPost post, _MediaKind media) {
   switch (media) {
     case _MediaKind.workout:
     case _MediaKind.meal:
+    case _MediaKind.milestone:
       return const [];
     case _MediaKind.run:
       final shown = {
@@ -288,12 +292,19 @@ enum _MediaKind {
   workout,
   meal,
 
+  /// A streak, badge or personal best, posted by the server.
+  milestone,
+
   /// Words only — the caption becomes the hero instead.
   none;
 
   static _MediaKind of(FeedPost post) {
     final hasRoute = post.routePoints.length >= 2;
     final hasPhoto = post.imageUrl != null && post.imageUrl!.isNotEmpty;
+
+    if (post.postType == PostType.milestone && post.milestone != null) {
+      return _MediaKind.milestone;
+    }
 
     // A run outranks its photo, exactly as the feed card decides it: the photo
     // is the backdrop the route and the numbers are drawn on, so sending it
@@ -435,6 +446,11 @@ class _MediaBlock extends StatelessWidget {
           mealData: post.mealData,
           activity: post.activity,
           backgroundImageUrl: post.imageUrl,
+          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        );
+      case _MediaKind.milestone:
+        return MilestoneCard(
+          milestone: post.milestone!,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         );
       case _MediaKind.none:

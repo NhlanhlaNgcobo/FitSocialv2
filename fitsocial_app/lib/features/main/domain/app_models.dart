@@ -14,6 +14,51 @@ enum PostType {
   workout,
   run,
   meal,
+
+  /// Written by the server, never composed: a streak, a badge or a personal
+  /// best, posted under the name of the person who earned it. See
+  /// functions/milestones.js.
+  milestone,
+}
+
+/// What a milestone post celebrates.
+///
+/// Carried whole on the post rather than looked up by key, so the server can
+/// word a new kind of milestone without this build knowing it exists.
+class PostMilestone {
+  const PostMilestone({
+    required this.kind,
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.emoji,
+  });
+
+  /// `streak`, `badge` or `personalBest`. Unknown kinds still render — the
+  /// card is drawn from the words, not from the kind.
+  final String kind;
+  final String key;
+  final String title;
+  final String subtitle;
+  final String emoji;
+
+  bool get isStreak => kind == 'streak';
+  bool get isPersonalBest => kind == 'personalBest';
+
+  /// Null for anything missing its title, which is the one field the card
+  /// cannot be drawn without.
+  static PostMilestone? fromMap(Object? value) {
+    if (value is! Map) return null;
+    final title = (value['title'] ?? '').toString().trim();
+    if (title.isEmpty) return null;
+    return PostMilestone(
+      kind: (value['kind'] ?? '').toString(),
+      key: (value['key'] ?? '').toString(),
+      title: title,
+      subtitle: (value['subtitle'] ?? '').toString().trim(),
+      emoji: (value['emoji'] ?? '').toString().trim(),
+    );
+  }
 }
 
 /// Someone attached to a post from its composer.
@@ -87,6 +132,7 @@ class FeedPost {
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
+    this.milestone,
   });
 
   final String id;
@@ -145,6 +191,9 @@ class FeedPost {
   /// before tagging existed, and on any post nobody was tagged in.
   final List<TaggedUser> taggedUsers;
 
+  /// What a [PostType.milestone] post celebrates. Null on every other post.
+  final PostMilestone? milestone;
+
   /// What [userId] reacted with, or null if they haven't reacted.
   ///
   /// Falls back to the default reaction for someone who is named in [likedBy]
@@ -191,6 +240,7 @@ class FeedPost {
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
       taggedUsers: taggedUsers,
+      milestone: milestone,
     );
   }
 
@@ -241,6 +291,7 @@ class FeedPost {
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       imageAspectRatio: imageAspectRatio ?? this.imageAspectRatio,
       taggedUsers: taggedUsers ?? this.taggedUsers,
+      milestone: milestone,
     );
   }
 }

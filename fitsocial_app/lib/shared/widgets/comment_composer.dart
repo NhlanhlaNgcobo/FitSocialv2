@@ -110,8 +110,10 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       // Bump the comment count on the feed post card
       ref.read(feedPostsProvider.notifier).incrementCommentCount(widget.postId);
 
-      // Refresh comment list
-      ref.invalidate(commentsProvider(widget.postId));
+      // Refresh comment list, and the two lines the feed card shows of it
+      ref
+        ..invalidate(commentsProvider(widget.postId))
+        ..invalidate(commentPreviewProvider(widget.postId));
     } catch (e) {
       if (mounted) {
         debugPrint('Posting a comment failed: $e');
