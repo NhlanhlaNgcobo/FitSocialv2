@@ -381,8 +381,6 @@ class _AuthorRow extends ConsumerWidget {
                   const SizedBox(height: 3),
                   Text(
                     activity,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.2,
