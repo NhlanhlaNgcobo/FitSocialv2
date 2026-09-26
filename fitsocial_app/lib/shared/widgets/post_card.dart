@@ -31,6 +31,7 @@ import 'milestone_card.dart';
 import 'post_conversation.dart';
 import 'run_summary_card.dart';
 import 'share_sheet.dart';
+import 'social_post_cards.dart';
 import 'workout_summary_card.dart';
 
 class PostCard extends StatelessWidget {
@@ -60,9 +61,57 @@ class PostCard extends StatelessWidget {
     this.reactionsBy = const {},
     this.likedBy = const [],
     this.milestone,
+    this.poll,
+    this.meetup,
+    this.prompt,
     this.onComposeTapped,
     super.key,
   });
+
+  /// The card for [post], with everything it carries.
+  ///
+  /// Every screen that lists posts builds its cards through here, so a field
+  /// added to [FeedPost] reaches all of them by being added once.
+  factory PostCard.of(
+    FeedPost post, {
+    VoidCallback? onCommentTapped,
+    VoidCallback? onComposeTapped,
+    VoidCallback? onDeleted,
+    Key? key,
+  }) {
+    return PostCard(
+      key: key,
+      postId: post.id,
+      authorId: post.authorId,
+      userName: post.userName,
+      activity: post.activity,
+      caption: post.caption,
+      metricLabels: post.metricLabels,
+      timestamp: post.timestamp,
+      likes: post.likes,
+      comments: post.comments,
+      backgroundColors: post.backgroundColors,
+      postType: post.postType,
+      imageUrl: post.imageUrl,
+      workoutData: post.workoutData,
+      mealData: post.mealData,
+      routePoints: post.routePoints,
+      showRouteMap: post.showRouteMap,
+      authorAvatarUrl: post.authorAvatarUrl,
+      imageAspectRatio: post.imageAspectRatio,
+      taggedUsers: post.taggedUsers,
+      reactions: post.reactions,
+      reactionsBy: post.reactionsBy,
+      likedBy: post.likedBy,
+      milestone: post.milestone,
+      poll: post.poll,
+      meetup: post.meetup,
+      prompt: post.prompt,
+      onCommentTapped: onCommentTapped,
+      onComposeTapped: onComposeTapped,
+      onDeleted: onDeleted,
+    );
+  }
 
   final String postId;
 
@@ -120,11 +169,25 @@ class PostCard extends StatelessWidget {
   /// What a milestone post celebrates; null on every other post.
   final PostMilestone? milestone;
 
+  /// A poll's question and votes, and a meetup's details and who's in. Null
+  /// on every other post.
+  final PostPoll? poll;
+  final PostMeetup? meetup;
+
+  /// The day's question this post answers, if it answers one.
+  final PostPrompt? prompt;
+
   /// Opens the comment box ready to type. Falls back to [onCommentTapped] —
   /// the same sheet, without the keyboard — when not given.
   final VoidCallback? onComposeTapped;
 
   bool get _isMilestone => postType == PostType.milestone && milestone != null;
+  bool get _isPoll => postType == PostType.poll && poll != null;
+  bool get _isMeetup => postType == PostType.meetup && meetup != null;
+
+  /// Posts whose caption is only a fallback for builds that can't draw the
+  /// card — printing it under the card would say everything twice.
+  bool get _captionIsFallback => _isMilestone || _isPoll || _isMeetup;
 
   /// A polyline needs at least two fixes; a single point is not a route.
   bool get _hasRoute => routePoints.length >= 2;
@@ -203,6 +266,8 @@ class PostCard extends StatelessWidget {
   /// and no photo — reads as a text post instead of reserving an empty band.
   bool get _hasPayload =>
       _isMilestone ||
+      _isPoll ||
+      _isMeetup ||
       _hasRoute ||
       imageUrl != null ||
       workoutData != null ||
@@ -254,6 +319,11 @@ class PostCard extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 8),
                 child: TaggedUsersLine(tagged: taggedUsers),
               ),
+            if (prompt != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(_gutter, 0, _gutter, 8),
+                child: PromptAnswerLine(prompt: prompt!),
+              ),
             // Double-tap the body — media or words — for a 🧡.
             DoubleTapReact(
               postId: postId,
@@ -279,9 +349,10 @@ class PostCard extends StatelessWidget {
               likedBy: likedBy,
             ),
             // A text post's words are already the body, so there's no caption
-            // line to repeat underneath — and a milestone's caption is the
-            // card's own words again, kept only for builds without the card.
-            if (_hasPayload && !_isMilestone) _buildCaption(palette),
+            // line to repeat underneath — and a milestone's, poll's or
+            // meetup's caption is the card's own words again, kept only for
+            // builds without the card.
+            if (_hasPayload && !_captionIsFallback) _buildCaption(palette),
             PostCommentPreview(
               postId: postId,
               comments: comments,
@@ -291,6 +362,8 @@ class PostCard extends StatelessWidget {
               postId: postId,
               authorId: authorId,
               isMilestone: _isMilestone,
+              // A poll and a meetup already have their own one-tap answer.
+              offerQuickReplies: !_isPoll && !_isMeetup,
               onCompose: onComposeTapped ?? onCommentTapped,
             ),
             _buildTimestamp(palette),
@@ -441,6 +514,22 @@ class PostCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: _gutter),
       );
     }
+    if (_isPoll) {
+      return PollCard(
+        postId: postId,
+        authorId: authorId,
+        poll: poll!,
+        margin: const EdgeInsets.fromLTRB(_gutter, 2, _gutter, 0),
+      );
+    }
+    if (_isMeetup) {
+      return MeetupCard(
+        postId: postId,
+        authorId: authorId,
+        meetup: meetup!,
+        margin: const EdgeInsets.symmetric(horizontal: _gutter),
+      );
+    }
 
     // A run outranks the type and outranks its photo: the photo is a backdrop
     // for the run's shape and its numbers, not a photo post.
@@ -463,6 +552,8 @@ class PostCard extends StatelessWidget {
       // A milestone without its card data never reaches here: the mapper
       // reads it as text.
       case PostType.milestone:
+      case PostType.poll:
+      case PostType.meetup:
       case PostType.run:
       case PostType.text:
         return _buildTextPayload();

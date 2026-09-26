@@ -31,6 +31,9 @@ import '../../features/main/presentation/meal_review_screen.dart';
 import '../../features/main/presentation/meal_tracking_screen.dart';
 import '../../features/main/presentation/meal_upload_screen.dart';
 import '../../features/main/presentation/post_compose_screen.dart';
+import '../../features/main/presentation/prompt_answers_screen.dart';
+import '../../features/main/presentation/social_compose_screens.dart';
+import '../../features/main/domain/daily_prompts.dart';
 import '../../features/main/presentation/post_detail_screen.dart';
 import '../../features/main/presentation/profile_screen.dart';
 import '../../features/main/presentation/run_log_screen.dart';
@@ -166,7 +169,33 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/compose-post',
-        builder: (context, state) => const PostComposeScreen(),
+        // An answer to the day's question arrives with the question as extra.
+        builder: (context, state) =>
+            PostComposeScreen(prompt: state.extra as PostPrompt?),
+      ),
+      GoRoute(
+        path: '/compose-poll',
+        builder: (context, state) => const PollComposeScreen(),
+      ),
+      GoRoute(
+        path: '/compose-meetup',
+        builder: (context, state) => const MeetupComposeScreen(),
+      ),
+      // Everyone's answers to one day's question. The id is the day, so a
+      // link that arrives without the question still knows which one it was.
+      GoRoute(
+        path: '/prompt/:promptId',
+        builder: (context, state) {
+          final id = state.pathParameters['promptId']!;
+          final prompt = state.extra as PostPrompt? ??
+              PostPrompt(
+                id: id,
+                text: DailyPrompts.forDay(
+                  DateTime.tryParse(id) ?? DateTime.now(),
+                ).text,
+              );
+          return PromptAnswersScreen(prompt: prompt);
+        },
       ),
       // Legacy path kept so older links/back-stack entries don't 404. The
       // real capture + AI analysis flow lives at /meal-upload.

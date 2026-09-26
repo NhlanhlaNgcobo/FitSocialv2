@@ -24,7 +24,6 @@ class PollCard extends ConsumerStatefulWidget {
   const PollCard({
     required this.postId,
     required this.authorId,
-    required this.question,
     required this.poll,
     this.margin = EdgeInsets.zero,
     super.key,
@@ -32,7 +31,6 @@ class PollCard extends ConsumerStatefulWidget {
 
   final String postId;
   final String authorId;
-  final String question;
 
   /// The poll as the feed loaded it. Stands in until the live copy arrives.
   final PostPoll poll;
@@ -92,7 +90,7 @@ class _PollCardState extends ConsumerState<PollCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.question,
+            poll.question,
             style: TextStyle(
               color: palette.text,
               fontSize: 17,

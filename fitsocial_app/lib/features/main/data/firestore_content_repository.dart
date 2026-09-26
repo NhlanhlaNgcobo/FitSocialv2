@@ -1733,12 +1733,12 @@ class FirestoreContentRepository implements ContentRepository {
       activity: 'Poll',
       // What a build without the poll card shows: the question, and the
       // answers as a list, so it can at least be answered in the comments.
-      caption: [question, '', for (final option in options) '• $option']
-          .join('\n'),
+      caption:
+          [question, '', for (final option in options) '• $option'].join('\n'),
       metricLabels: const [],
       themeKey: 'sunset',
       postType: 'poll',
-      poll: PostPoll(options: options),
+      poll: PostPoll(question: question, options: options),
     );
     return ActivitySaveResult(
       message: result.synced
@@ -2015,7 +2015,8 @@ class FirestoreContentRepository implements ContentRepository {
       if (mentioned.isNotEmpty) 'mentionedUserIds': mentioned,
       // The question and its answers. Votes start absent and are written one
       // key at a time by the voters — see setPollVote.
-      if (poll != null) 'poll': {'options': poll.options},
+      if (poll != null)
+        'poll': {'question': poll.question, 'options': poll.options},
       if (meetup != null)
         'meetup': {
           'title': meetup.title,

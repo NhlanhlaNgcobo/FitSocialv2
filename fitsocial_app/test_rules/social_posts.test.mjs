@@ -46,7 +46,7 @@ beforeEach(async () => {
       authorId: AUTHOR,
       postType: "poll",
       caption: "Legs or back?",
-      poll: { options: ["Legs", "Back"] },
+      poll: { question: "Legs or back?", options: ["Legs", "Back"] },
       pollVotes: { [OTHER]: 1 },
       likesCount: 0,
       commentsCount: 0,

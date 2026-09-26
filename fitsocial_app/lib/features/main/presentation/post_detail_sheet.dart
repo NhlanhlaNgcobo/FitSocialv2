@@ -78,53 +78,17 @@ class PostDetailSheet extends StatelessWidget {
                 // The same card the feed renders, so like, save, comment and the
                 // overflow menu behave identically here — there is no second
                 // implementation of a post to keep in step.
-                PostCard(
-                  postId: post.id,
-                  authorId: post.authorId,
-                  userName: post.userName,
-                  activity: post.activity,
-                  caption: post.caption,
-                  metricLabels: post.metricLabels,
-                  timestamp: post.timestamp,
-                  likes: post.likes,
-                  comments: post.comments,
-                  backgroundColors: post.backgroundColors,
-                  postType: post.postType,
-                  imageUrl: post.imageUrl,
-                  workoutData: post.workoutData,
-                  mealData: post.mealData,
-                  routePoints: post.routePoints,
-                  showRouteMap: post.showRouteMap,
-                  authorAvatarUrl: post.authorAvatarUrl,
-                  imageAspectRatio: post.imageAspectRatio,
-                  taggedUsers: post.taggedUsers,
-                  reactions: post.reactions,
-                  reactionsBy: post.reactionsBy,
-                  likedBy: post.likedBy,
-                  milestone: post.milestone,
-                  onCommentTapped: () => _openComments(context, post.id),
+                PostCard.of(
+                  post,
+                  onCommentTapped: () => showCommentsSheet(context, post.id),
                   onComposeTapped: () =>
-                      _openComments(context, post.id, compose: true),
+                      showCommentsSheet(context, post.id, compose: true),
                 ),
               ],
             ),
           ),
         );
       },
-    );
-  }
-
-  static void _openComments(
-    BuildContext context,
-    String postId, {
-    bool compose = false,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      useRootNavigator: true,
-      builder: (_) => CommentsSheet(postId: postId, autofocus: compose),
     );
   }
 }

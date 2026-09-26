@@ -33,12 +33,18 @@ enum PostType {
 /// counters: a map the rules can check one key of is a vote nobody can stuff,
 /// and the counts are a fold over it. One vote per person, changeable.
 class PostPoll {
-  const PostPoll({required this.options, this.votes = const {}});
+  const PostPoll({
+    required this.question,
+    required this.options,
+    this.votes = const {},
+  });
 
   static const int minOptions = 2;
   static const int maxOptions = 4;
   static const int maxOptionLength = 40;
+  static const int maxQuestionLength = 140;
 
+  final String question;
   final List<String> options;
   final Map<String, int> votes;
 
@@ -55,12 +61,15 @@ class PostPoll {
   PostPoll withVote(String userId, int? option) {
     final next = Map<String, int>.from(votes)..remove(userId);
     if (option != null) next[userId] = option;
-    return PostPoll(options: options, votes: next);
+    return PostPoll(question: question, options: options, votes: next);
   }
 
-  /// Null when there are too few readable options to vote between.
+  /// Null without a question, or with too few readable options to vote
+  /// between.
   static PostPoll? fromMap(Object? poll, Object? votes) {
     if (poll is! Map) return null;
+    final question = (poll['question'] ?? '').toString().trim();
+    if (question.isEmpty) return null;
     final raw = poll['options'];
     if (raw is! List) return null;
     final options = raw
@@ -84,7 +93,7 @@ class PostPoll {
         }
       }
     }
-    return PostPoll(options: options, votes: parsed);
+    return PostPoll(question: question, options: options, votes: parsed);
   }
 }
 

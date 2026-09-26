@@ -71,6 +71,23 @@ class CreateScreen extends ConsumerWidget {
           context.push(CreateCanvasDestination.post.route);
         },
       ),
+      // Two ways to post something that asks for an answer rather than
+      // reporting one. No create-flow destination: each is a short form that
+      // is finished in one sitting, with nothing worth resuming.
+      _CreateAction(
+        title: 'Ask the Feed',
+        subtitle: 'Post a quick poll',
+        icon: Icons.poll_rounded,
+        accent: _kPollAccent,
+        onTap: () => context.push('/compose-poll'),
+      ),
+      _CreateAction(
+        title: 'Plan a Session',
+        subtitle: 'Invite people to train with you',
+        icon: Icons.group_add_rounded,
+        accent: _kMeetupAccent,
+        onTap: () => context.push('/compose-meetup'),
+      ),
       // Last, and with no create-flow destination: entering a challenge is not
       // logging something, so it starts no draft and joins no resume state. It
       // sits here because this is where a user comes when they have decided to
@@ -153,6 +170,11 @@ const Color _kWorkoutAccent = AppColors.orangeBright;
 const Color _kRunAccent = Color(0xFF2ECBFF);
 const Color _kMealAccent = Color(0xFF31C46C);
 const Color _kPostAccent = Color(0xFFB06BFF);
+
+/// Gold for a poll — the same hue the badges use, since both are the
+/// community weighing in — and the meetup card's own green for a session.
+const Color _kPollAccent = Color(0xFFF2B01E);
+const Color _kMeetupAccent = Color(0xFF14B87A);
 
 /// Challenges take the brand orange rather than a fifth hue. They are not a
 /// category of thing to log — they are FitSocial asking something of you — and
