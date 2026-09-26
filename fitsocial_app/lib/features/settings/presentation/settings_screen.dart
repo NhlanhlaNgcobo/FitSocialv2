@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_colors.dart';
+import '../../../app/theme/app_motion.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/theme_mode_controller.dart';
@@ -34,6 +35,7 @@ const Color _kHealthAccent = Color(0xFFFF5C7A);
 const Color _kNotifyAccent = Color(0xFF2ECBFF);
 const Color _kSafetyAccent = Color(0xFF2E9C94);
 const Color _kMilestoneAccent = Color(0xFFF2B01E);
+const Color _kAccessibilityAccent = Color(0xFF8B7CF6);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -66,6 +68,14 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Appearance'),
           const _ThemeModePicker(),
+          const SizedBox(height: AppSpacing.lg),
+          const _SectionLabel('Accessibility'),
+          const _SettingsGroup(
+            children: [
+              _ReduceMotionTile(),
+              _ReduceTransparencyTile(),
+            ],
+          ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Account'),
           _SettingsGroup(
@@ -605,6 +615,56 @@ class _RunImportTile extends ConsumerWidget {
       value: ref.watch(runImportEnabledProvider),
       onChanged: (next) =>
           ref.read(runImportEnabledProvider.notifier).set(enabled: next),
+    );
+  }
+}
+
+/// Shortens and simplifies animations app-wide, on top of whatever the
+/// system's own Reduce Motion is already set to.
+///
+/// Off doesn't mean "no reduce motion" — it means "follow the system only",
+/// which is why the subtitle says so rather than leaving the row looking like
+/// the system setting has no effect until this is on.
+class _ReduceMotionTile extends ConsumerWidget {
+  const _ReduceMotionTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(accessibilityPrefsProvider);
+    return _SettingsSwitchTile(
+      icon: Icons.motion_photos_off_outlined,
+      accent: _kAccessibilityAccent,
+      label: 'Reduce motion',
+      subtitle: 'Shorten and simplify animations, even if your device '
+          'allows them',
+      value: prefs.forceReduceMotion,
+      onChanged: (next) => ref
+          .read(accessibilityPrefsProvider.notifier)
+          .setForceReduceMotion(next),
+    );
+  }
+}
+
+/// Swaps every pane of liquid glass for a solid surface.
+///
+/// Plain on/off, unlike the theme picker: there is no system-level reduce-
+/// transparency signal on either platform for this to defer to, so there is
+/// no "System" option that would mean anything.
+class _ReduceTransparencyTile extends ConsumerWidget {
+  const _ReduceTransparencyTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final prefs = ref.watch(accessibilityPrefsProvider);
+    return _SettingsSwitchTile(
+      icon: Icons.opacity_rounded,
+      accent: _kAccessibilityAccent,
+      label: 'Reduce transparency',
+      subtitle: 'Use solid surfaces instead of frosted glass',
+      value: prefs.reduceTransparency,
+      onChanged: (next) => ref
+          .read(accessibilityPrefsProvider.notifier)
+          .setReduceTransparency(next),
     );
   }
 }

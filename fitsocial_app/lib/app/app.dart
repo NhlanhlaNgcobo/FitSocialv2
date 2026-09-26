@@ -7,6 +7,7 @@ import '../features/safety/application/safety_providers.dart';
 import '../features/safety/application/safety_shortcuts.dart';
 import '../shared/widgets/liquid_backdrop.dart';
 import 'router/app_router.dart';
+import 'theme/app_motion.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_mode_controller.dart';
 
@@ -62,6 +63,7 @@ class _FitSocialAppState extends ConsumerState<FitSocialApp>
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final accessibilityPrefs = ref.watch(accessibilityPrefsProvider);
 
     return MaterialApp.router(
       title: 'FitSocial',
@@ -81,11 +83,20 @@ class _FitSocialAppState extends ConsumerState<FitSocialApp>
       // transition then crossfades two screens over one continuous backdrop
       // instead of sliding two backdrops past each other, and the ground stays
       // still while the screens move, which is what a ground should do.
-      builder: (context, child) => Stack(
-        children: [
-          const Positioned.fill(child: LiquidBackdrop()),
-          if (child != null) child,
-        ],
+      //
+      // [AppMotionScope] lives here too, above every route for the same
+      // reason: a screen transition needs to know whether to reduce itself
+      // before it ever builds.
+      builder: (context, child) => AppMotionScope(
+        reduceMotion: MediaQuery.disableAnimationsOf(context) ||
+            accessibilityPrefs.forceReduceMotion,
+        reduceTransparency: accessibilityPrefs.reduceTransparency,
+        child: Stack(
+          children: [
+            const Positioned.fill(child: LiquidBackdrop()),
+            if (child != null) child,
+          ],
+        ),
       ),
     );
   }

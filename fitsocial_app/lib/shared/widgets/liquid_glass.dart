@@ -2,6 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../app/theme/app_motion.dart';
 import '../../app/theme/app_palette.dart';
 import 'glass.dart';
 import 'glass_motion.dart';
@@ -403,6 +404,15 @@ class _LiquidGlassState extends State<LiquidGlass> {
     final shape = widget.borderRadius;
     final palette = context.palette;
 
+    // There is no OS signal for this the way there is for motion -- see
+    // [AppMotionX] -- so it is purely the app's own setting, and it overrides
+    // every other branch below: a pane that reads the backdrop is exactly
+    // what "reduce transparency" asks to stop seeing, on every surface at
+    // once, lens or painted alike.
+    if (context.reduceTransparency) {
+      return _shaped(_opaque(context, palette, shape), shape, palette);
+    }
+
     // The ordinary case: the material, painted. No second render pass, no
     // backdrop read, nothing for a transition to spoil -- see [LiquidGlass.lens].
     if (!widget.lens) {
@@ -452,6 +462,34 @@ class _LiquidGlassState extends State<LiquidGlass> {
     );
 
     return _shaped(glass, shape, palette);
+  }
+
+  /// What every pane of glass becomes under reduced transparency: [palette]'s
+  /// own solid surface colour, rather than the faint [AppPalette.liquidTint]
+  /// [_held] paints. The tint is tuned to sit *over* a backdrop the shader or
+  /// the theme's ground is still bending or showing through — at the alpha
+  /// that suits that job it reads as barely-there on its own, which is the
+  /// opposite of what less transparency is asking for. The rim stays, so the
+  /// surface still reads as one family with the panes around it that haven't
+  /// changed.
+  Widget _opaque(BuildContext context, AppPalette palette, BorderRadius shape) {
+    return CustomPaint(
+      foregroundPainter: GlassRim(
+        radius: shape.topLeft.x,
+        highlight: palette.glassRimHigh,
+        soft: palette.glassRimSoft,
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: palette.surface),
+            ),
+          ),
+          _content(context),
+        ],
+      ),
+    );
   }
 
   /// The same material with its filter switched off — everything the live pane
