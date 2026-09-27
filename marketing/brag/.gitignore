@@ -1,0 +1,14 @@
+# Rendered videos, carousels and their build copies are large and rebuilt by
+# tools/brag.ps1; keep the plans, specs, copy and compositions' HTML.
+output/*/brag.mp4
+output/*/brag.jpg
+output/*/carousel/*.png
+output/*/composition/assets/
+output/*/composition/snapshots/
+output/*/composition/kit.*
+output/*/carousel-src/assets/
+output/*/carousel-src/snapshots/
+output/*/carousel-src/kit.*
+output/*/carousel-src/_*.png
+output/_*.png
+output/*/_peek.png

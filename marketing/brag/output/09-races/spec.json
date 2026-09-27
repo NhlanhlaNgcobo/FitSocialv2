@@ -1,0 +1,13 @@
+{
+  "track": "happy-beats-business-moves-vol-12-by-ende-dot-app.mp3",
+  "shots": ["races", "race_detail", "races_saved", "race_submit"],
+  "clips": ["clip_races_scroll"],
+  "slides": [
+    ["races_saved", ["Your next", "<em>start line.</em>"], null],
+    ["races", ["Every race, one calendar."], "Filter by date, distance and qualifier."],
+    ["race_detail", ["Pick your distance."], "Start times, prices and where it starts."],
+    ["races_saved", ["Save it. Count it down."], "My Races counts the days to your next one."],
+    ["race_submit", ["Missing one? Add it."], "Submit a race. It's checked before it goes live."]
+  ],
+  "cta": ["See you at", "<em>the start.</em>"]
+}

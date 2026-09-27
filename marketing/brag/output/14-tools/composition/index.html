@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>FitSocial tools</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: 'Anton'; src: url('assets/fonts/Anton-Regular.ttf'); }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-regular.ttf'); font-weight: 400; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-medium.ttf'); font-weight: 500; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-bold.ttf'); font-weight: 700; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-blackitalic.ttf'); font-weight: 900; font-style: italic; }
+      html, body { margin: 0; padding: 0; background: #050505; }
+    </style>
+    <link rel="stylesheet" href="kit.css" />
+    <script src="kit.js"></script>
+    <script src="assets/audio-data.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-1-by-ende-dot-app.mp3" data-start="0" data-duration="30" data-track-index="10" data-volume="0.34" data-fade-out="1.5"></audio>
+      <audio id="sfx-land" src="assets/sfx/impactSoft_medium_001.ogg" data-start="2.2" data-track-index="11" data-volume="0.6"></audio>
+      <audio id="sfx-weather" src="assets/sfx/impactGlass_light_002.ogg" data-start="4.1" data-track-index="12" data-volume="0.55"></audio>
+      <audio id="sfx-health" src="assets/sfx/drop_001.ogg" data-start="9.02" data-track-index="13" data-volume="0.6"></audio>
+      <audio id="sfx-bmi" src="assets/sfx/drop_002.ogg" data-start="15.02" data-track-index="14" data-volume="0.6"></audio>
+      <audio id="sfx-settings" src="assets/sfx/card-place-1.ogg" data-start="20.02" data-track-index="15" data-volume="0.6"></audio>
+      <audio id="sfx-bell" src="assets/sfx/impactBell_heavy_000.ogg" data-start="25.4" data-track-index="16" data-volume="0.7"></audio>
+    </div>
+    <script>
+      const root = document.getElementById('root');
+      const kit = FitKit.create(root, { phoneWidth: 640, phoneTop: 470, statusTime: '05:30' });
+      const tl = kit.tl;
+      const S = 'assets/screens/';
+
+      kit.pane('weather', { scroll: { long: S + 'weather.png', top: S + 'weather.png', fixedTop: 112 } });
+      kit.pane('health', { still: S + 'health.png' });
+      kit.pane('bmi', { still: S + 'bmi.png' });
+      kit.pane('settings', { scroll: { long: S + 'settings.png', top: S + 'settings.png', fixedTop: 112 } });
+
+      // 1. Hook
+      const hook = kit.headline(0.15, 2.95, ['Check the weather.', '<em>Then go.</em>'], null, { size: 100, stagger: [0, 0.7] });
+      gsap.set(hook, { y: 620, scale: 1.12 });
+      tl.to(hook, { y: 0, scale: 1, duration: 0.7, ease: 'power3.inOut' }, 1.1);
+      kit.show('weather', 0, 'cut');
+      kit.phoneIn(1.35);
+
+      // 2. The forecast (beat 3.02): the "Good to run" chip, then the week.
+      kit.headline(3.02, 9.02, 'Good to run?', 'A 7-day forecast that says when to head out.');
+      kit.punch(3.4, 5.6, 1.12, 290, 230);
+      kit.scroll('weather', 6.2, 8.6, 300, 0);
+
+      // 3. Health (beat 9.02)
+      kit.show('health', 9.02);
+      kit.headline(9.02, 15.02, 'Your day, from Health Connect.', 'Steps, heart rate, sleep and active energy.');
+      kit.punch(9.6, 14.6, 1.1, 196, 290);
+
+      // 4. BMI (beat 15.02)
+      kit.show('bmi', 15.02);
+      kit.headline(15.02, 20.02, 'Know your numbers.', 'BMI with the healthy range for your height.');
+
+      // 5. Settings (beat 20.02)
+      kit.show('settings', 20.02);
+      kit.headline(20.02, 25.0, 'Make it yours.', 'Light or dark, health data and safety, all in Settings.');
+      kit.scroll('settings', 21.4, 23.6, 330, 0);
+
+      // 6. End card
+      kit.phoneOut(25.0);
+      kit.wordmark(25.4, 128, 'assets/fitsocial_f_mark.png', 'Train. Fuel. Share. Grow.');
+
+      kit.breathe(window.AUDIO_DATA, 0, 30);
+      window.__timelines['main'] = tl;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "track": "happy-beats-business-moves-vol-10-by-ende-dot-app.mp3",
+  "shots": ["pulse_share_post", "pulse_own_viewers"],
+  "clips": ["clip_home_scroll", "clip_pulse_text", "clip_pulse_play"],
+  "slides": [
+    ["clip_pulse_play_first", ["Post the moment."], "Not the whole workout."],
+    ["clip_pulse_text_last", ["Say it in a Pulse."], "Six typefaces. Twelve colours."],
+    ["pulse_share_post", ["Share any post to it."], "The author gets told."],
+    ["pulse_own_viewers", ["See who watched."], "Your Pulse lists who viewed it."]
+  ],
+  "cta": ["Up for", "<em>24 hours.</em>"]
+}

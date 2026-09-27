@@ -1,0 +1,12 @@
+{
+  "track": "happy-beats-business-moves-vol-12-by-ende-dot-app.mp3",
+  "shots": ["notifications", "post_detail", "settings"],
+  "clips": [],
+  "slides": [
+    ["notifications", ["Only the pings", "<em>that matter.</em>"], null],
+    ["notifications", ["Reactions. Replies. Tags."], "New, today and this week, in one list."],
+    ["post_detail", ["Tap to open it."], "A push opens the post, profile or challenge it's about."],
+    ["settings", ["One switch."], "Push for follows, reactions, comments and challenges.", 690]
+  ],
+  "cta": ["Stay", "<em>in the loop.</em>"]
+}

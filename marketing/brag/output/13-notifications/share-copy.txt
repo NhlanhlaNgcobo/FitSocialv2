@@ -1,0 +1,1 @@
+Only the pings that matter: reactions, replies, tags and challenge invites, and a tap opens exactly what it's about.

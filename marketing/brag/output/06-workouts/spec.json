@@ -1,0 +1,12 @@
+{
+  "track": "happy-beats-business-moves-vol-1-by-ende-dot-app.mp3",
+  "shots": ["workout_log"],
+  "clips": ["clip_workout_build", "clip_workout_repeat", "clip_home_scroll"],
+  "slides": [
+    ["clip_workout_build_last", ["Leg day.", "<em>Logged and posted.</em>"], null],
+    ["clip_workout_repeat_last", ["Repeat a session."], "One tap refills a workout you've done before."],
+    ["workout_log", ["Pull it from your watch."], "Fill it from Samsung Health or your watch."],
+    ["clip_home_scroll_last", ["Post it as a log sheet."], "Your crew sees every set."]
+  ],
+  "cta": ["Log it.", "<em>Post it.</em>"]
+}

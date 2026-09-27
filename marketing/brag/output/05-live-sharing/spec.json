@@ -1,0 +1,12 @@
+{
+  "track": "happy-beats-business-moves-vol-11-by-ende-dot-app.mp3",
+  "shots": ["live_run", "live_sharing", "live_viewer", "live_viewer_done"],
+  "clips": [],
+  "slides": [
+    ["live_viewer", ["They can see", "<em>you're on your way.</em>"], null],
+    ["live_sharing", ["One tap to share."], "Anyone with the link can follow until you finish."],
+    ["live_viewer", ["They watch you move."], "Distance, time and pace, updated live."],
+    ["live_viewer_done", ["Then it stops."], "When you finish, they get the final numbers."]
+  ],
+  "cta": ["Run with", "<em>company.</em>"]
+}

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>FitSocial music</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: 'Anton'; src: url('assets/fonts/Anton-Regular.ttf'); }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-regular.ttf'); font-weight: 400; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-medium.ttf'); font-weight: 500; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-bold.ttf'); font-weight: 700; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-blackitalic.ttf'); font-weight: 900; font-style: italic; }
+      html, body { margin: 0; padding: 0; background: #050505; }
+    </style>
+    <link rel="stylesheet" href="kit.css" />
+    <script src="kit.js"></script>
+    <script src="assets/audio-data.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-9-by-ende-dot-app.mp3" data-start="0" data-duration="30" data-track-index="10" data-volume="0.36" data-fade-out="1.5"></audio>
+      <audio id="sfx-land" src="assets/sfx/impactSoft_medium_001.ogg" data-start="2.2" data-track-index="11" data-volume="0.6"></audio>
+      <audio id="sfx-switch" src="assets/sfx/click_002.ogg" data-start="6.9" data-track-index="12" data-volume="0.7"></audio>
+      <audio id="sfx-run" src="assets/sfx/drop_001.ogg" data-start="8.44" data-track-index="13" data-volume="0.6"></audio>
+      <audio id="sfx-skip" src="assets/sfx/select_008.ogg" data-start="11.9" data-track-index="14" data-volume="0.6"></audio>
+      <audio id="sfx-island" src="assets/sfx/drop_002.ogg" data-start="16.1" data-track-index="15" data-volume="0.6"></audio>
+      <audio id="sfx-share" src="assets/sfx/card-place-1.ogg" data-start="19.48" data-track-index="16" data-volume="0.6"></audio>
+      <audio id="sfx-bell" src="assets/sfx/impactBell_heavy_000.ogg" data-start="25.1" data-track-index="17" data-volume="0.7"></audio>
+    </div>
+    <script>
+      const root = document.getElementById('root');
+      const kit = FitKit.create(root, { phoneWidth: 640, phoneTop: 470, statusTime: '05:42' });
+      const tl = kit.tl;
+      const S = 'assets/screens/';
+
+      kit.pane('home', { still: S + 'music_home.png' });
+      kit.pane('switch', { still: S + 'live_run.png' });
+      kit.pane('run', { still: S + 'music_run.png' });
+      kit.pane('home2', { still: S + 'music_home.png' });
+      kit.pane('island', { still: S + 'music_island.png' });
+      kit.pane('share', { still: S + 'music_share_pulse.png' });
+
+      // 1. Hook: the note in the top bar.
+      const hook = kit.headline(0.15, 3.1, ['Your soundtrack,', '<em>in the app.</em>'], null, { size: 100, stagger: [0, 0.7] });
+      gsap.set(hook, { y: 620, scale: 1.12 });
+      tl.to(hook, { y: 0, scale: 1, duration: 0.7, ease: 'power3.inOut' }, 1.1);
+      kit.show('home', 0, 'cut');
+      kit.phoneIn(1.35);
+      kit.punch(1.9, 3.1, 1.1, 222, 160);
+
+      // 2. One switch (beat 3.18): "Set up music" on the run screen.
+      kit.show('switch', 3.18, 'fade');
+      kit.headline(3.18, 8.44, 'One switch.', 'Play from any music app. No account, no password.');
+      kit.punch(3.6, 6.6, 1.12, 196, 700);
+      kit.touch(6.9, 7.3, 196, 830);
+
+      // 3. On the run (beat 8.44)
+      kit.show('run', 8.44, 'fade');
+      kit.headline(8.44, 14.22, 'Control it mid-run.', 'Skip and pause without leaving your run.');
+      kit.touch(11.9, 12.25, 344, 716);
+
+      // 4. The island (beat 14.22): tap the note, the player drops down.
+      kit.show('home2', 14.22);
+      kit.headline(14.22, 19.48, 'Tap the note.', 'Your music drops down from the top of Home.');
+      kit.touch(15.7, 16.05, 222, 80);
+      kit.show('island', 16.1, 'fade');
+
+      // 5. Share (beat 19.48)
+      kit.show('share', 19.48);
+      kit.headline(19.48, 24.7, 'Share the song.', "Put what you're playing on your Pulse.");
+
+      // 6. End card
+      kit.phoneOut(24.7);
+      kit.wordmark(25.1, 128, 'assets/fitsocial_f_mark.png', 'Train. Fuel. Share. Grow.');
+
+      kit.breathe(window.AUDIO_DATA, 0, 30);
+      window.__timelines['main'] = tl;
+    </script>
+  </body>
+</html>

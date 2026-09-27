@@ -1,0 +1,13 @@
+{
+  "track": "happy-beats-business-moves-vol-10-by-ende-dot-app.mp3",
+  "shots": ["challenge_hub", "challenge_invite", "challenge_live", "challenge_board"],
+  "clips": ["clip_challenge_create", "clip_challenge_scroll"],
+  "slides": [
+    ["challenge_hub", ["Call out", "<em>your friends.</em>"], null],
+    ["clip_challenge_create_last", ["Set the goal."], "Distance, dates, public or private."],
+    ["challenge_invite", ["They get the invite."], "Accept or decline, right on the board."],
+    ["challenge_board", ["Race the leaderboard."], "Streaks, days and kilometres, ranked."],
+    ["challenge_live", ["Or join one."], "Public challenges are open to anyone."]
+  ],
+  "cta": ["Game", "<em>on.</em>"]
+}

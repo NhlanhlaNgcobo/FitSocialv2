@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>FitSocial live sharing</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: 'Anton'; src: url('assets/fonts/Anton-Regular.ttf'); }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-regular.ttf'); font-weight: 400; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-medium.ttf'); font-weight: 500; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-bold.ttf'); font-weight: 700; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-blackitalic.ttf'); font-weight: 900; font-style: italic; }
+      html, body { margin: 0; padding: 0; background: #050505; }
+    </style>
+    <link rel="stylesheet" href="kit.css" />
+    <script src="kit.js"></script>
+    <script src="assets/audio-data.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <!-- clips -->
+
+      <!-- /clips -->
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-11-by-ende-dot-app.mp3" data-start="0" data-duration="30" data-track-index="10" data-volume="0.32" data-fade-out="1.5"></audio>
+      <audio id="sfx-land" src="assets/sfx/impactSoft_medium_001.ogg" data-start="2.3" data-track-index="11" data-volume="0.55"></audio>
+      <audio id="sfx-tap" src="assets/sfx/click_002.ogg" data-start="5.8" data-track-index="12" data-volume="0.7"></audio>
+      <audio id="sfx-sharing" src="assets/sfx/impactGlass_light_002.ogg" data-start="6.34" data-track-index="13" data-volume="0.55"></audio>
+      <audio id="sfx-send" src="assets/sfx/click_002.ogg" data-start="11.4" data-track-index="14" data-volume="0.7"></audio>
+      <audio id="sfx-viewer" src="assets/sfx/drop_001.ogg" data-start="12.65" data-track-index="15" data-volume="0.55"></audio>
+      <audio id="sfx-done" src="assets/sfx/drop_002.ogg" data-start="17.91" data-track-index="16" data-volume="0.55"></audio>
+      <audio id="sfx-bell" src="assets/sfx/impactBell_heavy_000.ogg" data-start="23.1" data-track-index="17" data-volume="0.65"></audio>
+    </div>
+    <script>
+      const root = document.getElementById('root');
+      const kit = FitKit.create(root, { phoneWidth: 640, phoneTop: 470, statusTime: '05:42' });
+      const tl = kit.tl;
+      const S = 'assets/screens/';
+
+      kit.pane('run', { still: S + 'live_run.png' });
+      kit.pane('sharing', { still: S + 'live_sharing.png' });
+      kit.pane('viewer', { still: S + 'live_viewer.png' });
+      kit.pane('done', { still: S + 'live_viewer_done.png' });
+
+      // 1. Hook
+      const hook = kit.headline(0.15, 3.65, ['They can see', "<em>you're on your way.</em>"], null, { size: 96, stagger: [0, 0.75] });
+      gsap.set(hook, { y: 620, scale: 1.12 });
+      tl.to(hook, { y: 0, scale: 1, duration: 0.7, ease: 'power3.inOut' }, 1.15);
+      kit.show('run', 0, 'cut');
+      kit.phoneIn(1.4);
+
+      // 2. One tap (strong beat 3.70), on Share activity.
+      kit.headline(3.7, 8.96, 'One tap to share.', 'Tap Share activity while you run.');
+      kit.touch(5.8, 6.2, 196, 641);
+      kit.show('sharing', 6.34, 'fade');
+
+      // 3. The link (strong beat 8.96)
+      kit.headline(8.96, 12.65, 'Send the link.', 'Anyone with it can follow until you finish.');
+      kit.touch(11.4, 11.8, 82, 722);
+
+      // 4. The friend's view (strong beat 12.65)
+      kit.show('viewer', 12.65);
+      kit.headline(12.65, 17.91, 'They watch you move.', 'Distance, time and pace, updated live.');
+      kit.punch(13.4, 17.6, 1.1, 196, 330);
+
+      // 5. Finished (strong beat 17.91)
+      kit.show('done', 17.91, 'fade');
+      kit.headline(17.91, 22.65, 'Then it stops.', 'When you finish, they get the final numbers.');
+
+      // 6. End card (strong beat 22.65)
+      kit.phoneOut(22.65);
+      kit.wordmark(23.1, 128, 'assets/fitsocial_f_mark.png', 'Train. Fuel. Share. Grow.');
+
+      kit.breathe(window.AUDIO_DATA, 0, 30);
+      window.__timelines['main'] = tl;
+    </script>
+  </body>
+</html>

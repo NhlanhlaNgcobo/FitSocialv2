@@ -1,0 +1,12 @@
+{
+  "track": "happy-beats-business-moves-vol-9-by-ende-dot-app.mp3",
+  "shots": ["react_done", "comments", "comments_reply"],
+  "clips": ["clip_home_scroll", "clip_react", "clip_tag"],
+  "slides": [
+    ["clip_home_scroll_first", ["Progress is", "<em>better together.</em>"], null],
+    ["clip_react_last", ["Hold to react."], "Seven reactions. Pick yours."],
+    ["comments_reply", ["Reply in threads."], "Replies sit under the comment they answer."],
+    ["clip_tag_last", ["Tag your crew."], "Tagged friends get a notification."]
+  ],
+  "cta": ["Better", "<em>together.</em>"]
+}

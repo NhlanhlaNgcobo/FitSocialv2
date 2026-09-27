@@ -1,0 +1,13 @@
+{
+  "track": "happy-beats-business-moves-vol-1-by-ende-dot-app.mp3",
+  "shots": ["weather", "health", "bmi", "settings"],
+  "clips": [],
+  "slides": [
+    ["weather", ["Check the weather.", "<em>Then go.</em>"], null],
+    ["weather", ["Good to run?"], "A 7-day forecast that says when to head out."],
+    ["health", ["Your day, from Health Connect."], "Steps, heart rate, sleep and active energy."],
+    ["bmi", ["Know your numbers."], "BMI with the healthy range for your height."],
+    ["settings", ["Make it yours."], "Light or dark, health data and safety, all in Settings."]
+  ],
+  "cta": ["Then", "<em>go.</em>"]
+}

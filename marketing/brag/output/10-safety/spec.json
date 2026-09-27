@@ -1,0 +1,13 @@
+{
+  "track": "happy-beats-business-moves-vol-12-by-ende-dot-app.mp3",
+  "shots": ["safety_home", "safety_contacts", "panic_alert_received", "safety_pins_duress", "panic_sent", "safety_hold_70"],
+  "clips": ["clip_sos_hold"],
+  "slides": [
+    ["safety_home", ["Run free.", "<em>Someone's got you.</em>"], null],
+    ["safety_contacts", ["Pick your people."], "Up to three: FitSocial friends or email."],
+    ["safety_hold_70", ["Hold for 2 seconds."], "A silent alert. Nothing sounds on your phone."],
+    ["panic_alert_received", ["They see where you are."], "Your live location, until you enter your safe PIN."],
+    ["safety_pins_duress", ["Forced to cancel?"], "A duress PIN looks like it ends the alert. Your contacts are told."]
+  ],
+  "cta": ["Run", "<em>free.</em>"]
+}

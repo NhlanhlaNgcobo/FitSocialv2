@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1350" />
+    <title>FitSocial launch carousel</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: 'Anton'; src: url('assets/fonts/Anton-Regular.ttf'); }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-regular.ttf'); font-weight: 400; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-medium.ttf'); font-weight: 500; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-bold.ttf'); font-weight: 700; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-blackitalic.ttf'); font-weight: 900; font-style: italic; }
+      html, body { margin: 0; padding: 0; background: #050505; }
+    </style>
+    <link rel="stylesheet" href="kit.css" />
+    <style>
+      .fk-type { top: 118px; height: 250px; }
+      .fk-line { font-size: 84px; }
+      .fk-sub { font-size: 34px; margin-top: 24px; }
+      .fk-end { justify-content: center; gap: 34px; }
+      .fk-cta { font-family: 'Anton', sans-serif; font-size: 110px; text-transform: uppercase; color: #f7f7f7; line-height: 1.06; text-align: center; }
+      .fk-cta em { font-style: normal; color: #ff6b1a; }
+    </style>
+    <script src="kit.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="8.5" data-width="1080" data-height="1350"></div>
+    <script>
+      // One slide per second, snapshots at n + 0.6; the last slide settles
+      // and is taken at 8.2.
+      const root = document.getElementById('root');
+      const kit = FitKit.create(root, { phoneWidth: 540, phoneTop: 400, statusTime: '05:42' });
+      const tl = kit.tl;
+      const S = 'assets/screens/';
+      const slides = [
+        ['feed', 'home_feed.png', ['Your whole fitness life.', '<em>One feed.</em>'], null],
+        ['run', 'live_run.png', 'Track it live.', 'Route, pace and time while you run.'],
+        ['meal', 'meal_review.png', 'Snap the plate.', 'Every food itemised. Macros added up.'],
+        ['pulse', 'pulse_viewer.png', 'Post the moment.', 'Pulses stay up for 24 hours.'],
+        ['board', 'challenge_board.png', 'Call out your crew.', 'Set a goal. Race your friends to it.'],
+        ['safety', 'safety_hold_70.png', 'Hold for 2 seconds.', 'A silent alert with your live location.'],
+      ];
+      const total = slides.length + 1;
+
+      // Header on every slide: the wordmark small, the slide number in orange.
+      const header = document.createElement('div');
+      header.className = 'fk-slide-top';
+      header.innerHTML = '<div class="fk-mark-row"><img class="fk-mark" src="assets/fitsocial_f_mark.png" style="height:40px;margin-right:-4px"><div class="fk-word" style="font-size:42px"><span class="fk-it">it</span>Social</div></div><div class="fk-slide-num"></div>';
+      root.appendChild(header);
+      const num = header.querySelector('.fk-slide-num');
+
+      slides.forEach(function (s, i) {
+        kit.pane(s[0], { still: S + s[1] });
+        kit.show(s[0], i, 'cut');
+        kit.headline(i, i + 1, Array.isArray(s[2]) ? s[2] : [s[2]], s[3], { stagger: [0, 0, 0] });
+        tl.set(num, { textContent: String(i + 1).padStart(2, '0') + '/' + String(total).padStart(2, '0') }, i);
+      });
+      kit.phoneIn(0, 0);
+
+      // Last slide: the call to action.
+      const last = slides.length;
+      kit.phoneOut(last - 0.001);
+      tl.set(num, { textContent: String(total).padStart(2, '0') + '/' + String(total).padStart(2, '0') }, last);
+      const end = kit.wordmark(last, 116, 'assets/fitsocial_f_mark.png', 'Train. Fuel. Share. Grow.');
+      const cta = document.createElement('div');
+      cta.className = 'fk-cta';
+      cta.innerHTML = 'Join the<br><em>crew.</em>';
+      end.insertBefore(cta, end.firstChild);
+      gsap.set(cta, { opacity: 0 });
+      tl.set(cta, { opacity: 1 }, last);
+      tl.set(header, { opacity: 1 }, 0);
+      // The big wordmark carries the last slide; drop the small one.
+      tl.set(header.firstChild, { opacity: 0 }, last);
+
+      window.__timelines['main'] = tl;
+    </script>
+  </body>
+</html>

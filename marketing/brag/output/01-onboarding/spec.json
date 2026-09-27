@@ -1,0 +1,49 @@
+{
+  "track": "happy-beats-business-moves-vol-12-by-ende-dot-app.mp3",
+  "shots": [
+    "signup",
+    "welcome",
+    "profile_setup"
+  ],
+  "clips": [
+    "clip_splash",
+    "clip_welcome",
+    "clip_profile_typing",
+    "clip_home_scroll"
+  ],
+  "slides": [
+    [
+      "welcome",
+      [
+        "Your crew is",
+        "<em>already here.</em>"
+      ],
+      null
+    ],
+    [
+      "signup",
+      [
+        "One tap to join."
+      ],
+      "Sign up with Google or with email."
+    ],
+    [
+      "clip_profile_typing_last",
+      [
+        "Make it yours."
+      ],
+      "Pick a name and a handle. We check it's free."
+    ],
+    [
+      "clip_home_scroll_first",
+      [
+        "Land in your feed."
+      ],
+      "Your crew's runs, lifts and meals, first thing."
+    ]
+  ],
+  "cta": [
+    "Your crew is",
+    "<em>waiting.</em>"
+  ]
+}

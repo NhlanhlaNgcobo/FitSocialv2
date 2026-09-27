@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>FitSocial notifications</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: 'Anton'; src: url('assets/fonts/Anton-Regular.ttf'); }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-regular.ttf'); font-weight: 400; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-medium.ttf'); font-weight: 500; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-bold.ttf'); font-weight: 700; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-blackitalic.ttf'); font-weight: 900; font-style: italic; }
+      html, body { margin: 0; padding: 0; background: #050505; }
+    </style>
+    <link rel="stylesheet" href="kit.css" />
+    <script src="kit.js"></script>
+    <script src="assets/audio-data.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3" data-start="0" data-duration="30" data-track-index="10" data-volume="0.2" data-fade-out="1.5"></audio>
+      <audio id="sfx-land" src="assets/sfx/impactSoft_medium_001.ogg" data-start="2.2" data-track-index="11" data-volume="0.5"></audio>
+      <audio id="sfx-invite" src="assets/sfx/impactGlass_light_002.ogg" data-start="8.74" data-track-index="12" data-volume="0.5"></audio>
+      <audio id="sfx-tap" src="assets/sfx/click_002.ogg" data-start="12.6" data-track-index="13" data-volume="0.65"></audio>
+      <audio id="sfx-bell" src="assets/sfx/impactBell_heavy_000.ogg" data-start="23.35" data-track-index="15" data-volume="0.6"></audio>
+    </div>
+    <script>
+      const root = document.getElementById('root');
+      const kit = FitKit.create(root, { phoneWidth: 640, phoneTop: 470, statusTime: '07:20' });
+      const tl = kit.tl;
+      const S = 'assets/screens/';
+
+      kit.pane('inbox', { still: S + 'notifications.png' });
+      kit.pane('post', { scroll: { long: S + 'post_detail.png', top: S + 'post_detail.png', fixedTop: 112 } });
+      kit.pane('settings', { scroll: { long: S + 'settings.png', top: S + 'settings.png', fixedTop: 112 } });
+
+      // 1. Hook. Deadpan: long holds, one move at a time.
+      const hook = kit.headline(0.15, 3.2, ['Only the pings', '<em>that matter.</em>'], null, { size: 104, stagger: [0, 0.9] });
+      gsap.set(hook, { y: 620, scale: 1.1 });
+      tl.to(hook, { y: 0, scale: 1, duration: 0.8, ease: 'power3.inOut' }, 1.2);
+      kit.show('inbox', 0, 'cut');
+      kit.phoneIn(1.45);
+
+      // 2. The list (beat 3.27)
+      kit.headline(3.27, 8.74, 'Reactions. Replies. Tags.', 'New, today and this week, in one list.');
+
+      // 3. Invites (strong beat 8.74)
+      kit.headline(8.74, 12.9, 'Invites land here too.', 'Challenge invites, accepts and finishes.');
+      kit.punch(9.2, 12.5, 1.15, 196, 380);
+
+      // 4. Tap to open (beat 13.11)
+      kit.touch(12.6, 12.95, 196, 190);
+      kit.show('post', 13.11);
+      kit.headline(13.11, 17.47, 'Tap to open it.', "A push opens the post, profile or challenge it's about.");
+      kit.scroll('post', 14.4, 16.9, 380, 0);
+
+      // 5. The switch (strong beat 17.47)
+      kit.show('settings', 17.47);
+      kit.headline(17.47, 22.93, 'One switch.', 'Push for follows, reactions, comments and challenges.');
+      kit.scroll('settings', 17.9, 19.6, 690, 0);
+
+      // 6. End card (strong beat 22.93)
+      kit.phoneOut(22.93);
+      kit.wordmark(23.35, 128, 'assets/fitsocial_f_mark.png', 'Train. Fuel. Share. Grow.');
+
+      kit.breathe(window.AUDIO_DATA, 0, 30);
+      window.__timelines['main'] = tl;
+    </script>
+  </body>
+</html>

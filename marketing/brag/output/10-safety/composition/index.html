@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>FitSocial safety</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: 'Anton'; src: url('assets/fonts/Anton-Regular.ttf'); }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-regular.ttf'); font-weight: 400; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-medium.ttf'); font-weight: 500; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-bold.ttf'); font-weight: 700; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/roboto-blackitalic.ttf'); font-weight: 900; font-style: italic; }
+      html, body { margin: 0; padding: 0; background: #050505; }
+    </style>
+    <link rel="stylesheet" href="kit.css" />
+    <script src="kit.js"></script>
+    <script src="assets/audio-data.js"></script>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+      <!-- clips -->
+      <video id="clip-hold" src="assets/clips/clip_sos_hold.mp4" data-start="9.2" data-duration="2.2" muted playsinline></video>
+      <!-- /clips -->
+      <audio id="music" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3" data-start="0" data-duration="30" data-track-index="10" data-volume="0.26" data-fade-out="1.5"></audio>
+      <audio id="sfx-land" src="assets/sfx/impactSoft_medium_001.ogg" data-start="2.2" data-track-index="11" data-volume="0.5"></audio>
+      <audio id="sfx-contacts" src="assets/sfx/drop_001.ogg" data-start="3.27" data-track-index="12" data-volume="0.5"></audio>
+      <audio id="sfx-press" src="assets/sfx/click_002.ogg" data-start="9.5" data-track-index="13" data-volume="0.65"></audio>
+      <audio id="sfx-ways" src="assets/sfx/drop_002.ogg" data-start="13.11" data-track-index="14" data-volume="0.5"></audio>
+      <audio id="sfx-alert" src="assets/sfx/impactSoft_medium_003.ogg" data-start="17.47" data-track-index="15" data-volume="0.55"></audio>
+      <audio id="sfx-pins" src="assets/sfx/drop_001.ogg" data-start="21.2" data-track-index="16" data-volume="0.5"></audio>
+      <audio id="sfx-bell" src="assets/sfx/impactBell_heavy_000.ogg" data-start="25.8" data-track-index="17" data-volume="0.6"></audio>
+    </div>
+    <script>
+      const root = document.getElementById('root');
+      const kit = FitKit.create(root, { phoneWidth: 640, phoneTop: 470, statusTime: '05:51' });
+      const tl = kit.tl;
+      const C = 'assets/clips/';
+      const S = 'assets/screens/';
+      const clip = (name, start, dur) => ({ video: { src: C + name + '.mp4', first: C + name + '_first.png', last: C + name + '_last.png', start: start, dur: dur } });
+
+      kit.pane('home', { still: S + 'safety_home.png' });
+      kit.pane('contacts', { still: S + 'safety_contacts.png' });
+      kit.pane('hold', clip('clip_sos_hold', 9.2, 2.2));
+      kit.pane('ways', { scroll: { long: S + 'safety_home.png', top: S + 'safety_home.png', fixedTop: 112 } });
+      kit.pane('received', { still: S + 'panic_alert_received.png' });
+      kit.pane('pins', { still: S + 'safety_pins_duress.png' });
+
+      // 1. Hook. Calm: no zooms, long holds.
+      const hook = kit.headline(0.15, 3.2, ['Run free.', "<em>Someone's got you.</em>"], null, { size: 104, stagger: [0, 0.8] });
+      gsap.set(hook, { y: 620, scale: 1.12 });
+      tl.to(hook, { y: 0, scale: 1, duration: 0.8, ease: 'power3.inOut' }, 1.15);
+      kit.show('home', 0, 'cut');
+      kit.phoneIn(1.4);
+
+      // 2. Contacts (beat 3.27)
+      kit.show('contacts', 3.27, 'fade');
+      kit.headline(3.27, 8.74, 'Pick your people.', 'Up to three: FitSocial friends or email.');
+
+      // 3. Hold (strong beat 8.74): the thumb lands on the tenth clip frame.
+      kit.show('hold', 8.74, 'fade');
+      kit.headline(8.74, 13.11, 'Hold for 2 seconds.', 'A silent alert. Nothing sounds on your phone.');
+      kit.touch(9.5, 11.35, 196, 200);
+
+      // 4. Other ways (strong beat 13.11)
+      kit.show('ways', 13.11, 'fade');
+      kit.headline(13.11, 17.47, 'No time to unlock?', 'Send from the app icon, mid-run, or the volume buttons.');
+      kit.scroll('ways', 13.6, 15.4, 610, 0);
+
+      // 5. What your contact sees (strong beat 17.47)
+      kit.show('received', 17.47, 'fade');
+      kit.headline(17.47, 21.2, 'They see where you are.', 'Your live location, until you enter your safe PIN.');
+
+      // 6. Duress PIN
+      kit.show('pins', 21.2, 'fade');
+      kit.headline(21.2, 25.3, 'Forced to cancel?', 'Your duress PIN seems to end it. Your contacts are told.');
+
+      // 7. End card
+      kit.phoneOut(25.3);
+      kit.wordmark(25.8, 128, 'assets/fitsocial_f_mark.png', 'Train. Fuel. Share. Grow.');
+
+      kit.breathe(window.AUDIO_DATA, 0, 30);
+      window.__timelines['main'] = tl;
+    </script>
+  </body>
+</html>

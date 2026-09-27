@@ -1,0 +1,12 @@
+{
+  "track": "happy-beats-business-moves-vol-11-by-ende-dot-app.mp3",
+  "shots": ["meal_upload", "meal_review", "meal_summary"],
+  "clips": ["clip_meal_scroll"],
+  "slides": [
+    ["meal_upload", ["Snap it. Check it.", "<em>Fuel right.</em>"], null],
+    ["clip_meal_scroll_last", ["Every food, itemised."], "Matched to a nutrition database. Adjust a portion, the macros follow."],
+    ["meal_summary", ["Track the day."], "Every meal against your goals."],
+    ["meal_review", ["Share the plate."], "Save the macro card or post it to the feed."]
+  ],
+  "cta": ["Fuel", "<em>right.</em>"]
+}
