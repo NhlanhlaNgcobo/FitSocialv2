@@ -239,22 +239,6 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             _PromptBanner(prompt: prompt),
             const SizedBox(height: AppSpacing.md),
           ],
-          if (_imageBytes == null)
-            _MediaPicker(
-              onGallery:
-                  _isSaving ? null : () => _pickImage(ImageSource.gallery),
-              onCamera: _isSaving ? null : () => _pickImage(ImageSource.camera),
-            )
-          else
-            _SelectedPhoto(
-              bytes: _imageBytes!,
-              aspectRatio: _imageAspectRatio,
-              onChange:
-                  _isSaving ? null : () => _pickImage(ImageSource.gallery),
-              onRemove:
-                  _isSaving ? null : () => setState(() => _imageBytes = null),
-            ),
-          const SizedBox(height: AppSpacing.md),
           _ComposerCard(
             displayName: displayName,
             handle: formatHandle(profile?.handle),
@@ -266,6 +250,18 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             taggedUsers: _taggedUsers,
             captionHint: _isAnswer ? 'Your answer…' : 'How did the session go?',
             onTagPeople: _isSaving ? null : _pickTaggedPeople,
+            photo: _imageBytes == null
+                ? null
+                : _SelectedPhoto(
+                    bytes: _imageBytes!,
+                    aspectRatio: _imageAspectRatio,
+                    onRemove: _isSaving
+                        ? null
+                        : () => setState(() => _imageBytes = null),
+                  ),
+            hasPhoto: _imageBytes != null,
+            onGallery: _isSaving ? null : () => _pickImage(ImageSource.gallery),
+            onCamera: _isSaving ? null : () => _pickImage(ImageSource.camera),
             onChanged: () {
               // Rebuilds for the activity counter as well as saving the draft.
               setState(_syncDraft);
@@ -338,89 +334,119 @@ class _PromptBanner extends StatelessWidget {
   }
 }
 
-/// The empty media slot: one panel that both explains itself and carries the
-/// two ways of filling it, rather than a blank box with a stray text button
-/// floating underneath it.
-class _MediaPicker extends StatelessWidget {
-  const _MediaPicker({required this.onGallery, required this.onCamera});
+/// The "+" at the foot of the caption. Closed it is one quiet round button, so
+/// a text-only post never has to look past a photo slot; tapped, it turns into
+/// a close and slides out the two sources beside it.
+class _AttachControl extends StatefulWidget {
+  const _AttachControl({
+    required this.hasPhoto,
+    required this.onGallery,
+    required this.onCamera,
+  });
 
+  final bool hasPhoto;
   final VoidCallback? onGallery;
   final VoidCallback? onCamera;
 
   @override
+  State<_AttachControl> createState() => _AttachControlState();
+}
+
+class _AttachControlState extends State<_AttachControl> {
+  bool _open = false;
+
+  void _pick(VoidCallback? source) {
+    setState(() => _open = false);
+    source?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final enabled = widget.onGallery != null;
 
-    return LiquidGlass(
-      // Painted by the lens rather than by a fill of its own: a pane
-      // over the app backdrop, like every other card.
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.lg,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: palette.stroke),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: palette.brandSoft,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: palette.brandSoftStroke),
-              ),
-              child: Icon(
-                Icons.add_photo_alternate_rounded,
-                color: palette.brand,
-                size: 32,
+    return Row(
+      children: [
+        Semantics(
+          button: true,
+          label: _open ? 'Close photo options' : 'Add a photo',
+          child: Material(
+            color: _open ? palette.brand : palette.brandSoft,
+            shape: CircleBorder(
+              side: BorderSide(
+                color: _open ? palette.brand : palette.brandSoftStroke,
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            const Text(
-              'Add a photo',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Optional — a post without one still lands in the feed.',
-              textAlign: TextAlign.center,
-              style:
-                  TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: _MediaAction(
-                    icon: Icons.photo_library_rounded,
-                    label: 'Gallery',
-                    onTap: onGallery,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: enabled ? () => setState(() => _open = !_open) : null,
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: AnimatedRotation(
+                  // An eighth of a turn makes the plus read as a close.
+                  turns: _open ? 0.125 : 0,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  child: Icon(
+                    Icons.add_rounded,
+                    size: 22,
+                    color: _open ? AppColors.onMedia : palette.brandText,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _MediaAction(
-                    icon: Icons.photo_camera_rounded,
-                    label: 'Camera',
-                    onTap: onCamera,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ],
+          ),
         ),
-      ),
+        Expanded(
+          child: ClipRect(
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.centerLeft,
+              child: _open
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: AppSpacing.sm),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _SourcePill(
+                              icon: Icons.photo_library_rounded,
+                              label: widget.hasPhoto ? 'Replace' : 'Gallery',
+                              onTap: () => _pick(widget.onGallery),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            _SourcePill(
+                              icon: Icons.photo_camera_rounded,
+                              label: 'Camera',
+                              onTap: () => _pick(widget.onCamera),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.only(left: 10),
+                      child: Text(
+                        widget.hasPhoto ? 'Photo attached' : 'Photo',
+                        style: TextStyle(
+                          color: palette.muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _MediaAction extends StatelessWidget {
-  const _MediaAction({
+class _SourcePill extends StatelessWidget {
+  const _SourcePill({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -428,44 +454,34 @@ class _MediaAction extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return LiquidGlass(
-      // Material stays for the ink splash and gives up its colour:
-      // an opaque fill in there would sit between the glass and
-      // everything it is meant to bend.
-      borderRadius: BorderRadius.circular(16),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 13),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 18, color: palette.brandText),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+    return Material(
+      color: palette.surfaceHigh,
+      shape: StadiumBorder(side: BorderSide(color: palette.stroke)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: palette.brandText),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -473,57 +489,53 @@ class _MediaAction extends StatelessWidget {
   }
 }
 
-/// The chosen photo, shown in the shape the user cropped it to — the same
-/// shape the feed will give it.
+/// The chosen photo, inside the composer under the words it goes with, in the
+/// shape the user cropped it to — the same shape the feed will give it. Tall
+/// crops are held to a height and sit to the left, like an attachment, rather
+/// than pushing the caption off the screen.
 class _SelectedPhoto extends StatelessWidget {
   const _SelectedPhoto({
     required this.bytes,
     required this.aspectRatio,
-    required this.onChange,
     required this.onRemove,
   });
 
   final Uint8List bytes;
   final double? aspectRatio;
-  final VoidCallback? onChange;
   final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: Stack(
-        children: [
-          AspectRatio(
-            // 9:16 only stands in when the decode failed; it is the crop
-            // screen's default, so the fallback is never a surprise.
-            aspectRatio: aspectRatio ?? kPictureAspectRatio,
-            child: ColoredBox(
-              color: AppColors.mediaBackdrop,
-              // Rendered from the same bytes the upload sends, so the
-              // preview and the post can never disagree.
-              child: Image.memory(bytes, fit: BoxFit.cover),
-            ),
-          ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Row(
-              // Without this the row fills the stack and drags both controls
-              // off the left edge.
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _GlassButton(
-                  icon: Icons.swap_horiz_rounded,
-                  label: 'Change',
-                  onTap: onChange,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 380),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            children: [
+              AspectRatio(
+                // 9:16 only stands in when the decode failed; it is the crop
+                // screen's default, so the fallback is never a surprise.
+                aspectRatio: aspectRatio ?? kPictureAspectRatio,
+                child: ColoredBox(
+                  color: AppColors.mediaBackdrop,
+                  // Rendered from the same bytes the upload sends, so the
+                  // preview and the post can never disagree.
+                  child: Image.memory(bytes, fit: BoxFit.cover),
                 ),
-                const SizedBox(width: 8),
-                _GlassIconButton(icon: Icons.close_rounded, onTap: onRemove),
-              ],
-            ),
+              ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: _GlassIconButton(
+                  icon: Icons.close_rounded,
+                  onTap: onRemove,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -543,6 +555,10 @@ class _ComposerCard extends StatelessWidget {
     required this.taggedUsers,
     required this.captionHint,
     required this.onTagPeople,
+    required this.photo,
+    required this.hasPhoto,
+    required this.onGallery,
+    required this.onCamera,
     required this.onChanged,
   });
 
@@ -556,6 +572,12 @@ class _ComposerCard extends StatelessWidget {
   final List<TaggedUser> taggedUsers;
   final String captionHint;
   final VoidCallback? onTagPeople;
+
+  /// The attached photo's preview, or null for a text-only post.
+  final Widget? photo;
+  final bool hasPhoto;
+  final VoidCallback? onGallery;
+  final VoidCallback? onCamera;
   final VoidCallback onChanged;
 
   @override
@@ -646,7 +668,17 @@ class _ComposerCard extends StatelessWidget {
               controller: captionController,
               focusNode: captionFocusNode,
             ),
-            const SizedBox(height: AppSpacing.sm),
+            if (photo case final photo?) ...[
+              const SizedBox(height: AppSpacing.md),
+              photo,
+            ],
+            const SizedBox(height: AppSpacing.md),
+            _AttachControl(
+              hasPhoto: hasPhoto,
+              onGallery: onGallery,
+              onCamera: onCamera,
+            ),
+            const SizedBox(height: AppSpacing.md),
             Divider(color: palette.stroke, height: 1),
             const SizedBox(height: AppSpacing.sm),
             TagPeopleRow(tagged: taggedUsers, onTap: onTagPeople),
@@ -856,50 +888,6 @@ class _ErrorBanner extends StatelessWidget {
 
 /// Controls that sit on a photo, so their colours are fixed rather than
 /// theme-dependent — the backdrop is the user's own image either way.
-class _GlassButton extends StatelessWidget {
-  const _GlassButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0x66000000),
-      shape: const StadiumBorder(
-        side: BorderSide(color: Color(0x33FFFFFF)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: AppColors.onMedia),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppColors.onMedia,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _GlassIconButton extends StatelessWidget {
   const _GlassIconButton({required this.icon, required this.onTap});
 
