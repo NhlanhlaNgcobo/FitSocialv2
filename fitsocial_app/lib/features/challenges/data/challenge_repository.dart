@@ -5,6 +5,7 @@ import '../../../core/bootstrap/bootstrap_status.dart';
 import '../domain/challenge_badges.dart';
 import '../domain/challenge_models.dart';
 import '../domain/challenge_task.dart';
+import '../domain/daily_health.dart';
 import 'challenge_repository_contract.dart';
 import 'firestore_challenge_repository.dart';
 
@@ -72,10 +73,10 @@ class UnconfiguredChallengeRepository implements ChallengeRepository {
   Future<void> refreshClock(String enrollmentId, int utcOffsetMinutes) async {}
 
   @override
-  Future<void> recordDailySteps({
+  Future<void> recordDailyHealth({
     required String userId,
     required String dayKey,
-    required int steps,
+    required DailyHealthReading reading,
     required String source,
   }) async {}
 

@@ -17,6 +17,15 @@ npm test          # starts the emulator, runs everything, shuts it down
 
 Java is required — the Firestore emulator runs on it.
 
+On Windows the Firebase CLI may report "Could not spawn `java -version`" even
+when `java` works in Git Bash, because it does not inherit that shell's PATH.
+Run it from PowerShell with Java put on the path first:
+
+```
+$env:JAVA_HOME = 'C:\Java\jdk-21'; $env:Path = "$env:JAVA_HOME\bin;" + $env:Path
+npm test
+```
+
 ## Every file here shares one emulator
 
 `env.clearFirestore()` wipes the **whole** database, not this file's slice of

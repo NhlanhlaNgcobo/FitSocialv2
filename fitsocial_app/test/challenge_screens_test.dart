@@ -10,6 +10,7 @@ import 'package:fitsocial_app/features/challenges/domain/challenge_clock.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_copy.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_models.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_task.dart';
+import 'package:fitsocial_app/features/challenges/domain/daily_health.dart';
 import 'package:fitsocial_app/features/challenges/presentation/challenge_outcome_screen.dart';
 import 'package:fitsocial_app/features/challenges/presentation/challenge_status_strip.dart';
 import 'package:fitsocial_app/features/challenges/presentation/challenge_tracker_screen.dart';
@@ -110,10 +111,10 @@ class _FakeChallengeRepository implements ChallengeRepository {
   }
 
   @override
-  Future<void> recordDailySteps({
+  Future<void> recordDailyHealth({
     required String userId,
     required String dayKey,
-    required int steps,
+    required DailyHealthReading reading,
     required String source,
   }) async {}
 

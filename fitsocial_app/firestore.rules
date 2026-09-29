@@ -389,6 +389,13 @@ service cloud.firestore {
              && entry.totalDurationSeconds == 0;
     }
 
+    // A field that is either absent or an int inside [low, high]. For the
+    // optional fields newer builds add to a document older builds still write.
+    function optionalIntIn(data, key, low, high) {
+      return !(key in data)
+             || (data[key] is int && data[key] >= low && data[key] <= high);
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
@@ -1123,13 +1130,34 @@ service cloud.firestore {
       allow read: if request.auth != null
                   && (resource == null
                       || request.auth.uid == resource.data.userId);
+      //
+      // Build 11 adds optional fields beside the step count: how much of it was
+      // typed in by hand, the day's heart rate, and the offset the phone read
+      // it in. Each is optional, so builds 10 and earlier -- which write only
+      // the original five -- keep passing, and each is bounded, because the
+      // leaderboard ranks on these numbers and a rule is the only check a
+      // client cannot skip. `manualSteps` may never exceed the total it is part
+      // of: a day cannot be more hand-typed than it is long.
       allow create, update: if request.auth != null
                             && request.auth.uid == request.resource.data.userId
                             && docId == request.auth.uid + '_' +
                                  request.resource.data.dayKey
+                            && request.resource.data.keys().hasOnly([
+                                 'userId', 'dayKey', 'steps', 'source',
+                                 'updatedAt', 'manualSteps', 'avgHeartRate',
+                                 'maxHeartRate', 'heartRateCoverageMinutes',
+                                 'utcOffsetMinutes'])
                             && request.resource.data.steps is int
                             && request.resource.data.steps >= 0
-                            && request.resource.data.steps <= 200000;
+                            && request.resource.data.steps <= 200000
+                            && optionalIntIn(request.resource.data, 'manualSteps',
+                                 0, request.resource.data.steps)
+                            && optionalIntIn(request.resource.data, 'avgHeartRate', 25, 240)
+                            && optionalIntIn(request.resource.data, 'maxHeartRate', 25, 250)
+                            && optionalIntIn(request.resource.data,
+                                 'heartRateCoverageMinutes', 0, 1440)
+                            && optionalIntIn(request.resource.data,
+                                 'utcOffsetMinutes', -720, 840);
       allow delete: if false;
     }
 

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/feature_flags.dart';
 import '../../auth/application/app_session.dart';
 import '../../main/application/content_providers.dart'
     show currentUserIdProvider;
@@ -9,6 +10,7 @@ import '../domain/challenge_badges.dart';
 import '../domain/challenge_clock.dart';
 import '../domain/challenge_models.dart';
 import '../domain/challenge_task.dart';
+import '../domain/daily_health.dart';
 
 /// The device's clock, as the challenge system reads it.
 ///
@@ -154,6 +156,26 @@ final canEnrolProvider = Provider.family<bool, ChallengeKey>((ref, key) {
   return !ref.watch(hasRunningEnrollmentProvider);
 });
 
+/// Whether this user's day needs a durable health record.
+///
+/// A document a day per user is only worth writing if something reads it.
+/// Pulse 75 always has: its steps task is judged at 2 AM from this record.
+/// Build 11's goals, Compare, the friends leaderboard, Weekly Insights and Up
+/// Next all read it too, so while any of them is switched on the record is
+/// kept for everybody — a leaderboard of the people who happened to be in a
+/// challenge would not be a leaderboard.
+final needsDailyHealthProvider = Provider<bool>((ref) {
+  if (ref.watch(hasRunningEnrollmentProvider)) return true;
+  const readers = [
+    FeatureFlag.goalsChallenges,
+    FeatureFlag.compare,
+    FeatureFlag.leaderboards,
+    FeatureFlag.weeklyInsights,
+    FeatureFlag.upNext,
+  ];
+  return readers.any((flag) => ref.watch(featureEnabledProvider(flag)));
+});
+
 /// Write-side actions.
 ///
 /// Nothing here invalidates anything afterwards: every read above is a live
@@ -233,18 +255,18 @@ class ChallengeActions {
   /// the last of an evening's walking after the walking has stopped, so the
   /// number the day closes on is not always the number that was readable while
   /// the user was still awake.
-  Future<void> recordSteps({
-    required int steps,
+  Future<void> recordDailyHealth({
+    required DailyHealthReading reading,
     required String source,
     String? dayKey,
   }) async {
     final userId = _ref.read(currentUserIdProvider);
-    if (userId == null || steps <= 0) return;
+    if (userId == null || reading.steps <= 0) return;
 
-    await _repository.recordDailySteps(
+    await _repository.recordDailyHealth(
       userId: userId,
       dayKey: dayKey ?? _ref.read(challengeClockProvider).today(),
-      steps: steps,
+      reading: reading,
       source: source,
     );
   }

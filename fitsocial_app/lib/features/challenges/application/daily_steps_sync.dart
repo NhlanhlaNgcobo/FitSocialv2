@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../tracking/application/tracking_providers.dart';
 import '../domain/challenge_clock.dart';
+import '../domain/daily_health.dart';
 import 'challenge_providers.dart';
 
 /// Keeps a durable record of today's step count.
@@ -91,17 +92,23 @@ class _DailyStepsSyncState extends ConsumerState<DailyStepsSync>
       }
     }
 
-    // The step record itself only matters while a run is going. Early Worm does
-    // not ask for steps, and writing a document a day for every user who has
-    // never entered a challenge would be paying for data nobody reads.
-    if (!ref.read(hasRunningEnrollmentProvider)) return;
+    // The day record only matters while something reads it: a Pulse 75 run,
+    // or a Build 11 feature that is switched on. Early Worm does not ask for
+    // steps, and writing a document a day for every user when nothing reads
+    // it would be paying for data nobody uses.
+    if (!ref.read(needsDailyHealthProvider)) return;
 
     try {
       final summary = await ref.read(healthServiceProvider).readTodaySummary();
       final steps = summary.steps;
       if (summary.available && steps != null && steps > 0) {
-        await actions.recordSteps(
-          steps: steps,
+        final now = DateTime.now();
+        await actions.recordDailyHealth(
+          reading: await _readDay(
+            DateTime(now.year, now.month, now.day),
+            now,
+            steps,
+          ),
           source: 'health_connect',
         );
       }
@@ -156,21 +163,42 @@ class _DailyStepsSyncState extends ConsumerState<DailyStepsSync>
     // rather than for a summary, because the day is over — there is no "so far
     // today" left to read.
     final midnight = DateTime(now.year, now.month, now.day);
-    final steps = await ref.read(healthServiceProvider).readStepsBetween(
-          DateTime(now.year, now.month, now.day - 1),
-          midnight,
-        );
+    final start = DateTime(now.year, now.month, now.day - 1);
+    final steps =
+        await ref.read(healthServiceProvider).readStepsBetween(start, midnight);
 
     if (!mounted || steps == null || steps <= 0) return;
     if (dayKey == _backfilledDayKey && steps <= _backfilledSteps) return;
 
-    await actions.recordSteps(
-      steps: steps,
+    await actions.recordDailyHealth(
+      reading: await _readDay(start, midnight, steps),
       source: 'health_connect_backfill',
       dayKey: dayKey,
     );
     _backfilledDayKey = dayKey;
     _backfilledSteps = steps;
+  }
+
+  /// The rest of a day's reading, around a step total already in hand.
+  ///
+  /// Each extra read fails on its own: a missing heart-rate permission, or a
+  /// phone with no watch at all, must still leave the steps to be written.
+  Future<DailyHealthReading> _readDay(
+    DateTime start,
+    DateTime end,
+    int steps,
+  ) async {
+    final health = ref.read(healthServiceProvider);
+    final manual = await health.readManualStepsBetween(start, end);
+    final heartRate = await health.readHeartRateSummary(start: start, end: end);
+    return DailyHealthReading(
+      steps: steps,
+      manualSteps: manual,
+      avgHeartRate: heartRate?.averageBpm,
+      maxHeartRate: heartRate?.maxBpm,
+      heartRateCoverageMinutes: heartRate?.coverage.inMinutes,
+      utcOffsetMinutes: ref.read(challengeClockProvider).utcOffsetMinutes,
+    );
   }
 
   @override

@@ -1,4 +1,5 @@
 import '../domain/challenge_badges.dart';
+import '../domain/daily_health.dart';
 import '../domain/challenge_models.dart';
 import '../domain/challenge_task.dart';
 
@@ -73,16 +74,18 @@ abstract class ChallengeRepository {
   /// day.
   Future<void> refreshClock(String enrollmentId, int utcOffsetMinutes);
 
-  /// Persists the running daily step total.
+  /// Persists the running daily step total, and the rest of the day's health
+  /// reading alongside it.
   ///
   /// Steps have to be stored rather than read live, because the job that closes
   /// a day runs at 2 AM and cannot ask a sleeping phone how far it walked. The
   /// highest value seen for a day wins, so a later read that comes back lower —
   /// a permissions blip, a source that reset — cannot erase the day's walking.
-  Future<void> recordDailySteps({
+  /// How each field merges is [dailyHealthChanges].
+  Future<void> recordDailyHealth({
     required String userId,
     required String dayKey,
-    required int steps,
+    required DailyHealthReading reading,
     required String source,
   });
 

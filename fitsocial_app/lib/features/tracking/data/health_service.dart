@@ -162,6 +162,38 @@ class HealthService implements RunSessionSource, WorkoutSessionSource {
     }
   }
 
+  /// Steps somebody typed in by hand over a window. Null when unreadable.
+  ///
+  /// Summed from the raw records marked manual — Health Connect's recording
+  /// method, HealthKit's "was user entered" — rather than asked for as
+  /// `getTotalStepsInInterval(includeManualEntry: false)`. That call looks like
+  /// the right one, but once any filter is set the plugin stops using Health
+  /// Connect's de-duplicated aggregate and adds up raw records instead, which
+  /// counts a walk twice when the phone and a paired watch both logged it.
+  /// Manual entries have one source apiece and cannot overlap like that, so
+  /// the sound figure is the de-duplicated total less these.
+  Future<int?> readManualStepsBetween(DateTime start, DateTime end) async {
+    try {
+      await _health.configure();
+      final points = await _health.getHealthDataFromTypes(
+        types: const [HealthDataType.STEPS],
+        startTime: start,
+        endTime: end,
+      );
+      var manual = 0;
+      for (final point in points) {
+        if (point.recordingMethod != RecordingMethod.manual) continue;
+        final value = point.value;
+        if (value is NumericHealthValue) {
+          manual += value.numericValue.round();
+        }
+      }
+      return manual;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The largest single source's total, rather than every source added up.
   ///
   /// Once a watch is paired, the phone and the watch both report the same walk:

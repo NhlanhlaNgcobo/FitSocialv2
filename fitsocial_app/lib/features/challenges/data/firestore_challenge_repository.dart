@@ -6,6 +6,7 @@ import '../domain/challenge_badges.dart';
 import '../domain/challenge_clock.dart';
 import '../domain/challenge_models.dart';
 import '../domain/challenge_task.dart';
+import '../domain/daily_health.dart';
 import 'challenge_repository_contract.dart';
 
 /// Challenges, on Cloud Firestore.
@@ -212,29 +213,29 @@ class FirestoreChallengeRepository implements ChallengeRepository {
   }
 
   @override
-  Future<void> recordDailySteps({
+  Future<void> recordDailyHealth({
     required String userId,
     required String dayKey,
-    required int steps,
+    required DailyHealthReading reading,
     required String source,
   }) async {
     final ref = _dailySteps.doc('${userId}_$dayKey');
 
-    // The highest reading for a day wins. Sources disagree and some of them
-    // reset: a pedometer restarts when the phone reboots, and Health Connect
-    // can come back empty while a permission is being re-granted. Taking the
-    // maximum means a bad reading cannot delete a day's walking.
+    // Read, merge, write in one transaction, so two syncs racing — the timer
+    // and a resume — cannot interleave and let the lower reading land last.
+    // The merge rules live in dailyHealthChanges: counts only go up, heart
+    // rate is replaced by a reading that covers more of the day.
     await _firestore.runTransaction((transaction) async {
       final existing = await transaction.get(ref);
-      final previous = (existing.data()?['steps'] as num?)?.toInt() ?? 0;
-      if (existing.exists && previous >= steps) return;
+      final changes = dailyHealthChanges(existing.data(), reading);
+      if (changes == null) return;
 
       transaction.set(
         ref,
         {
           'userId': userId,
           'dayKey': dayKey,
-          'steps': steps,
+          ...changes,
           'source': source,
           'updatedAt': FieldValue.serverTimestamp(),
         },
