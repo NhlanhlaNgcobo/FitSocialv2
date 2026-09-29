@@ -71,12 +71,8 @@ class NoopAppAnalytics implements AppAnalytics {
   void log(AnalyticsEvent event, [Map<String, Object> parameters = const {}]) {}
 }
 
-/// Gated on [AppConfig.enableAnalytics] as well as on Firebase being up.
-///
-/// That switch predates these events and has always been off; this is the
-/// first code that reads it. Turning it on is a product decision rather than
-/// an engineering one — it changes what the Data Safety form must declare —
-/// so the events are wired and ready, and silent until it is flipped.
+/// Gated on [AppConfig.enableAnalytics] as well as on Firebase being up, so
+/// analytics can be switched off in one place without touching a call site.
 final appAnalyticsProvider = Provider<AppAnalytics>((ref) {
   final status = ref.watch(bootstrapStatusProvider);
   if (status.canUseFirebase && appConfig.enableAnalytics) {

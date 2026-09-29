@@ -16,5 +16,9 @@ class AppConfig {
 
 const appConfig = AppConfig(
   backendMode: BackendMode.firebase,
-  enableAnalytics: false,
+  // On from Build 11. What is sent is listed in AnalyticsEvent
+  // (core/observability/app_analytics.dart): kinds and counts, never names,
+  // typed text or coordinates. The Play Data Safety form must declare app
+  // interactions accordingly.
+  enableAnalytics: true,
 );
