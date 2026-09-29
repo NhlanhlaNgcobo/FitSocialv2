@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/widgets.dart';
 
 import '../config/app_config.dart';
+import '../config/feature_flags.dart';
 import '../observability/crash_reporter.dart';
 import 'bootstrap_status.dart';
 import 'firebase_options_adapter.dart';
@@ -39,6 +40,15 @@ Future<BootstrapStatus> bootstrapApp() async {
     persistenceEnabled: true,
     cacheSizeBytes: kFirestoreCacheBytes,
   );
+
+  // Remote Config's seed and cached values. A failure here costs only the
+  // Build 11 features, which then read as off — never the launch.
+  try {
+    await initFeatureFlags();
+  } catch (error, stack) {
+    await const FirebaseCrashReporter()
+        .recordError(error, stack, reason: 'feature flags init');
+  }
 
   return const BootstrapStatus(
     backendMode: BackendMode.firebase,
