@@ -1,0 +1,50 @@
+{
+  "_comment": "The shared specification for week and month keys. Read by test/period_keys_test.dart and functions/test/period_keys.test.js; both implementations must pass every case.",
+  "weekOf": [
+    { "day": "2026-09-28", "week": "2026-W40", "why": "a Monday opens its week" },
+    { "day": "2026-10-04", "week": "2026-W40", "why": "a Sunday closes it" },
+    { "day": "2026-10-05", "week": "2026-W41", "why": "the next Monday starts the next" },
+    { "day": "2026-01-01", "week": "2026-W01", "why": "2026 starts on a Thursday" },
+    { "day": "2025-12-29", "week": "2026-W01", "why": "late December can belong to next year's week 1" },
+    { "day": "2024-12-30", "week": "2025-W01", "why": "the same, one year earlier" },
+    { "day": "2027-01-01", "week": "2026-W53", "why": "early January can belong to last year's week 53" },
+    { "day": "2027-01-03", "week": "2026-W53", "why": "through to that Sunday" },
+    { "day": "2027-01-04", "week": "2027-W01", "why": "and 2027 week 1 starts the Monday after" },
+    { "day": "2020-12-31", "week": "2020-W53", "why": "another 53-week year" },
+    { "day": "2021-01-03", "week": "2020-W53", "why": "a Sunday in January still in last year" },
+    { "day": "2024-02-29", "week": "2024-W09", "why": "leap day" },
+    { "day": "2023-01-01", "week": "2022-W52", "why": "a Sunday 1 January in a 52-week year" }
+  ],
+  "weekStart": [
+    { "week": "2026-W40", "monday": "2026-09-28" },
+    { "week": "2026-W01", "monday": "2025-12-29" },
+    { "week": "2026-W53", "monday": "2026-12-28" },
+    { "week": "2025-W01", "monday": "2024-12-30" },
+    { "week": "2020-W53", "monday": "2020-12-28" }
+  ],
+  "previousWeek": [
+    { "week": "2026-W41", "previous": "2026-W40" },
+    { "week": "2027-W01", "previous": "2026-W53" },
+    { "week": "2026-W01", "previous": "2025-W52" },
+    { "week": "2021-W01", "previous": "2020-W53" }
+  ],
+  "months": [
+    { "day": "2026-09-30", "month": "2026-09" },
+    { "day": "2026-10-01", "month": "2026-10" }
+  ],
+  "monthLength": [
+    { "month": "2026-02", "days": 28, "first": "2026-02-01", "last": "2026-02-28" },
+    { "month": "2024-02", "days": 29, "first": "2024-02-01", "last": "2024-02-29" },
+    { "month": "2026-09", "days": 30, "first": "2026-09-01", "last": "2026-09-30" },
+    { "month": "2026-12", "days": 31, "first": "2026-12-01", "last": "2026-12-31" }
+  ],
+  "previousMonth": [
+    { "month": "2026-10", "previous": "2026-09" },
+    { "month": "2027-01", "previous": "2026-12" }
+  ],
+  "invalid": {
+    "days": ["", "2026-9-28", "2026/09/28", "yesterday"],
+    "weeks": ["2026-W00", "2026-W54", "2026-40", "2026-W4"],
+    "months": ["2026-00", "2026-13", "2026-9"]
+  }
+}
