@@ -11,7 +11,8 @@ import 'running_challenge_repository_contract.dart';
 /// — creating a challenge, inviting somebody, and moving your own status
 /// between invited, active, declined and left. Every counter is written by
 /// `functions/running_challenges.js` and refused to clients in firestore.rules.
-class FirestoreRunningChallengeRepository implements RunningChallengeRepository {
+class FirestoreRunningChallengeRepository
+    implements RunningChallengeRepository {
   FirestoreRunningChallengeRepository(this._firestore);
 
   final FirebaseFirestore _firestore;
@@ -206,6 +207,56 @@ class FirestoreRunningChallengeRepository implements RunningChallengeRepository 
   }
 
   @override
+  Future<RunningChallenge> createActivityChallenge({
+    required String creatorId,
+    required String title,
+    required String description,
+    required ActivityMetric metric,
+    required ActivityMode mode,
+    required int? target,
+    required String startDayKey,
+    required String endDayKey,
+    required int utcOffsetMinutes,
+  }) async {
+    final ref = _challenges.doc();
+
+    // The key list is exactly what the create rule allows; it refuses anything
+    // else, including every figure the engine owns.
+    await ref.set({
+      'creatorId': creatorId,
+      'title': title,
+      'description': description,
+      'type': ChallengeKind.activity.key,
+      'metric': metric.key,
+      'mode': mode.key,
+      if (mode.needsTarget) 'target': target,
+      'visibility': ChallengeVisibility.private.key,
+      'startDayKey': startDayKey,
+      'endDayKey': endDayKey,
+      'maxParticipants': kMaxChallengeParticipants,
+      'utcOffsetMinutes': utcOffsetMinutes,
+      'status': RunningChallengeStatus.active.key,
+      'participantCount': 0,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    final written = await ref.get();
+    final challenge = _toChallenge(written.id, written.data()!);
+
+    await _participant(ref.id, creatorId).set(
+      _standingStart(
+        challengeId: ref.id,
+        userId: creatorId,
+        visibility: ChallengeVisibility.private,
+        status: ParticipantStatus.active,
+      ),
+    );
+
+    return challenge;
+  }
+
+  @override
   Future<void> join(RunningChallenge challenge, String userId) {
     // The document id is the user's own uid, so a double tap on Join is one
     // participant record rather than two. Firestore has no unique constraint;
@@ -337,6 +388,10 @@ class FirestoreRunningChallengeRepository implements RunningChallengeRepository 
       status: RunningChallengeStatus.byKey(data['status'] as String?),
       participantCount: _int(data['participantCount']),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      kind: ChallengeKind.byKey(data['type'] as String?),
+      activityMetric: ActivityMetric.byKey(data['metric'] as String?),
+      activityMode: ActivityMode.byKey(data['mode'] as String?),
+      target: (data['target'] as num?)?.toInt(),
     );
   }
 
@@ -370,6 +425,9 @@ class FirestoreRunningChallengeRepository implements RunningChallengeRepository 
       rank: _int(data['rank']),
       lastQualifiedDayKey: data['lastQualifiedDayKey'] as String?,
       joinedAt: (data['joinedAt'] as Timestamp?)?.toDate(),
+      total: _int(data['total']),
+      targetReachedDayKey: data['targetReachedDayKey'] as String?,
+      finalRank: (data['finalRank'] as num?)?.toInt(),
     );
   }
 

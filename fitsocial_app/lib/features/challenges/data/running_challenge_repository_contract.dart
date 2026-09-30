@@ -74,6 +74,21 @@ abstract class RunningChallengeRepository {
     required int utcOffsetMinutes,
   });
 
+  /// Creates an activity challenge -- steps, minutes, sessions or meals -- and
+  /// enrols the creator. Always private: Build 11 has no public activity
+  /// challenges, and firestore.rules refuses one.
+  Future<RunningChallenge> createActivityChallenge({
+    required String creatorId,
+    required String title,
+    required String description,
+    required ActivityMetric metric,
+    required ActivityMode mode,
+    required int? target,
+    required String startDayKey,
+    required String endDayKey,
+    required int utcOffsetMinutes,
+  });
+
   /// Joins a public challenge. Idempotent — joining twice is joining once,
   /// because the participant document's id is the user's own uid.
   Future<void> join(RunningChallenge challenge, String userId);

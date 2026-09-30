@@ -152,7 +152,7 @@ class RunningChallengeCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${challenge.goalValueKm.round()} km  ·  '
+                      '${challenge.goalLabel}  ·  '
                       '${challenge.participantCount} in  ·  '
                       '${ended ? "finished" : "$remaining ${remaining == 1 ? "day" : "days"} left"}',
                       style: TextStyle(color: palette.muted, fontSize: 12),

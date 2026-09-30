@@ -104,10 +104,12 @@ class _Board extends ConsumerWidget {
 
         const ChallengeLabel('LEADERBOARD'),
         const SizedBox(height: 10),
-        ChallengeLeaderboard(challengeId: challenge.id),
+        ChallengeLeaderboard(challengeId: challenge.id, challenge: challenge),
         const SizedBox(height: AppSpacing.lg),
 
-        if (me != null && me.status.isCounting) ...[
+        // Run-by-run history, which an activity challenge does not keep: its
+        // days are the daily stats, already on the user's own screens.
+        if (me != null && me.status.isCounting && !challenge.isActivity) ...[
           const ChallengeLabel('RECENT ACTIVITY'),
           const SizedBox(height: 10),
           _RecentActivity(challengeId: challenge.id),
@@ -162,7 +164,7 @@ class _Header extends StatelessWidget {
           ],
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '${challenge.goalValueKm.round()} km  ·  '
+            '${challenge.goalLabel}  ·  '
             '${challenge.startDayKey} to ${challenge.endDayKey}',
             style: TextStyle(color: palette.muted, fontSize: 13),
           ),
@@ -193,12 +195,17 @@ class _MyProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (challenge.isActivity) {
+      return _MyActivityProgress(
+        challenge: challenge,
+        participant: participant,
+      );
+    }
     final palette = context.palette;
     // Aged against today rather than shown as stored: somebody whose last
     // qualifying run was three days ago has a streak of zero now, and the board
     // should say so without waiting for a job to notice.
-    final streak =
-        participant.currentStreakAsOf(challenge.clock.today());
+    final streak = participant.currentStreakAsOf(challenge.clock.today());
 
     return DarkCard(
       child: Column(
@@ -471,7 +478,8 @@ class _Controls extends ConsumerWidget {
               await actions.leave(challenge.id);
               if (context.mounted) context.pop();
             },
-            child: Text('Leave challenge', style: TextStyle(color: palette.danger)),
+            child: Text('Leave challenge',
+                style: TextStyle(color: palette.danger)),
           ),
         ],
       ],
@@ -484,4 +492,81 @@ String _people(int count) => '$count ${count == 1 ? "person" : "people"}';
 String _km(double value) {
   final fixed = value.toStringAsFixed(1);
   return fixed.endsWith('.0') ? fixed.substring(0, fixed.length - 2) : fixed;
+}
+
+/// An activity challenge's own figures: the metric, how far toward the
+/// target or along the streak, and the place.
+class _MyActivityProgress extends StatelessWidget {
+  const _MyActivityProgress({
+    required this.challenge,
+    required this.participant,
+  });
+
+  final RunningChallenge challenge;
+  final ChallengeParticipant participant;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final fraction = participant.activityFraction(challenge);
+    final reached = participant.targetReachedDayKey != null;
+
+    return DarkCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Flexible(
+                child: Text(
+                  participant.activityHeadline(challenge),
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (reached)
+                Icon(Icons.check_circle_rounded, color: palette.success),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            participant.activityDetail(challenge),
+            style: TextStyle(color: palette.muted, fontSize: 13),
+          ),
+          if (fraction != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 8,
+                backgroundColor: palette.stroke,
+                valueColor: AlwaysStoppedAnimation(
+                  reached ? palette.success : palette.brand,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            participant.finalRank != null
+                ? 'Finished #${participant.finalRank} of '
+                    '${_people(challenge.participantCount)}'
+                : participant.rank > 0
+                    ? 'Ranked #${participant.rank} of '
+                        '${_people(challenge.participantCount)}'
+                    : 'Counting from the day you joined. Updates a minute or '
+                        'two after a log or a step sync.',
+            style: TextStyle(color: palette.muted, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -1,3 +1,4 @@
+import '../../../core/observability/app_analytics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/app_session.dart';
@@ -10,8 +11,7 @@ import '../domain/running_challenge.dart';
 import 'challenge_providers.dart' show challengeClockProvider;
 
 /// Public challenges still accepting people — the Live list on the hub.
-final publicChallengesProvider =
-    StreamProvider<List<RunningChallenge>>((ref) {
+final publicChallengesProvider = StreamProvider<List<RunningChallenge>>((ref) {
   ref.watch(appSessionProvider);
   return ref.watch(runningChallengeRepositoryProvider).watchPublicChallenges();
 });
@@ -115,7 +115,8 @@ final needsPinnedSelfRowProvider =
   final me = ref.watch(myParticipantProvider(challengeId)).valueOrNull;
   if (me == null || !me.status.isRanked) return false;
 
-  final board = ref.watch(challengeLeaderboardProvider(challengeId)).valueOrNull;
+  final board =
+      ref.watch(challengeLeaderboardProvider(challengeId)).valueOrNull;
   if (board == null) return false;
   return !board.any((p) => p.userId == me.userId);
 });
@@ -152,7 +153,7 @@ class RunningChallengeActions {
     // calendar per challenge is the only thing that makes a board comparable.
     final offset = _ref.read(challengeClockProvider).utcOffsetMinutes;
 
-    return _repository.createChallenge(
+    final challenge = await _repository.createChallenge(
       creatorId: userId,
       title: title.trim(),
       description: description.trim(),
@@ -163,12 +164,54 @@ class RunningChallengeActions {
       visibility: visibility,
       utcOffsetMinutes: offset,
     );
+    _ref.read(appAnalyticsProvider).log(AnalyticsEvent.challengeCreated, {
+      'kind': ChallengeKind.running.key,
+      'visibility': visibility.key,
+    });
+    return challenge;
+  }
+
+  /// Creates an activity challenge and enrols the creator. Null when nobody
+  /// is signed in, as for [create].
+  Future<RunningChallenge?> createActivity({
+    required String title,
+    required ActivityMetric metric,
+    required ActivityMode mode,
+    required String startDayKey,
+    required String endDayKey,
+    int? target,
+    String description = '',
+  }) async {
+    final userId = _ref.read(currentUserIdProvider);
+    if (userId == null) return null;
+
+    final challenge = await _repository.createActivityChallenge(
+      creatorId: userId,
+      title: title.trim(),
+      description: description.trim(),
+      metric: metric,
+      mode: mode,
+      target: mode.needsTarget ? target : null,
+      startDayKey: startDayKey,
+      endDayKey: endDayKey,
+      utcOffsetMinutes: _ref.read(challengeClockProvider).utcOffsetMinutes,
+    );
+    _ref.read(appAnalyticsProvider).log(AnalyticsEvent.challengeCreated, {
+      'kind': ChallengeKind.activity.key,
+      'metric': metric.key,
+      'mode': mode.key,
+    });
+    return challenge;
   }
 
   Future<void> join(RunningChallenge challenge) async {
     final userId = _ref.read(currentUserIdProvider);
     if (userId == null) return;
     await _repository.join(challenge, userId);
+    _ref.read(appAnalyticsProvider).log(AnalyticsEvent.challengeJoined, {
+      'kind': challenge.kind.key,
+      'via': 'join',
+    });
   }
 
   Future<void> invite(RunningChallenge challenge, String userId) =>
@@ -178,6 +221,9 @@ class RunningChallengeActions {
     final userId = _ref.read(currentUserIdProvider);
     if (userId == null) return;
     await _repository.accept(challengeId, userId);
+    _ref.read(appAnalyticsProvider).log(AnalyticsEvent.challengeJoined, {
+      'via': 'invite',
+    });
   }
 
   Future<void> decline(String challengeId) async {

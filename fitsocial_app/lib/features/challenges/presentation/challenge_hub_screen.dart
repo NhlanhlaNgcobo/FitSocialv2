@@ -103,8 +103,7 @@ class ChallengeHubScreen extends ConsumerWidget {
           // Invitations first, and only when there are some. An unanswered
           // invitation is the one thing on this screen somebody else is waiting
           // on, so it outranks everything below it.
-          for (final invite in invites)
-            _InviteCard(participant: invite),
+          for (final invite in invites) _InviteCard(participant: invite),
 
           for (final joined in myChallenges)
             _MyChallengeCard(participant: joined),
@@ -496,7 +495,9 @@ class _MyChallengeCard extends ConsumerWidget {
                       ),
                     ),
                   Text(
-                    '${participant.completionPercentage.round()}%',
+                    value.isActivity
+                        ? participant.activityHeadline(value)
+                        : '${participant.completionPercentage.round()}%',
                     style: TextStyle(color: palette.brand, fontSize: 12),
                   ),
                 ],

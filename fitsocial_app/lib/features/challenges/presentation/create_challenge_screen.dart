@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
+import '../../../core/config/feature_flags.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/input/typed_number.dart';
 import '../application/running_challenge_providers.dart';
@@ -29,6 +30,12 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
   final _description = TextEditingController();
   final _goal = TextEditingController(text: '50');
   final _dailyMinimum = TextEditingController(text: '1');
+  final _target = TextEditingController(text: '100000');
+
+  /// Null for a running (distance) challenge; otherwise what an activity
+  /// challenge counts. Only offered while Build 11's challenges are on.
+  ActivityMetric? _metric;
+  ActivityMode _mode = ActivityMode.cumulative;
 
   ChallengeVisibility _visibility = ChallengeVisibility.public;
   late String _startDayKey;
@@ -53,12 +60,16 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
     _description.dispose();
     _goal.dispose();
     _dailyMinimum.dispose();
+    _target.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final offerActivity =
+        ref.watch(featureEnabledProvider(FeatureFlag.goalsChallenges));
+    final metric = offerActivity ? _metric : null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('NEW CHALLENGE')),
@@ -100,52 +111,78 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
                 labelText: 'Description (optional)',
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            const _Label('THE GOAL'),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _goal,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Total distance',
-                suffixText: 'km',
+            if (offerActivity) ...[
+              const SizedBox(height: AppSpacing.md),
+              const _Label('WHAT COUNTS'),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Distance run'),
+                    selected: metric == null,
+                    onSelected: (_) => setState(() => _metric = null),
+                  ),
+                  for (final option in ActivityMetric.values)
+                    ChoiceChip(
+                      label: Text(option.label),
+                      selected: metric == option,
+                      onSelected: (_) => setState(() => _metric = option),
+                    ),
+                ],
               ),
-              validator: (value) => _number(
-                value,
-                min: kMinChallengeGoalKm,
-                max: 10000,
-                what: 'total distance',
+            ],
+            if (metric != null)
+              ..._activityFields(metric, palette)
+            else ...[
+              const SizedBox(height: AppSpacing.md),
+              const _Label('THE GOAL'),
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                controller: _goal,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Total distance',
+                  suffixText: 'km',
+                ),
+                validator: (value) => _number(
+                  value,
+                  min: kMinChallengeGoalKm,
+                  max: 10000,
+                  what: 'total distance',
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextFormField(
-              controller: _dailyMinimum,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-              ],
-              decoration: const InputDecoration(
-                labelText: 'A day counts from',
-                suffixText: 'km',
-                // The one field nobody expects, so it explains itself. Without
-                // a daily bar there is no such thing as a completed day, and
-                // the leaderboard ranks on completed days first.
-                helperText: 'Run at least this far and the day counts toward '
-                    'your streak.',
-                helperMaxLines: 2,
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                controller: _dailyMinimum,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'A day counts from',
+                  suffixText: 'km',
+                  // The one field nobody expects, so it explains itself. Without
+                  // a daily bar there is no such thing as a completed day, and
+                  // the leaderboard ranks on completed days first.
+                  helperText: 'Run at least this far and the day counts toward '
+                      'your streak.',
+                  helperMaxLines: 2,
+                ),
+                validator: (value) => _number(
+                  value,
+                  min: kMinDailyQualifyingKm,
+                  max: 200,
+                  what: 'daily minimum',
+                ),
               ),
-              validator: (value) => _number(
-                value,
-                min: kMinDailyQualifyingKm,
-                max: 200,
-                what: 'daily minimum',
-              ),
-            ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             const _Label('WHEN'),
             const SizedBox(height: AppSpacing.sm),
@@ -169,37 +206,45 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              _lengthLabel(),
+              _lengthLabel(metric),
               style: TextStyle(color: palette.muted, fontSize: 12),
             ),
             const SizedBox(height: AppSpacing.lg),
-            const _Label('WHO CAN JOIN'),
-            const SizedBox(height: AppSpacing.sm),
-            SegmentedButton<ChallengeVisibility>(
-              segments: const [
-                ButtonSegment(
-                  value: ChallengeVisibility.public,
-                  icon: Icon(Icons.public_rounded, size: 18),
-                  label: Text('Public'),
-                ),
-                ButtonSegment(
-                  value: ChallengeVisibility.private,
-                  icon: Icon(Icons.lock_rounded, size: 18),
-                  label: Text('Private'),
-                ),
-              ],
-              selected: {_visibility},
-              onSelectionChanged: (selected) =>
-                  setState(() => _visibility = selected.first),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              _visibility.isPrivate
-                  ? 'Hidden from discovery. Only people you invite can see it '
-                      'or join.'
-                  : 'Listed in Live challenges. Anyone can join.',
-              style: TextStyle(color: palette.muted, fontSize: 12),
-            ),
+            if (metric != null)
+              Text(
+                'Invite-only. Invite friends from the board once it is '
+                'created.',
+                style: TextStyle(color: palette.muted, fontSize: 12),
+              )
+            else ...[
+              const _Label('WHO CAN JOIN'),
+              const SizedBox(height: AppSpacing.sm),
+              SegmentedButton<ChallengeVisibility>(
+                segments: const [
+                  ButtonSegment(
+                    value: ChallengeVisibility.public,
+                    icon: Icon(Icons.public_rounded, size: 18),
+                    label: Text('Public'),
+                  ),
+                  ButtonSegment(
+                    value: ChallengeVisibility.private,
+                    icon: Icon(Icons.lock_rounded, size: 18),
+                    label: Text('Private'),
+                  ),
+                ],
+                selected: {_visibility},
+                onSelectionChanged: (selected) =>
+                    setState(() => _visibility = selected.first),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                _visibility.isPrivate
+                    ? 'Hidden from discovery. Only people you invite can see it '
+                        'or join.'
+                    : 'Listed in Live challenges. Anyone can join.',
+                style: TextStyle(color: palette.muted, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: AppSpacing.xl),
             FilledButton(
               onPressed: _saving ? null : _create,
@@ -217,12 +262,61 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
     );
   }
 
-  String _lengthLabel() {
+  int _maxDays(ActivityMetric? metric) =>
+      metric == null ? kMaxChallengeDays : kMaxActivityChallengeDays;
+
+  String _lengthLabel(ActivityMetric? metric) {
     final days = ChallengeClock.daysBetween(_startDayKey, _endDayKey) + 1;
-    if (days > kMaxChallengeDays) {
-      return '$days days — longer than the $kMaxChallengeDays-day maximum.';
+    final max = _maxDays(metric);
+    if (days > max) {
+      return '$days days, longer than the $max-day maximum.';
     }
     return '$days ${days == 1 ? "day" : "days"}.';
+  }
+
+  /// The goal section for an activity challenge: how it is won, and the
+  /// target where the mode has one.
+  List<Widget> _activityFields(ActivityMetric metric, AppPalette palette) {
+    final targetLabel = _mode.targetLabel(metric);
+    return [
+      const SizedBox(height: AppSpacing.md),
+      const _Label('HOW IT IS WON'),
+      const SizedBox(height: AppSpacing.sm),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final mode in ActivityMode.values)
+            ChoiceChip(
+              label: Text(mode.label),
+              selected: mode == _mode,
+              onSelected: (_) => setState(() => _mode = mode),
+            ),
+        ],
+      ),
+      const SizedBox(height: 6),
+      Text(
+        _mode.explanation(metric),
+        style: TextStyle(color: palette.muted, fontSize: 12),
+      ),
+      if (targetLabel != null) ...[
+        const SizedBox(height: AppSpacing.sm),
+        TextFormField(
+          controller: _target,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(labelText: targetLabel),
+          validator: (value) {
+            final parsed = int.tryParse(value ?? '');
+            if (parsed == null || parsed < 1) {
+              return 'Enter a target above zero.';
+            }
+            if (parsed > 10000000) return 'That target is too large.';
+            return null;
+          },
+        ),
+      ],
+    ];
   }
 
   String? _number(
@@ -241,9 +335,19 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
   Future<void> _create() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
+    final offerActivity =
+        ref.read(featureEnabledProvider(FeatureFlag.goalsChallenges));
+    final metric = offerActivity ? _metric : null;
+
     final days = ChallengeClock.daysBetween(_startDayKey, _endDayKey) + 1;
-    if (days > kMaxChallengeDays) {
-      _say('A challenge can run for at most $kMaxChallengeDays days.');
+    final max = _maxDays(metric);
+    if (days > max) {
+      _say('This challenge can run for at most $max days.');
+      return;
+    }
+
+    if (metric != null) {
+      await _createActivity(metric);
       return;
     }
 
@@ -279,6 +383,33 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
 
       // Replace rather than push: coming back from the board should return to
       // the hub, not to a create form that has already been submitted.
+      context.pushReplacement('/challenge/board/${challenge.id}');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      _say('That challenge could not be created. Try again.');
+    }
+  }
+
+  Future<void> _createActivity(ActivityMetric metric) async {
+    setState(() => _saving = true);
+    try {
+      final challenge =
+          await ref.read(runningChallengeActionsProvider).createActivity(
+                title: _title.text,
+                description: _description.text,
+                metric: metric,
+                mode: _mode,
+                target: int.tryParse(_target.text),
+                startDayKey: _startDayKey,
+                endDayKey: _endDayKey,
+              );
+      if (!mounted) return;
+      if (challenge == null) {
+        setState(() => _saving = false);
+        _say('Sign in to create a challenge.');
+        return;
+      }
       context.pushReplacement('/challenge/board/${challenge.id}');
     } catch (_) {
       if (!mounted) return;

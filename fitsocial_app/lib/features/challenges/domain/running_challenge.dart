@@ -15,6 +15,7 @@
 /// here, change it there too and run `test/running_challenge_domain_test.dart`.
 library;
 
+import '../../main/domain/progress_models.dart' show formatThousands;
 import 'challenge_clock.dart';
 
 /// Who can find a challenge, and who can join it.
@@ -148,6 +149,86 @@ const int kMaxChallengeParticipants = 500;
 /// challenge. A year-long challenge would make every logged run cost 365 reads.
 const int kMaxChallengeDays = 180;
 
+/// Which engine judges a challenge. Stored as `type`.
+enum ChallengeKind {
+  /// Distance run, judged by functions/running_challenges.js. The original,
+  /// and what a document with no `type` has always meant.
+  running('running'),
+
+  /// Steps, minutes, sessions or meals, judged by
+  /// functions/activity_challenges.js from the daily stats.
+  activity('activity');
+
+  const ChallengeKind(this.key);
+
+  final String key;
+
+  static ChallengeKind byKey(String? key) =>
+      key == activity.key ? activity : running;
+}
+
+/// What an activity challenge counts. Wire names match activity_ranking.js.
+enum ActivityMetric {
+  steps('steps', 'Steps', 'steps'),
+  activeMinutes('active_minutes', 'Active minutes', 'min'),
+  workouts('workouts', 'Sessions', 'sessions'),
+  mealsLogged('meals_logged', 'Meals logged', 'meals');
+
+  const ActivityMetric(this.key, this.label, this.unit);
+
+  final String key;
+  final String label;
+  final String unit;
+
+  static ActivityMetric? byKey(String? key) {
+    for (final value in values) {
+      if (value.key == key) return value;
+    }
+    return null;
+  }
+}
+
+/// How an activity challenge is won.
+enum ActivityMode {
+  cumulative('cumulative', 'Most in total'),
+  target('target', 'First to a target'),
+  streak('streak', 'Longest streak');
+
+  const ActivityMode(this.key, this.label);
+
+  final String key;
+  final String label;
+
+  bool get needsTarget => this != ActivityMode.cumulative;
+
+  /// What the target field means in this mode, or null when there is none.
+  String? targetLabel(ActivityMetric metric) => switch (this) {
+        ActivityMode.cumulative => null,
+        ActivityMode.target => 'Target (${metric.unit})',
+        ActivityMode.streak => 'A day counts from (${metric.unit})',
+      };
+
+  String explanation(ActivityMetric metric) => switch (this) {
+        ActivityMode.cumulative =>
+          'Whoever has the most ${metric.unit} at the end wins.',
+        ActivityMode.target =>
+          'First to reach the target wins. Everyone who reaches it has done it.',
+        ActivityMode.streak => 'A day counts when it reaches the daily target. '
+            'The longest run of days in a row wins.',
+      };
+
+  static ActivityMode? byKey(String? key) {
+    for (final value in values) {
+      if (value.key == key) return value;
+    }
+    return null;
+  }
+}
+
+/// The longest an activity challenge may run. Mirrors MAX_ACTIVITY_DAYS in
+/// functions/activity_ranking.js and the create rule in firestore.rules.
+const int kMaxActivityChallengeDays = 92;
+
 /// A challenge somebody created.
 class RunningChallenge {
   const RunningChallenge({
@@ -166,6 +247,10 @@ class RunningChallenge {
     this.status = RunningChallengeStatus.active,
     this.participantCount = 0,
     this.createdAt,
+    this.kind = ChallengeKind.running,
+    this.activityMetric,
+    this.activityMode,
+    this.target,
   });
 
   final String id;
@@ -201,10 +286,39 @@ class RunningChallenge {
   final int participantCount;
   final DateTime? createdAt;
 
-  ChallengeClock get clock => ChallengeClock(utcOffsetMinutes: utcOffsetMinutes);
+  final ChallengeKind kind;
+
+  /// Activity challenges only.
+  final ActivityMetric? activityMetric;
+  final ActivityMode? activityMode;
+
+  /// The total to reach (target mode) or a day's bar (streak mode).
+  final int? target;
+
+  bool get isActivity =>
+      kind == ChallengeKind.activity &&
+      activityMetric != null &&
+      activityMode != null;
+
+  /// What the challenge asks for, in a few words: "50 km", "Most steps",
+  /// "First to 200,000 steps", "Days of 10,000+ steps in a row".
+  String get goalLabel {
+    if (!isActivity) return '${goalValueKm.round()} km';
+    final metric = activityMetric!;
+    final amount = formatThousands(target ?? 0);
+    return switch (activityMode!) {
+      ActivityMode.cumulative => 'Most ${metric.unit}',
+      ActivityMode.target => 'First to $amount ${metric.unit}',
+      ActivityMode.streak => 'Days of $amount+ ${metric.unit} in a row',
+    };
+  }
+
+  ChallengeClock get clock =>
+      ChallengeClock(utcOffsetMinutes: utcOffsetMinutes);
 
   /// How many days the challenge runs for, both ends included.
-  int get durationDays => ChallengeClock.daysBetween(startDayKey, endDayKey) + 1;
+  int get durationDays =>
+      ChallengeClock.daysBetween(startDayKey, endDayKey) + 1;
 
   /// Whether [dayKey] falls inside the challenge window.
   ///
@@ -258,6 +372,10 @@ class RunningChallenge {
       status: status ?? this.status,
       participantCount: participantCount ?? this.participantCount,
       createdAt: createdAt,
+      kind: kind,
+      activityMetric: activityMetric,
+      activityMode: activityMode,
+      target: target,
     );
   }
 }
@@ -283,6 +401,9 @@ class ChallengeParticipant {
     this.rank = 0,
     this.lastQualifiedDayKey,
     this.joinedAt,
+    this.total = 0,
+    this.targetReachedDayKey,
+    this.finalRank,
   });
 
   /// A standing start — the shape the client is allowed to create, and the
@@ -304,7 +425,10 @@ class ChallengeParticipant {
         completionPercentage = 0,
         rank = 0,
         lastQualifiedDayKey = null,
-        joinedAt = null;
+        joinedAt = null,
+        total = 0,
+        targetReachedDayKey = null,
+        finalRank = null;
 
   final String userId;
   final String challengeId;
@@ -336,6 +460,52 @@ class ChallengeParticipant {
 
   final String? lastQualifiedDayKey;
   final DateTime? joinedAt;
+
+  /// Activity challenges: the metric's total over the days that count.
+  final int total;
+
+  /// Target mode: the day the target was reached, or null.
+  final String? targetReachedDayKey;
+
+  /// Where they finished, once the challenge has ended.
+  final int? finalRank;
+
+  /// How far along an activity challenge, 0..1, for the bar: the share of
+  /// the target in target mode, of the challenge's days in streak mode. Null
+  /// in cumulative mode, where there is no finish line to measure against.
+  double? activityFraction(RunningChallenge challenge) {
+    final target = challenge.target ?? 0;
+    return switch (challenge.activityMode) {
+      ActivityMode.target when target > 0 => (total / target).clamp(0.0, 1.0),
+      ActivityMode.streak => challenge.durationDays <= 0
+          ? 0
+          : (longestStreak / challenge.durationDays).clamp(0.0, 1.0),
+      _ => null,
+    };
+  }
+
+  /// The number an activity board leads with, e.g. "12,300 steps".
+  String activityHeadline(RunningChallenge challenge) {
+    final unit = challenge.activityMetric?.unit ?? '';
+    if (challenge.activityMode == ActivityMode.streak) {
+      return '$longestStreak ${longestStreak == 1 ? "day" : "days"}';
+    }
+    return '${formatThousands(total)} $unit';
+  }
+
+  /// The line under a name on an activity board.
+  String activityDetail(RunningChallenge challenge) {
+    final unit = challenge.activityMetric?.unit ?? '';
+    return switch (challenge.activityMode) {
+      ActivityMode.target => targetReachedDayKey != null
+          ? 'Reached on $targetReachedDayKey'
+          : '${formatThousands(total)} / '
+              '${formatThousands(challenge.target ?? 0)} $unit',
+      ActivityMode.streak =>
+        'Best streak $longestStreak  ·  ${formatThousands(total)} $unit',
+      _ => '${formatThousands(total)} $unit',
+    };
+  }
 
   /// 0..1 for a progress bar.
   double get fraction => (completionPercentage / 100).clamp(0.0, 1.0);

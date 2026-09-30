@@ -16,9 +16,17 @@ import '../domain/running_challenge.dart';
 /// somebody in fortieth place has to be able to see that they are in fortieth
 /// place, or there is no reason for them to open it.
 class ChallengeLeaderboard extends ConsumerWidget {
-  const ChallengeLeaderboard({required this.challengeId, super.key});
+  const ChallengeLeaderboard({
+    required this.challengeId,
+    this.challenge,
+    super.key,
+  });
 
   final String challengeId;
+
+  /// When given, rows show what this kind of challenge counts. Without it
+  /// they show distance, as they always have.
+  final RunningChallenge? challenge;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,7 +52,9 @@ class ChallengeLeaderboard extends ConsumerWidget {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
             child: Text(
-              'Nobody has logged a qualifying run yet. Be first.',
+              challenge?.isActivity == true
+                  ? 'Nothing has counted yet. Be first.'
+                  : 'Nobody has logged a qualifying run yet. Be first.',
               style: TextStyle(color: palette.muted),
             ),
           );
@@ -60,6 +70,7 @@ class ChallengeLeaderboard extends ConsumerWidget {
               LeaderboardRow(
                 participant: row,
                 isSelf: row.userId == myId,
+                challenge: challenge,
               ),
             if (pinned) ...[
               // A visible break, so the pinned row reads as "and, separately,
@@ -82,7 +93,11 @@ class ChallengeLeaderboard extends ConsumerWidget {
                   ],
                 ),
               ),
-              LeaderboardRow(participant: me, isSelf: true),
+              LeaderboardRow(
+                participant: me,
+                isSelf: true,
+                challenge: challenge,
+              ),
             ],
           ],
         );
@@ -100,11 +115,13 @@ class LeaderboardRow extends ConsumerWidget {
   const LeaderboardRow({
     required this.participant,
     this.isSelf = false,
+    this.challenge,
     super.key,
   });
 
   final ChallengeParticipant participant;
   final bool isSelf;
+  final RunningChallenge? challenge;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -113,6 +130,7 @@ class LeaderboardRow extends ConsumerWidget {
     final name = profile.valueOrNull?.displayName ?? 'Runner';
     final initials = profile.valueOrNull?.initials ?? '';
     final avatarUrl = profile.valueOrNull?.avatarUrl;
+    final activity = challenge?.isActivity == true ? challenge : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -152,9 +170,11 @@ class LeaderboardRow extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${participant.completedDays} '
-                  '${participant.completedDays == 1 ? "day" : "days"}'
-                  '  ·  ${_km(participant.totalDistanceKm)} km',
+                  activity != null
+                      ? participant.activityDetail(activity)
+                      : '${participant.completedDays} '
+                          '${participant.completedDays == 1 ? "day" : "days"}'
+                          '  ·  ${_km(participant.totalDistanceKm)} km',
                   style: TextStyle(color: palette.muted, fontSize: 12),
                 ),
               ],
@@ -163,13 +183,15 @@ class LeaderboardRow extends ConsumerWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              if (participant.currentStreak > 0)
+              if (activity == null && participant.currentStreak > 0)
                 Text(
                   '\u{1F525} ${participant.currentStreak}',
                   style: TextStyle(color: palette.brand, fontSize: 13),
                 ),
               Text(
-                '${participant.completionPercentage.round()}%',
+                activity != null
+                    ? participant.activityHeadline(activity)
+                    : '${participant.completionPercentage.round()}%',
                 style: TextStyle(
                   color: palette.text,
                   fontSize: 13,

@@ -64,6 +64,21 @@ class UnconfiguredRunningChallengeRepository
       Stream.value(const []);
 
   @override
+  Future<RunningChallenge> createActivityChallenge({
+    required String creatorId,
+    required String title,
+    required String description,
+    required ActivityMetric metric,
+    required ActivityMode mode,
+    required int? target,
+    required String startDayKey,
+    required String endDayKey,
+    required int utcOffsetMinutes,
+  }) {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<RunningChallenge> createChallenge({
     required String creatorId,
     required String title,
