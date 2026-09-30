@@ -386,7 +386,20 @@ service cloud.firestore {
              && entry.completionPercentage == 0
              && entry.rank == 0
              && entry.runCount == 0
-             && entry.totalDurationSeconds == 0;
+             && entry.totalDurationSeconds == 0
+             // The activity engine's figures and every challenge's final
+             // place. Absent, not merely zero: the checks above pin the
+             // running fields to zero, but a row could otherwise arrive
+             // carrying a total the board would show until the engine next
+             // looked.
+             && !entry.keys().hasAny(['total', 'dayValues', 'qualifiedDays',
+                                      'targetReachedDayKey', 'lastGainDayKey',
+                                      'countsFromDayKey', 'finalRank']);
+    }
+
+    // A YYYY-MM-DD day key as a date, for span checks.
+    function dayKeyDate(key) {
+      return timestamp.date(int(key[0:4]), int(key[5:7]), int(key[8:10]));
     }
 
     // A field that is either absent or an int inside [low, high]. For the
@@ -1366,6 +1379,47 @@ service cloud.firestore {
                     // compare, and a backwards range is refused here rather
                     // than producing a challenge with no days in it.
                     && request.resource.data.startDayKey <= request.resource.data.endDayKey
+                    && request.resource.data.maxParticipants is int
+                    && request.resource.data.maxParticipants > 0
+                    && request.resource.data.maxParticipants <= 500
+                    && request.resource.data.utcOffsetMinutes is int
+                    && request.resource.data.utcOffsetMinutes >= -720
+                    && request.resource.data.utcOffsetMinutes <= 840;
+
+      // Or an activity challenge (functions/activity_challenges.js): friends on
+      // steps, active minutes, sessions or meals. Invite-only in Build 11, at
+      // most 92 days, and with a target exactly when the mode needs one. The
+      // key list is closed so nothing the engine owns can be planted at birth.
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.creatorId
+                    && request.resource.data.keys().hasOnly([
+                         'creatorId', 'title', 'description', 'type', 'metric',
+                         'mode', 'target', 'visibility', 'startDayKey',
+                         'endDayKey', 'maxParticipants', 'utcOffsetMinutes',
+                         'status', 'participantCount', 'createdAt', 'updatedAt'])
+                    && request.resource.data.type == 'activity'
+                    && request.resource.data.status == 'active'
+                    && request.resource.data.participantCount == 0
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() >= 3
+                    && request.resource.data.title.size() <= 80
+                    && request.resource.data.metric in
+                         ['steps', 'active_minutes', 'workouts', 'meals_logged']
+                    && request.resource.data.mode in ['cumulative', 'target', 'streak']
+                    && (request.resource.data.mode == 'cumulative'
+                        ? request.resource.data.get('target', null) == null
+                        : (request.resource.data.target is int
+                           && request.resource.data.target >= 1
+                           && request.resource.data.target <= 10000000))
+                    && request.resource.data.visibility == 'private'
+                    && request.resource.data.startDayKey is string
+                    && request.resource.data.endDayKey is string
+                    && request.resource.data.startDayKey.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+                    && request.resource.data.endDayKey.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+                    && request.resource.data.startDayKey <= request.resource.data.endDayKey
+                    && dayKeyDate(request.resource.data.endDayKey)
+                         - dayKeyDate(request.resource.data.startDayKey)
+                         <= duration.value(91, 'd')
                     && request.resource.data.maxParticipants is int
                     && request.resource.data.maxParticipants > 0
                     && request.resource.data.maxParticipants <= 500

@@ -13,6 +13,7 @@ enum BadgeGroup {
   pulse75('Pulse 75'),
   earlyWorm('Early Worm'),
   goals('Goals'),
+  challenges('Challenges'),
   general('FitSocial');
 
   const BadgeGroup(this.label);
@@ -131,6 +132,26 @@ enum ChallengeBadge {
     group: BadgeGroup.goals,
   ),
 
+  // --- Challenges -------------------------------------------------------
+  challengeFinisher(
+    key: 'CHALLENGE_FINISHER',
+    label: 'Finisher',
+    description: 'Saw a challenge through to the end.',
+    group: BadgeGroup.challenges,
+  ),
+  podium(
+    key: 'CHALLENGE_PODIUM',
+    label: 'Podium',
+    description: 'Finished a challenge in the top three.',
+    group: BadgeGroup.challenges,
+  ),
+  champion(
+    key: 'CHALLENGE_WINNER',
+    label: 'Champion',
+    description: 'Won a challenge.',
+    group: BadgeGroup.challenges,
+  ),
+
   // --- General ----------------------------------------------------------
   firstPulse(
     key: 'FIRST_PULSE',
@@ -219,6 +240,9 @@ enum ChallengeBadge {
         goalGetter => facts.goalCompletions >= 1,
         onTarget => facts.goalCompletions >= 10,
         relentless => facts.goalCompletions >= 50,
+        challengeFinisher => facts.challengesFinished >= 1,
+        podium => facts.challengePodiums >= 1,
+        champion => facts.challengeWins >= 1,
       };
 }
 
@@ -240,6 +264,9 @@ class BadgeFacts {
     this.pulsesPublished = 0,
     this.reactionsGiven = 0,
     this.goalCompletions = 0,
+    this.challengesFinished = 0,
+    this.challengePodiums = 0,
+    this.challengeWins = 0,
   });
 
   /// Counters for the run being evaluated, not a lifetime total across runs.
@@ -263,6 +290,12 @@ class BadgeFacts {
   /// Goal periods completed, across every goal. A weekly goal hit ten weeks
   /// running is ten.
   final int goalCompletions;
+
+  /// Challenges finished with something to show, and how many of those were
+  /// in the top three, and won. Written once per challenge, when it ends.
+  final int challengesFinished;
+  final int challengePodiums;
+  final int challengeWins;
 
   /// Every badge these facts earn.
   List<ChallengeBadge> get earned => ChallengeBadge.values

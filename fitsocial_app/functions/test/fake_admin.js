@@ -333,6 +333,24 @@ class FakeFirestore {
     return new FakeBatch(this._store);
   }
 
+  /**
+   * A transaction as a batch with reads in front. Runs once: nothing here is
+   * concurrent, so there is never a conflict to retry, and what is being
+   * tested is the callback's own decision -- read, decide, write.
+   */
+  async runTransaction(callback) {
+    const batch = new FakeBatch(this._store);
+    const tx = {
+      get: (ref) => ref.get(),
+      set: (ref, updates, options) => batch.set(ref, updates, options),
+      update: (ref, updates) => batch.update(ref, updates),
+      delete: (ref) => batch.delete(ref),
+    };
+    const result = await callback(tx);
+    await batch.commit();
+    return result;
+  }
+
   async recursiveDelete(ref) {
     this._store.delete(ref.path);
     for (const path of [...this._store.keys()]) {

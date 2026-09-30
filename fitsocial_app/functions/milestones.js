@@ -87,6 +87,9 @@ const BADGE_COPY = {
   GOAL_FIRST: { title: "Goal Getter", line: "Hit a first personal goal", emoji: "\u{1F3AF}" },
   GOAL_TEN: { title: "On Target", line: "Hit 10 personal goals", emoji: "\u{1F3F9}" },
   GOAL_FIFTY: { title: "Relentless", line: "Hit 50 personal goals", emoji: "\u{1F525}" },
+  CHALLENGE_FINISHER: { title: "Finisher", line: "Saw a challenge through to the end", emoji: "\u{1F3C1}" },
+  CHALLENGE_PODIUM: { title: "Podium", line: "Finished a challenge in the top three", emoji: "\u{1F949}" },
+  CHALLENGE_WINNER: { title: "Champion", line: "Won a challenge", emoji: "\u{1F947}" },
 };
 
 function badgeMilestone(badgeKey) {

@@ -93,6 +93,15 @@ function messageFor(data) {
       return `joined ${challengeNoun(data.challengeTitle)}`;
     case "challengeCompleted":
       return `You finished ${challengeNoun(data.challengeTitle)}`;
+    case "challengeResult": {
+      const place = Number(data.finalRank);
+      const of = Number(data.participantCount);
+      const noun = challengeNoun(data.challengeTitle);
+      if (!Number.isInteger(place) || place < 1) return `${noun} has ended`;
+      return Number.isInteger(of) && of > 1
+        ? `${noun} has ended. You placed ${ordinal(place)} of ${of}.`
+        : `${noun} has ended. You placed ${ordinal(place)}.`;
+    }
     case "safetyInvite":
       return "asked you to be their safety contact";
     case "safetyAccepted":
@@ -127,7 +136,8 @@ function routeFor(data) {
     }
     case "challengeInvite":
     case "challengeAccepted":
-    case "challengeCompleted": {
+    case "challengeCompleted":
+    case "challengeResult": {
       const challengeId = String(data.challengeId ?? "");
       return challengeId === "" ? null : `/challenge/board/${challengeId}`;
     }
@@ -150,6 +160,22 @@ function routeFor(data) {
  * X"), and putting somebody else's name above that sentence would read as
  * though they had finished it.
  */
+/** 1 -> "1st", 2 -> "2nd", 11 -> "11th", 23 -> "23rd". */
+function ordinal(n) {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
 function notificationCopy(data) {
   if (!data) return null;
 
@@ -158,11 +184,11 @@ function notificationCopy(data) {
 
   const actorName = String(data.actorName ?? "").trim();
   const title =
-    data.type === "challengeCompleted"
+    data.type === "challengeCompleted" || data.type === "challengeResult"
       ? "FitSocial"
       : actorName || "FitSocial Member";
 
   return { title, body, route: routeFor(data) };
 }
 
-module.exports = { notificationCopy, _internals: { messageFor, routeFor, likedNoun, challengeNoun, REACTION_EMOJI } };
+module.exports = { notificationCopy, _internals: { messageFor, routeFor, ordinal, likedNoun, challengeNoun, REACTION_EMOJI } };

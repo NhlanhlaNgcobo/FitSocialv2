@@ -680,6 +680,13 @@ for (const [name, handler] of Object.entries(require("./goals"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }
+// Activity challenges: friends on steps, minutes, sessions or meals. Built on
+// the running-challenge rows and on the stats above; see the file for what it
+// shares and what it adds.
+for (const [name, handler] of Object.entries(require("./activity_challenges"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
 
 // --- Push -------------------------------------------------------------------
 //

@@ -87,10 +87,12 @@ void main() {
   });
 
   group('notification ids', () {
-    test('are the same for the same relationship, so following twice is one '
+    test(
+        'are the same for the same relationship, so following twice is one '
         'notification', () {
       expect(NotificationIds.follow('u2'), NotificationIds.follow('u2'));
-      expect(NotificationIds.like('p1', 'u2'), NotificationIds.like('p1', 'u2'));
+      expect(
+          NotificationIds.like('p1', 'u2'), NotificationIds.like('p1', 'u2'));
     });
 
     test('separate different actors and different posts', () {
@@ -220,10 +222,12 @@ void main() {
       expect(labelFor(const Duration(seconds: 30)), 'now');
     });
 
-    test('a missing or future timestamp reads as "now" rather than a '
+    test(
+        'a missing or future timestamp reads as "now" rather than a '
         'negative age', () {
       expect(notificationAgeLabel(null, now), 'now');
-      expect(notificationAgeLabel(now.add(const Duration(hours: 1)), now), 'now');
+      expect(
+          notificationAgeLabel(now.add(const Duration(hours: 1)), now), 'now');
     });
   });
 
@@ -238,10 +242,68 @@ void main() {
       expect(notificationInitials('T'), 'T');
     });
 
-    test('are empty when there is no name at all, so the row shows the '
+    test(
+        'are empty when there is no name at all, so the row shows the '
         'empty-profile glyph instead of invented letters', () {
       expect(notificationInitials('   '), '');
       expect(notificationInitials('FitSocial Member'), '');
+    });
+  });
+
+  group('challenge results', () {
+    FitNotification result({int? place, int? of}) => FitNotification(
+          id: 'challengeResult_c1',
+          type: FitNotificationType.challengeResult,
+          actorId: 'creator',
+          actorName: 'Creator',
+          isRead: false,
+          challengeId: 'c1',
+          challengeTitle: 'October steps',
+          finalRank: place,
+          participantCount: of,
+        );
+
+    test('say where you placed and among how many', () {
+      expect(
+        result(place: 2, of: 5).message,
+        'October steps has ended. You placed 2nd of 5.',
+      );
+      expect(
+        result(place: 1).message,
+        'October steps has ended. You placed 1st.',
+      );
+      expect(result().message, 'October steps has ended');
+    });
+
+    test('open the challenge board', () {
+      expect(result(place: 1, of: 2).route, '/challenge/board/c1');
+    });
+
+    test('round-trip through the stored key', () {
+      expect(
+        FitNotificationType.fromKey('challengeResult'),
+        FitNotificationType.challengeResult,
+      );
+    });
+
+    test('ordinals match the push copy', () {
+      expect(
+        [1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111].map(ordinal),
+        [
+          '1st',
+          '2nd',
+          '3rd',
+          '4th',
+          '11th',
+          '12th',
+          '13th',
+          '21st',
+          '22nd',
+          '23rd',
+          '101st',
+          '111th',
+        ],
+      );
     });
   });
 }

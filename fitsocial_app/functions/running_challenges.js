@@ -30,6 +30,7 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
+const activity = require("./activity_ranking");
 
 // The database accessor from the Pulse 75 engine, reused rather than rebuilt.
 //
@@ -372,10 +373,20 @@ async function rewriteRanks(challengeDoc) {
     .limit(MAX_PARTICIPANTS)
     .get();
 
+  // Activity challenges (activity_challenges.js) share the participant rows,
+  // the invitations and this ranker, but not the ordering: they rank on their
+  // own metric and mode. Keyed on the challenge's type, so a running challenge
+  // is ordered exactly as it always was.
+  const isActivity = challengeDoc.get("type") === activity.ACTIVITY_TYPE;
+  const toRankable = isActivity ? activity.rankableActivity : rankableOf;
+  const compare = isActivity
+    ? activity.compareActivity(challengeDoc.get("mode"))
+    : compareParticipants;
+
   const ranked = participants.docs
-    .map(rankableOf)
+    .map(toRankable)
     .filter((p) => RANKED_STATUSES.includes(p.status))
-    .sort(compareParticipants);
+    .sort(compare);
 
   const batch = db().batch();
   let changed = 0;
@@ -798,6 +809,18 @@ exports.onChallengeParticipantWritten = onDocumentWritten(
  * challenge within the hour of its own cutoff. Retries are safe — a challenge
  * already marked completed is skipped on the next pass.
  */
+/** Called with each challenge as it is finalised. See [onFinalise]. */
+const finaliseListeners = [];
+
+/**
+ * Registers something to run when a challenge ends, after its last ranking
+ * and before it is marked completed. A registry rather than a require, so
+ * activity_challenges.js can hook in without this file depending on it.
+ */
+function onFinalise(listener) {
+  finaliseListeners.push(listener);
+}
+
 async function finaliseEndedChallenges(now = new Date()) {
   const active = await db()
     .collection("challenges")
@@ -822,6 +845,13 @@ async function finaliseEndedChallenges(now = new Date()) {
     // Ranks are rewritten once more before the freeze, so the final board
     // reflects everything that arrived during the grace.
     await rewriteRanks(challengeDoc);
+    // Then whatever else a finished challenge means -- final places, results,
+    // badges. Before the status flips, so a listener that fails leaves the
+    // challenge active and the next hourly pass tries the whole thing again;
+    // each listener must be safe to run twice.
+    for (const listener of finaliseListeners) {
+      await listener(await challengeDoc.ref.get());
+    }
     await challengeDoc.ref.set(
       {
         status: "completed",
@@ -868,6 +898,8 @@ exports._internals = {
   recomputeDay,
   recomputeParticipant,
   rewriteRanks,
+  onFinalise,
+  notify,
   applyRunToChallenge,
   attributeRun,
   DEFAULT_DAILY_QUALIFYING_KM,

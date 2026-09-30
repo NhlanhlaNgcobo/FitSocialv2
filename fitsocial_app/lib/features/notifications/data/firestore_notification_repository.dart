@@ -90,6 +90,8 @@ class FirestoreNotificationRepository implements NotificationRepository {
       // understands, not be dropped.
       challengeId: data['challengeId'] as String?,
       challengeTitle: data['challengeTitle'] as String?,
+      finalRank: (data['finalRank'] as num?)?.toInt(),
+      participantCount: (data['participantCount'] as num?)?.toInt(),
     );
   }
 }

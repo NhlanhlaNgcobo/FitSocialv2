@@ -246,6 +246,7 @@ Color _accentFor(FitNotification notification, AppPalette palette) {
     case FitNotificationType.challengeInvite:
     case FitNotificationType.challengeAccepted:
     case FitNotificationType.challengeCompleted:
+    case FitNotificationType.challengeResult:
       return palette.brand;
     // Safety rows share one calm teal, apart from the social colours, so an
     // invite to watch over someone never reads as one more like.
@@ -517,6 +518,8 @@ class _ActorAvatar extends StatelessWidget {
         return Icons.group_add_rounded;
       case FitNotificationType.challengeCompleted:
         return Icons.emoji_events_rounded;
+      case FitNotificationType.challengeResult:
+        return Icons.military_tech_rounded;
       case FitNotificationType.safetyInvite:
         return Icons.shield_outlined;
       case FitNotificationType.safetyAccepted:

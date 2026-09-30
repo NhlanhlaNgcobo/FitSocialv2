@@ -51,6 +51,10 @@ enum FitNotificationType {
   /// in the list learning about a user who does not exist.
   challengeCompleted,
 
+  /// A challenge you were on has ended, with where you placed. Addressed to
+  /// you from the challenge, the same way [challengeCompleted] is.
+  challengeResult,
+
   /// Someone asked you to be one of their safety contacts.
   safetyInvite,
 
@@ -85,6 +89,8 @@ enum FitNotificationType {
         return 'challengeAccepted';
       case FitNotificationType.challengeCompleted:
         return 'challengeCompleted';
+      case FitNotificationType.challengeResult:
+        return 'challengeResult';
       case FitNotificationType.safetyInvite:
         return 'safetyInvite';
       case FitNotificationType.safetyAccepted:
@@ -116,6 +122,8 @@ enum FitNotificationType {
         return FitNotificationType.challengeAccepted;
       case 'challengeCompleted':
         return FitNotificationType.challengeCompleted;
+      case 'challengeResult':
+        return FitNotificationType.challengeResult;
       case 'safetyInvite':
         return FitNotificationType.safetyInvite;
       case 'safetyAccepted':
@@ -180,6 +188,8 @@ class FitNotification {
     this.reaction,
     this.challengeId,
     this.challengeTitle,
+    this.finalRank,
+    this.participantCount,
   });
 
   final String id;
@@ -232,6 +242,12 @@ class FitNotification {
   /// challenge read per row.
   final String? challengeTitle;
 
+  /// Where the recipient placed, on a [FitNotificationType.challengeResult].
+  final int? finalRank;
+
+  /// How many were ranked, on a [FitNotificationType.challengeResult].
+  final int? participantCount;
+
   /// The sentence that follows the actor's name.
   String get message {
     switch (type) {
@@ -265,6 +281,13 @@ class FitNotification {
         // Addressed to the recipient about their own achievement, which is why
         // this one reads as a statement rather than as something the actor did.
         return 'You finished $_challengeNoun';
+      case FitNotificationType.challengeResult:
+        final place = finalRank;
+        if (place == null || place < 1) return '$_challengeNoun has ended';
+        final of = participantCount;
+        return of != null && of > 1
+            ? '$_challengeNoun has ended. You placed ${ordinal(place)} of $of.'
+            : '$_challengeNoun has ended. You placed ${ordinal(place)}.';
       case FitNotificationType.safetyInvite:
         return 'asked you to be their safety contact';
       case FitNotificationType.safetyAccepted:
@@ -318,6 +341,7 @@ class FitNotification {
       case FitNotificationType.challengeInvite:
       case FitNotificationType.challengeAccepted:
       case FitNotificationType.challengeCompleted:
+      case FitNotificationType.challengeResult:
         final id = challengeId;
         return (id == null || id.isEmpty) ? null : '/challenge/board/$id';
       case FitNotificationType.safetyInvite:
@@ -349,4 +373,17 @@ String notificationAgeLabel(DateTime? createdAt, DateTime now) {
   if (elapsed.inDays < 1) return '${elapsed.inHours}h';
   if (elapsed.inDays < 7) return '${elapsed.inDays}d';
   return '${elapsed.inDays ~/ 7}w';
+}
+
+/// 1 -> "1st", 2 -> "2nd", 11 -> "11th", 23 -> "23rd". Matches `ordinal` in
+/// functions/notification_copy.js, which writes the push for the same row.
+String ordinal(int n) {
+  final tens = n % 100;
+  if (tens >= 11 && tens <= 13) return '${n}th';
+  return switch (n % 10) {
+    1 => '${n}st',
+    2 => '${n}nd',
+    3 => '${n}rd',
+    _ => '${n}th',
+  };
 }

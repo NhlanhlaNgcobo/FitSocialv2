@@ -424,6 +424,11 @@ const BADGES = {
   GOAL_FIRST: (f) => (f.goalCompletions || 0) >= 1,
   GOAL_TEN: (f) => (f.goalCompletions || 0) >= 10,
   GOAL_FIFTY: (f) => (f.goalCompletions || 0) >= 50,
+  // Finished challenges (activity_challenges.js recordResults), counted once
+  // per challenge when its final places are written.
+  CHALLENGE_FINISHER: (f) => (f.challengesFinished || 0) >= 1,
+  CHALLENGE_PODIUM: (f) => (f.challengePodiums || 0) >= 1,
+  CHALLENGE_WINNER: (f) => (f.challengeWins || 0) >= 1,
 };
 
 /** Badges that a second run can earn again, carried as a count. */
@@ -492,6 +497,9 @@ async function badgeFactsFor(userId, enrollment) {
     pulsesPublished: user.get("pulsesPublished") || 0,
     reactionsGiven: user.get("reactionsGiven") || 0,
     goalCompletions: user.get("goalCompletions") || 0,
+    challengesFinished: user.get("challengesFinished") || 0,
+    challengePodiums: user.get("challengePodiums") || 0,
+    challengeWins: user.get("challengeWins") || 0,
   };
 }
 
