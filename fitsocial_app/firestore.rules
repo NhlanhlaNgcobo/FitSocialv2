@@ -397,6 +397,14 @@ service cloud.firestore {
                                       'countsFromDayKey', 'finalRank']);
     }
 
+    // Reading one of your own stats documents: `<uid>_<period>`, whether or
+    // not it exists yet.
+    function ownStatsRead(docId) {
+      return request.auth != null
+             && docId.matches(request.auth.uid + '_.*')
+             && (resource == null || resource.data.userId == request.auth.uid);
+    }
+
     // A YYYY-MM-DD day key as a date, for span checks.
     function dayKeyDate(key) {
       return timestamp.date(int(key[0:4]), int(key[5:7]), int(key[8:10]));
@@ -1199,19 +1207,24 @@ service cloud.firestore {
     // owner reads them; and the numbers goals and leaderboards are judged on,
     // so nobody writes them but the server. Friends' leaderboard figures are
     // served separately rather than by opening these up.
+    //
+    // A missing document reads as missing, not as refused. A rule that only
+    // checked `resource.data.userId` would error on a document that does not
+    // exist yet -- a week nothing was logged in -- and the app would get a
+    // permission error where it should get an empty week: the same trap the
+    // dailySteps note above describes. The id is pinned to the caller's own
+    // uid, so all a missing document can tell anyone is that a key they could
+    // build for themselves holds nothing.
     match /dailyStats/{docId} {
-      allow read: if request.auth != null
-                  && request.auth.uid == resource.data.userId;
+      allow read: if ownStatsRead(docId);
       allow write: if false;
     }
     match /weeklyStats/{docId} {
-      allow read: if request.auth != null
-                  && request.auth.uid == resource.data.userId;
+      allow read: if ownStatsRead(docId);
       allow write: if false;
     }
     match /monthlyStats/{docId} {
-      allow read: if request.auth != null
-                  && request.auth.uid == resource.data.userId;
+      allow read: if ownStatsRead(docId);
       allow write: if false;
     }
 

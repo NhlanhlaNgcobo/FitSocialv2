@@ -141,6 +141,14 @@ test("a week rolls up its days, hand-checked", () => {
   // (70 * 600 + 80 * 200) / 800 = 72.5, rounded.
   assert.strictEqual(week.avgHeartRate, 73);
   assert.strictEqual(week.maxHeartRate, 170);
+
+  // One entry per day, Monday first, null where there were no stats.
+  assert.deepStrictEqual(week.byDay.steps, [8000, 10000, null, 0, null, null, null]);
+  assert.deepStrictEqual(week.byDay.sessions, [1, 1, null, 0, 0, null, null]);
+  assert.deepStrictEqual(week.byDay.meals, [2, 0, null, 0, 1, null, null]);
+  assert.deepStrictEqual(week.byDay.activeMinutes, [30, 40, null, 0, 0, null, null]);
+  assert.deepStrictEqual(week.byDay.avgHeartRate, [70, 80, null, null, null, null, null]);
+  assert.deepStrictEqual(week.byDay.hasData, [true, true, null, true, true, null, null]);
 });
 
 test("an empty week is zeros and nulls, never NaN", () => {

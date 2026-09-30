@@ -153,3 +153,13 @@ for (const [collection, id] of [
     );
   });
 }
+
+test("a stats document that does not exist yet reads as missing, not refused", async () => {
+  // Compare asks for weeks nothing was logged in; that must be an empty week.
+  const snap = await assertSucceeds(
+    getDoc(doc(db(ME), "weeklyStats", `${ME}_2020-W01`))
+  );
+  if (snap.exists()) throw new Error("expected no document");
+  // Somebody else's key, even for a missing document, is still refused.
+  await assertFails(getDoc(doc(db(OTHER), "weeklyStats", `${ME}_2020-W01`)));
+});

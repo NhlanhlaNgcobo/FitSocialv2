@@ -127,6 +127,36 @@ const SUMMED = [
   "meals",
 ];
 
+/**
+ * The per-day figures a period keeps, and what each reads from a day. Steps
+ * are the rankable figure, like everything a comparison might one day rank;
+ * heart rate carries its coverage so an average over part of a period can be
+ * weighted the way the whole-period one is.
+ */
+const BY_DAY = [
+  "steps",
+  "activeMinutes",
+  "sessions",
+  "meals",
+  "avgHeartRate",
+  "heartRateCoverageMinutes",
+  "hasData",
+];
+
+function dayFigure(day, field) {
+  switch (field) {
+    case "steps":
+      return day.hasSteps ? toInt(day.rankableSteps) : null;
+    case "avgHeartRate":
+    case "heartRateCoverageMinutes":
+      return day[field] == null ? null : toInt(day[field]);
+    case "hasData":
+      return Boolean(day.hasSteps || day.active || toInt(day.meals) > 0);
+    default:
+      return toInt(day[field]);
+  }
+}
+
 /** The longest run of consecutive day keys in [dayKeys] (any order). */
 function longestStreak(dayKeys) {
   const sorted = [...new Set(dayKeys)].sort();
@@ -167,9 +197,17 @@ function rollUp(days, dayKeys) {
   let hrWeighted = 0;
   let hrWeight = 0;
   let maxHeartRate = null;
+  // One entry per day of the period, in order, null where a day has no
+  // stats. Kept so Compare can set the first N days of this period against
+  // the first N of another from these two documents alone -- a Wednesday
+  // measured against last Monday-to-Wednesday, not against all of last week.
+  const byDay = Object.fromEntries(BY_DAY.map((key) => [key, []]));
 
   for (const key of dayKeys) {
     const day = days[key];
+    for (const field of BY_DAY) {
+      byDay[field].push(day ? dayFigure(day, field) : null);
+    }
     if (!day) continue;
     for (const field of SUMMED) totals[field] += toInt(day[field]);
     if (day.active) activeDayKeys.push(key);
@@ -197,6 +235,7 @@ function rollUp(days, dayKeys) {
     longestStreak: longestStreak(activeDayKeys),
     avgHeartRate: hrWeight > 0 ? Math.round(hrWeighted / hrWeight) : null,
     maxHeartRate,
+    byDay,
   };
 }
 
