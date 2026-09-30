@@ -20,6 +20,7 @@ import '../../features/challenges/presentation/live_challenges_screen.dart';
 import '../../features/challenges/presentation/challenge_outcome_screen.dart';
 import '../../features/challenges/presentation/challenge_tracker_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
+import '../../features/goals/presentation/goals_screen.dart';
 import '../../features/main/presentation/achievements_screen.dart';
 import '../../features/main/presentation/bmi_screen.dart';
 import '../../features/main/presentation/connections_screen.dart';
@@ -300,6 +301,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/challenges',
         builder: (context, state) => const ChallengeHubScreen(),
+      ),
+      // Personal goals. Reachable only from the home card, which is hidden
+      // while goals are switched off in Remote Config.
+      GoRoute(
+        path: '/goals',
+        builder: (context, state) => const GoalsScreen(),
       ),
       // User-created running challenges.
       //

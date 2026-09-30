@@ -15,6 +15,7 @@ import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/glass_top_bar.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../notifications/application/notification_providers.dart';
+import '../../goals/presentation/goals_home_card.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
 import 'daily_prompt_card.dart';
@@ -173,6 +174,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // at the streak, not somewhere to change the window.
       const ActivityGridCard(fixedRange: ActivityRange.week),
       const SizedBox(height: AppSpacing.sm),
+      // Carries its own spacing, and draws nothing while goals are off.
+      const GoalsHomeCard(),
       // Something to say, not only something to look at: above the posts,
       // where it is seen before the scroll starts.
       const DailyPromptCard(),
