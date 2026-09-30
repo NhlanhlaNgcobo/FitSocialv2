@@ -665,6 +665,22 @@ for (const [name, handler] of Object.entries(require("./milestones"))) {
   exports[name] = handler;
 }
 
+// --- Build 11: stats and goals ---------------------------------------------
+//
+// Daily, weekly and monthly stats rebuilt from the logs, and the personal goals
+// that read them. More triggers on runs, workouts, meals and dailySteps, added
+// beside the existing ones for the same reason as above: nothing here can move
+// a Pulse 75 day or a running-challenge rank. Both sit idle while every Build
+// 11 feature is switched off in Remote Config.
+for (const [name, handler] of Object.entries(require("./stats"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+for (const [name, handler] of Object.entries(require("./goals"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+
 // --- Push -------------------------------------------------------------------
 //
 // One trigger on the notification inbox, turning the rows every other module

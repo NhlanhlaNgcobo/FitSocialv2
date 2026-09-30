@@ -12,6 +12,7 @@ library;
 enum BadgeGroup {
   pulse75('Pulse 75'),
   earlyWorm('Early Worm'),
+  goals('Goals'),
   general('FitSocial');
 
   const BadgeGroup(this.label);
@@ -110,6 +111,26 @@ enum ChallengeBadge {
     group: BadgeGroup.earlyWorm,
   ),
 
+  // --- Goals ------------------------------------------------------------
+  goalGetter(
+    key: 'GOAL_FIRST',
+    label: 'Goal Getter',
+    description: 'Hit a personal goal for the first time.',
+    group: BadgeGroup.goals,
+  ),
+  onTarget(
+    key: 'GOAL_TEN',
+    label: 'On Target',
+    description: 'Hit 10 personal goals.',
+    group: BadgeGroup.goals,
+  ),
+  relentless(
+    key: 'GOAL_FIFTY',
+    label: 'Relentless',
+    description: 'Hit 50 personal goals.',
+    group: BadgeGroup.goals,
+  ),
+
   // --- General ----------------------------------------------------------
   firstPulse(
     key: 'FIRST_PULSE',
@@ -195,6 +216,9 @@ enum ChallengeBadge {
         century => facts.totalPoints >= 100,
         pointMachine => facts.totalPoints >= 10000,
         supporter => facts.reactionsGiven >= 100,
+        goalGetter => facts.goalCompletions >= 1,
+        onTarget => facts.goalCompletions >= 10,
+        relentless => facts.goalCompletions >= 50,
       };
 }
 
@@ -215,6 +239,7 @@ class BadgeFacts {
     this.totalPoints = 0,
     this.pulsesPublished = 0,
     this.reactionsGiven = 0,
+    this.goalCompletions = 0,
   });
 
   /// Counters for the run being evaluated, not a lifetime total across runs.
@@ -234,6 +259,10 @@ class BadgeFacts {
   final int totalPoints;
   final int pulsesPublished;
   final int reactionsGiven;
+
+  /// Goal periods completed, across every goal. A weekly goal hit ten weeks
+  /// running is ten.
+  final int goalCompletions;
 
   /// Every badge these facts earn.
   List<ChallengeBadge> get earned => ChallengeBadge.values

@@ -84,6 +84,9 @@ const BADGE_COPY = {
   POINTS_CENTURY: { title: "Century", line: "Earned 100 points", emoji: "\u{1F4AF}" },
   POINTS_MACHINE: { title: "Point Machine", line: "Earned 10,000 points", emoji: "\u{1F680}" },
   SUPPORTER: { title: "Supporter", line: "Cheered on 100 posts", emoji: "\u{1F4E3}" },
+  GOAL_FIRST: { title: "Goal Getter", line: "Hit a first personal goal", emoji: "\u{1F3AF}" },
+  GOAL_TEN: { title: "On Target", line: "Hit 10 personal goals", emoji: "\u{1F3F9}" },
+  GOAL_FIFTY: { title: "Relentless", line: "Hit 50 personal goals", emoji: "\u{1F525}" },
 };
 
 function badgeMilestone(badgeKey) {

@@ -250,4 +250,7 @@ IconData _iconFor(ChallengeBadge badge) => switch (badge) {
       ChallengeBadge.century => Icons.looks_one_rounded,
       ChallengeBadge.pointMachine => Icons.stars_rounded,
       ChallengeBadge.supporter => Icons.favorite_rounded,
+      ChallengeBadge.goalGetter => Icons.track_changes_rounded,
+      ChallengeBadge.onTarget => Icons.gps_fixed_rounded,
+      ChallengeBadge.relentless => Icons.local_fire_department_rounded,
     };

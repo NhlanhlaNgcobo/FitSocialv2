@@ -622,6 +622,26 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Personal goals (functions/goals.js). Created only through the
+      // createGoal callable, which caps how many are running and works out the
+      // period; progress, completion and the period records are the server's.
+      // The owner may do exactly one thing to a goal directly: archive it.
+      match /goals/{goalId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null
+                      && request.auth.uid == userId
+                      && resource.data.status == 'active'
+                      && request.resource.data.status == 'archived'
+                      && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['status', 'updatedAt']);
+        allow create, delete: if false;
+
+        match /periods/{periodId} {
+          allow read: if request.auth != null && request.auth.uid == userId;
+          allow write: if false;
+        }
+      }
+
       // This user's inbox: who followed them, who liked their posts.
       //
       // Written by the ACTOR, read by the owner — the mirror image of
@@ -1159,6 +1179,27 @@ service cloud.firestore {
                             && optionalIntIn(request.resource.data,
                                  'utcOffsetMinutes', -720, 840);
       allow delete: if false;
+    }
+
+    // Stats built from the logs by functions/stats.js: one document per user
+    // per day, week and month. Health data by another name, so only their
+    // owner reads them; and the numbers goals and leaderboards are judged on,
+    // so nobody writes them but the server. Friends' leaderboard figures are
+    // served separately rather than by opening these up.
+    match /dailyStats/{docId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+      allow write: if false;
+    }
+    match /weeklyStats/{docId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+      allow write: if false;
+    }
+    match /monthlyStats/{docId} {
+      allow read: if request.auth != null
+                  && request.auth.uid == resource.data.userId;
+      allow write: if false;
     }
 
     // The points ledger — every award, as a row.

@@ -419,6 +419,11 @@ const BADGES = {
   POINTS_CENTURY: (f) => f.totalPoints >= 100,
   POINTS_MACHINE: (f) => f.totalPoints >= 10000,
   SUPPORTER: (f) => f.reactionsGiven >= 100,
+  // Personal goals (goals.js). Counted per completed period, so a weekly goal
+  // hit for ten weeks is ten.
+  GOAL_FIRST: (f) => (f.goalCompletions || 0) >= 1,
+  GOAL_TEN: (f) => (f.goalCompletions || 0) >= 10,
+  GOAL_FIFTY: (f) => (f.goalCompletions || 0) >= 50,
 };
 
 /** Badges that a second run can earn again, carried as a count. */
@@ -486,6 +491,7 @@ async function badgeFactsFor(userId, enrollment) {
     totalPoints: user.get("totalPoints") || 0,
     pulsesPublished: user.get("pulsesPublished") || 0,
     reactionsGiven: user.get("reactionsGiven") || 0,
+    goalCompletions: user.get("goalCompletions") || 0,
   };
 }
 
@@ -1189,6 +1195,13 @@ exports._internals = {
   recomputePointsTotals,
   dayKeyOf,
   dayRange,
+  // Shared with stats.js, which reads the same logs for the same days. One
+  // implementation of "what happened on that day", with its hard-won index
+  // notes, rather than a second copy that forgets them.
+  activityInDay,
+  offsetFor,
+  badgeFactsFor,
+  awardBadges,
   finalisesAt,
   addDays,
   daysBetween,
