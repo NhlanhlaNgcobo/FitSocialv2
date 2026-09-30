@@ -405,7 +405,15 @@ exports.createGoal = onCall(async (request) => {
  * just closed is final when it is judged.
  */
 exports.rollGoalPeriods = onSchedule(
-  { schedule: "30 2 * * *", timeZone: "Africa/Johannesburg" },
+  {
+    schedule: "30 2 * * *",
+    timeZone: "Africa/Johannesburg",
+    // Cloud Scheduler has no presence in africa-south1, so a schedule left on
+    // the global region fails to deploy. Pinned like the scheduled jobs in
+    // challenges.js and running_challenges.js.
+    region: "us-central1",
+    timeoutSeconds: 540,
+  },
   async () => {
     if (!(await remoteConfig.isOn("f1_goals_challenges"))) return;
     const active = await db()
