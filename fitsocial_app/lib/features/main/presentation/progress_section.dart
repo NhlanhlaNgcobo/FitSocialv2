@@ -6,6 +6,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/activity_grid.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../compare/presentation/compare_card.dart';
+import '../../leaderboards/presentation/leaderboard_card.dart';
 import '../../weather/presentation/weather_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
@@ -64,6 +65,10 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
         // Carries its own spacing, and draws nothing while Compare is off or
         // for the day and year views.
         CompareCard(window: window),
+        // Under Compare, and the same shape of widget: its own spacing, and
+        // nothing drawn at all while leaderboards are off or the window is one
+        // no board covers.
+        LeaderboardCard(window: window),
         // Always the full year, whatever period is being reported on: this is
         // the streak at a glance, not a chart of the selected window.
         const ActivityGridCard(

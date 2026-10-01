@@ -106,6 +106,14 @@ function seedDatabase() {
     "meals/m1": { authorId: ME },
     "dailySteps/uid_me_2026-08-18": { userId: ME, steps: 8000 },
     "dailySteps/uid_other_2026-08-18": { userId: OTHER, steps: 9000 },
+
+    // The Build 11 stats pipeline's records, and the one projection of them
+    // other people can read.
+    "dailyStats/uid_me_2026-08-18": { userId: ME, steps: 8000 },
+    "weeklyStats/uid_me_2026-W34": { userId: ME, rankableSteps: 52000 },
+    "monthlyStats/uid_me_2026-08": { userId: ME, rankableSteps: 180000 },
+    "leaderboardEntries/uid_me_2026-W34": { userId: ME, steps: 52000 },
+    "leaderboardEntries/uid_other_2026-W34": { userId: OTHER, steps: 44000 },
     "pointsLedger/p1": { userId: ME, points: 10 },
     "earlyWorm/uid_me": { streak: 4 },
     "earlyWorm/uid_other": { streak: 9 },
@@ -203,6 +211,10 @@ test("deletes private logs and challenge records, subcollections included", asyn
     "workouts/w1",
     "meals/m1",
     "dailySteps/uid_me_2026-08-18",
+    "dailyStats/uid_me_2026-08-18",
+    "weeklyStats/uid_me_2026-W34",
+    "monthlyStats/uid_me_2026-08",
+    "leaderboardEntries/uid_me_2026-W34",
     "pointsLedger/p1",
     "earlyWorm/uid_me",
     "challengeEnrollments/e1",
@@ -210,6 +222,11 @@ test("deletes private logs and challenge records, subcollections included", asyn
   ]) {
     assert.equal(store.has(gone), false, `${gone} should be deleted`);
   }
+  assert.equal(
+    store.has("leaderboardEntries/uid_other_2026-W34"),
+    true,
+    "someone else's leaderboard entry stays"
+  );
 });
 
 test("holds the username instead of freeing it", async () => {

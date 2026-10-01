@@ -433,6 +433,25 @@ async function purgeAccount(uid) {
     firestore.collection("pointsLedger").where("userId", "==", uid)
   );
 
+  // The Build 11 stats pipeline's own records: what the logs above added up to
+  // per day, week and month, and the leaderboard projection taken off the week
+  // and month. Derived data, but derived health data -- a deleted account must
+  // not leave its step counts behind in a document nothing will ever rebuild.
+  // The leaderboard entries matter most: they are the only ones other people
+  // can read, so a board would otherwise keep ranking somebody who is gone.
+  const dailyStats = await deleteMatching(
+    firestore.collection("dailyStats").where("userId", "==", uid)
+  );
+  const weeklyStats = await deleteMatching(
+    firestore.collection("weeklyStats").where("userId", "==", uid)
+  );
+  const monthlyStats = await deleteMatching(
+    firestore.collection("monthlyStats").where("userId", "==", uid)
+  );
+  const leaderboardEntries = await deleteMatching(
+    firestore.collection("leaderboardEntries").where("userId", "==", uid)
+  );
+
   await firestore.collection("earlyWorm").doc(uid).delete();
 
   const usernames = await releaseUsername(uid);
@@ -461,6 +480,10 @@ async function purgeAccount(uid) {
     meals,
     dailySteps,
     points,
+    dailyStats,
+    weeklyStats,
+    monthlyStats,
+    leaderboardEntries,
     usernames,
     storageFiles,
   };

@@ -21,6 +21,7 @@ import '../../features/challenges/presentation/challenge_outcome_screen.dart';
 import '../../features/challenges/presentation/challenge_tracker_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
 import '../../features/goals/presentation/goals_screen.dart';
+import '../../features/leaderboards/presentation/leaderboard_screen.dart';
 import '../../features/main/presentation/achievements_screen.dart';
 import '../../features/main/presentation/bmi_screen.dart';
 import '../../features/main/presentation/connections_screen.dart';
@@ -307,6 +308,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/goals',
         builder: (context, state) => const GoalsScreen(),
+      ),
+      // The friends leaderboard. Reachable only from the Progress card, which
+      // is hidden while leaderboards are switched off in Remote Config.
+      GoRoute(
+        path: '/leaderboard',
+        builder: (context, state) => const LeaderboardScreen(),
       ),
       // User-created running challenges.
       //

@@ -1228,6 +1228,31 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The friends leaderboard's projection: `<uid>_<periodId>`, holding the
+    // four figures a board ranks and nothing else (functions/leaderboard.js).
+    //
+    // Readable by its owner and by the people who follow them, like a Pulse and
+    // for the same reason: a board is something you show the people you have let
+    // in, not the internet. Enforced per document, which is also what scopes the
+    // client's query -- a list is checked against every row it returns, so one
+    // that asked for a stranger's entry fails outright instead of handing it
+    // over. The follower lookups set the chunk size in
+    // FirestoreLeaderboardRepository: the rules engine allows 20 document
+    // lookups per query, identical ones cached, so a chunk covers ten people.
+    //
+    // Your own entry is matched on the document id rather than on
+    // `resource.data`, so reading the week you have no entry for comes back
+    // empty instead of refused -- the trap the dailyStats note above describes.
+    // The `resource != null` guard is what keeps the follower clause from being
+    // asked about a document that does not exist.
+    match /leaderboardEntries/{docId} {
+      allow read: if request.auth != null
+                  && (ownStatsRead(docId)
+                      || (resource != null
+                          && isFollowerOf(resource.data.userId)));
+      allow write: if false;
+    }
+
     // The points ledger — every award, as a row.
     //
     // Append-only and server-written. A ledger rather than a running total is

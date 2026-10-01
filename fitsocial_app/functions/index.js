@@ -687,6 +687,13 @@ for (const [name, handler] of Object.entries(require("./activity_challenges"))) 
   if (name === "_internals") continue;
   exports[name] = handler;
 }
+// Friends leaderboards: the followers-readable projection of the week and month
+// stats, and the opt-out that clears it. Registers a listener on stats.js, so it
+// has to be required after it.
+for (const [name, handler] of Object.entries(require("./leaderboard"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
 
 // --- Push -------------------------------------------------------------------
 //

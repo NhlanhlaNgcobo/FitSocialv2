@@ -1,7 +1,7 @@
 # Build 11 handoff
 
 **For:** whoever picks Build 11 up next, including a fresh Claude Code session on another machine.
-**Last updated:** 2026-10-01, at commit `bb3a476` on `main`.
+**Last updated:** 2026-10-01, with F6 committed to `main` as `7d97b12` (not pushed).
 **Spec:** `FitSocial_Build11_Spec.md` (Bear's copy, kept outside the repo). This file records how that spec was reconciled with the code, what is done, and what is left.
 
 A new Claude Code session should read this file first, then `HANDOFF.md` and `CODEBASE_ANALYSIS.md` for the wider app.
@@ -45,8 +45,8 @@ The spec was written without seeing the repo, and much of it already existed. Bu
 | F1: activity challenges (steps / minutes / sessions / meals) | Done, pushed | `f1_goals_challenges` |
 | F1: final places, `challengeResult` notification, 6 new badges | Done, pushed | also affects running challenges |
 | F4: Compare card on the Progress tab | Done, pushed | `f4_compare` |
-| F6: friends leaderboards | **Next** | `f6_leaderboards` |
-| Live Share: purge ended shares' positions | Not started | none |
+| F6: friends leaderboards | Done, committed, **not pushed** | `f6_leaderboards` |
+| Live Share: purge ended shares' positions | **Next** | none |
 | F2: Weekly Insights (AI) | Not started | `f2_weekly_insights` |
 | F3: Up Next | Not started | `f3_up_next` |
 | F5: Recap Cards (+ Instagram Stories) | Not started | `f5_recap_cards` |
@@ -65,6 +65,10 @@ Nothing from Build 11 has been run on a phone or against the live Firebase proje
 - `goals.js`: `createGoal` callable, progress per period, nightly `rollGoalPeriods` job.
 - `activity_ranking.js`: pure ranking rules for activity challenges.
 - `activity_challenges.js`: activity challenge engine and `recordResults` (final places, badges, result notifications) for every challenge type.
+- `leaderboard.js`: the followers-readable projection of a week's or month's
+  stats (`leaderboardEntries/{uid}_{periodId}`), and the trigger that acts on
+  the opt-out. Registered as a `stats.onDayChanged` listener, so it has to be
+  required after `stats.js` in `index.js`.
 - `scripts/backfill_stats.js`: builds the last 70 days of stats. **Not run yet**: it needs admin credentials this laptop does not have. Bear may prefer it as a one-off Cloud Function instead.
 
 **App (`fitsocial_app/lib/`)**
@@ -72,6 +76,8 @@ Nothing from Build 11 has been run on a phone or against the live Firebase proje
 - `core/observability/app_analytics.dart`: every product event, in one enum.
 - `features/goals/`: goals model, repository, providers, screen, home card.
 - `features/compare/`: Compare logic, repository, card.
+- `features/leaderboards/`: the ranking (pure), the entry repository, the board
+  screen at `/leaderboard`, and the preview card on the Progress tab.
 - `features/challenges/domain/running_challenge.dart`: now also carries `ChallengeKind`, `ActivityMetric`, `ActivityMode`.
 - `features/challenges/domain/daily_health.dart`: how a day's health reading merges into `dailySteps`.
 
@@ -104,18 +110,109 @@ Nothing from Build 11 has been run on a phone or against the live Firebase proje
     $env:JAVA_HOME = 'C:\Java\jdk-21'; $env:Path = "$env:JAVA_HOME\bin;" + $env:Path
     firebase emulators:exec --only firestore --project fitsocial-rules-test "node --test --test-concurrency=1"
     ```
-  - Last green run: 1,718 app tests, 218 Functions tests, 151 rules tests.
+  - Last green run **with F6**: 1,778 app tests, 228 Functions tests, 170 rules
+    tests. The rules count includes `routines.test.mjs`, which belongs to the
+    workout work another session is doing in this checkout, not to F6.
 
 ---
 
-## 6. Next: F6 friends leaderboards
+## 6. F6 friends leaderboards, as built
 
-What the spec asks: weekly and monthly leaderboards among the people you follow, for steps, active minutes, sessions and streaks, with an opt-out, deterministic ties, hand-typed steps and implausible days excluded, and a bounded number of reads.
+Weekly and monthly boards among the people you follow, on four figures — steps,
+active minutes, sessions and best streak — with an opt-out, deterministic ties,
+hand-typed and implausible days excluded, and a fixed number of reads.
 
-What already exists to build on:
-- `weeklyStats` / `monthlyStats` already hold rankable figures (`rankableSteps`, `rankableActiveMinutes`, `sessions`, `longestStreak`).
-- These documents are owner-read-only, deliberately. A leaderboard needs friends' figures, so plan a small, public-to-followers projection (for example `leaderboardEntries/{uid}_{periodId}` holding only the ranked numbers and the opt-out) rather than opening the stats documents.
-- The follow graph is `users/{uid}/following`. Firestore `in` queries take up to 30 values, so chunk and cap the board (for example top 50).
-- Analytics events already exist: `leaderboard_viewed`, `leaderboard_filter_changed`, `leaderboard_optout_toggled`.
+**The projection is the whole design.** `weeklyStats` and `monthlyStats` stay
+owner-only. `functions/leaderboard.js` copies the four rankable figures, plus
+`activeDays` as the tiebreak, into `leaderboardEntries/{uid}_{periodId}`, which
+`firestore.rules` opens to the owner and to the people who follow them. Meals,
+heart rate, raw and hand-typed steps and the per-day series never leave the stats
+documents. Integrity needed no new code: an entry copies `rankableSteps` and
+`rankableActiveMinutes`, which stats.js has already netted of hand-typed steps
+and zeroed for a day over the Remote Config ceiling.
 
-After F6: the Live Share purge, then Phase 2 (F2, F3, F5).
+Decisions worth knowing before changing any of it:
+
+- **A period with nothing in it has no entry.** Not a row of zeros: a week nobody
+  logged anything in is somebody who was not playing, not a last place. A period
+  emptied by a deleted workout deletes its entry rather than leaving stale
+  figures standing.
+- **Nobody appears on a board they have no figure for.** Three sessions and no
+  step sync puts you on the sessions board and leaves you off the steps board,
+  where a 0 would read as a week spent sitting down.
+- **Equal figures share a rank** (1, 2, 2, 4), ordered within the tie by active
+  days and then by user id — fixed, so a board never reshuffles between
+  refreshes. The id fallback is the one activity challenges already use.
+- **The viewer is always on their own board**, pinned under the top 50 at their
+  real rank, the same way the challenge board pins its own row.
+- **Opt-out is `users/{uid}.leaderboardOptOut`.** Setting it purges every entry
+  that user has, *whether or not the flag is on* — entries written while it was up
+  outlive it coming down, and somebody asking to be taken off is owed that.
+  Clearing it rebuilds the current week and month only; finished boards somebody
+  sat out stay sat out.
+- **Ten uids per query, not thirty.** The rule does a follower lookup per
+  returned document and the rules engine allows 20 per query, identical ones
+  cached. Same constraint, same number, as the Pulse tray.
+- **Entries are read by document id**, which `{uid}_{periodId}` makes possible, so
+  a board needs no composite index and somebody with no entry costs nothing.
+- The board is a `FutureProvider`, not a stream: pull down to refresh. A live
+  listener per chunk would be five sockets for figures that move a few times a
+  day.
+- `account_deletion.js` now also purges `dailyStats`, `weeklyStats`,
+  `monthlyStats` and `leaderboardEntries`. The first three were a gap left by F1
+  — a deleted account was keeping its step history in documents nothing would
+  ever rebuild — and the last is the only one other people can read, so a board
+  would otherwise go on ranking somebody who is gone.
+
+Where the UI is: `/leaderboard`, reached from a preview card under Compare on the
+Progress tab. The card draws only on the current week or month — there is no board
+to page back to — and nothing at all while the flag is off or the board is empty.
+The opt-out switch is on the board screen itself, worded "Show me on
+leaderboards" rather than as an opt-out, and it has to live there: opting out
+empties the screen above it, so a switch anywhere else would be the only way
+back on.
+
+Left out deliberately: no leaderboard notifications, no paging to past periods,
+and no backfill — so a board stays empty until the stats pipeline has run for a
+day with the flag on, or `scripts/backfill_stats.js` has been run (§3).
+
+## 7. The other session's workout work is still in this tree
+
+F6 was committed as `7d97b12` with its own files only. Everything still showing
+as modified or untracked in `fitsocial_app` belongs to another session's workout
+work, which was in flight at the same time and is **not finished** — at one point
+it had `firestore_content_repository.dart` importing a `meal_quality.dart` that
+did not exist, which broke every `flutter test` until it was backed out.
+
+What is theirs, as of F6's commit:
+
+```
+lib/features/main/domain/{active_workout,exercise_library,workout_math,workout_models}.dart
+lib/features/main/application/{active_workout_controller,workout_library_providers}.dart
+lib/features/main/data/active_workout_store.dart
+lib/features/main/presentation/{workout_session_screen,exercise_picker_sheet,custom_exercise_sheet}.dart
+lib/features/main/{data/content_repository*.dart,data/firestore_content_repository.dart,domain/app_models.dart}
+lib/features/main/presentation/create_screen.dart
+test/{active_workout,workout_math,workout_session_screen,workout_sets_model}_test.dart
+test_rules/routines.test.mjs
+```
+
+and, inside four files F6 also touched, these additions which are theirs alone:
+
+| File | Theirs |
+|---|---|
+| `firestore.rules` | the `/routines` and `/customExercises` blocks |
+| `functions/account_deletion.js` | purging `routines` and `customExercises` |
+| `functions/test/account_deletion.test.js` | the `routines`/`customExercises` seed and assertions |
+| `lib/app/router/app_router.dart` | the `/workout-session` route and its import |
+
+So `git diff` on those four shows their work and nothing else. Do not stage them
+wholesale into an F6 follow-up, and do not revert or stash any of it.
+
+## 8. Next: the Live Share purge, then Phase 2
+
+
+The Live Share purge is the smallest piece left: `locationShares` keeps the last
+position after a share ends, and only that needs clearing. Then Phase 2 — F2
+Weekly Insights (AI, through the existing `OPENROUTER_API_KEY`), F3 Up Next and
+F5 Recap Cards — and the build number bump to 11, last of all.
