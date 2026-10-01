@@ -103,6 +103,9 @@ function seedDatabase() {
     "runs/run1": { authorId: ME, distanceKm: 5 },
     "runs/run2": { authorId: OTHER, distanceKm: 8 },
     "workouts/w1": { authorId: ME },
+    "routines/r1": { authorId: ME },
+    "routines/r2": { authorId: OTHER },
+    "customExercises/c1": { authorId: ME },
     "meals/m1": { authorId: ME },
     "dailySteps/uid_me_2026-08-18": { userId: ME, steps: 8000 },
     "dailySteps/uid_other_2026-08-18": { userId: OTHER, steps: 9000 },
@@ -209,6 +212,8 @@ test("deletes private logs and challenge records, subcollections included", asyn
   for (const gone of [
     "runs/run1",
     "workouts/w1",
+    "routines/r1",
+    "customExercises/c1",
     "meals/m1",
     "dailySteps/uid_me_2026-08-18",
     "dailyStats/uid_me_2026-08-18",
@@ -227,6 +232,7 @@ test("deletes private logs and challenge records, subcollections included", asyn
     true,
     "someone else's leaderboard entry stays"
   );
+  assert.equal(store.has("routines/r2"), true, "someone else's routine stays");
 });
 
 test("holds the username instead of freeing it", async () => {

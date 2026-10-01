@@ -423,6 +423,12 @@ async function purgeAccount(uid) {
   const workouts = await deleteMatching(
     firestore.collection("workouts").where("authorId", "==", uid)
   );
+  const routines = await deleteMatching(
+    firestore.collection("routines").where("authorId", "==", uid)
+  );
+  const customExercises = await deleteMatching(
+    firestore.collection("customExercises").where("authorId", "==", uid)
+  );
   const meals = await deleteMatching(
     firestore.collection("meals").where("authorId", "==", uid)
   );
@@ -477,6 +483,8 @@ async function purgeAccount(uid) {
     notifications,
     runs,
     workouts,
+    routines,
+    customExercises,
     meals,
     dailySteps,
     points,

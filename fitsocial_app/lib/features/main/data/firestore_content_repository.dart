@@ -19,6 +19,7 @@ import '../domain/explore_models.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
+import '../domain/workout_models.dart';
 import 'activity_session_parsing.dart';
 import 'author_identity_cache.dart';
 import 'content_repository_contract.dart';
@@ -844,6 +845,97 @@ class FirestoreContentRepository implements ContentRepository {
     return byTitle.values.toList();
   }
 
+  @override
+  Future<List<List<ExerciseEntry>>> getWorkoutHistory({int limit = 200}) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const [];
+
+    final docs = await _activityLogs(workoutsCollection, user.uid);
+    final dated = <(DateTime, List<ExerciseEntry>)>[];
+    for (final doc in docs) {
+      final data = doc.data();
+      final loggedAt = _firstTimestamp(data, const ['loggedAt', 'createdAt']);
+      if (loggedAt == null) continue;
+      final exercises = (data['exercises'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(ExerciseEntry.fromMap)
+              .where((entry) => entry.name.isNotEmpty)
+              .toList() ??
+          const <ExerciseEntry>[];
+      if (exercises.isNotEmpty) dated.add((loggedAt, exercises));
+    }
+    dated.sort((a, b) => b.$1.compareTo(a.$1));
+    return dated.take(limit).map((entry) => entry.$2).toList();
+  }
+
+  @override
+  Future<List<WorkoutRoutine>> getRoutines() async {
+    final user = _requireCurrentUser();
+    final snapshot =
+        await routinesCollection.where('authorId', isEqualTo: user.uid).get();
+    return snapshot.docs
+        .map((doc) => WorkoutRoutine.fromMap(doc.id, doc.data()))
+        .where((routine) => routine.name.isNotEmpty)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  @override
+  Future<WorkoutRoutine> saveRoutine(WorkoutRoutine routine) async {
+    final user = _requireCurrentUser();
+    final ref = routine.id.isEmpty
+        ? routinesCollection.doc()
+        : routinesCollection.doc(routine.id);
+    await _settleWrite(ref.set({
+      ...routine.toMap(),
+      'authorId': user.uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }));
+    return WorkoutRoutine(
+      id: ref.id,
+      name: routine.name,
+      exercises: routine.exercises,
+    );
+  }
+
+  @override
+  Future<void> deleteRoutine(String id) async {
+    _requireCurrentUser();
+    await _settleWrite(routinesCollection.doc(id).delete());
+  }
+
+  @override
+  Future<List<CustomExercise>> getCustomExercises() async {
+    final user = _requireCurrentUser();
+    final snapshot = await customExercisesCollection
+        .where('authorId', isEqualTo: user.uid)
+        .get();
+    return snapshot.docs
+        .map((doc) => CustomExercise.fromMap(doc.id, doc.data()))
+        .where((exercise) => exercise.name.isNotEmpty)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
+  @override
+  Future<CustomExercise> saveCustomExercise(CustomExercise exercise) async {
+    final user = _requireCurrentUser();
+    final ref = exercise.id.isEmpty
+        ? customExercisesCollection.doc()
+        : customExercisesCollection.doc(exercise.id);
+    await _settleWrite(ref.set({
+      ...exercise.toMap(),
+      'authorId': user.uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }));
+    return CustomExercise(
+      id: ref.id,
+      name: exercise.name,
+      muscles: exercise.muscles,
+      equipment: exercise.equipment,
+    );
+  }
+
   static RecentWorkout? _toRecentWorkout(
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {
@@ -1285,6 +1377,12 @@ class FirestoreContentRepository implements ContentRepository {
   CollectionReference<Map<String, dynamic>> get mealsCollection =>
       _firestore.collection('meals');
 
+  CollectionReference<Map<String, dynamic>> get routinesCollection =>
+      _firestore.collection('routines');
+
+  CollectionReference<Map<String, dynamic>> get customExercisesCollection =>
+      _firestore.collection('customExercises');
+
   /// Hard ceiling on stored route points.
   ///
   /// A Firestore document is capped at 1 MiB. At ~45 bytes per `{lat, lng}`
@@ -1579,6 +1677,8 @@ class FirestoreContentRepository implements ContentRepository {
       // detail than the copy — and left the log screen with nothing to build a
       // "repeat this session" from.
       'exercises': draft.exercises.map((e) => e.toMap()).toList(),
+      // The routine it was started from. Absent for a freeform workout.
+      if (draft.routineId != null) 'routineId': draft.routineId,
       'sharedToFeed': draft.shareToFeed,
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
       'loggedAt': Timestamp.fromDate(draft.loggedAt ?? DateTime.now()),

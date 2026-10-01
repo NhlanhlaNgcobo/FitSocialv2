@@ -10,6 +10,7 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
+import '../domain/workout_models.dart';
 import 'content_repository_contract.dart';
 import 'firestore_content_repository.dart';
 import 'firestore_models.dart';
@@ -47,6 +48,36 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<List<RecentWorkout>> getRecentWorkouts({int limit = 6}) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<WorkoutRoutine>> getRoutines() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<WorkoutRoutine> saveRoutine(WorkoutRoutine routine) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> deleteRoutine(String id) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<CustomExercise>> getCustomExercises() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<CustomExercise> saveCustomExercise(CustomExercise exercise) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<List<ExerciseEntry>>> getWorkoutHistory({int limit = 200}) async {
     throw StateError(_firebaseSetupMessage);
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/reactions/fit_reaction.dart';
 import 'activity_kind.dart';
+import 'workout_models.dart';
 
 /// What a post is, as recorded on the document.
 ///
@@ -738,17 +739,71 @@ class ExerciseEntry {
         sets: (map['sets'] as num?)?.toInt() ?? 0,
         reps: (map['reps'] as num?)?.toInt() ?? 0,
         weightKg: (map['weightKg'] as num?)?.toDouble(),
+        exerciseId: map['exerciseId'] as String?,
+        supersetGroup: map['supersetGroup'] as String?,
+        setLog: (map['setLog'] as List<dynamic>?)
+                ?.whereType<Map<String, dynamic>>()
+                .map(ExerciseSet.fromMap)
+                .toList() ??
+            const [],
       );
+
+  /// An entry built from individual sets, with `sets`, `reps` and `weightKg`
+  /// derived from the working ones.
+  ///
+  /// Every reader that predates per-set logging — the share card, the Repeat
+  /// chips, the Progress tab — reads only those three, so they keep working on
+  /// a workout logged set by set. Warm-ups are left out of the summary.
+  factory ExerciseEntry.fromSets({
+    required String name,
+    required List<ExerciseSet> setLog,
+    String? exerciseId,
+    String? supersetGroup,
+  }) {
+    final working = setLog.where((s) => s.type.isWorking).toList();
+    final count = working.length;
+    final reps = count == 0
+        ? 0
+        : (working.fold<int>(0, (sum, s) => sum + s.reps) / count).round();
+    final loads = working.where((s) => s.weightKg > 0).toList();
+    final weight = loads.isEmpty
+        ? null
+        : loads.fold<double>(0, (sum, s) => sum + s.weightKg) / loads.length;
+    return ExerciseEntry(
+      name: name,
+      sets: count,
+      reps: reps,
+      weightKg: weight,
+      exerciseId: exerciseId,
+      supersetGroup: supersetGroup,
+      setLog: List.unmodifiable(setLog),
+    );
+  }
+
   const ExerciseEntry({
     required this.name,
     required this.sets,
     required this.reps,
     this.weightKg,
+    this.exerciseId,
+    this.supersetGroup,
+    this.setLog = const [],
   });
 
   final String name;
   final int sets;
   final int reps;
+
+  /// The library or custom exercise this was picked from. Null for free-text
+  /// names, which is every entry written before the library existed.
+  final String? exerciseId;
+
+  /// Entries sharing a group id were done as one circuit.
+  final String? supersetGroup;
+
+  /// Every set as logged. Empty for a workout entered as "3 x 10 at 60 kg",
+  /// in which case [sets], [reps] and [weightKg] are the whole record.
+  final List<ExerciseSet> setLog;
 
   /// The load carried, in kilograms. Null where it was not recorded — every
   /// entry written before this field existed, and bodyweight work, which has a
@@ -771,6 +826,21 @@ class ExerciseEntry {
         'sets': sets,
         'reps': reps,
         if (weightKg != null) 'weightKg': weightKg,
+        if (exerciseId != null) 'exerciseId': exerciseId,
+        if (supersetGroup != null) 'supersetGroup': supersetGroup,
+        if (setLog.isNotEmpty) 'setLog': setLog.map((s) => s.toMap()).toList(),
+      };
+
+  /// [toMap] without the per-set log: what the feed post carries.
+  ///
+  /// The card reads only name, sets, reps and weight, and a shared post is read
+  /// by every follower — the set-by-set record belongs on the private workout
+  /// log, not copied into each post.
+  Map<String, dynamic> toSummaryMap() => {
+        'name': name,
+        'sets': sets,
+        'reps': reps,
+        if (weightKg != null) 'weightKg': weightKg,
       };
 }
 
@@ -785,9 +855,14 @@ class WorkoutLogDraft {
     this.backgroundImagePath,
     this.loggedAt,
     this.taggedUsers = const [],
+    this.routineId,
   });
 
   final String title;
+
+  /// The saved routine this session was started from, or null for a freeform
+  /// one. Recorded on the workout log; the feed post does not carry it.
+  final String? routineId;
 
   /// The people attached to the shared post. Ignored when [shareToFeed] is
   /// off: with no post there is nothing to tag them in.
@@ -833,7 +908,7 @@ class WorkoutLogDraft {
         'title': title.trim().isEmpty ? 'Workout' : title.trim(),
         'duration': durationLabel,
         'calories': caloriesLabel,
-        'exercises': exercises.map((e) => e.toMap()).toList(),
+        'exercises': exercises.map((e) => e.toSummaryMap()).toList(),
       };
 }
 

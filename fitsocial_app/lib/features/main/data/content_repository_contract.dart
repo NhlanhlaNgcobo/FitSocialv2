@@ -6,6 +6,7 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
+import '../domain/workout_models.dart';
 
 abstract class ContentRepository {
   /// The home feed: posts by the people the signed-in user follows, plus
@@ -35,6 +36,27 @@ abstract class ContentRepository {
   /// carry any; older ones come back with an empty list and repeat only the
   /// title, duration and calories.
   Future<List<RecentWorkout>> getRecentWorkouts({int limit});
+
+  /// The signed-in user's saved routines, alphabetical.
+  Future<List<WorkoutRoutine>> getRoutines();
+
+  /// Creates a routine, or updates it when [routine] already has an id.
+  /// Returns the saved routine with its id filled in.
+  Future<WorkoutRoutine> saveRoutine(WorkoutRoutine routine);
+
+  Future<void> deleteRoutine(String id);
+
+  /// The exercises the signed-in user has made up, alphabetical.
+  Future<List<CustomExercise>> getCustomExercises();
+
+  Future<CustomExercise> saveCustomExercise(CustomExercise exercise);
+
+  /// Every workout's exercises with their per-set logs, newest first.
+  ///
+  /// What live PR detection compares against. Separate from
+  /// [getRecentWorkouts], which is deduplicated by title and so would hide most
+  /// of the history a personal best is measured over.
+  Future<List<List<ExerciseEntry>>> getWorkoutHistory({int limit});
 
   /// Every meal the signed-in user has logged.
   ///
