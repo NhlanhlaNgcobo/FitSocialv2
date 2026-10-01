@@ -37,6 +37,10 @@ import '../../features/main/presentation/prompt_answers_screen.dart';
 import '../../features/main/presentation/social_compose_screens.dart';
 import '../../features/main/domain/daily_prompts.dart';
 import '../../features/main/presentation/post_detail_screen.dart';
+import '../../features/main/presentation/workout_session_screen.dart';
+import '../../features/main/presentation/routine_editor_screen.dart';
+import '../../features/main/presentation/routines_screen.dart';
+import '../../features/main/domain/workout_models.dart';
 import '../../features/main/presentation/profile_screen.dart';
 import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/user_profile_screen.dart';
@@ -160,6 +164,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/log-workout',
         builder: (context, state) => const WorkoutLogScreen(),
+      ),
+      GoRoute(
+        path: '/workout-session',
+        builder: (context, state) => const WorkoutSessionScreen(),
+      ),
+      GoRoute(
+        path: '/routines',
+        builder: (context, state) => const RoutinesScreen(),
+      ),
+      GoRoute(
+        path: '/routine-editor',
+        // The routine to edit rides in `extra`; none means a new one.
+        builder: (context, state) =>
+            RoutineEditorScreen(initial: state.extra as WorkoutRoutine?),
       ),
       GoRoute(
         path: '/log-run',

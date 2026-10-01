@@ -8,6 +8,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../tracking/presentation/run_drafts_section.dart';
+import '../application/active_workout_controller.dart';
 import '../application/create_flow_controller.dart';
 import '../domain/activity_kind.dart';
 import '../../music/presentation/music_island_action.dart';
@@ -21,10 +22,32 @@ class CreateScreen extends ConsumerWidget {
     final palette = context.palette;
     final flowState = ref.watch(createFlowControllerProvider);
     final flowController = ref.read(createFlowControllerProvider.notifier);
+    final inProgress = ref.watch(activeWorkoutProvider) != null;
     final actions = [
+      // No create-flow destination: a session in progress is persisted by its
+      // own controller, so there is no draft here to resume or discard.
+      _CreateAction(
+        title: inProgress ? 'Resume Workout' : 'Start a Workout',
+        subtitle: inProgress
+            ? 'Pick up where you left off'
+            : 'Log sets live, with a timer',
+        icon: Icons.timer_rounded,
+        accent: _kWorkoutAccent,
+        onTap: () async {
+          await ref.read(activeWorkoutProvider.notifier).ensureStarted();
+          if (context.mounted) context.push('/workout-session');
+        },
+      ),
+      _CreateAction(
+        title: 'Routines',
+        subtitle: 'Start from a saved workout',
+        icon: Icons.checklist_rounded,
+        accent: _kWorkoutAccent,
+        onTap: () => context.push('/routines'),
+      ),
       _CreateAction(
         title: 'Log a Workout',
-        subtitle: 'Track your gym session',
+        subtitle: 'Add one you have already done',
         icon: Icons.fitness_center_rounded,
         accent: _kWorkoutAccent,
         destination: CreateCanvasDestination.workout,
