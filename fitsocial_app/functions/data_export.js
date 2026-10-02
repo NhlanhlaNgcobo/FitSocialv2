@@ -81,6 +81,11 @@ const OWNED_COLLECTIONS = [
   ["pointsLedger", "userId"],
   ["leaderboardEntries", "userId"],
   ["insightFeedback", "userId"],
+  // Saved routines and user-made exercises. The app no longer shows routines,
+  // but ones already saved are still the user's, and account deletion clears
+  // both.
+  ["routines", "authorId"],
+  ["customExercises", "authorId"],
 ];
 
 /** Fields dropped from documents of a collection. See the header. */
