@@ -1,5 +1,6 @@
 /**
- * Safety: contacts, panic alerts and location-share expiry. Spec part A.
+ * Safety: contacts, panic alerts, and location-share expiry and purge. Spec
+ * part A.
  *
  * The rule this whole module exists to enforce: **only an accepted safety
  * contact is ever sent an alert.** The client never names recipients. A panic
@@ -515,6 +516,9 @@ async function handleAcknowledged(eventId) {
  * Closes shares past their expiry. The client stops writing at expiry too,
  * but a phone that died mid-share never gets the chance, and a share must
  * never be left open indefinitely.
+ *
+ * The last position goes in the same write: an expired share is as finished
+ * as a stopped one.
  */
 async function expireShares(now = new Date()) {
   const snap = await db()
@@ -524,10 +528,37 @@ async function expireShares(now = new Date()) {
     .get();
   await Promise.all(
     snap.docs.map((d) =>
-      d.ref.set({ status: "expired", endedAt: now }, { merge: true })
+      d.ref.set(
+        {
+          status: "expired",
+          endedAt: now,
+          current: admin.firestore.FieldValue.delete(),
+        },
+        { merge: true }
+      )
     )
   );
   return snap.size;
+}
+
+/**
+ * Deletes the last position of a share that has ended. Viewers keep reading
+ * the document after it ends (it is how they learn it ended), so leaving
+ * `current` there would keep telling them where somebody was long after they
+ * stopped sharing it. Who it was shared with and when stay, for the owner's
+ * own history; where they were does not.
+ *
+ * Runs on every update and acts only once a share is no longer active and
+ * still carries a position, so its own write does not loop. Rules refuse
+ * position ticks on a share that is not active, so nothing puts it back.
+ */
+async function purgeEndedSharePosition(shareId, after) {
+  if (!after || after.status === "active" || after.current == null) return false;
+  await db()
+    .collection("locationShares")
+    .doc(shareId)
+    .update({ current: admin.firestore.FieldValue.delete() });
+  return true;
 }
 
 // --- Exports ----------------------------------------------------------------
@@ -594,6 +625,12 @@ exports.resendPanicAlerts = onSchedule(
   }
 );
 
+exports.onLocationShareUpdated = onDocumentUpdated(
+  "locationShares/{shareId}",
+  async (event) =>
+    purgeEndedSharePosition(event.params.shareId, event.data?.after?.data())
+);
+
 exports.expireLocationShares = onSchedule(
   { schedule: "every 15 minutes", region: "us-central1" },
   async () => {
@@ -610,6 +647,7 @@ exports._internals = {
   resendDue,
   handleAcknowledged,
   expireShares,
+  purgeEndedSharePosition,
   MAX_ACCEPTED_CONTACTS,
   MAX_PANIC_PUSHES,
   PANIC_RATE_LIMIT,

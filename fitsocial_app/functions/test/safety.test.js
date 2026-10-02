@@ -336,6 +336,57 @@ test("shares past their expiry are closed", async () => {
   assert.equal(store.get("locationShares/live").status, "active");
 });
 
+const POSITION = { lat: -26.2, lng: 28.04, accuracy: 12, batteryPercent: 40 };
+
+test("an expired share loses its last position in the same write", async () => {
+  const now = new Date("2026-09-23T18:00:00Z");
+  const { safety, store } = loadSafety({
+    "locationShares/old": {
+      ownerId: "owner",
+      viewerIds: ["friend"],
+      status: "active",
+      expiresAt: new Date(now.getTime() - 1),
+      current: POSITION,
+    },
+    "locationShares/live": {
+      status: "active",
+      expiresAt: new Date(now.getTime() + 60_000),
+      current: POSITION,
+    },
+  });
+  await safety.expireShares(now);
+  const old = store.get("locationShares/old");
+  assert.equal("current" in old, false);
+  assert.deepEqual(old.viewerIds, ["friend"]);
+  assert.deepEqual(store.get("locationShares/live").current, POSITION);
+});
+
+test("a stopped share's last position is deleted, and nothing else", async () => {
+  const after = {
+    ownerId: "owner",
+    viewerIds: ["friend"],
+    status: "ended",
+    endedAt: new Date("2026-09-23T18:00:00Z"),
+    current: POSITION,
+  };
+  const { safety, store } = loadSafety({ "locationShares/s1": after });
+  assert.equal(await safety.purgeEndedSharePosition("s1", after), true);
+  const doc = store.get("locationShares/s1");
+  assert.equal("current" in doc, false);
+  assert.equal(doc.status, "ended");
+  assert.deepEqual(doc.viewerIds, ["friend"]);
+});
+
+test("an active share keeps its position, and the purge's own write is a no-op", async () => {
+  const active = { status: "active", current: POSITION };
+  const { safety, store } = loadSafety({ "locationShares/s1": active });
+  assert.equal(await safety.purgeEndedSharePosition("s1", active), false);
+  assert.deepEqual(store.get("locationShares/s1").current, POSITION);
+  // The trigger fires again on the purge itself: ended, no position, no write.
+  assert.equal(await safety.purgeEndedSharePosition("s1", { status: "ended" }), false);
+  assert.equal(await safety.purgeEndedSharePosition("s1", undefined), false);
+});
+
 // ── email contacts ───────────────────────────────────────────────────────────
 
 /** Pulls the token out of the first link in an email. */

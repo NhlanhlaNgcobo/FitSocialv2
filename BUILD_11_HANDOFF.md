@@ -1,7 +1,7 @@
 # Build 11 handoff
 
 **For:** whoever picks Build 11 up next, including a fresh Claude Code session on another machine.
-**Last updated:** 2026-10-01, with F6 committed to `main` as `7d97b12` (not pushed).
+**Last updated:** 2026-10-02, with F6 pushed (`e6aec3d`) and the Live Share purge on `feat/live-share-purge`.
 **Spec:** `FitSocial_Build11_Spec.md` (Bear's copy, kept outside the repo). This file records how that spec was reconciled with the code, what is done, and what is left.
 
 A new Claude Code session should read this file first, then `HANDOFF.md` and `CODEBASE_ANALYSIS.md` for the wider app.
@@ -45,9 +45,9 @@ The spec was written without seeing the repo, and much of it already existed. Bu
 | F1: activity challenges (steps / minutes / sessions / meals) | Done, pushed | `f1_goals_challenges` |
 | F1: final places, `challengeResult` notification, 6 new badges | Done, pushed | also affects running challenges |
 | F4: Compare card on the Progress tab | Done, pushed | `f4_compare` |
-| F6: friends leaderboards | Done, committed, **not pushed** | `f6_leaderboards` |
-| Live Share: purge ended shares' positions | **Next** | none |
-| F2: Weekly Insights (AI) | Not started | `f2_weekly_insights` |
+| F6: friends leaderboards | Done, pushed | `f6_leaderboards` |
+| Live Share: purge ended shares' positions | Done (`onLocationShareUpdated` + `expireShares`), not deployed | none |
+| F2: Weekly Insights (AI) | **Next** | `f2_weekly_insights` |
 | F3: Up Next | Not started | `f3_up_next` |
 | F5: Recap Cards (+ Instagram Stories) | Not started | `f5_recap_cards` |
 | Build number 10 to 11 in `pubspec.yaml` | Not done | do it last |
@@ -209,10 +209,12 @@ and, inside four files F6 also touched, these additions which are theirs alone:
 So `git diff` on those four shows their work and nothing else. Do not stage them
 wholesale into an F6 follow-up, and do not revert or stash any of it.
 
-## 8. Next: the Live Share purge, then Phase 2
+## 8. Next: Phase 2
 
 
-The Live Share purge is the smallest piece left: `locationShares` keeps the last
-position after a share ends, and only that needs clearing. Then Phase 2 — F2
+The Live Share purge is done: `onLocationShareUpdated` in `functions/safety.js`
+deletes `current` once a share is no longer active, and `expireShares` drops it in
+the same write that expires a share. Shares that ended before it is deployed keep
+their last position until somebody clears them by hand. Next is Phase 2 — F2
 Weekly Insights (AI, through the existing `OPENROUTER_API_KEY`), F3 Up Next and
 F5 Recap Cards — and the build number bump to 11, last of all.
