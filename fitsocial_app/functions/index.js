@@ -694,6 +694,11 @@ for (const [name, handler] of Object.entries(require("./leaderboard"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }
+// Weekly Insights: an AI-written read of last week, from the stats above.
+for (const [name, handler] of Object.entries(require("./insights"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
 
 // --- Push -------------------------------------------------------------------
 //

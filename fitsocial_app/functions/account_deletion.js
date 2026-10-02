@@ -451,6 +451,11 @@ async function purgeAccount(uid) {
   const leaderboardEntries = await deleteMatching(
     firestore.collection("leaderboardEntries").where("userId", "==", uid)
   );
+  // Their Weekly Insights go with the users/{uid} tree; their ratings of
+  // them live at the top level.
+  const insightFeedback = await deleteMatching(
+    firestore.collection("insightFeedback").where("userId", "==", uid)
+  );
 
   await firestore.collection("earlyWorm").doc(uid).delete();
 
@@ -484,6 +489,7 @@ async function purgeAccount(uid) {
     weeklyStats,
     monthlyStats,
     leaderboardEntries,
+    insightFeedback,
     usernames,
     storageFiles,
   };

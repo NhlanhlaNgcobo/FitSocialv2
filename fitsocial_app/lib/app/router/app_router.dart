@@ -21,6 +21,7 @@ import '../../features/challenges/presentation/challenge_outcome_screen.dart';
 import '../../features/challenges/presentation/challenge_tracker_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
 import '../../features/goals/presentation/goals_screen.dart';
+import '../../features/insights/presentation/weekly_insight_screen.dart';
 import '../../features/leaderboards/presentation/leaderboard_screen.dart';
 import '../../features/main/presentation/achievements_screen.dart';
 import '../../features/main/presentation/bmi_screen.dart';
@@ -189,7 +190,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/prompt/:promptId',
         builder: (context, state) {
           final id = state.pathParameters['promptId']!;
-          final prompt = state.extra as PostPrompt? ??
+          final prompt =
+              state.extra as PostPrompt? ??
               PostPrompt(
                 id: id,
                 text: DailyPrompts.forDay(
@@ -217,10 +219,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/achievements',
         builder: (context, state) => const AchievementsScreen(),
       ),
-      GoRoute(
-        path: '/bmi',
-        builder: (context, state) => const BmiScreen(),
-      ),
+      GoRoute(path: '/bmi', builder: (context, state) => const BmiScreen()),
       GoRoute(
         path: '/meal-tracking',
         builder: (context, state) => const MealTrackingScreen(),
@@ -271,9 +270,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // An alert somebody else raised, opened from its push notification.
       GoRoute(
         path: '/safety/alert/:eventId',
-        builder: (context, state) => PanicAlertScreen(
-          eventId: state.pathParameters['eventId']!,
-        ),
+        builder: (context, state) =>
+            PanicAlertScreen(eventId: state.pathParameters['eventId']!),
       ),
       // Your followers and the people you follow.
       //
@@ -293,9 +291,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // destination you come back from, not one of the five tabs.
       GoRoute(
         path: '/user/:userId',
-        builder: (context, state) => UserProfileScreen(
-          userId: state.pathParameters['userId']!,
-        ),
+        builder: (context, state) =>
+            UserProfileScreen(userId: state.pathParameters['userId']!),
       ),
       // Challenges. Outside the shell, like the log flows: these are
       // destinations you come back from, not one of the five tabs.
@@ -305,12 +302,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       // Personal goals. Reachable only from the home card, which is hidden
       // while goals are switched off in Remote Config.
-      GoRoute(
-        path: '/goals',
-        builder: (context, state) => const GoalsScreen(),
-      ),
+      GoRoute(path: '/goals', builder: (context, state) => const GoalsScreen()),
       // The friends leaderboard. Reachable only from the Progress card, which
       // is hidden while leaderboards are switched off in Remote Config.
+      // Last week's Weekly Insight in full. Reached from the home card, which
+      // draws nothing while the feature is off or hidden.
+      GoRoute(
+        path: '/insights',
+        builder: (context, state) => const WeeklyInsightScreen(),
+      ),
       GoRoute(
         path: '/leaderboard',
         builder: (context, state) => const LeaderboardScreen(),
@@ -357,12 +357,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/challenge/:challengeKey',
         redirect: (context, state) =>
             ChallengeKey.byKey(state.pathParameters['challengeKey'] ?? '') ==
-                    null
-                ? '/challenges'
-                : null,
+                null
+            ? '/challenges'
+            : null,
         builder: (context, state) => ChallengeDetailScreen(
-          challengeKey:
-              ChallengeKey.byKey(state.pathParameters['challengeKey']!)!,
+          challengeKey: ChallengeKey.byKey(
+            state.pathParameters['challengeKey']!,
+          )!,
         ),
       ),
       // The running calendar. Outside the shell like the challenge screens:
@@ -372,10 +373,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // path never has to be disambiguated by ordering luck — the two literal
       // sub-paths sit under /races and the parameterised one under /race, which
       // cannot collide with either.
-      GoRoute(
-        path: '/races',
-        builder: (context, state) => const RacesScreen(),
-      ),
+      GoRoute(path: '/races', builder: (context, state) => const RacesScreen()),
       GoRoute(
         path: '/races/saved',
         builder: (context, state) => const SavedRacesScreen(),
@@ -386,9 +384,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/race/:eventId',
-        builder: (context, state) => RaceDetailScreen(
-          eventId: state.pathParameters['eventId']!,
-        ),
+        builder: (context, state) =>
+            RaceDetailScreen(eventId: state.pathParameters['eventId']!),
       ),
       GoRoute(
         path: '/live-run',
@@ -411,9 +408,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // FitSocialLinks.live.
       GoRoute(
         path: '/live/:shareId',
-        builder: (context, state) => LiveActivityViewerScreen(
-          shareId: state.pathParameters['shareId']!,
-        ),
+        builder: (context, state) =>
+            LiveActivityViewerScreen(shareId: state.pathParameters['shareId']!),
       ),
       GoRoute(
         path: '/health',
@@ -431,9 +427,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/share-to-pulse',
         redirect: (context, state) =>
             state.extra is SharedPostRef ? null : '/home',
-        builder: (context, state) => SharePostToPulseScreen(
-          post: state.extra! as SharedPostRef,
-        ),
+        builder: (context, state) =>
+            SharePostToPulseScreen(post: state.extra! as SharedPostRef),
       ),
       // The track rides along as `extra` for the same reason a post does: it is
       // a snapshot of what was playing when the button was pressed, not
@@ -442,9 +437,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/share-music-to-pulse',
         redirect: (context, state) =>
             state.extra is PulseMusic ? null : '/home',
-        builder: (context, state) => ShareMusicToPulseScreen(
-          music: state.extra! as PulseMusic,
-        ),
+        builder: (context, state) =>
+            ShareMusicToPulseScreen(music: state.extra! as PulseMusic),
       ),
       // Playback opens on one author's ring and can then be swiped across the
       // rest of the tray, which the viewer reads from the provider itself —

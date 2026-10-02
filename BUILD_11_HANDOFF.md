@@ -1,7 +1,7 @@
 # Build 11 handoff
 
 **For:** whoever picks Build 11 up next, including a fresh Claude Code session on another machine.
-**Last updated:** 2026-10-02, with F6 pushed (`e6aec3d`) and the Live Share purge on `feat/live-share-purge`.
+**Last updated:** 2026-10-02. P0, F1, F4, F6 and the Live Share purge are pushed **and deployed**; F2 Weekly Insights is on `feat/weekly-insights`.
 **Spec:** `FitSocial_Build11_Spec.md` (Bear's copy, kept outside the repo). This file records how that spec was reconciled with the code, what is done, and what is left.
 
 A new Claude Code session should read this file first, then `HANDOFF.md` and `CODEBASE_ANALYSIS.md` for the wider app.
@@ -47,12 +47,12 @@ The spec was written without seeing the repo, and much of it already existed. Bu
 | F4: Compare card on the Progress tab | Done, pushed | `f4_compare` |
 | F6: friends leaderboards | Done, pushed | `f6_leaderboards` |
 | Live Share: purge ended shares' positions | Done (`onLocationShareUpdated` + `expireShares`), not deployed | none |
-| F2: Weekly Insights (AI) | **Next** | `f2_weekly_insights` |
-| F3: Up Next | Not started | `f3_up_next` |
+| F2: Weekly Insights (AI) | Done on `feat/weekly-insights`, not deployed; wellbeing wording awaits Bear | `f2_weekly_insights` |
+| F3: Up Next | **Next** | `f3_up_next` |
 | F5: Recap Cards (+ Instagram Stories) | Not started | `f5_recap_cards` |
 | Build number 10 to 11 in `pubspec.yaml` | Not done | do it last |
 
-Nothing from Build 11 has been run on a phone or against the live Firebase project yet. All of it is tested locally (see §5).
+Rules, indexes and every function up to the Live Share purge were deployed to fitsocialv2 on 2026-10-02, with every flag still off. Nothing has been switched on or run on a phone yet.
 
 ---
 
@@ -218,3 +218,37 @@ the same write that expires a share. Shares that ended before it is deployed kee
 their last position until somebody clears them by hand. Next is Phase 2 — F2
 Weekly Insights (AI, through the existing `OPENROUTER_API_KEY`), F3 Up Next and
 F5 Recap Cards — and the build number bump to 11, last of all.
+
+## 9. F2 Weekly Insights, as built
+
+`functions/insights.js`, `lib/features/insights/`, rules for `users/{uid}/insights`
+and `insightFeedback`, and tests in all three suites.
+
+- **Model:** `anthropic/claude-haiku-4.5` through OpenRouter, Bear's choice as the
+  cheapest. Override with `INSIGHTS_MODEL` in `functions/.env`. Same
+  `OPENROUTER_API_KEY` secret as the meal analyzer.
+- **When:** `generateWeeklyInsights` runs Mondays 05:00 SAST (us-central1) for
+  everybody with at least two days of data last week who has not hidden the
+  feature. The app also calls `requestWeeklyInsight` once when it finds no insight
+  stored, so nobody waits a week after the flag goes on.
+- **Cost controls:** one insight per user per week, cached on uid + weekId +
+  `PROMPT_VERSION`; a week with fewer than two days of data never calls the model;
+  two regenerations per user per day; a transaction claim so the job and a tap
+  cannot both pay for the same week; three attempts at most, with backoff.
+- **Privacy:** the model gets aggregates only, copied field by field
+  (`buildPayload`, asserted key by key in the tests). No uid, names, places, free
+  text or calories.
+- **Safety:** the reply has to parse, match the output contract and pass a list
+  of banned patterns (calories, weight, restriction, fasting, "cheat", medical
+  words...). It is tested against adversarial replies. A failed reply is stored
+  as `failed` with no content, and the app shows nothing.
+- **Wellbeing note:** set on the server when at least four days each have two or
+  more meals logged and average under 1,000 kcal. The app then shows
+  `kWellbeingNote`. **Both the threshold and the wording are drafts and need
+  Bear's sign-off before the flag goes on (spec §7.1).**
+- **Client:** home card under Goals, `/insights` detail screen (wins, trends,
+  suggestion, feedback chips, "Report as offensive", "Write a new one", "Hide"),
+  and a Settings switch that only exists while the flag is on.
+
+Left out: challenge progress in the payload (goals only), and any push
+notification when an insight is ready.

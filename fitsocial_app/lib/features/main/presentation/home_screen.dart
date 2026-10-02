@@ -16,6 +16,7 @@ import '../../../shared/widgets/glass_top_bar.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../goals/presentation/goals_home_card.dart';
+import '../../insights/presentation/weekly_insight_card.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
 import 'daily_prompt_card.dart';
@@ -63,10 +64,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<int>(
-      homeTabReselectProvider,
-      (_, __) => _backToTopAndRefresh(),
-    );
+    ref.listen<int>(homeTabReselectProvider, (_, __) => _backToTopAndRefresh());
     final posts = ref.watch(feedPostsProvider);
     final rows = _rows(posts, ref);
 
@@ -176,6 +174,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       const SizedBox(height: AppSpacing.sm),
       // Carries its own spacing, and draws nothing while goals are off.
       const GoalsHomeCard(),
+      // Last week's insight. Likewise carries its own spacing, and draws
+      // nothing while Weekly Insights are off, hidden, or have nothing to say.
+      const WeeklyInsightCard(),
       // Something to say, not only something to look at: above the posts,
       // where it is seen before the scroll starts.
       const DailyPromptCard(),
@@ -183,8 +184,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ...posts.when(
         data: (feed) => _buildFeed(feed, ref),
         loading: () => const [_SectionPlaceholder(label: 'Loading feed...')],
-        error: (_, __) =>
-            const [_SectionPlaceholder(label: 'Feed unavailable')],
+        error: (_, __) => const [
+          _SectionPlaceholder(label: 'Feed unavailable'),
+        ],
       ),
     ];
   }
@@ -273,11 +275,7 @@ class _SuggestedHeader extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.explore_outlined,
-                  size: 18,
-                  color: palette.brand,
-                ),
+                Icon(Icons.explore_outlined, size: 18, color: palette.brand),
                 const SizedBox(width: 8),
                 Text(
                   isTopUp ? 'More from FitSocial' : 'Suggested for you',
@@ -293,10 +291,13 @@ class _SuggestedHeader extends StatelessWidget {
             Text(
               isTopUp
                   ? "That's everything from the people you follow. Follow a few "
-                      'more and this section shrinks.'
+                        'more and this section shrinks.'
                   : 'Follow people and their posts land here first.',
-              style:
-                  TextStyle(color: palette.muted, fontSize: 13.5, height: 1.4),
+              style: TextStyle(
+                color: palette.muted,
+                fontSize: 13.5,
+                height: 1.4,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
@@ -350,11 +351,7 @@ class _NothingPostedYet extends StatelessWidget {
                 color: palette.brandSoft,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.bolt_rounded,
-                color: palette.brand,
-                size: 30,
-              ),
+              child: Icon(Icons.bolt_rounded, color: palette.brand, size: 30),
             ),
             const SizedBox(height: AppSpacing.md),
             Text(
@@ -422,8 +419,10 @@ class _NotificationBell extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(999),
                 // Separates the badge from the glyph underneath it, whichever
                 // way the theme has painted the bar.
-                border:
-                    Border.all(color: context.palette.background, width: 1.5),
+                border: Border.all(
+                  color: context.palette.background,
+                  width: 1.5,
+                ),
               ),
               child: Text(
                 // Past nine the exact number stops being information; what
@@ -464,10 +463,7 @@ class _SectionPlaceholder extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: palette.stroke),
         ),
-        child: Text(
-          label,
-          style: TextStyle(color: palette.muted),
-        ),
+        child: Text(label, style: TextStyle(color: palette.muted)),
       ),
     );
   }

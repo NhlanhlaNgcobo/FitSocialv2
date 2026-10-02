@@ -114,6 +114,9 @@ function seedDatabase() {
     "monthlyStats/uid_me_2026-08": { userId: ME, rankableSteps: 180000 },
     "leaderboardEntries/uid_me_2026-W34": { userId: ME, steps: 52000 },
     "leaderboardEntries/uid_other_2026-W34": { userId: OTHER, steps: 44000 },
+    "users/uid_me/insights/2026-W34": { status: "ready" },
+    "insightFeedback/uid_me_2026-W34": { userId: ME, rating: "very_helpful" },
+    "insightFeedback/uid_other_2026-W34": { userId: OTHER, rating: "unhelpful" },
     "pointsLedger/p1": { userId: ME, points: 10 },
     "earlyWorm/uid_me": { streak: 4 },
     "earlyWorm/uid_other": { streak: 9 },
@@ -215,6 +218,8 @@ test("deletes private logs and challenge records, subcollections included", asyn
     "weeklyStats/uid_me_2026-W34",
     "monthlyStats/uid_me_2026-08",
     "leaderboardEntries/uid_me_2026-W34",
+    "users/uid_me/insights/2026-W34",
+    "insightFeedback/uid_me_2026-W34",
     "pointsLedger/p1",
     "earlyWorm/uid_me",
     "challengeEnrollments/e1",
@@ -226,6 +231,11 @@ test("deletes private logs and challenge records, subcollections included", asyn
     store.has("leaderboardEntries/uid_other_2026-W34"),
     true,
     "someone else's leaderboard entry stays"
+  );
+  assert.equal(
+    store.has("insightFeedback/uid_other_2026-W34"),
+    true,
+    "someone else's insight feedback stays"
   );
 });
 

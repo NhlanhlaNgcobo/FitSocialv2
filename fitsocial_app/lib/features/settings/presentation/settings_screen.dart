@@ -12,6 +12,7 @@ import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
+import '../../insights/application/insight_providers.dart';
 import '../../main/application/content_providers.dart';
 import '../../main/data/content_repository.dart';
 import '../../../shared/links/share_links.dart';
@@ -71,10 +72,7 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Accessibility'),
           const _SettingsGroup(
-            children: [
-              _ReduceMotionTile(),
-              _ReduceTransparencyTile(),
-            ],
+            children: [_ReduceMotionTile(), _ReduceTransparencyTile()],
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Account'),
@@ -119,13 +117,15 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => context.push('/health'),
               ),
               const _RunImportTile(),
+              const _WeeklyInsightsTile(),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
           const _SettingsNote(
             icon: Icons.directions_run_rounded,
             accent: _kHealthAccent,
-            text: 'A run your watch recorded turns up on the Create page as a '
+            text:
+                'A run your watch recorded turns up on the Create page as a '
                 'draft. It stays on your phone until you post it.',
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -135,7 +135,8 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsNote(
             icon: Icons.emoji_events_outlined,
             accent: _kMilestoneAccent,
-            text: 'Streaks, badges and personal bests show up in your '
+            text:
+                'Streaks, badges and personal bests show up in your '
                 "followers' feeds so they can cheer you on. Personal bests "
                 'only come from runs you shared.',
           ),
@@ -159,7 +160,8 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsNote(
             icon: Icons.notifications_none_rounded,
             accent: _kNotifyAccent,
-            text: 'Open someone\'s profile and tap the bell to hear about '
+            text:
+                'Open someone\'s profile and tap the bell to hear about '
                 'what they post.',
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -268,17 +270,11 @@ class SettingsScreen extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: palette.muted),
-            ),
+            child: Text('Cancel', style: TextStyle(color: palette.muted)),
           ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              'Sign out',
-              style: TextStyle(color: palette.danger),
-            ),
+            child: Text('Sign out', style: TextStyle(color: palette.danger)),
           ),
         ],
       ),
@@ -481,10 +477,7 @@ class _AccountCard extends StatelessWidget {
                         handle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: palette.muted,
-                          fontSize: 13.5,
-                        ),
+                        style: TextStyle(color: palette.muted, fontSize: 13.5),
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Text(
@@ -499,10 +492,7 @@ class _AccountCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: palette.brandText,
-                ),
+                Icon(Icons.chevron_right_rounded, color: palette.brandText),
               ],
             ),
           ),
@@ -619,6 +609,28 @@ class _RunImportTile extends ConsumerWidget {
   }
 }
 
+/// Weekly Insights on or off for this user. Not drawn at all while the feature
+/// is switched off in Remote Config -- a switch for something that does not
+/// exist yet would only confuse. This is the way back on after "Hide Weekly
+/// Insights" on the insight screen, which takes the home card away with it.
+class _WeeklyInsightsTile extends ConsumerWidget {
+  const _WeeklyInsightsTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(weeklyInsightsFlagProvider)) return const SizedBox.shrink();
+    final hidden = ref.watch(insightsHiddenProvider).valueOrNull ?? false;
+    return _SettingsSwitchTile(
+      icon: Icons.auto_awesome_rounded,
+      accent: _kHealthAccent,
+      label: 'Weekly Insights',
+      subtitle: 'A short AI-written look back at your week',
+      value: !hidden,
+      onChanged: (show) => ref.read(insightActionsProvider).setHidden(!show),
+    );
+  }
+}
+
 /// Shortens and simplifies animations app-wide, on top of whatever the
 /// system's own Reduce Motion is already set to.
 ///
@@ -635,7 +647,8 @@ class _ReduceMotionTile extends ConsumerWidget {
       icon: Icons.motion_photos_off_outlined,
       accent: _kAccessibilityAccent,
       label: 'Reduce motion',
-      subtitle: 'Shorten and simplify animations, even if your device '
+      subtitle:
+          'Shorten and simplify animations, even if your device '
           'allows them',
       value: prefs.forceReduceMotion,
       onChanged: (next) => ref
@@ -758,8 +771,9 @@ class _PushNotificationsTileState
     setState(() => _isChanging = true);
 
     try {
-      final willArrive =
-          await ref.read(pushPreferenceActionsProvider)(enabled: enabled);
+      final willArrive = await ref.read(pushPreferenceActionsProvider)(
+        enabled: enabled,
+      );
 
       // The operating system has a switch of its own, and it wins. Someone who
       // refused the permission prompt would otherwise be left looking at a
@@ -869,11 +883,7 @@ class _SettingsSwitchTile extends StatelessWidget {
                 ],
               ),
             ),
-            Switch(
-              value: value,
-              onChanged: change,
-              activeTrackColor: glyph,
-            ),
+            Switch(value: value, onChanged: change, activeTrackColor: glyph),
           ],
         ),
       ),
@@ -967,11 +977,7 @@ class _SettingsTile extends StatelessWidget {
               ),
             ),
             if (showChevron)
-              Icon(
-                Icons.chevron_right_rounded,
-                color: palette.muted,
-                size: 22,
-              ),
+              Icon(Icons.chevron_right_rounded, color: palette.muted, size: 22),
           ],
         ),
       ),
