@@ -159,8 +159,8 @@ class WeeklyInsight {
 
 /// Shown when [WeeklyInsight.wellbeingNote] is set.
 ///
-/// DRAFT -- the spec (section 7.1) asks for Bear's sign-off on the exact
-/// wording before Weekly Insights are switched on for anybody.
+/// Wording signed off by Bear on 2026-10-02, as spec section 7.1 requires.
+/// Change it only with the same sign-off.
 const String kWellbeingNote =
     'Looking after yourself matters more than any number in this app. '
     'If anything about food or eating is worrying you, a doctor or a '

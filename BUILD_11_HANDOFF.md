@@ -19,7 +19,7 @@ A new Claude Code session should read this file first, then `HANDOFF.md` and `CO
 | Analytics | On since 2026-09-30 (`AppConfig.enableAnalytics = true`). Bear still has to update the Play Data Safety form. |
 | Instagram Stories | Wanted for Recap Cards (F5), as well as the system share sheet. Check Meta's current sharing rules before building. |
 | AI provider | OpenRouter, through the existing `OPENROUTER_API_KEY` secret in Cloud Functions. Not OpenAI directly. |
-| Still open | Can under-18s sign up? ZAR pricing and billing vendor (Build 12). Exact wording of the "talk to a professional" message in Weekly Insights. |
+| Still open | Can under-18s sign up? ZAR pricing and billing vendor (Build 12).  |
 
 ### How the spec was reconciled with the code
 
@@ -47,7 +47,7 @@ The spec was written without seeing the repo, and much of it already existed. Bu
 | F4: Compare card on the Progress tab | Done, pushed | `f4_compare` |
 | F6: friends leaderboards | Done, pushed | `f6_leaderboards` |
 | Live Share: purge ended shares' positions | Done (`onLocationShareUpdated` + `expireShares`), not deployed | none |
-| F2: Weekly Insights (AI) | Done on `feat/weekly-insights`, not deployed; wellbeing wording awaits Bear | `f2_weekly_insights` |
+| F2: Weekly Insights (AI) | Done, pushed, not deployed | `f2_weekly_insights` |
 | F3: Up Next | **Next** | `f3_up_next` |
 | F5: Recap Cards (+ Instagram Stories) | Not started | `f5_recap_cards` |
 | Build number 10 to 11 in `pubspec.yaml` | Not done | do it last |
@@ -244,8 +244,8 @@ and `insightFeedback`, and tests in all three suites.
   as `failed` with no content, and the app shows nothing.
 - **Wellbeing note:** set on the server when at least four days each have two or
   more meals logged and average under 1,000 kcal. The app then shows
-  `kWellbeingNote`. **Both the threshold and the wording are drafts and need
-  Bear's sign-off before the flag goes on (spec §7.1).**
+  `kWellbeingNote`. Bear signed off the wording on 2026-10-02; the
+  threshold is Claude's and can be tuned without a new sign-off.
 - **Client:** home card under Goals, `/insights` detail screen (wins, trends,
   suggestion, feedback chips, "Report as offensive", "Write a new one", "Hide"),
   and a Settings switch that only exists while the flag is on.
