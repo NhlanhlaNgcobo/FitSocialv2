@@ -53,6 +53,10 @@ abstract class ContentRepository {
   /// same way [deleteActivitySession] leaves a session's post alone.
   Future<void> deleteLoggedMeal(String id);
 
+  /// The signed-in user's step count for each day in [dayKeys] that has one,
+  /// from the `dailySteps` records the app keeps. Days with none are absent.
+  Future<Map<String, int>> getDailySteps(List<String> dayKeys);
+
   /// Logs [meal] again, now, as a new private meal with the same foods.
   Future<void> relogMeal(LoggedMeal meal);
 

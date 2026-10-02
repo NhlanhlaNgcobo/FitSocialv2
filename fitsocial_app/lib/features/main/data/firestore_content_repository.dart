@@ -975,6 +975,25 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
+  Future<Map<String, int>> getDailySteps(List<String> dayKeys) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null || dayKeys.isEmpty) return const {};
+    // By id rather than a range query: the ids are `<uid>_<dayKey>` already,
+    // a month is 31 reads at most, and a range over userId and dayKey would
+    // need a composite index for this one screen.
+    final steps = _firestore.collection('dailySteps');
+    final snapshots = await Future.wait([
+      for (final dayKey in dayKeys) steps.doc('${user.uid}_$dayKey').get(),
+    ]);
+    return {
+      for (var i = 0; i < dayKeys.length; i++)
+        if (intFromStoredValue(snapshots[i].data()?['steps']) case final count
+            when count > 0)
+          dayKeys[i]: count,
+    };
+  }
+
+  @override
   Future<void> relogMeal(LoggedMeal meal) async {
     final user = _requireCurrentUser();
     // Private, whatever the original was: the same meal posted twice is a

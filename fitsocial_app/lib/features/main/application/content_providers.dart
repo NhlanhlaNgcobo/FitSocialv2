@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/application/app_session.dart';
+import '../../auth/application/body_metrics_providers.dart';
 import '../../auth/domain/auth_models.dart';
 import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
@@ -311,12 +312,46 @@ final mealRepeatsProvider = FutureProvider.autoDispose<List<MealRepeat>>((ref) {
   return ref.watch(contentRepositoryProvider).getMealRepeats();
 });
 
+/// Each day's steps in a window, for the calorie target's step bonus.
+///
+/// Never fails the page: steps are a bonus on the target, and a summary with
+/// the plain target beats an error where the meals should be.
+final windowStepsProvider = FutureProvider.autoDispose
+    .family<Map<String, int>, ProgressWindow>((ref, window) async {
+  final dayKeys = [
+    for (var i = 0; i < window.dayCount; i++)
+      mealDayKey(ActivityCalendar.addDays(window.start, i)),
+  ];
+  try {
+    return await ref.watch(contentRepositoryProvider).getDailySteps(dayKeys);
+  } catch (_) {
+    return const {};
+  }
+});
+
 /// Everything the tracking page reports for one window.
 final mealWindowSummaryProvider = FutureProvider.autoDispose
     .family<MealWindowSummary, ProgressWindow>((ref, window) async {
   final meals = await ref.watch(loggedMealsProvider.future);
   final goals = await ref.watch(macroGoalsProvider.future);
-  return MealWindowSummary.from(meals: meals, window: window, goals: goals);
+  final steps = goals.stepBonus
+      ? await ref.watch(windowStepsProvider(window).future)
+      : const <String, int>{};
+  double? weightKg;
+  if (goals.stepBonus && steps.isNotEmpty) {
+    try {
+      weightKg = (await ref.watch(bodyMetricsProvider.future)).weightKg;
+    } catch (_) {
+      // StepCalories has a default weight for exactly this.
+    }
+  }
+  return MealWindowSummary.from(
+    meals: meals,
+    window: window,
+    goals: goals,
+    stepsByDay: steps,
+    weightKg: weightKg,
+  );
 });
 
 /// Following / Followers / Likes for one profile. Keyed by user id so the

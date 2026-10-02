@@ -65,6 +65,10 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<Map<String, int>> getDailySteps(List<String> dayKeys) async =>
+      const {};
+
+  @override
   Future<void> relogMeal(LoggedMeal meal) async {
     throw StateError(_firebaseSetupMessage);
   }

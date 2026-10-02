@@ -80,7 +80,8 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
         onRefresh: () async {
           ref
             ..invalidate(loggedMealsProvider)
-            ..invalidate(macroGoalsProvider);
+            ..invalidate(macroGoalsProvider)
+            ..invalidate(windowStepsProvider);
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
@@ -382,10 +383,39 @@ class _MacroSummaryCard extends ConsumerWidget {
               ],
             ],
           ),
+          if (summary.stepCalories > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _StepBonusRow(summary: summary),
+          ],
           const SizedBox(height: AppSpacing.md),
           _InsightRow(summary: summary),
         ],
       ),
+    );
+  }
+}
+
+/// "Includes +175 kcal for 10,000 steps", so a target that moved says why.
+class _StepBonusRow extends StatelessWidget {
+  const _StepBonusRow({required this.summary});
+
+  final MealWindowSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Row(
+      children: [
+        Icon(Icons.directions_walk_rounded, size: 16, color: palette.muted),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Calorie target includes +${formatMacroValue(summary.stepCalories)} '
+            'kcal for ${formatMacroValue(summary.steps)} steps',
+            style: TextStyle(color: palette.muted, fontSize: 12.5),
+          ),
+        ),
+      ],
     );
   }
 }
