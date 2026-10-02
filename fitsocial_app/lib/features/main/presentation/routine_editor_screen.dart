@@ -10,9 +10,12 @@ import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/workout_library_providers.dart';
+import '../application/workout_preferences.dart';
 import '../data/content_repository.dart';
+import '../data/workout_preferences_store.dart';
 import '../domain/workout_models.dart';
 import 'exercise_picker_sheet.dart';
+import 'workout_tool_sheets.dart';
 
 /// Create or edit a routine: a name, and an ordered list of exercises with a
 /// target number of sets, reps and load for each.
@@ -33,7 +36,9 @@ class RoutineEditorScreen extends ConsumerStatefulWidget {
 /// into it survive a reorder.
 class _Row {
   _Row(this.id, this.source)
-      : sets = TextEditingController(text: '${source.targetSets}'),
+      : restSeconds = source.restSeconds,
+        supersetGroup = source.supersetGroup,
+        sets = TextEditingController(text: '${source.targetSets}'),
         reps = TextEditingController(text: '${source.targetReps}'),
         weight = TextEditingController(
           text: source.targetWeightKg == null
@@ -44,9 +49,14 @@ class _Row {
   /// Identifies the row for reordering; unrelated to the exercise.
   final int id;
 
-  /// Carries the fields this screen does not edit (rest time, superset group)
-  /// through to the saved routine untouched.
+  /// The exercise as it was picked or loaded: its name and library id.
   final RoutineExercise source;
+
+  /// This exercise's own rest; null for the user's default.
+  int? restSeconds;
+
+  /// Shared with the neighbouring exercises it is supersetted with.
+  String? supersetGroup;
   final TextEditingController sets;
   final TextEditingController reps;
   final TextEditingController weight;
@@ -67,8 +77,8 @@ class _Row {
       targetSets: targetSets,
       targetReps: targetReps,
       targetWeightKg: kg == null || kg <= 0 ? null : kg,
-      restSeconds: source.restSeconds,
-      supersetGroup: source.supersetGroup,
+      restSeconds: restSeconds,
+      supersetGroup: supersetGroup,
     );
   }
 
@@ -116,13 +126,92 @@ class _RoutineEditorScreenState extends ConsumerState<RoutineEditorScreen> {
   }
 
   void _removeAt(int index) {
-    setState(() => _rows.removeAt(index).dispose());
+    setState(() {
+      _rows.removeAt(index).dispose();
+      _tidySupersets();
+    });
   }
 
   /// [to] is already the item's final position: `onReorderItem`, unlike the
   /// deprecated `onReorder`, accounts for the item being lifted out.
   void _reorder(int from, int to) {
-    setState(() => _rows.insert(to, _rows.removeAt(from)));
+    setState(() {
+      _rows.insert(to, _rows.removeAt(from));
+      _tidySupersets();
+    });
+  }
+
+  String _newGroup() => 's${DateTime.now().microsecondsSinceEpoch}_${_nextId++}';
+
+  /// A superset here is a run of neighbouring exercises. Whatever a reorder or
+  /// a removal has left on its own goes back to being a plain exercise, and a
+  /// run split in two becomes two supersets.
+  void _tidySupersets() {
+    final seen = <String>{};
+    for (var i = 0; i < _rows.length; i++) {
+      final group = _rows[i].supersetGroup;
+      if (group == null) continue;
+      final continues = i > 0 && _rows[i - 1].supersetGroup == group;
+      if (!continues && !seen.add(group)) {
+        final fresh = _newGroup();
+        for (var j = i;
+            j < _rows.length && _rows[j].supersetGroup == group;
+            j++) {
+          _rows[j].supersetGroup = fresh;
+        }
+        seen.add(fresh);
+      }
+    }
+    for (var i = 0; i < _rows.length; i++) {
+      final group = _rows[i].supersetGroup;
+      if (group == null) continue;
+      final before = i > 0 && _rows[i - 1].supersetGroup == group;
+      final after =
+          i + 1 < _rows.length && _rows[i + 1].supersetGroup == group;
+      if (!before && !after) _rows[i].supersetGroup = null;
+    }
+  }
+
+  /// Ties the exercise at [index] to the one after it, merging any superset
+  /// either is already in.
+  void _linkWithNext(int index) {
+    if (index + 1 >= _rows.length) return;
+    setState(() {
+      final group = _rows[index].supersetGroup ?? _newGroup();
+      final old = _rows[index + 1].supersetGroup;
+      for (final row in _rows) {
+        if (old != null && row.supersetGroup == old) row.supersetGroup = group;
+      }
+      _rows[index].supersetGroup = group;
+      _rows[index + 1].supersetGroup = group;
+    });
+  }
+
+  /// Unties the exercise at [index] from the one after it.
+  void _unlinkFromNext(int index) {
+    if (index + 1 >= _rows.length) return;
+    setState(() {
+      final group = _rows[index].supersetGroup;
+      final fresh = _newGroup();
+      for (var j = index + 1;
+          j < _rows.length && _rows[j].supersetGroup == group;
+          j++) {
+        _rows[j].supersetGroup = fresh;
+      }
+      _tidySupersets();
+    });
+  }
+
+  Future<void> _pickRest(_Row row) async {
+    final picked = await showRestOverridePicker(
+      context,
+      exerciseName: row.source.name,
+      current: row.restSeconds,
+      defaultSeconds: ref.read(workoutPreferencesProvider).restSeconds,
+      choices: WorkoutPreferences.restChoices,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => row.restSeconds = picked.seconds);
   }
 
   Future<void> _save() async {
@@ -204,11 +293,27 @@ class _RoutineEditorScreenState extends ConsumerState<RoutineEditorScreen> {
               for (var i = 0; i < _rows.length; i++)
                 Padding(
                   key: ValueKey(_rows[i].id),
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: _RowCard(
-                    row: _rows[i],
-                    index: i,
-                    onRemove: () => _removeAt(i),
+                  // The superset link between two cards is their spacing.
+                  padding: EdgeInsets.only(
+                    bottom: i + 1 < _rows.length ? 0 : AppSpacing.sm,
+                  ),
+                  child: Column(
+                    children: [
+                      _RowCard(
+                        row: _rows[i],
+                        index: i,
+                        onRemove: () => _removeAt(i),
+                        onPickRest: () => _pickRest(_rows[i]),
+                      ),
+                      if (i + 1 < _rows.length)
+                        _SupersetLink(
+                          linked: _rows[i].supersetGroup != null &&
+                              _rows[i].supersetGroup ==
+                                  _rows[i + 1].supersetGroup,
+                          onLink: () => _linkWithNext(i),
+                          onUnlink: () => _unlinkFromNext(i),
+                        ),
+                    ],
                   ),
                 ),
             ],
@@ -255,16 +360,51 @@ class _RoutineEditorScreenState extends ConsumerState<RoutineEditorScreen> {
   }
 }
 
+/// The joint between two routine exercises: a link that ties them into a
+/// superset, or shows that they are and unties them.
+class _SupersetLink extends StatelessWidget {
+  const _SupersetLink({
+    required this.linked,
+    required this.onLink,
+    required this.onUnlink,
+  });
+
+  final bool linked;
+  final VoidCallback onLink;
+  final VoidCallback onUnlink;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Center(
+      child: TextButton.icon(
+        onPressed: linked ? onUnlink : onLink,
+        icon: Icon(
+          linked ? Icons.link_rounded : Icons.add_link_rounded,
+          size: 18,
+        ),
+        label: Text(linked ? 'Superset (tap to unlink)' : 'Superset'),
+        style: TextButton.styleFrom(
+          foregroundColor: linked ? palette.brandText : palette.muted,
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
+    );
+  }
+}
+
 class _RowCard extends StatelessWidget {
   const _RowCard({
     required this.row,
     required this.index,
     required this.onRemove,
+    required this.onPickRest,
   });
 
   final _Row row;
   final int index;
   final VoidCallback onRemove;
+  final VoidCallback onPickRest;
 
   @override
   Widget build(BuildContext context) {
@@ -353,6 +493,22 @@ class _RowCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 number('Weight (kg)', row.weight, decimal: true),
               ],
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onPickRest,
+              icon: const Icon(Icons.timer_outlined, size: 18),
+              label: Text(
+                row.restSeconds == null
+                    ? 'Rest: default'
+                    : 'Rest: ${formatRest(row.restSeconds!)}',
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: palette.muted,
+                visualDensity: VisualDensity.compact,
+              ),
             ),
           ),
         ],

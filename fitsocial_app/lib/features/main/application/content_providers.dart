@@ -228,6 +228,16 @@ final recentWorkoutsProvider =
   return ref.watch(contentRepositoryProvider).getRecentWorkouts();
 });
 
+/// Every workout's exercises with their per-set logs, newest first — what a
+/// set ticked off now is measured against for a personal record.
+///
+/// autoDispose, and invalidated on every save, so a record set in one session
+/// is the bar the next one has to clear.
+final workoutHistoryProvider =
+    FutureProvider.autoDispose<List<List<ExerciseEntry>>>((ref) {
+  return ref.watch(contentRepositoryProvider).getWorkoutHistory();
+});
+
 /// The gap-filled run/workout calendar behind the streak grid.
 ///
 /// The window is derived from the range here rather than in the widget so the

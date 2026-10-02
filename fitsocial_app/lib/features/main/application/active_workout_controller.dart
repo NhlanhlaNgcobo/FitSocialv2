@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../tracking/application/run_draft_providers.dart';
 import '../data/active_workout_store.dart';
+import 'content_providers.dart';
 import '../domain/active_workout.dart';
+import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 
 /// The session store, filed under the signed-in user.
@@ -26,6 +28,27 @@ final activeWorkoutStoreProvider = Provider<ActiveWorkoutStore>((ref) {
 final activeWorkoutProvider =
     StateNotifierProvider<ActiveWorkoutController, ActiveWorkout?>((ref) {
   return ActiveWorkoutController(ref.watch(activeWorkoutStoreProvider));
+});
+
+/// The user's bests per movement, from every workout saved before this one.
+final personalBestsProvider =
+    FutureProvider.autoDispose<PersonalBests>((ref) async {
+  final history = await ref.watch(workoutHistoryProvider.future);
+  return PersonalBests.fromHistory(history);
+});
+
+/// The records the sets ticked off in this session broke — see
+/// [sessionRecords].
+///
+/// Empty until the history has loaded, and when it cannot be: a missing
+/// trophy is a far smaller fault than a screen that will not log a set
+/// offline.
+final sessionRecordsProvider =
+    Provider.autoDispose<Map<String, Map<int, Set<PrKind>>>>((ref) {
+  final workout = ref.watch(activeWorkoutProvider);
+  final bests = ref.watch(personalBestsProvider).valueOrNull;
+  if (workout == null || bests == null) return const {};
+  return sessionRecords(bests, workout);
 });
 
 /// Owns the workout that is happening now.
@@ -109,6 +132,7 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
             name: e.name,
             exerciseId: e.exerciseId,
             supersetGroup: e.supersetGroup,
+            restSeconds: e.restSeconds,
             sets: [
               for (var i = 0; i < (e.targetSets < 1 ? 1 : e.targetSets); i++)
                 ExerciseSet(
@@ -153,9 +177,115 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
   void removeExercise(String key) {
     final workout = state;
     if (workout == null) return;
+    final group = workout.exercise(key)?.supersetGroup;
+    var rest = workout.exercises.where((e) => e.key != key).toList();
+    // A superset of one is just an exercise.
+    if (group != null) rest = _dissolveLoneSuperset(rest, group);
+    _commit(workout.copyWith(exercises: rest));
+  }
+
+  /// Puts [otherKey] in a superset with [key], directly after the last
+  /// exercise already in it — a superset is done back to back, so it is shown
+  /// back to back.
+  ///
+  /// Joins [key]'s superset if it has one, otherwise starts one. [otherKey]
+  /// leaves any superset it was in.
+  void linkSuperset(String key, String otherKey) {
+    final workout = state;
+    if (workout == null || key == otherKey) return;
+    final anchor = workout.exercise(key);
+    final other = workout.exercise(otherKey);
+    if (anchor == null || other == null) return;
+
+    final group = anchor.supersetGroup ?? 's${_newKey()}';
+    var list = [
+      for (final e in workout.exercises)
+        if (e.key == key) e.copyWith(supersetGroup: group) else e,
+    ];
+    final previousGroup = other.supersetGroup;
+    list.removeWhere((e) => e.key == otherKey);
+    if (previousGroup != null && previousGroup != group) {
+      list = _dissolveLoneSuperset(list, previousGroup);
+    }
+    final lastMember = list.lastIndexWhere((e) => e.supersetGroup == group);
+    list.insert(lastMember + 1, other.copyWith(supersetGroup: group));
+    _commit(workout.copyWith(exercises: list));
+  }
+
+  /// Takes [key] out of its superset, leaving it where it is.
+  void unlinkSuperset(String key) {
+    final workout = state;
+    final group = workout?.exercise(key)?.supersetGroup;
+    if (workout == null || group == null) return;
+    final list = [
+      for (final e in workout.exercises)
+        if (e.key == key) e.copyWith(clearSupersetGroup: true) else e,
+    ];
+    _commit(workout.copyWith(exercises: _dissolveLoneSuperset(list, group)));
+  }
+
+  static List<ActiveExercise> _dissolveLoneSuperset(
+    List<ActiveExercise> list,
+    String group,
+  ) {
+    if (list.where((e) => e.supersetGroup == group).length > 1) return list;
+    return [
+      for (final e in list)
+        if (e.supersetGroup == group) e.copyWith(clearSupersetGroup: true) else e,
+    ];
+  }
+
+  /// Sets this exercise's own rest, in seconds; null goes back to the user's
+  /// default, zero turns the timer off for it.
+  void setRestOverride(String key, int? seconds) {
+    _mapExercise(
+      key,
+      (e) => seconds == null
+          ? e.copyWith(clearRestSeconds: true)
+          : e.copyWith(restSeconds: seconds < 0 ? 0 : seconds),
+    );
+  }
+
+  /// Adds or takes off time from the rest that is running. Taking it below
+  /// zero ends it.
+  void adjustRest(int seconds) {
+    final workout = state;
+    final rest = workout?.rest;
+    if (workout == null || rest == null || rest.isOver(_now())) return;
+    final endsAt = rest.endsAt.add(Duration(seconds: seconds));
+    if (!endsAt.isAfter(_now())) {
+      _commit(workout.copyWith(clearRest: true));
+      return;
+    }
+    final total = rest.totalSeconds + seconds;
     _commit(workout.copyWith(
-      exercises: workout.exercises.where((e) => e.key != key).toList(),
+      rest: RestTimer(endsAt: endsAt, totalSeconds: total < 1 ? 1 : total),
     ));
+  }
+
+  void skipRest() {
+    final workout = state;
+    if (workout == null || workout.rest == null) return;
+    _commit(workout.copyWith(clearRest: true));
+  }
+
+  /// Replaces any warm-ups not yet done at the top of the exercise with
+  /// [ramp], ahead of the working sets.
+  void addWarmups(String key, List<WarmupSet> ramp) {
+    if (ramp.isEmpty) return;
+    _mapExercise(key, (exercise) {
+      final kept = exercise.sets
+          .where((s) => s.type != SetType.warmup || s.completedAt != null)
+          .toList();
+      // Warm-ups already done stay first, then the new ones, then the rest.
+      final done = kept.takeWhile((s) => s.type == SetType.warmup).toList();
+      return exercise.copyWith(sets: [
+        ...done,
+        for (final w in ramp)
+          ExerciseSet(weightKg: w.weight, reps: w.reps, type: SetType.warmup),
+        ...kept.skip(done.length),
+      ]);
+    });
   }
 
   /// Adds a row, pre-filled with the load and reps of the one above it — the
@@ -208,7 +338,11 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
 
   /// Ticks a row off, or un-ticks it. Returns false when the row cannot be
   /// ticked because it has no reps — a set of nothing was not done.
-  bool toggleDone(String key, int index) {
+  ///
+  /// Ticking a row off starts the rest timer, at the exercise's own rest or
+  /// [defaultRestSeconds] — see [ActiveWorkout.restAfter]. Un-ticking leaves
+  /// a running timer alone.
+  bool toggleDone(String key, int index, {int defaultRestSeconds = 0}) {
     final workout = state;
     if (workout == null) return false;
     final exercise = workout.exercises.where((e) => e.key == key).firstOrNull;
@@ -217,13 +351,28 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     }
     final set = exercise.sets[index];
     if (set.completedAt == null && set.reps <= 0) return false;
+    final ticking = set.completedAt == null;
+    final now = _now();
     _mapSet(
       key,
       index,
-      (s) => s.completedAt == null
-          ? s.copyWith(completedAt: _now())
+      (s) => ticking
+          ? s.copyWith(completedAt: now)
           : s.copyWith(clearCompletedAt: true),
     );
+    if (ticking) {
+      final ticked = state!;
+      final seconds =
+          ticked.restAfter(key, defaultSeconds: defaultRestSeconds);
+      if (seconds != null) {
+        _commit(ticked.copyWith(
+          rest: RestTimer(
+            endsAt: now.add(Duration(seconds: seconds)),
+            totalSeconds: seconds,
+          ),
+        ));
+      }
+    }
     return true;
   }
 

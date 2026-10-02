@@ -15,9 +15,15 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
+import '../application/workout_library_providers.dart';
+import '../application/workout_preferences.dart';
+import '../data/workout_preferences_store.dart';
 import '../domain/active_workout.dart';
+import '../domain/exercise_library.dart';
+import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 import 'exercise_picker_sheet.dart';
+import 'workout_tool_sheets.dart';
 
 /// The workout that is happening now: a running clock, a card per exercise,
 /// and a row per set that gets ticked off as it is done.
@@ -159,6 +165,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
       _title.text = workout.title;
       _titleSynced = true;
     }
+    final letters = supersetLetters(workout);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Workout')),
@@ -192,12 +199,19 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           const SizedBox(height: AppSpacing.md),
           _StatsStrip(workout: workout),
           const SizedBox(height: AppSpacing.md),
-          for (final exercise in workout.exercises)
+          for (var i = 0; i < workout.exercises.length; i++)
             Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              // A superset's cards sit close, so they read as one block.
+              padding: EdgeInsets.only(
+                bottom: _continuesSuperset(workout.exercises, i)
+                    ? AppSpacing.xs
+                    : AppSpacing.md,
+              ),
               child: _ExerciseCard(
-                key: ValueKey(exercise.key),
-                exercise: exercise,
+                key: ValueKey(workout.exercises[i].key),
+                exercise: workout.exercises[i],
+                supersetLabel:
+                    letters[workout.exercises[i].supersetGroup],
               ),
             ),
           OutlinedButton.icon(
@@ -237,6 +251,12 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (workout.rest != null)
+                RestTimerBar(
+                  rest: workout.rest!,
+                  onAdjust: _controller.adjustRest,
+                  onSkip: _controller.skipRest,
+                ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -326,6 +346,186 @@ class _StatsStrip extends StatelessWidget {
   }
 }
 
+/// Whether the exercise after [i] is in the same superset as it.
+bool _continuesSuperset(List<ActiveExercise> exercises, int i) {
+  final group = exercises[i].supersetGroup;
+  return group != null &&
+      i + 1 < exercises.length &&
+      exercises[i + 1].supersetGroup == group;
+}
+
+/// "A", "B", … per superset, in the order they first appear. A group with one
+/// exercise left in it gets no letter.
+Map<String?, String> supersetLetters(ActiveWorkout workout) {
+  final out = <String?, String>{};
+  for (final e in workout.exercises) {
+    final group = e.supersetGroup;
+    if (group == null || out.containsKey(group)) continue;
+    if (workout.supersetMembers(group).length < 2) continue;
+    out[group] = String.fromCharCode(65 + out.length % 26);
+  }
+  return out;
+}
+
+/// The rest between sets: a countdown draining a bar, with time to add or
+/// take off and a way to skip it.
+///
+/// Counts down from the stored end time, so it is right after the phone was
+/// locked. When it runs out with the screen open it buzzes, says so for a few
+/// seconds, and goes.
+class RestTimerBar extends StatefulWidget {
+  const RestTimerBar({
+    required this.rest,
+    required this.onAdjust,
+    required this.onSkip,
+    this.now = DateTime.now,
+    super.key,
+  });
+
+  final RestTimer rest;
+  final ValueChanged<int> onAdjust;
+  final VoidCallback onSkip;
+
+  /// Injected so a test can drive the clock.
+  final DateTime Function() now;
+
+  /// How long "Rest over" stays up once the countdown reaches zero.
+  static const lingerFor = Duration(seconds: 4);
+
+  @override
+  State<RestTimerBar> createState() => _RestTimerBarState();
+}
+
+class _RestTimerBarState extends State<RestTimerBar> {
+  Timer? _ticker;
+
+  /// Set while counting down, so the buzz fires once, on the way through
+  /// zero — not on opening the screen to a rest that ended an hour ago.
+  late bool _running;
+
+  @override
+  void initState() {
+    super.initState();
+    _running = !widget.rest.isOver(widget.now());
+    _ticker = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (_) => _tick(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(RestTimerBar old) {
+    super.didUpdateWidget(old);
+    if (!widget.rest.isOver(widget.now())) _running = true;
+  }
+
+  void _tick() {
+    if (_running && widget.rest.isOver(widget.now())) {
+      _running = false;
+      HapticFeedback.heavyImpact();
+      SystemSound.play(SystemSoundType.alert);
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final now = widget.now();
+    final rest = widget.rest;
+    final over = rest.isOver(now);
+    if (over && now.difference(rest.endsAt) > RestTimerBar.lingerFor) {
+      return const SizedBox.shrink();
+    }
+
+    final remaining = rest.remaining(now);
+    // Rounded up, so "0:00" never shows while there is still time left.
+    final seconds = (remaining.inMilliseconds / 1000).ceil();
+    final fraction = over
+        ? 0.0
+        : (remaining.inMilliseconds / (rest.totalSeconds * 1000))
+            .clamp(0.0, 1.0);
+
+    Widget adjust(String label, String tooltip, int delta) => Tooltip(
+          message: tooltip,
+          child: TextButton(
+            onPressed: over ? null : () => widget.onAdjust(delta),
+            style: TextButton.styleFrom(
+              foregroundColor: palette.brandText,
+              minimumSize: const Size(48, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: GlassWell(
+        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  over
+                      ? Icons.notifications_active_rounded
+                      : Icons.timer_outlined,
+                  color: palette.brandText,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    over ? 'Rest over' : 'Rest ${formatElapsed(Duration(seconds: seconds))}',
+                    key: const ValueKey('rest-countdown'),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: palette.text,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+                adjust('−15', 'Take 15 seconds off', -15),
+                adjust('+15', 'Add 15 seconds', 15),
+                TextButton(
+                  onPressed: widget.onSkip,
+                  style: TextButton.styleFrom(
+                    foregroundColor: palette.muted,
+                    minimumSize: const Size(48, 40),
+                  ),
+                  child: Text(over ? 'Dismiss' : 'Skip'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 4,
+                color: palette.brand,
+                backgroundColor: palette.stroke,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// "42:07", or "1:02:07" past the hour. Counts from [startedAt] by reading the
 /// clock each second, so it is right however long the app was away.
 class ElapsedClock extends StatefulWidget {
@@ -392,15 +592,108 @@ String _formatKg(double kg) {
   return kg.toStringAsFixed(1);
 }
 
+/// The colour a personal record is marked in — the achievements gold.
+const Color _kRecordHue = Color(0xFFF2B01E);
+
+/// The equipment behind [exerciseId], from the library or the user's own
+/// exercises. Null for free-text names.
+String? _equipmentFor(WidgetRef ref, String? exerciseId) {
+  if (exerciseId == null) return null;
+  final library = ExerciseLibrary.byId(exerciseId);
+  if (library != null) return library.equipment;
+  final custom = ref.read(customExercisesProvider).valueOrNull ?? const [];
+  for (final c in custom) {
+    if (customExerciseId(c.id) == exerciseId) return c.equipment;
+  }
+  return null;
+}
+
+enum _ExerciseAction {
+  warmups,
+  plates,
+  rest,
+  superset,
+  unlinkSuperset,
+  remove,
+}
+
 class _ExerciseCard extends ConsumerWidget {
-  const _ExerciseCard({required this.exercise, super.key});
+  const _ExerciseCard({
+    required this.exercise,
+    this.supersetLabel,
+    super.key,
+  });
 
   final ActiveExercise exercise;
+
+  /// "A", "B"… when this exercise is in a superset with at least one other.
+  final String? supersetLabel;
+
+  /// The heaviest working load on the card, the natural target for a
+  /// warm-up ramp or the plate maths.
+  double get _workingKg => exercise.sets
+      .where((s) => s.type.isWorking)
+      .fold<double>(0, (top, s) => s.weightKg > top ? s.weightKg : top);
+
+  Future<void> _onAction(
+    BuildContext context,
+    WidgetRef ref,
+    _ExerciseAction action,
+  ) async {
+    final controller = ref.read(activeWorkoutProvider.notifier);
+    switch (action) {
+      case _ExerciseAction.warmups:
+        final ramp = await showWarmupSheet(
+          context,
+          exerciseName: exercise.name,
+          workingKg: _workingKg,
+          equipment: _equipmentFor(ref, exercise.exerciseId),
+        );
+        if (ramp != null) controller.addWarmups(exercise.key, ramp);
+      case _ExerciseAction.plates:
+        await showPlateCalculator(context, initialKg: _workingKg);
+      case _ExerciseAction.rest:
+        final picked = await showRestOverridePicker(
+          context,
+          exerciseName: exercise.name,
+          current: exercise.restSeconds,
+          defaultSeconds: ref.read(workoutPreferencesProvider).restSeconds,
+          choices: WorkoutPreferences.restChoices,
+        );
+        if (picked != null) {
+          controller.setRestOverride(exercise.key, picked.seconds);
+        }
+      case _ExerciseAction.superset:
+        final workout = ref.read(activeWorkoutProvider);
+        if (workout == null) return;
+        final group = exercise.supersetGroup;
+        final key = await showSupersetPicker(
+          context,
+          exerciseName: exercise.name,
+          candidates: [
+            for (final e in workout.exercises)
+              if (e.key != exercise.key &&
+                  (group == null || e.supersetGroup != group))
+                e,
+          ],
+        );
+        if (key != null) controller.linkSuperset(exercise.key, key);
+      case _ExerciseAction.unlinkSuperset:
+        controller.unlinkSuperset(exercise.key);
+      case _ExerciseAction.remove:
+        controller.removeExercise(exercise.key);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final controller = ref.read(activeWorkoutProvider.notifier);
+    final prefs = ref.watch(workoutPreferencesProvider);
+    final records =
+        ref.watch(sessionRecordsProvider)[exercise.key] ?? const {};
+    final inSuperset = supersetLabel != null;
+    final rest = exercise.restSeconds;
 
     TextStyle head() => TextStyle(
           fontSize: 10,
@@ -422,11 +715,28 @@ class _ExerciseCard extends ConsumerWidget {
         },
     ];
 
-    return GlassWell(
+    final card = GlassWell(
       padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (inSuperset || rest != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Wrap(
+                spacing: 12,
+                children: [
+                  if (inSuperset)
+                    Text('SUPERSET $supersetLabel',
+                        style: head().copyWith(color: palette.brandText)),
+                  if (rest != null)
+                    Text(
+                      rest == 0 ? 'NO REST TIMER' : 'REST ${formatRest(rest)}',
+                      style: head(),
+                    ),
+                ],
+              ),
+            ),
           Row(
             children: [
               Expanded(
@@ -439,16 +749,40 @@ class _ExerciseCard extends ConsumerWidget {
                   ),
                 ),
               ),
-              PopupMenuButton<String>(
+              PopupMenuButton<_ExerciseAction>(
                 tooltip: 'Exercise options',
                 icon: Icon(Icons.more_horiz_rounded, color: palette.muted),
-                onSelected: (value) {
-                  if (value == 'remove') {
-                    controller.removeExercise(exercise.key);
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'remove', child: Text('Remove exercise')),
+                onSelected: (action) => _onAction(context, ref, action),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: _ExerciseAction.warmups,
+                    child: Text('Warm-up sets'),
+                  ),
+                  const PopupMenuItem(
+                    value: _ExerciseAction.plates,
+                    child: Text('Plate calculator'),
+                  ),
+                  PopupMenuItem(
+                    value: _ExerciseAction.rest,
+                    child: Text(
+                      rest == null
+                          ? 'Rest timer'
+                          : 'Rest timer (${formatRest(rest)})',
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _ExerciseAction.superset,
+                    child: Text(inSuperset ? 'Add to superset' : 'Superset with…'),
+                  ),
+                  if (inSuperset)
+                    const PopupMenuItem(
+                      value: _ExerciseAction.unlinkSuperset,
+                      child: Text('Remove from superset'),
+                    ),
+                  const PopupMenuItem(
+                    value: _ExerciseAction.remove,
+                    child: Text('Remove exercise'),
+                  ),
                 ],
               ),
             ],
@@ -465,6 +799,11 @@ class _ExerciseCard extends ConsumerWidget {
                 Expanded(
                   child: Center(child: Text('REPS', style: head())),
                 ),
+                if (prefs.trackRpe)
+                  SizedBox(
+                    width: 44,
+                    child: Center(child: Text('RPE', style: head())),
+                  ),
                 const SizedBox(width: 52),
               ],
             ),
@@ -486,6 +825,8 @@ class _ExerciseCard extends ConsumerWidget {
                 index: i,
                 label: labels[i],
                 set: exercise.sets[i],
+                showRpe: prefs.trackRpe,
+                record: records[i],
               ),
             ),
           Center(
@@ -499,6 +840,26 @@ class _ExerciseCard extends ConsumerWidget {
         ],
       ),
     );
+
+    if (!inSuperset) return card;
+    // A rail down the left edge ties a superset's cards together.
+    return Stack(
+      children: [
+        Padding(padding: const EdgeInsets.only(left: 10), child: card),
+        Positioned(
+          left: 0,
+          top: 10,
+          bottom: 10,
+          child: Container(
+            width: 4,
+            decoration: BoxDecoration(
+              color: palette.brand,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -508,12 +869,18 @@ class _SetRow extends ConsumerStatefulWidget {
     required this.index,
     required this.label,
     required this.set,
+    required this.showRpe,
+    this.record,
   });
 
   final String exerciseKey;
   final int index;
   final String label;
   final ExerciseSet set;
+  final bool showRpe;
+
+  /// The records this set broke, when it is ticked off and broke any.
+  final Set<PrKind>? record;
 
   @override
   ConsumerState<_SetRow> createState() => _SetRowState();
@@ -561,11 +928,50 @@ class _SetRowState extends ConsumerState<_SetRow> {
         SetType.failure => SetType.normal,
       };
 
+  void _toggleDone() {
+    final controller = ref.read(activeWorkoutProvider.notifier);
+    final ticking = widget.set.completedAt == null;
+    final ok = controller.toggleDone(
+      widget.exerciseKey,
+      widget.index,
+      defaultRestSeconds: ref.read(workoutPreferencesProvider).restSeconds,
+    );
+    if (!ok) {
+      showQuickToast(context, 'Enter the reps first.');
+      return;
+    }
+    if (!ticking) return;
+    final broken =
+        ref.read(sessionRecordsProvider)[widget.exerciseKey]?[widget.index];
+    if (broken != null && broken.isNotEmpty) {
+      HapticFeedback.mediumImpact();
+      showQuickToast(
+        context,
+        'New PR: ${describeRecord(broken)}',
+        icon: Icons.emoji_events_rounded,
+        tone: ToastTone.success,
+      );
+    }
+  }
+
+  Future<void> _pickRpe() async {
+    final picked = await showRpePicker(context, current: widget.set.rpe);
+    if (picked == null || !mounted) return;
+    ref.read(activeWorkoutProvider.notifier).updateSet(
+          widget.exerciseKey,
+          widget.index,
+          rpe: picked.rpe,
+          clearRpe: picked.rpe == null,
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final controller = ref.read(activeWorkoutProvider.notifier);
     final done = widget.set.completedAt != null;
+    final isRecord = done && (widget.record?.isNotEmpty ?? false);
+    final gold = palette.accent(_kRecordHue);
 
     Widget field(TextEditingController c, {required bool decimal, required ValueChanged<String> onChanged}) {
       return Expanded(
@@ -595,6 +1001,8 @@ class _SetRowState extends ConsumerState<_SetRow> {
       );
     }
 
+    final rpe = widget.set.rpe;
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       padding: const EdgeInsets.only(right: 8),
@@ -606,28 +1014,49 @@ class _SetRowState extends ConsumerState<_SetRow> {
         children: [
           SizedBox(
             width: 44,
-            child: TextButton(
-              onPressed: () => controller.updateSet(
-                widget.exerciseKey,
-                widget.index,
-                type: _nextType(widget.set.type),
-              ),
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(44, 44),
-                foregroundColor: switch (widget.set.type) {
-                  SetType.normal => palette.text,
-                  SetType.warmup => palette.muted,
-                  _ => palette.brandText,
-                },
-              ),
-              child: Text(
-                widget.label,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => controller.updateSet(
+                    widget.exerciseKey,
+                    widget.index,
+                    type: _nextType(widget.set.type),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(44, 44),
+                    foregroundColor: switch (widget.set.type) {
+                      SetType.normal => palette.text,
+                      SetType.warmup => palette.muted,
+                      _ => palette.brandText,
+                    },
+                  ),
+                  child: Text(
+                    widget.label,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-              ),
+                if (isRecord)
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: Tooltip(
+                      message:
+                          'Personal record: ${describeRecord(widget.record!)}',
+                      child: Icon(
+                        Icons.emoji_events_rounded,
+                        key: const ValueKey('set-record'),
+                        size: 14,
+                        color: gold,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           field(
@@ -649,6 +1078,27 @@ class _SetRowState extends ConsumerState<_SetRow> {
               reps: parseTypedInt(text) ?? 0,
             ),
           ),
+          if (widget.showRpe)
+            SizedBox(
+              width: 44,
+              child: TextButton(
+                onPressed: _pickRpe,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(44, 44),
+                  foregroundColor: rpe == null ? palette.muted : palette.text,
+                ),
+                child: Text(
+                  rpe == null ? '—' : formatRpe(rpe),
+                  semanticsLabel:
+                      rpe == null ? 'Rate this set' : 'RPE ${formatRpe(rpe)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
           SizedBox(
             width: 52,
             child: IconButton(
@@ -659,13 +1109,7 @@ class _SetRowState extends ConsumerState<_SetRow> {
                     : Icons.radio_button_unchecked_rounded,
                 color: done ? palette.brand : palette.muted,
               ),
-              onPressed: () {
-                final ok = controller.toggleDone(
-                  widget.exerciseKey,
-                  widget.index,
-                );
-                if (!ok) showQuickToast(context, 'Enter the reps first.');
-              },
+              onPressed: _toggleDone,
             ),
           ),
         ],

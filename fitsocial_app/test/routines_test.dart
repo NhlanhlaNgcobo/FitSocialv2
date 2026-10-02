@@ -325,6 +325,50 @@ void main() {
       expect(find.text('HOME'), findsOneWidget);
     });
 
+    testWidgets('exercises can be supersetted and given their own rest',
+        (tester) async {
+      final h = await pumpApp(tester, location: '/routine-editor');
+      await tester.enterText(find.byType(TextField).first, 'Upper');
+      await pickExercise(tester, 'bench', 'Bench Press (Barbell)');
+      await pickExercise(tester, 'row', 'Bent Over Row (Barbell)');
+
+      await tester.tap(find.text('Superset'));
+      await tester.pumpAndSettle();
+      expect(find.text('Superset (tap to unlink)'), findsOneWidget);
+
+      await tester.tap(find.text('Rest: default').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2:00'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Save routine'));
+      await tester.pumpAndSettle();
+
+      final [bench, row] = h.repository.routines.single.exercises;
+      expect(bench.supersetGroup, isNotNull);
+      expect(row.supersetGroup, bench.supersetGroup);
+      expect(bench.restSeconds, 120);
+      expect(row.restSeconds, isNull);
+    });
+
+    testWidgets('unlinking the only pair leaves two plain exercises',
+        (tester) async {
+      final h = await pumpApp(tester, location: '/routine-editor');
+      await tester.enterText(find.byType(TextField).first, 'Upper');
+      await pickExercise(tester, 'bench', 'Bench Press (Barbell)');
+      await pickExercise(tester, 'row', 'Bent Over Row (Barbell)');
+      await tester.tap(find.text('Superset'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Superset (tap to unlink)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save routine'));
+      await tester.pumpAndSettle();
+
+      final saved = h.repository.routines.single.exercises;
+      expect(saved.every((e) => e.supersetGroup == null), isTrue);
+    });
+
     testWidgets('editing preloads the routine and keeps what it does not show',
         (tester) async {
       final h = await pumpApp(
