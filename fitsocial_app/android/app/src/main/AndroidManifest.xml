@@ -16,6 +16,11 @@
          progress" notification. Tracking still works if it is refused — only
          the lock-screen readout is lost. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Exact alarms: the "rest over" alert between sets has to land on the
+         second, not within Android's inexact window of up to a minute late.
+         Granted by default up to Android 13; from 14 it is off until the user
+         allows it, and the app falls back to firing the alert itself. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- Activity recognition: needed to use the hardware step counter sensor (Android 10+) -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <!-- Body sensors: heart-rate via device/wearable sensors -->
@@ -244,6 +249,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- flutter_local_notifications: delivers the scheduled "rest over"
+             alert. No boot receiver: a rest is minutes long, and one that
+             spans a reboot is not worth waking anyone for. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

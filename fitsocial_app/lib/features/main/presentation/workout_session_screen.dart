@@ -15,6 +15,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
 import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
+import '../application/rest_alerts.dart';
 import '../application/workout_library_providers.dart';
 import '../application/workout_preferences.dart';
 import '../data/workout_preferences_store.dart';
@@ -941,6 +942,11 @@ class _SetRowState extends ConsumerState<_SetRow> {
       return;
     }
     if (!ticking) return;
+    // The first rest of a session is the moment a "your rest is over"
+    // notification makes sense to ask about. Asked once per launch at most.
+    if (ref.read(activeWorkoutProvider)?.rest != null) {
+      unawaited(ref.read(restAlertsProvider).requestPermission());
+    }
     final broken =
         ref.read(sessionRecordsProvider)[widget.exerciseKey]?[widget.index];
     if (broken != null && broken.isNotEmpty) {

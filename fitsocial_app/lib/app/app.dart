@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/bootstrap/bootstrap_status.dart';
+import '../features/main/application/rest_alerts.dart';
 import '../features/notifications/application/push_tap_router.dart';
 import '../features/safety/application/safety_providers.dart';
 import '../features/safety/application/safety_shortcuts.dart';
@@ -49,7 +50,17 @@ class _FitSocialAppState extends ConsumerState<FitSocialApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _resumeSafety();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _resumeSafety();
+        ref.read(restAlertLifecycleProvider).appForegrounded();
+      case AppLifecycleState.paused:
+        // A rest between sets still running when the phone goes in a pocket
+        // gets a notification to say when it is up.
+        ref.read(restAlertLifecycleProvider).appBackgrounded();
+      default:
+        break;
+    }
   }
 
   void _resumeSafety() {
