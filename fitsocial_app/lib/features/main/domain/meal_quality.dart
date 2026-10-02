@@ -17,6 +17,10 @@ import 'app_models.dart';
 /// ([MealFoodItem.category]). Items without one — the model's own estimates,
 /// USDA matches, and meals analysed before the group was sent — are placed by
 /// their name instead, which is rougher but right for the obvious cases.
+///
+/// functions/meal_quality.js holds a second copy of these rules, which the
+/// healthy-eating challenge ranks on. Change both together and bump [version];
+/// the two test files score the same plates so a drift shows up.
 class MealQuality {
   const MealQuality._({
     required this.score,

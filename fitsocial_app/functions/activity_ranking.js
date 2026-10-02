@@ -1,8 +1,9 @@
 /**
  * Activity challenges: the arithmetic and the ordering, with no Firestore.
  *
- * An activity challenge counts one metric -- steps, active minutes, sessions
- * or meals logged -- between two dates, in one of three modes:
+ * An activity challenge counts one metric -- steps, active minutes, sessions,
+ * meals logged or healthy-eating points -- between two dates, in one of three
+ * modes:
  *
  *   cumulative  most in total wins
  *   target      first to reach `target` wins; everyone who reaches it has done
@@ -37,6 +38,7 @@ const METRIC_FIELDS = Object.freeze({
   active_minutes: "rankableActiveMinutes",
   workouts: "sessions",
   meals_logged: "meals",
+  meal_quality: "mealQualityPoints",
 });
 
 const MODES = Object.freeze(["cumulative", "target", "streak"]);

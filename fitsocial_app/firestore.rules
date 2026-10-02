@@ -1489,7 +1489,8 @@ service cloud.firestore {
                     && request.resource.data.title.size() >= 3
                     && request.resource.data.title.size() <= 80
                     && request.resource.data.metric in
-                         ['steps', 'active_minutes', 'workouts', 'meals_logged']
+                         ['steps', 'active_minutes', 'workouts', 'meals_logged',
+                          'meal_quality']
                     && request.resource.data.mode in ['cumulative', 'target', 'streak']
                     && (request.resource.data.mode == 'cumulative'
                         ? request.resource.data.get('target', null) == null
