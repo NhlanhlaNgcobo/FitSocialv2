@@ -1028,6 +1028,33 @@ service cloud.firestore {
                             && resource.data.authorId == request.auth.uid;
     }
 
+    // Saved routines and user-made exercises — private to their author, like
+    // the workouts they feed. Unlike /workouts, an update may not rewrite
+    // `authorId`: that would hand the document to someone else.
+    match /routines/{routineId} {
+      allow read: if request.auth != null
+                  && resource.data.authorId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.authorId == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.authorId == request.auth.uid
+                    && request.resource.data.authorId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.authorId == request.auth.uid;
+    }
+
+    match /customExercises/{exerciseId} {
+      allow read: if request.auth != null
+                  && resource.data.authorId == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.authorId == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.authorId == request.auth.uid
+                    && request.resource.data.authorId == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.authorId == request.auth.uid;
+    }
+
     // Meal logs — the canonical record of a logged meal: the totals plus the
     // itemised breakdown the analyzer produced. Private to its author for the
     // same reason as /runs and /workouts, and more so: a food diary is health
