@@ -197,6 +197,9 @@ async function resolveItem(item, index, usdaKey) {
     name,
     matchedFood: food.name,
     foodId: food.id,
+    // The table's food group, which the app's meal quality score reads. A
+    // USDA match only says "usda" here, and the app places it by name.
+    category: food.category,
     grams,
     quantity: String(item.quantity ?? "").trim() || `${grams}g`,
     source,
@@ -228,8 +231,8 @@ function sumTotals(items) {
  *
  * Returns:
  *   { name, calories, protein, carbs, fat, confidence, notes,
- *     foodItems: [{ name, matchedFood, grams, quantity, source, per100g,
- *                   calories, protein, carbs, fat }],
+ *     foodItems: [{ name, matchedFood, category, grams, quantity, source,
+ *                   per100g, calories, protein, carbs, fat }],
  *     databaseCoverage }
  */
 exports.analyzeMeal = onCall(

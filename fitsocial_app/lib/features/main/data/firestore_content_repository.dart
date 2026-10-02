@@ -16,6 +16,7 @@ import '../../notifications/domain/notification_models.dart';
 import '../domain/app_models.dart';
 import '../domain/comment_threads.dart';
 import '../domain/explore_models.dart';
+import '../domain/meal_quality.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
@@ -1671,6 +1672,10 @@ class FirestoreContentRepository implements ContentRepository {
         'protein': draft.protein.trim(),
         'carbs': draft.carbs.trim(),
         'fat': draft.fat.trim(),
+        // Only an analysed meal has the items to score; one typed in by hand
+        // posts without it rather than with a guess.
+        if (MealQuality.of(draft.items) case final quality?)
+          'quality': quality.score,
       },
     );
     await _linkLogToPost(logRef, result.post.id);
@@ -2926,6 +2931,7 @@ class FirestoreContentRepository implements ContentRepository {
         double.tryParse(value.trim())?.round() ??
         0;
 
+    final quality = MealQuality.of(draft.items);
     final ref = mealsCollection.doc();
     await _settleWrite(ref.set({
       'authorId': user.uid,
@@ -2937,6 +2943,12 @@ class FirestoreContentRepository implements ContentRepository {
       'notes': draft.notes.trim(),
       'items': draft.items.map((item) => item.toMap()).toList(),
       'itemCount': draft.items.length,
+      // Stored with the version of the rules that produced it, so anything
+      // ranking on it later can tell an old score from a current one.
+      if (quality != null) ...{
+        'qualityScore': quality.score,
+        'qualityVersion': MealQuality.version,
+      },
       'sharedToFeed': draft.shareToFeed,
       if (draft.imageUrl != null) 'imageUrl': draft.imageUrl,
       // Stamped client-side, as workouts already are, so the meal lands in the

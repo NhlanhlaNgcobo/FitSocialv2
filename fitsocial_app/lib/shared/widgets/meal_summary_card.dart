@@ -6,6 +6,7 @@ import '../../app/theme/app_typography.dart';
 import 'app_photo.dart';
 import 'fit_social_logo.dart';
 import 'macro_ring.dart';
+import 'meal_quality_badge.dart';
 import 'network_photo_aspect.dart';
 import 'picture_ratio.dart';
 
@@ -24,8 +25,8 @@ class MealSummaryCard extends StatelessWidget {
     super.key,
   });
 
-  /// The post's raw `mealData` map: `calories`, `protein`, `carbs`, `fat`.
-  /// Absent keys read as zero.
+  /// The post's raw `mealData` map: `calories`, `protein`, `carbs`, `fat`,
+  /// and `quality` when the meal was scored. Absent macros read as zero.
   final Map<String, dynamic>? mealData;
 
   /// The meal's name, printed where the review screen prints it.
@@ -80,6 +81,10 @@ class MealSummaryCard extends StatelessWidget {
     final protein = _numberFrom(data['protein']);
     final carbs = _numberFrom(data['carbs']);
     final fat = _numberFrom(data['fat']);
+    // Absent on meals typed in by hand and on every meal shared before the
+    // score existed — those simply go without the badge.
+    final quality =
+        data['quality'] == null ? null : _numberFrom(data['quality']);
 
     // Rings read as a share of the meal's own calories — computed the same
     // way the review screen's hero computes it, so a meal rings identically
@@ -143,6 +148,10 @@ class MealSummaryCard extends StatelessWidget {
                       color: AppColors.onMedia,
                     ),
                     const Spacer(),
+                    if (quality != null) ...[
+                      MealQualityBadge(score: quality),
+                      const SizedBox(height: 8),
+                    ],
                     // Wraps rather than ellipsises: the picture is what gets
                     // shared, and a name cut short in it cannot be read back.
                     Text(
