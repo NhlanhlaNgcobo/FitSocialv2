@@ -52,7 +52,9 @@ The spec was written without seeing the repo, and much of it already existed. Bu
 | F5: Recap Cards | Done, app-only (nothing to deploy); Instagram Stories button deferred | `f5_recap_cards` |
 | Build number 10 to 11 in `pubspec.yaml` | Not done | do it last |
 
-Rules, indexes and every function up to the Live Share purge were deployed to fitsocialv2 on 2026-10-02, with every flag still off. Nothing has been switched on or run on a phone yet.
+All server code is deployed to fitsocialv2. On 2026-10-02 `scripts/backfill_stats.js --commit` rebuilt 70 days of stats for all 13 users with activity, and all six flags were published as `true` (Remote Config version 1) for on-device testing. Nothing has been run on a phone yet.
+
+**Switch `f2_weekly_insights` off before 05:00 SAST on Monday 2026-10-05** unless the new build is on testers' phones: the Monday job would otherwise pay for AI insights that build-10 phones cannot show.
 
 ---
 
