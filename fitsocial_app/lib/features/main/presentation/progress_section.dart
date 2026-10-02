@@ -63,12 +63,8 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
         const SizedBox(height: AppSpacing.md),
         _OverviewCard(window: window),
         const SizedBox(height: AppSpacing.md),
-        // Carries its own spacing, and draws nothing while Compare is off or
-        // for the day and year views.
-        CompareCard(window: window),
-        // Under Compare, and the same shape of widget: its own spacing, and
-        // nothing drawn at all while leaderboards are off or the window is one
-        // no board covers.
+        // Carries its own spacing, and draws nothing at all while leaderboards
+        // are off or the window is one no board covers.
         LeaderboardCard(window: window),
         // Last week as a shareable card. Its own spacing, and nothing at all
         // while Recap Cards are off or last week was empty.
@@ -80,6 +76,10 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
           expanded: true,
         ),
         const SizedBox(height: AppSpacing.md),
+        // Last before the session list: a look back at the period, read after
+        // the period itself. Carries its own spacing, and draws nothing while
+        // Compare is off or for the day and year views.
+        CompareCard(window: window),
         _SessionList(window: window),
       ],
     );
