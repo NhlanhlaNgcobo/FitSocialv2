@@ -8,6 +8,7 @@ import '../../../core/bootstrap/bootstrap_status.dart';
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
+import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 import 'content_repository_contract.dart';
@@ -62,6 +63,27 @@ class UnconfiguredContentRepository implements ContentRepository {
   Future<void> deleteLoggedMeal(String id) async {
     throw StateError(_firebaseSetupMessage);
   }
+
+  @override
+  Future<void> relogMeal(LoggedMeal meal) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<MealRepeat>> getMealRepeats() async => const [];
+
+  @override
+  Future<void> saveMealRepeat(MealRepeat repeat) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> deleteMealRepeat(String id) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<int> logDueMealRepeats(DateTime now) async => 0;
 
   @override
   Future<int> getWeeklyGoalDays() async =>

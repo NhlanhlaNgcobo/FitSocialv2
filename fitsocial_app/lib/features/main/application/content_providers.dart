@@ -11,6 +11,7 @@ import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
 import '../domain/daily_prompts.dart';
 import '../domain/explore_models.dart';
+import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 
@@ -302,6 +303,12 @@ final loggedMealsProvider = FutureProvider.autoDispose<List<LoggedMeal>>((ref) {
 final macroGoalsProvider = FutureProvider<MacroGoals>((ref) {
   ref.watch(appSessionProvider);
   return ref.watch(contentRepositoryProvider).getMacroGoals();
+});
+
+/// The user's repeating meals, for the tracking page's list of them.
+final mealRepeatsProvider = FutureProvider.autoDispose<List<MealRepeat>>((ref) {
+  ref.watch(appSessionProvider);
+  return ref.watch(contentRepositoryProvider).getMealRepeats();
 });
 
 /// Everything the tracking page reports for one window.

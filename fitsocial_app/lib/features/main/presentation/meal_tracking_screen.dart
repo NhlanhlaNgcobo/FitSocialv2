@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../application/content_providers.dart';
+import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 import 'macro_goals_sheet.dart';
+import 'meal_repeat_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -125,7 +127,94 @@ class _SummaryBody extends StatelessWidget {
         _MacroSummaryCard(summary: summary),
         const SizedBox(height: AppSpacing.md),
         _MealsLoggedCard(summary: summary),
+        const _RepeatingMealsCard(),
       ],
+    );
+  }
+}
+
+/// The meals set to repeat, each tappable to change its days or stop it.
+/// Absent until there is one: an empty "Repeating meals" panel would be a
+/// feature advertising itself on every visit.
+class _RepeatingMealsCard extends ConsumerWidget {
+  const _RepeatingMealsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repeats = ref.watch(mealRepeatsProvider).valueOrNull ?? const [];
+    if (repeats.isEmpty) return const SizedBox.shrink();
+    final palette = context.palette;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: _Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Repeating Meals',
+              style: TextStyle(
+                color: palette.text,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (final repeat in repeats) _RepeatRow(repeat: repeat),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RepeatRow extends ConsumerWidget {
+  const _RepeatRow({required this.repeat});
+
+  final MealRepeat repeat;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => showMealRepeatSheet(context, ref, existing: repeat),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            _MealThumbnail(imageUrl: repeat.imageUrl),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    repeat.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    repeat.scheduleLabel,
+                    style: TextStyle(color: palette.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '${formatMacroValue(repeat.calories)} kcal',
+              style: TextStyle(color: palette.muted, fontSize: 12.5),
+            ),
+            Icon(Icons.chevron_right_rounded, color: palette.muted, size: 20),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -484,13 +573,13 @@ class _MealsLoggedCard extends StatelessWidget {
   }
 }
 
-class _MealRow extends StatelessWidget {
+class _MealRow extends ConsumerWidget {
   const _MealRow({required this.meal});
 
   final LoggedMeal meal;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
 
     return InkWell(
@@ -521,9 +610,22 @@ class _MealRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    meal.timeLabel,
-                    style: TextStyle(color: palette.muted, fontSize: 12),
+                  Row(
+                    children: [
+                      Text(
+                        meal.timeLabel,
+                        style: TextStyle(color: palette.muted, fontSize: 12),
+                      ),
+                      if (meal.isRepeat) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.event_repeat_rounded,
+                          size: 13,
+                          color: palette.muted,
+                          semanticLabel: 'Logged by a repeat',
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 6),
                   _MacroChips(meal: meal),
@@ -554,8 +656,15 @@ class _MealRow extends StatelessWidget {
                 ),
               ],
             ),
-            if (meal.postId != null)
-              Icon(Icons.chevron_right_rounded, color: palette.muted, size: 20),
+            // Log again and Repeat. The row itself still opens the post, so
+            // the actions get their own target rather than a long press
+            // nobody would find.
+            IconButton(
+              onPressed: () => showMealActionsSheet(context, ref, meal),
+              icon: Icon(Icons.more_horiz_rounded, color: palette.muted),
+              tooltip: 'Meal options',
+              visualDensity: VisualDensity.compact,
+            ),
           ],
         ),
       ),

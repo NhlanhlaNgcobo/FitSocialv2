@@ -20,6 +20,9 @@ class LoggedMeal {
     this.itemCount = 0,
     this.sharedToFeed = false,
     this.postId,
+    this.items = const [],
+    this.notes = '',
+    this.repeatId,
   });
 
   final String id;
@@ -43,6 +46,18 @@ class LoggedMeal {
   /// The post this meal created, when it was shared. Null otherwise, and for
   /// meals logged before the id was recorded.
   final String? postId;
+
+  /// The analysed breakdown, when there was one. Carried so a meal logged
+  /// again keeps its foods — and with them its quality score.
+  final List<MealFoodItem> items;
+
+  final String notes;
+
+  /// The [MealRepeat] that logged this meal, when one did.
+  final String? repeatId;
+
+  /// Logged by a repeat rather than by hand.
+  bool get isRepeat => repeatId != null;
 
   /// Local midnight of the day this meal belongs to.
   DateTime get day => ActivityCalendar.dateOnly(loggedAt);
