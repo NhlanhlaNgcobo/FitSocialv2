@@ -7,6 +7,7 @@ import '../../../shared/widgets/activity_grid.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../compare/presentation/compare_card.dart';
 import '../../leaderboards/presentation/leaderboard_card.dart';
+import '../../recap/presentation/week_recap_card.dart';
 import '../../weather/presentation/weather_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
@@ -69,6 +70,9 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
         // nothing drawn at all while leaderboards are off or the window is one
         // no board covers.
         LeaderboardCard(window: window),
+        // Last week as a shareable card. Its own spacing, and nothing at all
+        // while Recap Cards are off or last week was empty.
+        const WeekRecapEntry(),
         // Always the full year, whatever period is being reported on: this is
         // the streak at a glance, not a chart of the selected window.
         const ActivityGridCard(

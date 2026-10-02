@@ -9,6 +9,9 @@ import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/glass.dart';
 import '../../main/application/content_providers.dart'
     show currentUserIdProvider;
+import '../../recap/application/recap_providers.dart';
+import '../../recap/domain/recap.dart';
+import '../../recap/presentation/recap_share_sheet.dart';
 import '../application/running_challenge_providers.dart';
 import '../domain/running_challenge.dart';
 import 'challenge_indicators.dart';
@@ -496,7 +499,7 @@ String _km(double value) {
 
 /// An activity challenge's own figures: the metric, how far toward the
 /// target or along the streak, and the place.
-class _MyActivityProgress extends StatelessWidget {
+class _MyActivityProgress extends ConsumerWidget {
   const _MyActivityProgress({
     required this.challenge,
     required this.participant,
@@ -506,7 +509,7 @@ class _MyActivityProgress extends StatelessWidget {
   final ChallengeParticipant participant;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
     final fraction = participant.activityFraction(challenge);
     final reached = participant.targetReachedDayKey != null;
@@ -565,6 +568,28 @@ class _MyActivityProgress extends StatelessWidget {
                         'two after a log or a step sync.',
             style: TextStyle(color: palette.muted, fontSize: 12),
           ),
+          // A finished challenge is something to show off: the sharer's own
+          // place and result only, never the rest of the board.
+          if (participant.finalRank != null &&
+              ref.watch(recapCardsEnabledProvider))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => showRecapSheet(
+                  context,
+                  challengeRecap(
+                    title: challenge.title,
+                    finalRank: participant.finalRank!,
+                    participantCount: challenge.participantCount,
+                    result: participant.activityHeadline(challenge),
+                    displayName:
+                        ref.watch(recapDisplayNameProvider).valueOrNull,
+                  ),
+                ),
+                icon: const Icon(Icons.ios_share_rounded, size: 18),
+                label: const Text('Share result'),
+              ),
+            ),
         ],
       ),
     );

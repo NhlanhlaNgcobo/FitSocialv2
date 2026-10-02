@@ -143,7 +143,13 @@ class BadgeTile extends StatelessWidget {
 }
 
 /// The sheet a tapped badge opens: what it was for, and when it was earned.
-Future<void> showBadgeSheet(BuildContext context, UserBadge badge) {
+/// [onShare], when given, adds a "Share" button under the badge -- Recap
+/// Cards pass it while they are switched on.
+Future<void> showBadgeSheet(
+  BuildContext context,
+  UserBadge badge, {
+  VoidCallback? onShare,
+}) {
   final palette = Theme.of(context).extension<AppPalette>() ?? AppPalette.dark;
 
   return showModalBottomSheet<void>(
@@ -201,6 +207,17 @@ Future<void> showBadgeSheet(BuildContext context, UserBadge badge) {
                           : 'Earned ${_dateLabel(badge.awardedAt)}.',
                       style: TextStyle(color: palette.muted, fontSize: 12),
                     ),
+                    if (onShare != null) ...[
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          onShare();
+                        },
+                        icon: const Icon(Icons.ios_share_rounded),
+                        label: const Text('Share'),
+                      ),
+                    ],
                   ],
                 ),
               ),

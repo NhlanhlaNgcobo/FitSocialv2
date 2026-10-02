@@ -1,7 +1,7 @@
 # Build 11 handoff
 
 **For:** whoever picks Build 11 up next, including a fresh Claude Code session on another machine.
-**Last updated:** 2026-10-02. P0, F1, F2, F4, F6 and the Live Share purge are pushed **and deployed**, all flags off; F3 Up Next is on `feat/up-next`.
+**Last updated:** 2026-10-02. P0, F1, F2, F3, F4, F6 and the Live Share purge are pushed **and deployed**, all flags off. F5 Recap Cards is app-only and on `feat/recap-cards`.
 **Spec:** `FitSocial_Build11_Spec.md` (Bear's copy, kept outside the repo). This file records how that spec was reconciled with the code, what is done, and what is left.
 
 A new Claude Code session should read this file first, then `HANDOFF.md` and `CODEBASE_ANALYSIS.md` for the wider app.
@@ -48,8 +48,8 @@ The spec was written without seeing the repo, and much of it already existed. Bu
 | F6: friends leaderboards | Done, pushed | `f6_leaderboards` |
 | Live Share: purge ended shares' positions | Done (`onLocationShareUpdated` + `expireShares`), not deployed | none |
 | F2: Weekly Insights (AI) | Done, pushed, deployed | `f2_weekly_insights` |
-| F3: Up Next | Done on `feat/up-next`, not deployed | `f3_up_next` |
-| F5: Recap Cards (+ Instagram Stories) | **Next** | `f5_recap_cards` |
+| F3: Up Next | Done, pushed, deployed | `f3_up_next` |
+| F5: Recap Cards | Done, app-only (nothing to deploy); Instagram Stories button deferred | `f5_recap_cards` |
 | Build number 10 to 11 in `pubspec.yaml` | Not done | do it last |
 
 Rules, indexes and every function up to the Live Share purge were deployed to fitsocialv2 on 2026-10-02, with every flag still off. Nothing has been switched on or run on a phone yet.
@@ -278,3 +278,25 @@ tests in all three suites.
 
 Left out: the spec's "challenge lead change" rule. It needs a ranking history
 nothing keeps yet.
+
+## 11. F5 Recap Cards, as built
+
+App-only: `lib/features/recap/`. No server code, no new collections, nothing to
+deploy. Ships with the next app build.
+
+- Three cards, each a 1080 x 1920 PNG drawn off screen the way the run, meal and
+  workout cards already are: **last week** ("Share last week" on the Progress
+  tab, under the leaderboard card), a **finished challenge** ("Share result" on
+  your own row of a finished activity challenge), and a **badge** ("Share" in
+  the badge sheet on Achievements).
+- A sheet with a live preview and switches: name (on), numbers (on), heart rate
+  (**off** by default, and only with numbers on). Challenge cards carry only the
+  sharer's own place and result -- there is no parameter for anybody else's.
+- One fixed dark design whatever the app theme, since the image goes to someone
+  else's feed. Tested for overflow on small and large screens in both themes.
+- Shared through the system share sheet. `recap_generated` when the image is
+  drawn, `recap_shared` with the picked app's package when the platform says.
+- **Instagram Stories button: deferred by Bear.** Meta's Stories intent
+  (`com.instagram.share.ADD_TO_STORY`) refuses shares without a registered Meta
+  App ID in `source_application`. When Bear has one, add the button to the
+  recap sheet, hidden while the ID is unset.

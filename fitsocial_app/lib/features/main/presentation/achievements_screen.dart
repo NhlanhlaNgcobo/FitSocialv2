@@ -9,6 +9,9 @@ import '../../challenges/domain/challenge_models.dart';
 import '../../challenges/presentation/badge_shelf.dart';
 import '../../challenges/presentation/challenge_indicators.dart';
 import '../../music/presentation/music_island_action.dart';
+import '../../recap/application/recap_providers.dart';
+import '../../recap/domain/recap.dart';
+import '../../recap/presentation/recap_share_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
 /// Points and badges — what the app has to say about what somebody has done.
@@ -27,6 +30,9 @@ class AchievementsScreen extends ConsumerWidget {
     final points = ref.watch(myPointsProvider).valueOrNull ?? 0;
     final badges = ref.watch(myBadgesProvider);
     final earlyWorm = ref.watch(earlyWormProvider);
+    final shareEnabled = ref.watch(recapCardsEnabledProvider);
+    final displayName =
+        shareEnabled ? ref.watch(recapDisplayNameProvider).valueOrNull : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -72,7 +78,21 @@ class AchievementsScreen extends ConsumerWidget {
                   badges: badges
                       .where((held) => held.badge.group == group)
                       .toList(growable: false),
-                  onTap: (badge) => showBadgeSheet(context, badge),
+                  onTap: (badge) => showBadgeSheet(
+                    context,
+                    badge,
+                    onShare: shareEnabled
+                        ? () => showRecapSheet(
+                              context,
+                              achievementRecap(
+                                label: badge.badge.label,
+                                description: badge.badge.description,
+                                count: badge.count,
+                                displayName: displayName,
+                              ),
+                            )
+                        : null,
+                  ),
                 ),
               ],
             ],
