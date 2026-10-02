@@ -620,6 +620,15 @@ for (const [name, handler] of Object.entries(require("./account_deletion"))) {
   exports[name] = handler;
 }
 
+// --- Data export ------------------------------------------------------------
+//
+// The counterpart to account deletion: what that module erases, this one hands
+// over, and the two lists of collections are kept in step.
+for (const [name, handler] of Object.entries(require("./data_export"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+
 // --- Race entry taps --------------------------------------------------------
 //
 // One trigger that turns private per-user tap records into an anonymous

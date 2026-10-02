@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/theme_mode_controller.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/quick_toast.dart';
+import '../../../shared/widgets/share_sheet.dart' show shareOriginOf;
 import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
 import '../../insights/application/insight_providers.dart';
@@ -19,6 +21,7 @@ import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../notifications/application/push_providers.dart';
 import '../../tracking/application/run_draft_providers.dart';
+import '../data/data_export.dart';
 import 'delete_account_sheet.dart';
 import 'set_password_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -37,6 +40,7 @@ const Color _kNotifyAccent = Color(0xFF2ECBFF);
 const Color _kSafetyAccent = Color(0xFF2E9C94);
 const Color _kMilestoneAccent = Color(0xFFF2B01E);
 const Color _kAccessibilityAccent = Color(0xFF8B7CF6);
+const Color _kExportAccent = Color(0xFF4FB6A5);
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -92,6 +96,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Badges you have earned so far',
                 onTap: () => context.push('/achievements'),
               ),
+              const _ExportDataTile(),
               // Only for accounts with no password — usually Google-only ones.
               // For them Forgot Password silently sends nothing, so without
               // this the account has exactly one way in.
@@ -887,6 +892,71 @@ class _SettingsSwitchTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Download your data: everything the account holds, as one JSON file handed
+/// to the share sheet, where it can be saved to Files or Drive or sent on.
+class _ExportDataTile extends StatefulWidget {
+  const _ExportDataTile();
+
+  @override
+  State<_ExportDataTile> createState() => _ExportDataTileState();
+}
+
+class _ExportDataTileState extends State<_ExportDataTile> {
+  bool _busy = false;
+
+  Future<void> _export() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final export = await requestDataExport();
+      if (!mounted) return;
+      showQuickToast(
+        context,
+        '${export.summary}, ready to save.',
+        tone: ToastTone.success,
+      );
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [
+            XFile.fromData(
+              export.bytes,
+              mimeType: 'application/json',
+              name: export.fileName,
+            ),
+          ],
+          fileNameOverrides: [export.fileName],
+          subject: 'My FitSocial data',
+          sharePositionOrigin: shareOriginOf(context),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      showQuickToast(
+        context,
+        'Could not export your data. Check your connection and try again.',
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsTile(
+      icon: Icons.download_rounded,
+      accent: _kExportAccent,
+      label: 'Download your data',
+      subtitle: _busy
+          ? 'Gathering everything. This can take a minute'
+          : 'Meals, workouts, runs, posts and stats, as one file',
+      showChevron: false,
+      onTap: _export,
     );
   }
 }

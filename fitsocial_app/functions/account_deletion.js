@@ -20,6 +20,9 @@ const admin = require("firebase-admin");
  * would strip the credential that authorises the rest of the sweep and strand
  * the remainder with nothing able to reach it.
  *
+ * data_export.js reads the same collections this sweeps. A collection added
+ * here belongs there too, or the export silently stops being complete.
+ *
  * What is intentionally NOT deleted:
  *
  *  - The username reservation, which is stamped with a release date instead.
