@@ -152,13 +152,26 @@ class _RepeatingMealsCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Repeating Meals',
-              style: TextStyle(
-                color: palette.text,
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Repeating Meals',
+                    style: TextStyle(
+                      color: palette.text,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                // The repeats are the week's plan, so this is where the
+                // shopping for it starts.
+                TextButton.icon(
+                  onPressed: () => context.push('/meal-shopping-list'),
+                  icon: const Icon(Icons.shopping_basket_outlined, size: 18),
+                  label: const Text('Shopping list'),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.sm),
             for (final repeat in repeats) _RepeatRow(repeat: repeat),

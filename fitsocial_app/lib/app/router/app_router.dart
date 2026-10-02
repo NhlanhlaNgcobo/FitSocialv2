@@ -32,6 +32,7 @@ import '../../features/main/presentation/home_screen.dart';
 import '../../features/main/presentation/manual_run_entry_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
 import '../../features/main/presentation/meal_tracking_screen.dart';
+import '../../features/main/presentation/shopping_list_screen.dart';
 import '../../features/main/presentation/meal_upload_screen.dart';
 import '../../features/main/presentation/post_compose_screen.dart';
 import '../../features/main/presentation/prompt_answers_screen.dart';
@@ -223,6 +224,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/meal-tracking',
         builder: (context, state) => const MealTrackingScreen(),
+      ),
+      GoRoute(
+        path: '/meal-shopping-list',
+        builder: (context, state) => const ShoppingListScreen(),
       ),
       GoRoute(
         path: '/weather',
