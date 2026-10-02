@@ -699,6 +699,12 @@ for (const [name, handler] of Object.entries(require("./insights"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }
+// Up Next: today's rule-based suggestions. Listens on stats.js after goals.js
+// has, so the goal gaps it reads are already up to date.
+for (const [name, handler] of Object.entries(require("./up_next"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
 
 // --- Push -------------------------------------------------------------------
 //

@@ -651,6 +651,23 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Up Next (functions/up_next.js): one document per day of suggestions.
+      // The server writes them; the owner may only add ids to `dismissed`,
+      // which every rebuild leaves alone and filters out. Bounded, so the
+      // list cannot be used to grow the document without limit.
+      match /upNext/{dayKey} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null
+                      && request.auth.uid == userId
+                      && request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['dismissed'])
+                      && request.resource.data.dismissed is list
+                      && request.resource.data.dismissed.size() <= 20
+                      && request.resource.data.dismissed
+                           .hasAll(resource.data.get('dismissed', []));
+        allow create, delete: if false;
+      }
+
       // Personal goals (functions/goals.js). Created only through the
       // createGoal callable, which caps how many are running and works out the
       // period; progress, completion and the period records are the server's.

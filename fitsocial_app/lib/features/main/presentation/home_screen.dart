@@ -17,6 +17,7 @@ import '../../../shared/widgets/post_card.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../goals/presentation/goals_home_card.dart';
 import '../../insights/presentation/weekly_insight_card.dart';
+import '../../up_next/presentation/up_next_carousel.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
 import 'daily_prompt_card.dart';
@@ -172,6 +173,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // at the streak, not somewhere to change the window.
       const ActivityGridCard(fixedRange: ActivityRange.week),
       const SizedBox(height: AppSpacing.sm),
+      // Today's suggestions, first thing under the week: the one row here that
+      // says what to do next. Draws nothing while Up Next is off or empty.
+      const UpNextCarousel(),
       // Carries its own spacing, and draws nothing while goals are off.
       const GoalsHomeCard(),
       // Last week's insight. Likewise carries its own spacing, and draws
@@ -291,7 +295,7 @@ class _SuggestedHeader extends StatelessWidget {
             Text(
               isTopUp
                   ? "That's everything from the people you follow. Follow a few "
-                        'more and this section shrinks.'
+                      'more and this section shrinks.'
                   : 'Follow people and their posts land here first.',
               style: TextStyle(
                 color: palette.muted,

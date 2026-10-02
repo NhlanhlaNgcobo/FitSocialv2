@@ -1,7 +1,7 @@
 # Build 11 handoff
 
 **For:** whoever picks Build 11 up next, including a fresh Claude Code session on another machine.
-**Last updated:** 2026-10-02. P0, F1, F4, F6 and the Live Share purge are pushed **and deployed**; F2 Weekly Insights is on `feat/weekly-insights`.
+**Last updated:** 2026-10-02. P0, F1, F2, F4, F6 and the Live Share purge are pushed **and deployed**, all flags off; F3 Up Next is on `feat/up-next`.
 **Spec:** `FitSocial_Build11_Spec.md` (Bear's copy, kept outside the repo). This file records how that spec was reconciled with the code, what is done, and what is left.
 
 A new Claude Code session should read this file first, then `HANDOFF.md` and `CODEBASE_ANALYSIS.md` for the wider app.
@@ -47,9 +47,9 @@ The spec was written without seeing the repo, and much of it already existed. Bu
 | F4: Compare card on the Progress tab | Done, pushed | `f4_compare` |
 | F6: friends leaderboards | Done, pushed | `f6_leaderboards` |
 | Live Share: purge ended shares' positions | Done (`onLocationShareUpdated` + `expireShares`), not deployed | none |
-| F2: Weekly Insights (AI) | Done, pushed, not deployed | `f2_weekly_insights` |
-| F3: Up Next | **Next** | `f3_up_next` |
-| F5: Recap Cards (+ Instagram Stories) | Not started | `f5_recap_cards` |
+| F2: Weekly Insights (AI) | Done, pushed, deployed | `f2_weekly_insights` |
+| F3: Up Next | Done on `feat/up-next`, not deployed | `f3_up_next` |
+| F5: Recap Cards (+ Instagram Stories) | **Next** | `f5_recap_cards` |
 | Build number 10 to 11 in `pubspec.yaml` | Not done | do it last |
 
 Rules, indexes and every function up to the Live Share purge were deployed to fitsocialv2 on 2026-10-02, with every flag still off. Nothing has been switched on or run on a phone yet.
@@ -252,3 +252,29 @@ and `insightFeedback`, and tests in all three suites.
 
 Left out: challenge progress in the payload (goals only), and any push
 notification when an insight is ready.
+
+## 10. F3 Up Next, as built
+
+`functions/up_next.js`, `lib/features/up_next/`, rules for `users/{uid}/upNext`,
+tests in all three suites.
+
+- **Rule-based, no AI** (spec: start rule-based). Four rules, in the order they
+  win one of three places: a streak of 2+ days at risk after 15:00; a weekly
+  goal today can close (steps within 6,000 -- "a 25-minute walk" at 100 steps a
+  minute -- minutes within 60, one session, meals within 3); no meal logged
+  between 12:00 and 21:00 for somebody who logged on 3 of the last 7 days; no
+  session by Wednesday for somebody who trained in the fortnight before.
+- Nothing for somebody with no data in the last 14 days.
+- Rebuilt on every change to today's stats (a `stats.onDayChanged` listener,
+  required after goals.js so goal progress is current) and by the
+  `refreshUpNext` callable, which the app calls when home appears and on resume,
+  at most every 15 minutes. No schedule: the time-of-day rules only matter to
+  somebody looking at the app.
+- Dismissal is the owner adding an id to `dismissed`; rules allow only that,
+  only growing, at most 20. Rebuilds filter dismissed ids out, so a swiped card
+  does not come back that day.
+- Every suggestion's text goes through the Weekly Insights safety filter in the
+  tests.
+
+Left out: the spec's "challenge lead change" rule. It needs a ranking history
+nothing keeps yet.
