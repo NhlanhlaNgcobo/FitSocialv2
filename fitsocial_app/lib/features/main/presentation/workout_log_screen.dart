@@ -24,10 +24,12 @@ import '../../../shared/widgets/save_workout_card_row.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../tracking/application/tracking_providers.dart';
 import '../../tracking/data/workout_prefill_service.dart';
+import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
-import 'exercise_editor_sheet.dart';
+import '../domain/workout_math.dart';
+import 'exercise_picker_sheet.dart';
 import 'tag_people_sheet.dart';
 
 /// The training log.
@@ -37,10 +39,11 @@ import 'tag_people_sheet.dart';
 ///
 ///  * **Repeat before entry.** A chip across the top refills the entire form
 ///    from a session already logged, so the common case is one tap and Save.
-///  * **The exercises are the screen.** A real table with a row per lift and a
-///    load on each, not one sets/reps pair standing in for a whole session.
-///    Volume, sets and reps are then read *out* of that table rather than
-///    typed, because they are facts about it.
+///  * **The exercises are the screen.** A card per lift, picked from the
+///    exercise library, with its sets, reps and load typed straight into it —
+///    not one sets/reps pair standing in for a whole session. Volume, sets and
+///    reps are then read *out* of the cards rather than typed, because they
+///    are facts about them.
 ///  * **Save is always reachable.** It is pinned to the bottom, so the screen
 ///    is never in a state where finishing it means scrolling first.
 class WorkoutLogScreen extends ConsumerStatefulWidget {
@@ -56,7 +59,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   late final TextEditingController _caloriesController;
   late final TextEditingController _notesController;
 
-  final List<ExerciseEntry> _exercises = [];
+  final List<_LogRow> _rows = [];
+  int _nextRowId = 0;
 
   bool _shareToFeed = true;
   List<TaggedUser> _taggedUsers = const [];
@@ -94,12 +98,17 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     _durationController.dispose();
     _caloriesController.dispose();
     _notesController.dispose();
+    for (final row in _rows) {
+      row.dispose();
+    }
     super.dispose();
   }
 
   int get _durationMinutes => parseTypedInt(_durationController.text) ?? 0;
 
   int get _calories => parseTypedInt(_caloriesController.text) ?? 0;
+
+  List<ExerciseEntry> get _exercises => [for (final row in _rows) row.toEntry()];
 
   int get _totalSets => _exercises.fold<int>(0, (sum, e) => sum + e.sets);
 
@@ -109,7 +118,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// Sets × reps × load, over every row that carries all three.
   ///
   /// The figure the whole screen is arranged around, and the reason weight is
-  /// on the table at all: it is the one number that says how hard the session
+  /// on the cards at all: it is the one number that says how hard the session
   /// was, and it cannot be typed — only derived.
   double get _volumeKg => _exercises.fold<double>(
         0,
@@ -126,7 +135,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
         title: _titleController.text.trim(),
         durationMinutes: _durationMinutes,
         calories: _calories,
-        exercises: List.of(_exercises),
+        exercises: _exercises,
         notes: _notesController.text.trim(),
         shareToFeed: _shareToFeed,
         backgroundImagePath: _backgroundPath,
@@ -136,7 +145,25 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
 
   /// Whether there is a card worth saving yet. A photo or a lift is enough;
   /// a title on its own is not a workout anyone would put on their wall.
-  bool get _hasCard => _exercises.isNotEmpty || _backgroundPath != null;
+  bool get _hasCard => _rows.isNotEmpty || _backgroundPath != null;
+
+  _LogRow _rowFrom(ExerciseEntry entry) => _LogRow(
+        _nextRowId++,
+        name: entry.name,
+        exerciseId: entry.exerciseId,
+        sets: entry.sets,
+        reps: entry.reps,
+        weightKg: entry.weightKg,
+      );
+
+  void _replaceRows(Iterable<ExerciseEntry> entries) {
+    for (final row in _rows) {
+      row.dispose();
+    }
+    _rows
+      ..clear()
+      ..addAll(entries.map(_rowFrom));
+  }
 
   /// Fills the whole form from a session already logged.
   void _repeat(RecentWorkout workout) {
@@ -146,9 +173,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
           workout.durationMinutes > 0 ? '${workout.durationMinutes}' : '';
       _caloriesController.text =
           workout.calories > 0 ? '${workout.calories}' : '';
-      _exercises
-        ..clear()
-        ..addAll(workout.exercises);
+      _replaceRows(workout.exercises);
       _errorMessage = null;
     });
     // The numbers are a starting point, not a claim about today — say so, so
@@ -198,8 +223,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   }
 
   /// Name, duration, calories and the date. Not the exercises: the store has
-  /// no idea what was lifted, and the table is left as it is — a repeat chip
-  /// may already have filled it, and this must not wipe that out.
+  /// no idea what was lifted, and the cards are left as they are — a repeat
+  /// chip may already have filled them, and this must not wipe that out.
   void _applyHealthPrefill(HealthWorkoutPrefill prefill) {
     setState(() {
       _healthPrefill = prefill;
@@ -227,28 +252,58 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     ].join(' · ');
   }
 
+  /// Starts a live session — or opens the one already running, which is never
+  /// replaced from here — on top of this screen, so backing out of it lands
+  /// back on the log.
+  Future<void> _startLiveWorkout() async {
+    await ref.read(activeWorkoutProvider.notifier).ensureStarted();
+    if (mounted) context.push('/workout-session');
+  }
+
+  /// Picks a movement from the library and adds it as a card, filled in with
+  /// what was logged for it last time — or 3 × 10 for one never logged, a
+  /// starting point to adjust rather than a blank to fill.
   Future<void> _addExercise() async {
-    final result = await showExerciseEditor(context);
-    if (result?.entry == null || !mounted) return;
+    final picked = await showExercisePicker(context);
+    if (picked == null || !mounted) return;
+    final last = _lastLogged(picked.name, picked.id);
     setState(() {
-      _exercises.add(result!.entry!);
+      _rows.add(_LogRow(
+        _nextRowId++,
+        name: picked.name,
+        exerciseId: picked.id,
+        sets: last?.sets ?? 3,
+        reps: last?.reps ?? 10,
+        weightKg: last?.weightKg,
+      ));
       _errorMessage = null;
     });
   }
 
-  Future<void> _editExercise(int index) async {
-    final result = await showExerciseEditor(
-      context,
-      initial: _exercises[index],
-    );
-    if (result == null || !mounted) return;
-    setState(() {
-      if (result.removed) {
-        _exercises.removeAt(index);
-      } else {
-        _exercises[index] = result.entry!;
+  /// The most recent logged entry for this movement with numbers on it, or
+  /// null when there is none or the history has not loaded.
+  ExerciseEntry? _lastLogged(String name, String? exerciseId) {
+    final history = ref.read(workoutHistoryProvider).valueOrNull;
+    if (history == null) return null;
+    final key = exerciseKeyFor(name: name, exerciseId: exerciseId);
+    for (final workout in history) {
+      for (final entry in workout) {
+        if (exerciseKey(entry) == key && entry.sets > 0 && entry.reps > 0) {
+          return entry;
+        }
       }
-    });
+    }
+    return null;
+  }
+
+  void _removeExercise(int index) {
+    setState(() => _rows.removeAt(index).dispose());
+  }
+
+  /// [to] is already the item's final position: `onReorderItem`, unlike the
+  /// deprecated `onReorder`, accounts for the item being lifted out.
+  void _reorderExercise(int from, int to) {
+    setState(() => _rows.insert(to, _rows.removeAt(from)));
   }
 
   /// Picks and crops a backdrop. The cropper downscales and re-encodes, so what
@@ -318,6 +373,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     // failed to load is worse than one without the convenience.
     final recents = ref.watch(recentWorkoutsProvider).valueOrNull ??
         const <RecentWorkout>[];
+    // Watched so it is loaded by the time an exercise is picked: a new card is
+    // filled in from the last time that movement was logged.
+    ref.watch(workoutHistoryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -335,6 +393,11 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                 AppSpacing.md,
               ),
               children: [
+                _LiveWorkoutCard(
+                  inProgress: ref.watch(activeWorkoutProvider) != null,
+                  onTap: _isSaving ? null : _startLiveWorkout,
+                ),
+                const SizedBox(height: AppSpacing.md),
                 _DateChip(loggedAt: _loggedAt),
                 if (!kIsWeb) ...[
                   const SizedBox(height: AppSpacing.md),
@@ -374,10 +437,12 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                   totalReps: _totalReps,
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                _ExerciseTable(
-                  exercises: _exercises,
+                _ExerciseCards(
+                  rows: _rows,
                   onAdd: _isSaving ? null : _addExercise,
-                  onEdit: _isSaving ? null : _editExercise,
+                  onRemove: _isSaving ? null : _removeExercise,
+                  onReorder: _reorderExercise,
+                  onChanged: () => setState(() {}),
                 ),
                 const SizedBox(height: AppSpacing.lg),
                 _NotesField(controller: _notesController),
@@ -424,6 +489,93 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
             onSave: _isSaving ? null : _saveWorkout,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The other way to log a workout: live, set by set, with a clock. First on
+/// the screen because it is a choice made before anything below is filled in.
+/// Says "Resume" while a session is running, since that is what a tap does.
+class _LiveWorkoutCard extends StatelessWidget {
+  const _LiveWorkoutCard({required this.inProgress, required this.onTap});
+
+  final bool inProgress;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return LiquidGlass(
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(
+                color: inProgress ? palette.brand : palette.brandSoftStroke,
+              ),
+            ),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: palette.brandSoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.timer_rounded,
+                    color: palette.brand,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        inProgress ? 'Resume your workout' : 'Start a workout',
+                        style: TextStyle(
+                          color: palette.text,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        inProgress
+                            ? 'Pick up where you left off'
+                            : 'Log it live, set by set, with a timer and '
+                                'rest between sets',
+                        style: TextStyle(
+                          color: palette.muted,
+                          fontSize: 12.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: palette.muted,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -659,7 +811,7 @@ class _TitleField extends StatelessWidget {
   }
 }
 
-/// Duration and calories are typed; volume and sets are read off the table.
+/// Duration and calories are typed; volume and sets are read off the cards.
 ///
 /// They share one grid because they are the same kind of thing to the reader —
 /// the session's headline figures — and separating "yours" from "ours" into two
@@ -747,7 +899,7 @@ class _MetricGrid extends StatelessWidget {
                     icon: Icons.repeat_rounded,
                     label: 'Sets',
                     value: totalSets > 0 ? '$totalSets' : '—',
-                    hint: totalReps > 0 ? '$totalReps reps' : 'From the table',
+                    hint: totalReps > 0 ? '$totalReps reps' : 'From your exercises',
                   ),
                 ),
               ],
@@ -955,23 +1107,82 @@ class _DerivedMetric extends StatelessWidget {
   }
 }
 
-/// The log itself: a row per exercise, tapped to edit.
-class _ExerciseTable extends StatelessWidget {
-  const _ExerciseTable({
-    required this.exercises,
+/// One exercise on the log, being filled in. Holds its own controllers so the
+/// numbers typed into it survive a reorder.
+class _LogRow {
+  _LogRow(
+    this.id, {
+    required this.name,
+    this.exerciseId,
+    int sets = 0,
+    int reps = 0,
+    double? weightKg,
+  })  : sets = TextEditingController(text: sets > 0 ? '$sets' : ''),
+        reps = TextEditingController(text: reps > 0 ? '$reps' : ''),
+        weight = TextEditingController(
+          text: weightKg == null || weightKg <= 0 ? '' : _trimmed(weightKg),
+        );
+
+  /// Identifies the row for reordering; unrelated to the exercise.
+  final int id;
+  final String name;
+
+  /// The library or custom exercise it was picked as. Null for a free-text
+  /// name, and for rows repeated from workouts logged before the library.
+  final String? exerciseId;
+
+  final TextEditingController sets;
+  final TextEditingController reps;
+  final TextEditingController weight;
+
+  int get setCount => (parseTypedInt(sets.text) ?? 0).clamp(0, 99);
+  int get repCount => (parseTypedInt(reps.text) ?? 0).clamp(0, 999);
+
+  double? get weightKg {
+    final kg = parseTypedDouble(weight.text);
+    return kg == null || kg <= 0 ? null : kg;
+  }
+
+  /// A blank field is "not filled in", saved as nothing rather than invented.
+  ExerciseEntry toEntry() => ExerciseEntry(
+        name: name,
+        exerciseId: exerciseId,
+        sets: setCount,
+        reps: repCount,
+        weightKg: weightKg,
+      );
+
+  void dispose() {
+    sets.dispose();
+    reps.dispose();
+    weight.dispose();
+  }
+
+  /// `60.0` → `60`, `22.5` → `22.5`.
+  static String _trimmed(double value) {
+    final text = value.toStringAsFixed(2);
+    return text
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
+}
+
+/// The log itself: a card per exercise, with its sets, reps and load typed in
+/// place, dragged to reorder.
+class _ExerciseCards extends StatelessWidget {
+  const _ExerciseCards({
+    required this.rows,
     required this.onAdd,
-    required this.onEdit,
+    required this.onRemove,
+    required this.onReorder,
+    required this.onChanged,
   });
 
-  final List<ExerciseEntry> exercises;
+  final List<_LogRow> rows;
   final VoidCallback? onAdd;
-  final ValueChanged<int>? onEdit;
-
-  /// Matches the feed card's columns, so the table someone fills in and the
-  /// card their followers read are laid out the same way.
-  static const double _setsWidth = 44;
-  static const double _repsWidth = 44;
-  static const double _loadWidth = 62;
+  final ValueChanged<int>? onRemove;
+  final void Function(int from, int to) onReorder;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -994,9 +1205,9 @@ class _ExerciseTable extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (exercises.isNotEmpty)
+              if (rows.isNotEmpty)
                 Text(
-                  '${exercises.length}',
+                  '${rows.length}',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -1006,158 +1217,144 @@ class _ExerciseTable extends StatelessWidget {
             ],
           ),
         ),
-        if (exercises.isEmpty)
+        if (rows.isEmpty)
           _EmptyTable(onAdd: onAdd)
-        else
-          Column(
+        else ...[
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            onReorderItem: onReorder,
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
-                child: Row(
-                  children: [
-                    Expanded(child: _ColumnHead('Exercise')),
-                    SizedBox(
-                      width: _setsWidth,
-                      child: _ColumnHead('Sets', end: true),
-                    ),
-                    SizedBox(
-                      width: _repsWidth,
-                      child: _ColumnHead('Reps', end: true),
-                    ),
-                    SizedBox(
-                      width: _loadWidth,
-                      child: _ColumnHead('kg', end: true),
-                    ),
-                  ],
+              for (var i = 0; i < rows.length; i++)
+                Padding(
+                  key: ValueKey(rows[i].id),
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: _ExerciseCard(
+                    row: rows[i],
+                    index: i,
+                    onRemove: onRemove == null ? null : () => onRemove!(i),
+                    onChanged: onChanged,
+                  ),
                 ),
-              ),
-              for (var i = 0; i < exercises.length; i++)
-                _ExerciseRow(
-                  exercise: exercises[i],
-                  onTap: onEdit == null ? null : () => onEdit!(i),
-                ),
-              const SizedBox(height: 10),
-              _AddExerciseButton(onAdd: onAdd),
             ],
           ),
+          const SizedBox(height: 2),
+          _AddExerciseButton(onAdd: onAdd),
+        ],
       ],
     );
   }
 }
 
-class _ColumnHead extends StatelessWidget {
-  const _ColumnHead(this.label, {this.end = false});
+class _ExerciseCard extends StatelessWidget {
+  const _ExerciseCard({
+    required this.row,
+    required this.index,
+    required this.onRemove,
+    required this.onChanged,
+  });
 
-  final String label;
-  final bool end;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label.toUpperCase(),
-      textAlign: end ? TextAlign.right : TextAlign.left,
-      maxLines: 1,
-      softWrap: false,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: 9,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.1,
-        color: context.palette.muted,
-      ),
-    );
-  }
-}
-
-class _ExerciseRow extends StatelessWidget {
-  const _ExerciseRow({required this.exercise, required this.onTap});
-
-  final ExerciseEntry exercise;
-  final VoidCallback? onTap;
-
-  /// `60.0` → `60`, `22.5` → `22.5`.
-  static String trimmed(double value) {
-    final text = value.toStringAsFixed(1);
-    return text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
-  }
+  final _LogRow row;
+  final int index;
+  final VoidCallback? onRemove;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.nested),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(4, 12, 4, 12),
-        decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: palette.stroke)),
-        ),
-        child: Row(
+    Widget number(
+      String label,
+      TextEditingController controller, {
+      bool decimal = false,
+    }) {
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
               child: Text(
-                exercise.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                label.toUpperCase(),
                 style: TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                  color: palette.text,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                  color: palette.muted,
                 ),
               ),
             ),
-            _Cell(
-              width: _ExerciseTable._setsWidth,
-              text: exercise.sets > 0 ? '${exercise.sets}' : '—',
-              muted: exercise.sets == 0,
-            ),
-            _Cell(
-              width: _ExerciseTable._repsWidth,
-              text: exercise.reps > 0 ? '${exercise.reps}' : '—',
-              muted: exercise.reps == 0,
-            ),
-            _Cell(
-              width: _ExerciseTable._loadWidth,
-              text:
-                  exercise.weightKg == null ? '—' : trimmed(exercise.weightKg!),
-              muted: exercise.weightKg == null,
+            TextField(
+              controller: controller,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.numberWithOptions(decimal: decimal),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  decimal ? RegExp(r'[0-9.,]') : RegExp(r'[0-9]'),
+                ),
+              ],
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '—',
+                hintStyle: TextStyle(color: palette.muted),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              onChanged: (_) => onChanged(),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
+      );
+    }
 
-class _Cell extends StatelessWidget {
-  const _Cell({
-    required this.width,
-    required this.text,
-    required this.muted,
-  });
-
-  final double width;
-  final String text;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return SizedBox(
-      width: width,
-      child: Text(
-        text,
-        textAlign: TextAlign.right,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 14.5,
-          fontWeight: FontWeight.w700,
-          color: muted ? palette.muted : palette.text,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
+    return GlassWell(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              ReorderableDragStartListener(
+                index: index,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(Icons.drag_handle_rounded, color: palette.muted),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  row.name,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: palette.brandText,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove ${row.name}',
+                icon: Icon(Icons.close_rounded, color: palette.muted),
+                onPressed: onRemove,
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                number('Sets', row.sets),
+                const SizedBox(width: 12),
+                number('Reps', row.reps),
+                const SizedBox(width: 12),
+                number('Weight (kg)', row.weight, decimal: true),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1184,8 +1381,8 @@ class _EmptyTable extends StatelessWidget {
         child: Column(
           children: [
             Text(
-              'Add the lifts you did, with the load on each. '
-              'Volume adds itself up.',
+              'Pick the lifts you did from the library, with the load on '
+              'each. Volume adds itself up.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: palette.muted,

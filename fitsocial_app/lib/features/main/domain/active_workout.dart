@@ -121,7 +121,6 @@ class ActiveWorkout {
     required this.startedAt,
     required this.exercises,
     this.title = '',
-    this.routineId,
     this.rest,
   });
 
@@ -137,7 +136,6 @@ class ActiveWorkout {
       id: (json['id'] as String?) ?? '',
       startedAt: startedAt,
       title: (json['title'] as String?) ?? '',
-      routineId: json['routineId'] as String?,
       rest: RestTimer.fromJson(json['rest']),
       exercises: (json['exercises'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
@@ -152,8 +150,6 @@ class ActiveWorkout {
   final DateTime startedAt;
   final String title;
 
-  /// The routine this was started from; null for a freeform workout.
-  final String? routineId;
   final List<ActiveExercise> exercises;
 
   /// The rest running now, or the last one, which the screen stops showing
@@ -222,7 +218,6 @@ class ActiveWorkout {
         id: id,
         startedAt: startedAt,
         title: title ?? this.title,
-        routineId: routineId,
         exercises: exercises ?? this.exercises,
         rest: clearRest ? null : (rest ?? this.rest),
       );
@@ -248,7 +243,6 @@ class ActiveWorkout {
       notes: notes,
       shareToFeed: shareToFeed,
       loggedAt: startedAt,
-      routineId: routineId,
       exercises: [
         for (final exercise in exercises)
           if (exercise.doneSets.isNotEmpty)
@@ -266,7 +260,6 @@ class ActiveWorkout {
         'id': id,
         'startedAt': startedAt.millisecondsSinceEpoch,
         'title': title,
-        if (routineId != null) 'routineId': routineId,
         if (rest != null) 'rest': rest!.toJson(),
         'exercises': exercises.map((e) => e.toJson()).toList(),
       };

@@ -52,21 +52,6 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<WorkoutRoutine>> getRoutines() async {
-    throw StateError(_firebaseSetupMessage);
-  }
-
-  @override
-  Future<WorkoutRoutine> saveRoutine(WorkoutRoutine routine) async {
-    throw StateError(_firebaseSetupMessage);
-  }
-
-  @override
-  Future<void> deleteRoutine(String id) async {
-    throw StateError(_firebaseSetupMessage);
-  }
-
-  @override
   Future<List<CustomExercise>> getCustomExercises() async {
     throw StateError(_firebaseSetupMessage);
   }

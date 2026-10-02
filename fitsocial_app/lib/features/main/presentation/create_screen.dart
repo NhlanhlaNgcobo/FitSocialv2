@@ -24,30 +24,13 @@ class CreateScreen extends ConsumerWidget {
     final flowController = ref.read(createFlowControllerProvider.notifier);
     final inProgress = ref.watch(activeWorkoutProvider) != null;
     final actions = [
-      // No create-flow destination: a session in progress is persisted by its
-      // own controller, so there is no draft here to resume or discard.
-      _CreateAction(
-        title: inProgress ? 'Resume Workout' : 'Start a Workout',
-        subtitle: inProgress
-            ? 'Pick up where you left off'
-            : 'Log sets live, with a timer',
-        icon: Icons.timer_rounded,
-        accent: _kWorkoutAccent,
-        onTap: () async {
-          await ref.read(activeWorkoutProvider.notifier).ensureStarted();
-          if (context.mounted) context.push('/workout-session');
-        },
-      ),
-      _CreateAction(
-        title: 'Routines',
-        subtitle: 'Start from a saved workout',
-        icon: Icons.checklist_rounded,
-        accent: _kWorkoutAccent,
-        onTap: () => context.push('/routines'),
-      ),
       _CreateAction(
         title: 'Log a Workout',
-        subtitle: 'Add one you have already done',
+        // Live sessions start from inside the log screen now, so a workout
+        // left running is announced here, on the way in.
+        subtitle: inProgress
+            ? 'A live workout is in progress. Resume it from here'
+            : 'Live with a timer, or one you have done',
         icon: Icons.fitness_center_rounded,
         accent: _kWorkoutAccent,
         destination: CreateCanvasDestination.workout,

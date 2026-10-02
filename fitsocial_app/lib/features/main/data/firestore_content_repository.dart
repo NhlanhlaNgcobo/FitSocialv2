@@ -869,42 +869,6 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
-  Future<List<WorkoutRoutine>> getRoutines() async {
-    final user = _requireCurrentUser();
-    final snapshot =
-        await routinesCollection.where('authorId', isEqualTo: user.uid).get();
-    return snapshot.docs
-        .map((doc) => WorkoutRoutine.fromMap(doc.id, doc.data()))
-        .where((routine) => routine.name.isNotEmpty)
-        .toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-  }
-
-  @override
-  Future<WorkoutRoutine> saveRoutine(WorkoutRoutine routine) async {
-    final user = _requireCurrentUser();
-    final ref = routine.id.isEmpty
-        ? routinesCollection.doc()
-        : routinesCollection.doc(routine.id);
-    await _settleWrite(ref.set({
-      ...routine.toMap(),
-      'authorId': user.uid,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }));
-    return WorkoutRoutine(
-      id: ref.id,
-      name: routine.name,
-      exercises: routine.exercises,
-    );
-  }
-
-  @override
-  Future<void> deleteRoutine(String id) async {
-    _requireCurrentUser();
-    await _settleWrite(routinesCollection.doc(id).delete());
-  }
-
-  @override
   Future<List<CustomExercise>> getCustomExercises() async {
     final user = _requireCurrentUser();
     final snapshot = await customExercisesCollection
@@ -1377,9 +1341,6 @@ class FirestoreContentRepository implements ContentRepository {
   CollectionReference<Map<String, dynamic>> get mealsCollection =>
       _firestore.collection('meals');
 
-  CollectionReference<Map<String, dynamic>> get routinesCollection =>
-      _firestore.collection('routines');
-
   CollectionReference<Map<String, dynamic>> get customExercisesCollection =>
       _firestore.collection('customExercises');
 
@@ -1677,8 +1638,6 @@ class FirestoreContentRepository implements ContentRepository {
       // detail than the copy — and left the log screen with nothing to build a
       // "repeat this session" from.
       'exercises': draft.exercises.map((e) => e.toMap()).toList(),
-      // The routine it was started from. Absent for a freeform workout.
-      if (draft.routineId != null) 'routineId': draft.routineId,
       'sharedToFeed': draft.shareToFeed,
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
       'loggedAt': Timestamp.fromDate(draft.loggedAt ?? DateTime.now()),

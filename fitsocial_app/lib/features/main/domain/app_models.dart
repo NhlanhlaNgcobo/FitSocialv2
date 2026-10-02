@@ -855,14 +855,9 @@ class WorkoutLogDraft {
     this.backgroundImagePath,
     this.loggedAt,
     this.taggedUsers = const [],
-    this.routineId,
   });
 
   final String title;
-
-  /// The saved routine this session was started from, or null for a freeform
-  /// one. Recorded on the workout log; the feed post does not carry it.
-  final String? routineId;
 
   /// The people attached to the shared post. Ignored when [shareToFeed] is
   /// off: with no post there is nothing to tag them in.

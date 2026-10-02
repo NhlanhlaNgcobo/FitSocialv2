@@ -37,15 +37,6 @@ abstract class ContentRepository {
   /// title, duration and calories.
   Future<List<RecentWorkout>> getRecentWorkouts({int limit});
 
-  /// The signed-in user's saved routines, alphabetical.
-  Future<List<WorkoutRoutine>> getRoutines();
-
-  /// Creates a routine, or updates it when [routine] already has an id.
-  /// Returns the saved routine with its id filled in.
-  Future<WorkoutRoutine> saveRoutine(WorkoutRoutine routine);
-
-  Future<void> deleteRoutine(String id);
-
   /// The exercises the signed-in user has made up, alphabetical.
   Future<List<CustomExercise>> getCustomExercises();
 

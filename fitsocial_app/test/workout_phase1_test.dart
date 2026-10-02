@@ -139,25 +139,6 @@ void main() {
       expect(rest.remaining(rig.now), Duration.zero);
     });
 
-    test('a routine hands its rest and supersets to the session', () async {
-      final rig = _Rig();
-      await rig.controller.startFromRoutine(const WorkoutRoutine(
-        id: 'r',
-        name: 'Upper',
-        exercises: [
-          RoutineExercise(name: 'Bench', restSeconds: 120, supersetGroup: 'g'),
-          RoutineExercise(name: 'Row', supersetGroup: 'g'),
-        ],
-      ));
-      final [bench, row] = rig.workout.exercises;
-      expect(bench.restSeconds, 120);
-      expect(row.supersetGroup, 'g');
-
-      rig.controller.updateSet(row.key, 0, reps: 8);
-      rig.controller.toggleDone(row.key, 0, defaultRestSeconds: 60);
-      expect(rig.workout.rest!.totalSeconds, 120);
-    });
-
     test('the rest survives the saved-session file', () async {
       final rig = _Rig();
       final [a] = await rig.start(['Squat']);

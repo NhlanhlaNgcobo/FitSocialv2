@@ -107,45 +107,6 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     ));
   }
 
-  /// Starts a workout from [routine]: its exercises in order, each with its
-  /// target number of rows pre-filled with the target reps and load.
-  ///
-  /// Returns false, changing nothing, when a workout is already running and
-  /// [replace] is not set — the caller asks the user before throwing a
-  /// session away. The pre-filled rows are not ticked: a target is a plan, not
-  /// something that was done.
-  Future<bool> startFromRoutine(
-    WorkoutRoutine routine, {
-    bool replace = false,
-  }) async {
-    await ready;
-    if (state != null && !replace) return false;
-    _commit(ActiveWorkout(
-      id: _newKey(),
-      startedAt: _now(),
-      title: routine.name,
-      routineId: routine.id.isEmpty ? null : routine.id,
-      exercises: [
-        for (final e in routine.exercises)
-          ActiveExercise(
-            key: _newKey(),
-            name: e.name,
-            exerciseId: e.exerciseId,
-            supersetGroup: e.supersetGroup,
-            restSeconds: e.restSeconds,
-            sets: [
-              for (var i = 0; i < (e.targetSets < 1 ? 1 : e.targetSets); i++)
-                ExerciseSet(
-                  weightKg: e.targetWeightKg ?? 0,
-                  reps: e.targetReps,
-                ),
-            ],
-          ),
-      ],
-    ));
-    return true;
-  }
-
   /// Ends the session without saving it.
   void discard() => _commit(null);
 
