@@ -14,6 +14,7 @@ import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
 import '../../insights/application/insight_providers.dart';
 import '../../main/application/content_providers.dart';
+import '../../onboarding/application/fitness_plan.dart';
 import '../../main/application/workout_preferences.dart';
 import '../../main/data/content_repository.dart';
 import '../../main/data/workout_preferences_store.dart';
@@ -120,6 +121,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Steps, heart rate and connected devices',
                 onTap: () => context.push('/health'),
               ),
+              const _TrainingPlanTile(),
               const _RunImportTile(),
               const _WeeklyInsightsTile(),
             ],
@@ -614,6 +616,31 @@ class _RunImportTile extends ConsumerWidget {
       value: ref.watch(runImportEnabledProvider),
       onChanged: (next) =>
           ref.read(runImportEnabledProvider.notifier).set(enabled: next),
+    );
+  }
+}
+
+/// The goal, equipment and days the user signed up with, and the way to
+/// change them. For an account with no plan yet — anyone who signed up before
+/// onboarding asked — it says so, and the same screens fill one in.
+class _TrainingPlanTile extends ConsumerWidget {
+  const _TrainingPlanTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(fitnessProfileProvider);
+    final subtitle = switch (profile) {
+      AsyncData(value: final plan?) =>
+        '${plan.primaryGoal.label} · ${plan.equipment.first.label}',
+      AsyncData() => 'Not set yet. Two quick screens',
+      _ => 'Your goal, equipment and days',
+    };
+    return _SettingsTile(
+      icon: Icons.flag_outlined,
+      accent: _kHealthAccent,
+      label: 'Training plan',
+      subtitle: subtitle,
+      onTap: () => context.push<bool>('/plan/goal'),
     );
   }
 }

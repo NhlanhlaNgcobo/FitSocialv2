@@ -13,8 +13,14 @@ import 'onboarding_chrome.dart';
 /// The first screen anyone signed out sees. Tapping a card only selects it;
 /// `Continue` moves on — decided over tap-to-advance so a mis-tap cannot
 /// carry somebody forward with the wrong goal.
+///
+/// With [finishing] set it is the first of two screens of "Finish your plan",
+/// for someone already signed in: no wordmark or login link, a way out, and
+/// it closes with `true` once the plan is saved on the next screen.
 class GoalScreen extends ConsumerWidget {
-  const GoalScreen({super.key});
+  const GoalScreen({super.key, this.finishing = false});
+
+  final bool finishing;
 
   static IconData iconFor(TrainingGoal goal) => switch (goal) {
         TrainingGoal.loseFat => Icons.local_fire_department_outlined,
@@ -52,11 +58,23 @@ class GoalScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const OnboardingHeader(step: 1),
+                      OnboardingHeader(
+                        step: 1,
+                        totalSteps: finishing ? 2 : 4,
+                        onBack: finishing ? () => context.pop(false) : null,
+                      ),
                       const SizedBox(height: AppSpacing.xl + AppSpacing.sm),
-                      const OnboardingEyebrow('Your training starts here'),
+                      OnboardingEyebrow(
+                        finishing
+                            ? 'Finish your plan'
+                            : 'Your training starts here',
+                      ),
                       const SizedBox(height: AppSpacing.sm),
-                      const OnboardingHeadline('Train. Fuel.\nShare. Grow.'),
+                      OnboardingHeadline(
+                        finishing
+                            ? 'What are you\ntraining for?'
+                            : 'Train. Fuel.\nShare. Grow.',
+                      ),
                       const SizedBox(height: AppSpacing.md),
                       const Text(
                         "Pick what you're chasing.",
@@ -95,14 +113,24 @@ class GoalScreen extends ConsumerWidget {
                       label: 'Continue',
                       onPressed: selected == null
                           ? null
-                          : () => context.push('/onboarding/shape'),
+                          : finishing
+                              ? () async {
+                                  final saved =
+                                      await context.push<bool>('/plan/shape');
+                                  if (saved == true && context.mounted) {
+                                    context.pop(true);
+                                  }
+                                }
+                              : () => context.push('/onboarding/shape'),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    OnboardingLoginLink(
-                      // The answers stay on disk: someone who logs in to an
-                      // account with no plan gets them back pre-filled.
-                      onPressed: () => context.go('/login?mode=login'),
-                    ),
+                    if (!finishing) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      OnboardingLoginLink(
+                        // The answers stay on disk: someone who logs in to an
+                        // account with no plan gets them back pre-filled.
+                        onPressed: () => context.go('/login?mode=login'),
+                      ),
+                    ],
                   ],
                 ),
               ),

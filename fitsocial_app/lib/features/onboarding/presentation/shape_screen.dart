@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../application/fitness_plan.dart';
 import '../application/onboarding_controller.dart';
 import '../domain/fitness_profile.dart';
 import 'onboarding_chrome.dart';
@@ -15,8 +16,13 @@ import 'onboarding_chrome.dart';
 /// `Continue`: experience and equipment decide which workouts can be served
 /// at all, and a silent default would serve beginner bodyweight work to
 /// someone with a home gym.
+///
+/// With [finishing] set it is the second screen of "Finish your plan": the
+/// button saves the plan to the signed-in account and closes with `true`.
 class ShapeScreen extends ConsumerWidget {
-  const ShapeScreen({super.key});
+  const ShapeScreen({super.key, this.finishing = false});
+
+  final bool finishing;
 
   /// The tail of the summary line, from the goal picked on Step 1.
   static String descriptorFor(TrainingGoal goal) => switch (goal) {
@@ -85,6 +91,7 @@ class ShapeScreen extends ConsumerWidget {
                     children: [
                       OnboardingHeader(
                         step: 2,
+                        totalSteps: finishing ? 2 : 4,
                         onBack: () => context.canPop()
                             ? context.pop()
                             : context.go('/onboarding/goal'),
@@ -195,20 +202,78 @@ class ShapeScreen extends ConsumerWidget {
                   AppSpacing.lg,
                   AppSpacing.md,
                 ),
-                child: OnboardingCta(
-                  label: 'Continue',
-                  onPressed: ready
-                      ? () {
-                          controller.confirmShape();
-                          context.push('/onboarding/plan');
-                        }
-                      : null,
-                ),
+                child: finishing
+                    ? _SavePlanButton(ready: ready)
+                    : OnboardingCta(
+                        label: 'Continue',
+                        onPressed: ready
+                            ? () {
+                                controller.confirmShape();
+                                context.push('/onboarding/plan');
+                              }
+                            : null,
+                      ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// `Save plan`, with the wait and the failure it can have.
+class _SavePlanButton extends ConsumerStatefulWidget {
+  const _SavePlanButton({required this.ready});
+
+  final bool ready;
+
+  @override
+  ConsumerState<_SavePlanButton> createState() => _SavePlanButtonState();
+}
+
+class _SavePlanButtonState extends ConsumerState<_SavePlanButton> {
+  bool _saving = false;
+  String? _error;
+
+  Future<void> _save() async {
+    ref.read(onboardingControllerProvider.notifier).confirmShape();
+    final draft = ref.read(onboardingControllerProvider);
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref.read(fitnessPlanActionsProvider).save(draft);
+      if (mounted) context.pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error =
+            "Couldn't save your plan. Check your connection and try again.";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_error != null) ...[
+          Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 14),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        OnboardingCta(
+          label: _saving ? 'Saving…' : 'Save plan',
+          onPressed: widget.ready && !_saving ? _save : null,
+        ),
+      ],
     );
   }
 }

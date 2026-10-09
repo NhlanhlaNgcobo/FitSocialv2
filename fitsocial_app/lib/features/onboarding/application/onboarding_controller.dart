@@ -18,8 +18,10 @@ final onboardingControllerProvider =
 
 class OnboardingController extends StateNotifier<OnboardingDraft> {
   OnboardingController(this._store) : super(const OnboardingDraft()) {
-    _load();
+    _loaded = _load();
   }
+
+  late final Future<void> _loaded;
 
   final OnboardingDraftStore _store;
 
@@ -30,6 +32,22 @@ class OnboardingController extends StateNotifier<OnboardingDraft> {
   Future<void> _load() async {
     final saved = await _store.read();
     if (saved != null && mounted && !_touched) state = saved;
+  }
+
+  /// Pre-fills from a saved plan, for editing one from Settings. Only when
+  /// there is nothing newer: a kept draft, or anything already tapped, wins.
+  Future<void> seedFrom(FitnessProfile profile, {int? weeklyGoalDays}) async {
+    await _loaded;
+    if (!mounted || _touched || !state.isEmpty) return;
+    state = OnboardingDraft(
+      primaryGoal: profile.primaryGoal,
+      secondaryFocus: profile.secondaryFocus,
+      secondaryFocusAnswered: true,
+      fitnessLevel: profile.fitnessLevel,
+      equipment: profile.equipment,
+      weeklyGoalDays:
+          weeklyGoalDayChoices.contains(weeklyGoalDays) ? weeklyGoalDays : null,
+    );
   }
 
   void selectGoal(TrainingGoal goal) =>

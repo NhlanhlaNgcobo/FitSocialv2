@@ -45,6 +45,7 @@ import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/onboarding/presentation/claim_name_screen.dart';
 import '../../features/onboarding/presentation/goal_screen.dart';
 import '../../features/onboarding/presentation/plan_screen.dart';
+import '../../features/onboarding/presentation/plan_setup_screen.dart';
 import '../../features/onboarding/presentation/shape_screen.dart';
 import '../../features/races/presentation/race_detail_screen.dart';
 import '../../features/races/presentation/races_screen.dart';
@@ -188,6 +189,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding/name',
         builder: (context, state) => const ClaimNameScreen(),
+      ),
+      // "Finish your plan": Steps 1-2 again, signed in. Each closes with true
+      // once the plan is saved, so whoever opened it knows to carry on.
+      GoRoute(
+        path: '/plan/goal',
+        builder: (context, state) => const PlanSetupScreen(),
+      ),
+      GoRoute(
+        path: '/plan/shape',
+        builder: (context, state) => const ShapeScreen(finishing: true),
       ),
       GoRoute(
         path: '/edit-profile',

@@ -109,11 +109,15 @@ class OnboardingHeader extends StatelessWidget {
   const OnboardingHeader({
     required this.step,
     this.onBack,
+    this.totalSteps = OnboardingStepIndicator.defaultTotal,
     super.key,
   });
 
-  /// 1–4. That many segments are filled.
+  /// That many segments are filled.
   final int step;
+
+  /// Four in sign-up; two when finishing a plan after signing in.
+  final int totalSteps;
 
   /// Null on Step 1, which has nowhere to go back to and shows the wordmark
   /// in its place.
@@ -149,7 +153,7 @@ class OnboardingHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        OnboardingStepIndicator(step: step),
+        OnboardingStepIndicator(step: step, total: totalSteps),
       ],
     );
   }
@@ -184,11 +188,16 @@ class _Wordmark extends StatelessWidget {
 
 /// Four equal bars; the first [step] are orange.
 class OnboardingStepIndicator extends StatelessWidget {
-  const OnboardingStepIndicator({required this.step, super.key});
+  const OnboardingStepIndicator({
+    required this.step,
+    this.total = defaultTotal,
+    super.key,
+  });
 
   final int step;
+  final int total;
 
-  static const total = 4;
+  static const defaultTotal = 4;
 
   @override
   Widget build(BuildContext context) {
