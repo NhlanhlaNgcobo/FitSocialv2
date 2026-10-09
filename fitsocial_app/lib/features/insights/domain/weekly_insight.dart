@@ -14,11 +14,11 @@ enum InsightStatus {
   failed;
 
   static InsightStatus fromKey(Object? key) => switch (key) {
-    'ready' => ready,
-    'insufficient' => insufficient,
-    'generating' => generating,
-    _ => failed,
-  };
+        'ready' => ready,
+        'insufficient' => insufficient,
+        'generating' => generating,
+        _ => failed,
+      };
 }
 
 enum TrendDirection {
@@ -27,11 +27,11 @@ enum TrendDirection {
   flat;
 
   static TrendDirection? fromKey(Object? key) => switch (key) {
-    'up' => up,
-    'down' => down,
-    'flat' => flat,
-    _ => null,
-  };
+        'up' => up,
+        'down' => down,
+        'flat' => flat,
+        _ => null,
+      };
 }
 
 class InsightTrend {
@@ -48,14 +48,14 @@ class InsightTrend {
   final String note;
 
   String get metricLabel => switch (metric) {
-    'steps' => 'Steps',
-    'active_minutes' => 'Active minutes',
-    'sessions' => 'Sessions',
-    'streak' => 'Streak',
-    'meals_logged' => 'Meals logged',
-    'heart_rate' => 'Heart rate',
-    _ => metric,
-  };
+        'steps' => 'Steps',
+        'active_minutes' => 'Active minutes',
+        'sessions' => 'Sessions',
+        'streak' => 'Streak',
+        'meals_logged' => 'Meals logged',
+        'heart_rate' => 'Heart rate',
+        _ => metric,
+      };
 }
 
 /// How a user rated an insight. The keys match the rules' allowed list.
