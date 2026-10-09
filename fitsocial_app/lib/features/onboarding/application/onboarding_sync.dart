@@ -31,6 +31,11 @@ abstract interface class OnboardingSync {
 
   /// Finishes a flush a previous launch started and did not complete.
   Future<void> retryPending(String uid);
+
+  /// The user backed out of "Claim your name" and is being signed out. The
+  /// answers stay, unclaimed, so whichever account they sign in with next
+  /// gets them — including a different Google account.
+  Future<void> abandon(String uid);
 }
 
 /// For sessions with no onboarding behind them — tests, mostly.
@@ -48,6 +53,9 @@ class NoopOnboardingSync implements OnboardingSync {
 
   @override
   Future<void> retryPending(String uid) async {}
+
+  @override
+  Future<void> abandon(String uid) async {}
 }
 
 class DraftOnboardingSync implements OnboardingSync {
@@ -128,6 +136,19 @@ class DraftOnboardingSync implements OnboardingSync {
       }
     } catch (error) {
       debugPrint('Onboarding flush retry failed: $error');
+    }
+  }
+
+  @override
+  Future<void> abandon(String uid) async {
+    try {
+      final draft = await _drafts.read();
+      if (draft == null || draft.ownerUid != uid) return;
+      // fitnessSaved goes too: it was true of the account being left, not of
+      // the one coming next.
+      await _drafts.save(draft.copyWith(clearOwner: true, fitnessSaved: false));
+    } catch (error) {
+      debugPrint('Could not release the onboarding draft: $error');
     }
   }
 

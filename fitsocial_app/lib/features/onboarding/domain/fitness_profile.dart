@@ -325,6 +325,7 @@ class OnboardingDraft {
     Set<Equipment>? equipment,
     int? weeklyGoalDays,
     String? ownerUid,
+    bool clearOwner = false,
     bool? fitnessSaved,
   }) {
     return OnboardingDraft(
@@ -336,7 +337,7 @@ class OnboardingDraft {
       fitnessLevel: fitnessLevel ?? this.fitnessLevel,
       equipment: equipment ?? this.equipment,
       weeklyGoalDays: weeklyGoalDays ?? this.weeklyGoalDays,
-      ownerUid: ownerUid ?? this.ownerUid,
+      ownerUid: clearOwner ? null : ownerUid ?? this.ownerUid,
       fitnessSaved: fitnessSaved ?? this.fitnessSaved,
     );
   }

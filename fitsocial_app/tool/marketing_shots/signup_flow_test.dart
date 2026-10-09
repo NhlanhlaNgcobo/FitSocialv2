@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fitsocial_app/features/onboarding/application/onboarding_draft_providers.dart';
 import 'package:fitsocial_app/features/onboarding/data/onboarding_draft_store.dart';
 import 'package:fitsocial_app/features/onboarding/domain/fitness_profile.dart';
+import 'package:fitsocial_app/features/onboarding/presentation/claim_name_screen.dart';
 import 'package:fitsocial_app/features/onboarding/presentation/goal_screen.dart';
 import 'package:fitsocial_app/features/onboarding/presentation/plan_screen.dart';
 import 'package:fitsocial_app/features/onboarding/presentation/shape_screen.dart';
@@ -71,6 +72,20 @@ void main() {
         ...newAccount,
         onboardingDraftStoreProvider.overrideWithValue(store),
       ]),
+    );
+  });
+
+  testWidgets('signup step 4, prefilled from Google', (tester) async {
+    await shoot(
+      tester,
+      'signup_4_name',
+      shotApp(const ClaimNameScreen(), overrides: [
+        ...newAccount,
+        providerDisplayNameProvider.overrideWithValue('Neo Motion'),
+      ]),
+      before: (tester) async {
+        await tester.pump(const Duration(seconds: 1));
+      },
     );
   });
 }

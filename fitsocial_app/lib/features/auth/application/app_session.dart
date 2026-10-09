@@ -396,6 +396,15 @@ class AppSession extends ChangeNotifier {
     }
   }
 
+  /// Backs out of "Claim your name": releases the onboarding answers from
+  /// this account, then signs out. The answers stay on the phone for the next
+  /// sign-in, which may well be a different account.
+  Future<void> abandonSignUp() async {
+    final uid = authRepository.currentUserId();
+    if (uid != null) await onboarding.abandon(uid);
+    await signOut();
+  }
+
   /// Permanently deletes the account and drops the session.
   ///
   /// Returns true only when the server confirmed the deletion. A false return
