@@ -326,6 +326,70 @@ service cloud.firestore {
                      || (usernameCooldownElapsed() && stampsHandleChange())));
     }
 
+    // Days a week the user means to train. Set during sign-up (2-6) and from
+    // the progress tab (1-7, see setWeeklyGoalDays), so the wider range is the
+    // rule. Optional -- an account that never chose reads the app's default.
+    // Checked on every owner write, so it must never be narrower than what
+    // the app already stores, or the user could not edit their profile.
+    function hasValidWeeklyGoalDays() {
+      let data = request.resource.data;
+      return !('weeklyGoalDays' in data)
+             || (data.weeklyGoalDays is int
+                 && data.weeklyGoalDays >= 1
+                 && data.weeklyGoalDays <= 7);
+    }
+
+    // users/{uid}/private/fitness: what the sign-up journey produces. The
+    // workout matrix treats primaryGoal and equipment as hard constraints, so
+    // a value it does not know would match no workout at all -- every field is
+    // checked against the app's own list. Mirrors the enums in
+    // lib/features/onboarding/domain/fitness_profile.dart; change both together.
+    function isValidFitnessProfile() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['primaryGoal', 'fitnessLevel', 'equipment'])
+             && data.keys().hasOnly(['primaryGoal', 'secondaryFocus',
+                                     'fitnessLevel', 'activityLevel',
+                                     'equipment', 'dietType', 'allergies',
+                                     'targetWeightKg', 'updatedAt'])
+             && data.primaryGoal in ['loseFat', 'buildMuscle', 'buildStrength',
+                                     'getLean', 'buildCore', 'improveEndurance',
+                                     'athleticPerformance', 'mobilityFitness']
+             && data.fitnessLevel in ['beginner', 'intermediate', 'advanced']
+             && data.equipment is list
+             && data.equipment.size() >= 1
+             && data.equipment.size() <= 3
+             && data.equipment.toSet().hasOnly(['none', 'dumbbells', 'homeGym'])
+             // Absent and null both mean "skipped" for the optional fields.
+             && (data.get('secondaryFocus', null) == null
+                 || data.secondaryFocus in ['chest', 'back', 'shoulders', 'arms',
+                                            'legs', 'glutes', 'core', 'fullBody',
+                                            'hyrox'])
+             && (data.get('activityLevel', null) == null
+                 || data.activityLevel in ['sedentary', 'light', 'moderate',
+                                           'active', 'veryActive'])
+             && (data.get('dietType', null) == null
+                 || data.dietType in ['omnivore', 'vegetarian', 'vegan',
+                                      'pescatarian'])
+             && (!('allergies' in data)
+                 || (data.allergies is list && data.allergies.size() <= 30))
+             && (data.get('targetWeightKg', null) == null
+                 || (data.targetWeightKg is number
+                     && data.targetWeightKg >= 20
+                     && data.targetWeightKg <= 400));
+    }
+
+    // One weigh-in per day, the day key as the id. Kilograms only, like every
+    // stored weight in the app.
+    function isValidWeighIn(dayKey) {
+      let data = request.resource.data;
+      return dayKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+             && data.keys().hasOnly(['weightKg', 'recordedAt'])
+             && data.weightKg is number
+             && data.weightKg >= 20
+             && data.weightKg <= 400
+             && data.recordedAt == request.time;
+    }
+
     // Profile documents.
     //
     // Reads are open to any signed-in user because Explore search and post
@@ -421,10 +485,12 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
                     && request.auth.uid == userId
-                    && ownsRequestedHandle(userId);
+                    && ownsRequestedHandle(userId)
+                    && hasValidWeeklyGoalDays();
       allow update: if request.auth != null
                     && ((request.auth.uid == userId
-                         && isAllowedHandleWrite(userId))
+                         && isAllowedHandleWrite(userId)
+                         && hasValidWeeklyGoalDays())
                         || (request.resource.data.diff(resource.data)
                               .affectedKeys()
                               .hasOnly(['followersCount'])
@@ -434,9 +500,32 @@ service cloud.firestore {
 
       // Private account data (email, and anything else that must never be
       // readable by other users). Owner-only, read and write.
+      //
+      // The fitness document is carved out and validated below. Rules OR every
+      // match together, so without the docId check here this wildcard would
+      // let any shape through and the validation would be decorative.
       match /private/{docId} {
-        allow read, write: if request.auth != null
-                           && request.auth.uid == userId;
+        allow read, delete: if request.auth != null
+                            && request.auth.uid == userId;
+        allow create, update: if request.auth != null
+                              && request.auth.uid == userId
+                              && docId != 'fitness';
+      }
+
+      match /private/fitness {
+        allow create, update: if request.auth != null
+                              && request.auth.uid == userId
+                              && isValidFitnessProfile();
+      }
+
+      // The weight history, one document per day. Owner-only: weight is
+      // health data, and nothing in the app shows another user's.
+      match /weighIns/{dayKey} {
+        allow read, delete: if request.auth != null
+                            && request.auth.uid == userId;
+        allow create, update: if request.auth != null
+                              && request.auth.uid == userId
+                              && isValidWeighIn(dayKey);
       }
 
       // Saved posts are private to their owner. Rules do not cascade into
