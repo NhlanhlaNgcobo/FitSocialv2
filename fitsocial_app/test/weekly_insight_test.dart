@@ -108,11 +108,11 @@ void main() {
   group('home card', () {
     final ready = WeeklyInsight.fromMap('2026-W39', _readyDoc());
 
-    testWidgets('shows the headline, labelled as AI-written', (tester) async {
+    testWidgets('shows the headline, without the AI label', (tester) async {
       await tester.pumpWidget(_host(_FakeInsightRepository(insight: ready)));
       await tester.pumpAndSettle();
       expect(find.text('Five sessions and a four-day streak'), findsOneWidget);
-      expect(find.text('Written by AI from your logged data'), findsOneWidget);
+      expect(find.text('Written by AI from your logged data'), findsNothing);
       expect(find.text(kWellbeingNote), findsNothing);
     });
 
