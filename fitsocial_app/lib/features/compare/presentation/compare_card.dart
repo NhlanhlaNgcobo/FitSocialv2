@@ -78,26 +78,20 @@ class _CompareCardState extends ConsumerState<CompareCard> {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final option in CompareBaseline.values)
-                  ChoiceChip(
-                    label: Text(option.label(monthly: monthly)),
-                    selected: option == _baseline,
-                    onSelected: (_) {
-                      if (option == _baseline) return;
-                      setState(() => _baseline = option);
-                      ref.read(appAnalyticsProvider).log(
-                        AnalyticsEvent.comparePeriodChanged,
-                        {
-                          'period': monthly ? 'month' : 'week',
-                          'baseline': option.name,
-                        },
-                      );
-                    },
-                  ),
-              ],
+            _BaselinePicker(
+              selected: _baseline,
+              monthly: monthly,
+              onSelected: (option) {
+                if (option == _baseline) return;
+                setState(() => _baseline = option);
+                ref.read(appAnalyticsProvider).log(
+                  AnalyticsEvent.comparePeriodChanged,
+                  {
+                    'period': monthly ? 'month' : 'week',
+                    'baseline': option.name,
+                  },
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -133,6 +127,69 @@ class _CompareCardState extends ConsumerState<CompareCard> {
     return days == 1
         ? 'Today against the first day of the other $whole.'
         : 'The first $days days of each $whole.';
+  }
+}
+
+/// What to compare against, drawn like the Day / Week / Month picker above
+/// it: one track, the chosen option in the brand's soft orange. Not Material
+/// ChoiceChips, which fill the selected chip with the theme's leftover teal.
+class _BaselinePicker extends StatelessWidget {
+  const _BaselinePicker({
+    required this.selected,
+    required this.monthly,
+    required this.onSelected,
+  });
+
+  final CompareBaseline selected;
+  final bool monthly;
+  final ValueChanged<CompareBaseline> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.stroke),
+      ),
+      child: Row(
+        children: [
+          for (final option in CompareBaseline.values)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: option == selected,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelected(option),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: option == selected
+                          ? palette.brandSoft
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      option.label(monthly: monthly),
+                      style: TextStyle(
+                        color: option == selected
+                            ? palette.brandText
+                            : palette.muted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

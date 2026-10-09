@@ -54,6 +54,19 @@ abstract final class AppTheme {
           .copyWith(
         primary: AppColors.orange,
         secondary: AppColors.orangeBright,
+        // What Material paints a selected ChoiceChip and SegmentedButton
+        // with. Left alone, the dark scheme's default is the teal #03DAC6,
+        // which no other part of the app uses. The brand's soft orange is
+        // what the app's own pickers already mark a selection with.
+        secondaryContainer: palette.brandSoft,
+        onSecondaryContainer: palette.brandText,
+        // The same teal sits in tertiary and its container, which some
+        // Material widgets fall back to. Nothing here names them; they should
+        // still never be teal.
+        tertiary: AppColors.orangeBright,
+        onTertiary: AppColors.onBrand,
+        tertiaryContainer: palette.brandSoft,
+        onTertiaryContainer: palette.brandText,
         surface: palette.surface,
         onPrimary: AppColors.onBrand,
         onSecondary: AppColors.onBrand,
