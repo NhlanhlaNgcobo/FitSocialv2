@@ -115,7 +115,8 @@ class OnboardingHeader extends StatelessWidget {
   /// 1–4. That many segments are filled.
   final int step;
 
-  /// Null on Step 1, which has nowhere to go back to.
+  /// Null on Step 1, which has nowhere to go back to and shows the wordmark
+  /// in its place.
   final VoidCallback? onBack;
 
   @override
@@ -127,11 +128,16 @@ class OnboardingHeader extends StatelessWidget {
           height: 48,
           child: Row(
             children: [
-              if (onBack != null) ...[
+              // The wordmark on Step 1, the chevron after it -- as the
+              // handoff draws them, never both.
+              if (onBack == null)
+                const _Wordmark()
+              else
                 IconButton(
                   onPressed: onBack,
                   tooltip: 'Back',
                   padding: EdgeInsets.zero,
+                  alignment: Alignment.centerLeft,
                   constraints: const BoxConstraints(minWidth: 40),
                   icon: const Icon(
                     Icons.arrow_back_ios_new_rounded,
@@ -139,9 +145,6 @@ class OnboardingHeader extends StatelessWidget {
                     size: 22,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.xs),
-              ],
-              const _Wordmark(),
             ],
           ),
         ),
@@ -320,6 +323,76 @@ class OnboardingLoginLink extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A single-select pill: dark glass by default, solid orange with near-black
+/// ink when chosen (spec §3).
+class OnboardingPill extends StatelessWidget {
+  const OnboardingPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.minWidth = 0,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final double minWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    const shape = StadiumBorder();
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        constraints: BoxConstraints(minWidth: minWidth, minHeight: 40),
+        decoration: ShapeDecoration(
+          shape: shape.copyWith(
+            side: BorderSide(
+              color: selected
+                  ? AppColors.orangeBright
+                  : AppColors.onMedia.withValues(alpha: 0.1),
+            ),
+          ),
+          color: selected
+              ? AppColors.orangeBright
+              : onboardingSurface.withValues(alpha: 0.9),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            customBorder: shape,
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm + 2,
+                vertical: 9,
+              ),
+              // Shrinks rather than wraps, so a row of pills holds its shape
+              // on a narrow phone or at a large text size.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: selected ? onboardingCtaInk : AppColors.onMedia,
+                    fontSize: 14.5,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

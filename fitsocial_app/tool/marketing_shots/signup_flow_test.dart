@@ -4,6 +4,7 @@ import 'package:fitsocial_app/features/onboarding/application/onboarding_draft_p
 import 'package:fitsocial_app/features/onboarding/data/onboarding_draft_store.dart';
 import 'package:fitsocial_app/features/onboarding/domain/fitness_profile.dart';
 import 'package:fitsocial_app/features/onboarding/presentation/goal_screen.dart';
+import 'package:fitsocial_app/features/onboarding/presentation/shape_screen.dart';
 
 import 'shot_harness.dart';
 
@@ -29,6 +30,23 @@ void main() {
       tester,
       'signup_1_goal_selected',
       shotApp(const GoalScreen(), overrides: [
+        onboardingDraftStoreProvider.overrideWithValue(store),
+      ]),
+    );
+  });
+
+  testWidgets('signup step 2, worked example', (tester) async {
+    final store = MemoryOnboardingDraftStore();
+    await store.save(const OnboardingDraft(
+      primaryGoal: TrainingGoal.athleticPerformance,
+      fitnessLevel: Difficulty.intermediate,
+      equipment: {Equipment.dumbbells},
+      weeklyGoalDays: 4,
+    ));
+    await shoot(
+      tester,
+      'signup_2_shape',
+      shotApp(const ShapeScreen(), overrides: [
         onboardingDraftStoreProvider.overrideWithValue(store),
       ]),
     );

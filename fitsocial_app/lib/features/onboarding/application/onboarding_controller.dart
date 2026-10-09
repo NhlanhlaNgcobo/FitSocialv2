@@ -35,6 +35,41 @@ class OnboardingController extends StateNotifier<OnboardingDraft> {
   void selectGoal(TrainingGoal goal) =>
       _update(state.copyWith(primaryGoal: goal));
 
+  /// A second tap on the chosen focus takes it back off, leaving the
+  /// question unanswered again.
+  void toggleFocus(SecondaryFocus focus) {
+    if (state.secondaryFocus == focus) {
+      _update(
+        state.copyWith(
+            clearSecondaryFocus: true, secondaryFocusAnswered: false),
+      );
+    } else {
+      _update(
+        state.copyWith(secondaryFocus: focus, secondaryFocusAnswered: true),
+      );
+    }
+  }
+
+  /// `Skip`: no focus, and that is the answer.
+  void skipFocus() => _update(
+        state.copyWith(clearSecondaryFocus: true, secondaryFocusAnswered: true),
+      );
+
+  void selectLevel(Difficulty level) =>
+      _update(state.copyWith(fitnessLevel: level));
+
+  /// One item: sign-up offers a single choice. The set exists so a later
+  /// screen can offer more.
+  void selectEquipment(Equipment item) =>
+      _update(state.copyWith(equipment: {item}));
+
+  void selectDays(int days) => _update(state.copyWith(weeklyGoalDays: days));
+
+  /// Leaving Step 2 with no focus picked is the same answer as `Skip`.
+  void confirmShape() {
+    if (!state.secondaryFocusAnswered) skipFocus();
+  }
+
   void _update(OnboardingDraft next) {
     _touched = true;
     state = next;

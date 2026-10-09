@@ -44,6 +44,7 @@ import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/onboarding/presentation/goal_screen.dart';
+import '../../features/onboarding/presentation/plan_screen.dart';
 import '../../features/onboarding/presentation/shape_screen.dart';
 import '../../features/races/presentation/race_detail_screen.dart';
 import '../../features/races/presentation/races_screen.dart';
@@ -101,6 +102,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/login',
         '/onboarding/goal',
         '/onboarding/shape',
+        '/onboarding/plan',
       };
 
       // While restoring a persisted session, stay on the splash screen. A deep
@@ -161,6 +163,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding/shape',
         builder: (context, state) => const ShapeScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/plan',
+        builder: (context, state) => const PlanScreen(),
       ),
       GoRoute(
         path: '/login',
