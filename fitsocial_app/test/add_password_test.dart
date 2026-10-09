@@ -143,6 +143,7 @@ class _FakeProfiles implements UserProfileRepository {
     String? avatarLocalPath,
     String pronouns = '',
     String links = '',
+    int? weeklyGoalDays,
   }) async {
     throw UnimplementedError();
   }

@@ -204,6 +204,7 @@ class ShotProfiles implements UserProfileRepository {
     String? avatarLocalPath,
     String pronouns = '',
     String links = '',
+    int? weeklyGoalDays,
   }) async =>
       UserProfileDraft(
           displayName: displayName, handle: handle, bio: bio, location: location);

@@ -255,10 +255,16 @@ class OnboardingDraft {
     this.fitnessLevel,
     this.equipment,
     this.weeklyGoalDays,
+    this.ownerUid,
+    this.fitnessSaved = false,
   });
 
   /// Bumped when the stored shape changes in a way older files can't be read
   /// as. [fromJson] rejects anything else rather than guessing.
+  ///
+  /// [ownerUid] and [fitnessSaved] were added without moving this: both are
+  /// optional, and their absence means exactly what it meant before they
+  /// existed — nobody has claimed the draft and nothing has been written.
   static const int schemaVersion = 1;
 
   final TrainingGoal? primaryGoal;
@@ -272,6 +278,17 @@ class OnboardingDraft {
 
   /// Written to `users/{uid}`, not `private/fitness`.
   final int? weeklyGoalDays;
+
+  /// The account these answers were created for, stamped when sign-up
+  /// succeeds. Until then the draft belongs to nobody, and a retry on launch
+  /// must not hand it to whoever happens to be signed in — on a shared phone
+  /// that could be someone else.
+  final String? ownerUid;
+
+  /// True once `private/fitness` has been written from this draft. The draft
+  /// is still kept after that, because `weeklyGoalDays` rides on the profile
+  /// write that comes later.
+  final bool fitnessSaved;
 
   bool get isEmpty =>
       primaryGoal == null &&
@@ -307,6 +324,8 @@ class OnboardingDraft {
     Difficulty? fitnessLevel,
     Set<Equipment>? equipment,
     int? weeklyGoalDays,
+    String? ownerUid,
+    bool? fitnessSaved,
   }) {
     return OnboardingDraft(
       primaryGoal: primaryGoal ?? this.primaryGoal,
@@ -317,6 +336,8 @@ class OnboardingDraft {
       fitnessLevel: fitnessLevel ?? this.fitnessLevel,
       equipment: equipment ?? this.equipment,
       weeklyGoalDays: weeklyGoalDays ?? this.weeklyGoalDays,
+      ownerUid: ownerUid ?? this.ownerUid,
+      fitnessSaved: fitnessSaved ?? this.fitnessSaved,
     );
   }
 
@@ -334,6 +355,8 @@ class OnboardingDraft {
                 if (equipment!.contains(item)) item.wireName,
             ],
       'weeklyGoalDays': weeklyGoalDays,
+      'ownerUid': ownerUid,
+      'fitnessSaved': fitnessSaved,
     };
   }
 
@@ -363,6 +386,8 @@ class OnboardingDraft {
       equipment: equipment,
       weeklyGoalDays:
           days is int && weeklyGoalDayChoices.contains(days) ? days : null,
+      ownerUid: json['ownerUid'] is String ? json['ownerUid'] as String : null,
+      fitnessSaved: json['fitnessSaved'] == true,
     );
   }
 }

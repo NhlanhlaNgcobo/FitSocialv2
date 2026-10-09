@@ -63,6 +63,7 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
     String? avatarLocalPath,
     String pronouns = '',
     String links = '',
+    int? weeklyGoalDays,
   }) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) {
@@ -183,6 +184,10 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
             'pronouns': pronouns.trim(),
             'links': links.trim(),
             if (avatarUrl != null) 'avatarUrl': avatarUrl,
+            // Only from sign-up, which hands over the onboarding answer. Every
+            // later save leaves it alone, so the progress tab's own setting
+            // is never overwritten by an edit to the bio.
+            if (weeklyGoalDays != null) 'weeklyGoalDays': weeklyGoalDays,
             // Stamped only on a rename, and always from the server clock. The
             // security rules require it to equal the request time, so a client
             // cannot backdate it to shorten its own cooldown.
