@@ -19,7 +19,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Train. Fuel. Share. Grow.'), findsWidgets);
-    expect(find.text('Get Started'), findsOneWidget);
+    // Signed out, the app opens on onboarding Step 1.
+    expect(find.text('YOUR TRAINING STARTS HERE'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
   });
 }

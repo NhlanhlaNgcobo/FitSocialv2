@@ -10,7 +10,6 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/edit_profile_screen.dart';
 import '../../features/auth/presentation/profile_setup_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
-import '../../features/auth/presentation/welcome_screen.dart';
 import '../../features/challenges/domain/challenge_models.dart';
 import '../../features/challenges/presentation/challenge_detail_screen.dart';
 import '../../features/challenges/presentation/challenge_board_screen.dart';
@@ -44,6 +43,8 @@ import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/onboarding/presentation/goal_screen.dart';
+import '../../features/onboarding/presentation/shape_screen.dart';
 import '../../features/races/presentation/race_detail_screen.dart';
 import '../../features/races/presentation/races_screen.dart';
 import '../../features/races/presentation/saved_races_screen.dart';
@@ -93,7 +94,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final location = state.matchedLocation;
       final stage = session.stage;
-      const authRoutes = {'/welcome', '/login'};
+      // Everywhere a signed-out user may be. The onboarding steps sit here
+      // because they come before the account: Steps 1-2 run with no uid.
+      const authRoutes = {
+        '/welcome',
+        '/login',
+        '/onboarding/goal',
+        '/onboarding/shape',
+      };
 
       // While restoring a persisted session, stay on the splash screen. A deep
       // link is the usual reason to be anywhere else this early — the platform
@@ -106,7 +114,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Bootstrap finished: move off the splash to the right destination.
       if (location == '/splash') {
-        if (stage == AuthStage.unauthenticated) return '/welcome';
+        if (stage == AuthStage.unauthenticated) return '/onboarding/goal';
         if (stage == AuthStage.profileSetup) return '/profile-setup';
         return pendingLink.take() ?? '/home';
       }
@@ -114,7 +122,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (stage == AuthStage.unauthenticated) {
         if (!authRoutes.contains(location)) {
           pendingLink.remember(location);
-          return '/welcome';
+          return '/onboarding/goal';
         }
         return null;
       }
@@ -140,9 +148,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
+      // Replaced by onboarding Step 1, but kept routable: old deep links and
+      // the login screen's back button still point here.
       GoRoute(
         path: '/welcome',
-        builder: (context, state) => const WelcomeScreen(),
+        redirect: (context, state) => '/onboarding/goal',
+      ),
+      GoRoute(
+        path: '/onboarding/goal',
+        builder: (context, state) => const GoalScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/shape',
+        builder: (context, state) => const ShapeScreen(),
       ),
       GoRoute(
         path: '/login',
