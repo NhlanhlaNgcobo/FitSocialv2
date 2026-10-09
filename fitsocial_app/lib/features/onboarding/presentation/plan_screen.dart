@@ -138,7 +138,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 const Text(
-                  "Create an account and it's saved.",
+                  'Create an account to save your plan.',
                   style: TextStyle(color: AppColors.onMediaMuted, fontSize: 16),
                 ),
                 const SizedBox(height: AppSpacing.lg),

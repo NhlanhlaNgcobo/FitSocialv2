@@ -2,44 +2,40 @@ import '../../main/domain/exercise_library.dart';
 import '../../main/domain/workout_models.dart';
 import 'fitness_profile.dart';
 
-/// What Step 3 shows: a count, a sentence, and three sample workouts drawn
-/// from the bundled exercise library.
+/// What Step 3 shows: a sentence, and three sample workouts drawn from the
+/// bundled exercise library.
+///
+/// Deliberately no workout count. The handoff says "12 workouts", but nothing
+/// builds or stores those workouts yet, so the screen promises a plan — the
+/// answers, which are saved — rather than workouts nobody will find after
+/// signing up (decided 2026-10-09).
 ///
 /// This is the simple version decided on 2026-10-09 — filter the library on
 /// focus and equipment, then group. The full workout-selection engine (the
 /// template matrix with its hard constraints and ranking weights) is a later,
 /// separate piece; this only has to be honest about what the answers mean.
 class PlanPreview {
-  const PlanPreview({
-    required this.workoutCount,
-    required this.sentence,
-    required this.workouts,
-  });
+  const PlanPreview({required this.sentence, required this.workouts});
 
-  /// Three weeks at the chosen number of days.
-  final int workoutCount;
-
-  /// `12 workouts for building muscle, chest-led, for 4 days a week with
+  /// `A 3-week plan for building muscle, chest-led, for 4 days a week with
   /// dumbbells.`
   final String sentence;
 
   final List<PreviewWorkout> workouts;
 
-  /// How many weeks the count stands for.
+  /// How long the plan the sentence describes runs.
   static const weeks = 3;
 
   static PlanPreview fromDraft(OnboardingDraft draft) {
     final profile = draft.toFitnessProfile();
     final days = draft.weeklyGoalDays ?? 3;
-    final count = days * weeks;
     return PlanPreview(
-      workoutCount: count,
-      sentence: _sentence(profile, days, count),
+      sentence: _sentence(profile, days),
       workouts: _workouts(profile),
     );
   }
 
-  static String _sentence(FitnessProfile profile, int days, int count) {
+  static String _sentence(FitnessProfile profile, int days) {
     final goal = switch (profile.primaryGoal) {
       TrainingGoal.loseFat => 'losing fat',
       TrainingGoal.buildMuscle => 'building muscle',
@@ -58,7 +54,7 @@ class PlanPreview {
     };
     final kit = _kitPhrase(profile.equipment);
     return [
-      '$count workouts for $goal',
+      'A $weeks-week plan for $goal',
       if (led != null) led,
       'for $days days a week with $kit.',
     ].join(', ');

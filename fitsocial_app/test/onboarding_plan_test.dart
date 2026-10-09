@@ -30,10 +30,9 @@ void main() {
   group('PlanPreview', () {
     test("reproduces the handoff's worked example", () {
       final preview = PlanPreview.fromDraft(_example);
-      expect(preview.workoutCount, 12);
       expect(
         preview.sentence,
-        '12 workouts for building muscle, chest-led, '
+        'A 3-week plan for building muscle, chest-led, '
         'for 4 days a week with dumbbells.',
       );
       expect(
@@ -53,7 +52,7 @@ void main() {
       );
       expect(
         preview.sentence,
-        '12 workouts for building muscle, for 4 days a week with dumbbells.',
+        'A 3-week plan for building muscle, for 4 days a week with dumbbells.',
       );
       expect(
         [for (final w in preview.workouts) w.title],
@@ -126,7 +125,6 @@ void main() {
 
     test('an empty draft still renders, on the defaults', () {
       final preview = PlanPreview.fromDraft(const OnboardingDraft());
-      expect(preview.workoutCount, 9);
       expect(preview.sentence, contains('mobility and fitness'));
       expect(preview.sentence, contains('no equipment'));
     });
@@ -187,7 +185,7 @@ void main() {
 
     testWidgets('shows the sentence and the three workouts', (tester) async {
       await pump(tester);
-      expect(find.textContaining('12 workouts for building muscle'),
+      expect(find.textContaining('A 3-week plan for building muscle'),
           findsOneWidget);
       expect(find.text('Chest Builder'), findsOneWidget);
       expect(find.text('45 min · 6 exercises'), findsOneWidget);
