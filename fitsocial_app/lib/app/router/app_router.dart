@@ -38,6 +38,7 @@ import '../../features/main/presentation/prompt_answers_screen.dart';
 import '../../features/main/presentation/social_compose_screens.dart';
 import '../../features/main/domain/daily_prompts.dart';
 import '../../features/main/presentation/post_detail_screen.dart';
+import '../../features/main/presentation/workout_session_screen.dart';
 import '../../features/main/presentation/profile_screen.dart';
 import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/user_profile_screen.dart';
@@ -161,6 +162,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/log-workout',
         builder: (context, state) => const WorkoutLogScreen(),
+      ),
+      GoRoute(
+        path: '/workout-session',
+        builder: (context, state) => const WorkoutSessionScreen(),
       ),
       GoRoute(
         path: '/log-run',

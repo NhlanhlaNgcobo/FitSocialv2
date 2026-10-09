@@ -73,6 +73,8 @@ class ActivityActions {
       // And the log screen's repeat chips, so the session just saved is
       // offered as a template the next time it opens.
       ..invalidate(recentWorkoutsProvider)
+      // And the history live PRs are measured against.
+      ..invalidate(workoutHistoryProvider)
       // And the meal history, so a meal logged from the tracking page appears
       // in today's totals rather than after a restart.
       ..invalidate(loggedMealsProvider)
