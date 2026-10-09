@@ -67,11 +67,52 @@ abstract final class AppTheme {
         onTertiary: AppColors.onBrand,
         tertiaryContainer: palette.brandSoft,
         onTertiaryContainer: palette.brandText,
+        // Every other slot is named too. The factories fill whatever is left
+        // with Material's stock lavender (#BB86FC dark, #6200EE light) and
+        // teal (#03DAC6) -- the extended FAB, menus and dialog tints read them
+        // -- and with pure white or black outlines. None of those are FitSocial
+        // colours, so nothing is left for Material to choose.
+        primaryContainer: palette.brandSoft,
+        onPrimaryContainer: palette.brandText,
+        primaryFixed: palette.brandSoft,
+        primaryFixedDim: palette.brandSoftStroke,
+        onPrimaryFixed: palette.brandText,
+        onPrimaryFixedVariant: palette.brandText,
+        secondaryFixed: palette.brandSoft,
+        secondaryFixedDim: palette.brandSoftStroke,
+        onSecondaryFixed: palette.brandText,
+        onSecondaryFixedVariant: palette.brandText,
+        tertiaryFixed: palette.brandSoft,
+        tertiaryFixedDim: palette.brandSoftStroke,
+        onTertiaryFixed: palette.brandText,
+        onTertiaryFixedVariant: palette.brandText,
+        inversePrimary: AppColors.orangeBright,
+        // No tint: surfaces are the palette's greys, not greys washed in the
+        // primary colour.
+        surfaceTint: Colors.transparent,
         surface: palette.surface,
+        surfaceDim: palette.background,
+        surfaceBright: palette.surfaceHigh,
+        surfaceContainerLowest: palette.background,
+        surfaceContainerLow: palette.surface,
+        surfaceContainer: palette.surface,
+        surfaceContainerHigh: palette.surfaceHigh,
+        surfaceContainerHighest: palette.surfaceHigh,
+        onSurfaceVariant: palette.muted,
+        outline: palette.stroke,
+        outlineVariant: palette.stroke,
+        inverseSurface: palette.text,
+        onInverseSurface: palette.background,
         onPrimary: AppColors.onBrand,
         onSecondary: AppColors.onBrand,
         onSurface: palette.text,
         error: palette.danger,
+      ),
+      // Solid brand orange, like the app's other floating button. Material's
+      // default would be primaryContainer, the soft orange meant for chips.
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: palette.brand,
+        foregroundColor: AppColors.onBrand,
       ),
       textTheme: base.textTheme.apply(
         bodyColor: palette.text,
