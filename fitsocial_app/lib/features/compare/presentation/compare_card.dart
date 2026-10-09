@@ -12,9 +12,11 @@ import '../domain/compare.dart';
 
 /// This week (or month) against an earlier one, metric by metric.
 ///
-/// Sits under the overview on the Progress tab for the week and month views,
-/// and draws nothing -- spacing included -- while Compare is switched off or
-/// for a day or year view.
+/// Sits on the Progress tab for the week and month views, and draws nothing --
+/// spacing included -- while Compare is switched off, for a day or year view,
+/// and until there is enough data to compare: this period and at least one
+/// baseline need data on half their days. The stats are live, so the card
+/// appears on its own once they do.
 class CompareCard extends ConsumerStatefulWidget {
   const CompareCard({required this.window, super.key});
 
@@ -25,7 +27,8 @@ class CompareCard extends ConsumerStatefulWidget {
 }
 
 class _CompareCardState extends ConsumerState<CompareCard> {
-  CompareBaseline _baseline = CompareBaseline.previous;
+  /// The baseline the user picked, or null until they pick one.
+  CompareBaseline? _picked;
 
   /// The window compare_viewed was last logged for, so paging or rebuilding
   /// does not log the same view twice.
@@ -37,6 +40,37 @@ class _CompareCardState extends ConsumerState<CompareCard> {
     final current = periodRefFor(widget.window);
     if (current == null) return const SizedBox.shrink();
 
+    // Every baseline is read, not just the chosen one, so the card can tell
+    // whether there is anything to compare with before it shows itself.
+    final currentStats = ref.watch(periodStatsProvider(current));
+    final elapsedDays = elapsedDaysOf(widget.window);
+    final comparisons = <CompareBaseline, Comparison>{};
+    for (final option in CompareBaseline.values) {
+      final stats =
+          ref.watch(periodStatsProvider(baselineRefFor(current, option)));
+      if (currentStats.isLoading || stats.isLoading) {
+        return const SizedBox.shrink();
+      }
+      if (currentStats.hasError || stats.hasError) {
+        return const SizedBox.shrink();
+      }
+      comparisons[option] = compare(
+        current: currentStats.valueOrNull,
+        baseline: stats.valueOrNull,
+        elapsedDays: elapsedDays,
+      );
+    }
+    final ready = [
+      for (final option in CompareBaseline.values)
+        if (comparisons[option]!.hasEnough) option,
+    ];
+    if (ready.isEmpty) return const SizedBox.shrink();
+
+    // Until the user picks, open on a baseline that has enough data.
+    final baselineChoice = _picked ?? ready.first;
+    final comparison = comparisons[baselineChoice]!;
+    final monthly = current.monthly;
+
     if (_logged != current) {
       _logged = current;
       // After the frame: logging is a side effect, and build may run again.
@@ -44,24 +78,12 @@ class _CompareCardState extends ConsumerState<CompareCard> {
         if (!mounted) return;
         ref.read(appAnalyticsProvider).log(AnalyticsEvent.compareViewed, {
           'period': current.monthly ? 'month' : 'week',
-          'baseline': _baseline.name,
+          'baseline': baselineChoice.name,
         });
       });
     }
 
     final palette = context.palette;
-    final baseline = baselineRefFor(current, _baseline);
-    final currentStats = ref.watch(periodStatsProvider(current));
-    final baselineStats = ref.watch(periodStatsProvider(baseline));
-    final loading = currentStats.isLoading || baselineStats.isLoading;
-    final failed = currentStats.hasError || baselineStats.hasError;
-
-    final comparison = compare(
-      current: currentStats.valueOrNull,
-      baseline: baselineStats.valueOrNull,
-      elapsedDays: elapsedDaysOf(widget.window),
-    );
-    final monthly = current.monthly;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -79,11 +101,11 @@ class _CompareCardState extends ConsumerState<CompareCard> {
             ),
             const SizedBox(height: AppSpacing.sm),
             _BaselinePicker(
-              selected: _baseline,
+              selected: baselineChoice,
               monthly: monthly,
               onSelected: (option) {
-                if (option == _baseline) return;
-                setState(() => _baseline = option);
+                if (option == baselineChoice) return;
+                setState(() => _picked = option);
                 ref.read(appAnalyticsProvider).log(
                   AnalyticsEvent.comparePeriodChanged,
                   {
@@ -99,17 +121,9 @@ class _CompareCardState extends ConsumerState<CompareCard> {
               style: TextStyle(color: palette.muted, fontSize: 12),
             ),
             const SizedBox(height: AppSpacing.md),
-            if (loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (failed)
-              Text(
-                'Compare could not load. Check your connection.',
-                style: TextStyle(color: palette.muted),
-              )
-            else if (!comparison.hasEnough)
+            // Only reachable when the user picked the one baseline that is
+            // short: the other has data, so the card stays up to switch back.
+            if (!comparison.hasEnough)
               _NotEnough(comparison: comparison, monthly: monthly)
             else
               for (final row in comparison.rows) _CompareRow(row: row),

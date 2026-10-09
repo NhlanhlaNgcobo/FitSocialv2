@@ -168,16 +168,55 @@ void main() {
       expect(find.text('35,000'), findsOneWidget);
     });
 
-    testWidgets('says so when there is not enough data', (tester) async {
+    testWidgets('stays hidden until there is enough data to compare',
+        (tester) async {
       await tester.pumpWidget(
         _host(_FakeCompareRepository({'2026-W39': _fullWeek(10000)})),
       );
+      await tester.pumpAndSettle();
+      expect(find.text('Compare'), findsNothing);
+      expect(tester.getSize(find.byType(CompareCard)), Size.zero);
+    });
+
+    testWidgets('stays hidden while this week has too little data',
+        (tester) async {
+      final sparse = PeriodStats.fromMap({
+        'dayCount': 7,
+        'byDay': {
+          'steps': [9000, null, null, null, null, null, null],
+          'hasData': [true, false, false, false, false, false, false],
+        },
+      });
+      await tester.pumpWidget(
+        _host(_FakeCompareRepository({
+          '2026-W39': sparse,
+          '2026-W38': _fullWeek(8000),
+          '2026-W35': _fullWeek(5000),
+        })),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Compare'), findsNothing);
+    });
+
+    testWidgets('opens on the baseline that has data', (tester) async {
+      // Nothing last week, but a full week four weeks ago.
+      await tester.pumpWidget(
+        _host(_FakeCompareRepository({
+          '2026-W39': _fullWeek(10000),
+          '2026-W35': _fullWeek(5000),
+        })),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Compare'), findsOneWidget);
+      expect(find.text('35,000'), findsOneWidget);
+
+      // Picking the empty one keeps the card, so the user can switch back.
+      await tester.tap(find.text('Last week'));
       await tester.pumpAndSettle();
       expect(
         find.textContaining('Not enough data yet in the one you are'),
         findsOneWidget,
       );
-      expect(find.text('70,000'), findsNothing);
     });
   });
 }
