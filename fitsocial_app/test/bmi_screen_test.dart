@@ -70,6 +70,23 @@ void main() {
       expect(find.text('Healthy'), findsOneWidget);
     });
 
+    // Sign-up no longer asks for these, so the first visit here is where
+    // most people are first asked, and the ask says where the numbers go.
+    testWidgets('a first visit says what the numbers are for', (tester) async {
+      await pumpCalculator(tester, FakeProfiles());
+      expect(find.textContaining('Two numbers and we can show your BMI'),
+          findsOneWidget);
+    });
+
+    testWidgets('a returning visit skips the ask', (tester) async {
+      await pumpCalculator(
+        tester,
+        FakeProfiles(stored: const BodyMetrics(heightCm: 175, weightKg: 70)),
+      );
+      expect(find.textContaining('Two numbers and we can show your BMI'),
+          findsNothing);
+    });
+
     testWidgets('invites input while the form is untouched', (tester) async {
       await pumpCalculator(tester, FakeProfiles());
 

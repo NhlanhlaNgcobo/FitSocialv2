@@ -247,3 +247,28 @@ class BodyMetrics {
         'units': units.name,
       };
 }
+
+/// The first entry of `users/{uid}/weighIns`, when a save is the first time
+/// this account has had a weight at all — or null.
+///
+/// Only the first: later weights belong to the weekly weigh-in, and a history
+/// that only begins there throws away the baseline every later change is
+/// measured against. Outside the range the security rules accept, nothing is
+/// returned, so a mistyped weight can never fail the body save it rides with.
+({String dayKey, double weightKg})? firstWeighIn({
+  required BodyMetrics previous,
+  required BodyMetrics next,
+  required DateTime now,
+}) {
+  final weight = next.weightKg;
+  if (previous.weightKg != null || weight == null) return null;
+  if (weight < 20 || weight > 400) return null;
+  return (dayKey: weighInDayKey(now), weightKg: weight);
+}
+
+/// `2026-10-09`, from the phone's own calendar: a weigh-in belongs to the day
+/// the user stood on the scale, wherever they were.
+String weighInDayKey(DateTime now) {
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${now.year}-${two(now.month)}-${two(now.day)}';
+}

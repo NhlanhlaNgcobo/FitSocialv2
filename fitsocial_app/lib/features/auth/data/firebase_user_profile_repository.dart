@@ -254,15 +254,49 @@ class FirebaseUserProfileRepository implements UserProfileRepository {
       throw StateError('No authenticated Firebase user found for body save.');
     }
 
-    // Merged, so clearing one field leaves the other standing — the calculator
-    // lets a user set a height now and a weight later.
-    await _bodyRef(user.uid).set(
-      {
-        ...metrics.toMap(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    final bodyRef = _bodyRef(user.uid);
+
+    // Whether this is the account's first weight, which also starts the
+    // weigh-in history. A read that fails (offline, nothing cached) skips
+    // the history rather than the save.
+    ({String dayKey, double weightKg})? firstEntry;
+    try {
+      final previous = BodyMetrics.fromMap((await bodyRef.get()).data());
+      firstEntry = firstWeighIn(
+        previous: previous,
+        next: metrics,
+        now: DateTime.now(),
+      );
+    } catch (error) {
+      firstEntry = null;
+    }
+
+    // One batch, so the history never starts from a weight the body document
+    // does not hold. Merged, so clearing one field leaves the other standing
+    // — the calculator lets a user set a height now and a weight later.
+    final batch = _firestore.batch()
+      ..set(
+        bodyRef,
+        {
+          ...metrics.toMap(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    if (firstEntry != null) {
+      batch.set(
+        _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('weighIns')
+            .doc(firstEntry.dayKey),
+        {
+          'weightKg': firstEntry.weightKg,
+          'recordedAt': FieldValue.serverTimestamp(),
+        },
+      );
+    }
+    await batch.commit();
   }
 
   Future<String> _uploadAvatar(String userId, String localFilePath) async {

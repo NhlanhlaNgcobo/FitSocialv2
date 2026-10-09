@@ -60,6 +60,17 @@ class _BmiScreenState extends ConsumerState<BmiScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
+          // The first-open ask (spec §5.4): sign-up no longer collects these,
+          // so this is where most people are first asked. Gone once there is
+          // anything stored.
+          if (stored.asData?.value.isEmpty ?? false) ...[
+            Text(
+              'Two numbers and we can show your BMI. Private to you, never '
+              'on your profile.',
+              style: TextStyle(color: palette.muted, fontSize: 15, height: 1.4),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           BodyMetricsFields(
             // Empty until the stored values land; the fields adopt them then,
             // and only while nothing has been typed.
