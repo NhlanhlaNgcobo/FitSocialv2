@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/observability/app_analytics.dart';
 import '../../auth/application/app_session.dart';
 import '../application/onboarding_controller.dart';
 import '../domain/plan_preview.dart';
@@ -227,7 +228,13 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 OnboardingLoginLink(
-                  onPressed: () => context.go('/login?mode=login'),
+                  onPressed: () {
+                    ref.read(appAnalyticsProvider).log(
+                      AnalyticsEvent.onboardingAbandoned,
+                      {'last_screen': 'plan'},
+                    );
+                    context.go('/login?mode=login');
+                  },
                 ),
               ],
             ),

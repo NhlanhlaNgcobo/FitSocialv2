@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/observability/app_analytics.dart';
 import '../application/onboarding_controller.dart';
 import '../domain/fitness_profile.dart';
 import 'onboarding_chrome.dart';
@@ -121,14 +122,26 @@ class GoalScreen extends ConsumerWidget {
                                     context.pop(true);
                                   }
                                 }
-                              : () => context.push('/onboarding/shape'),
+                              : () {
+                                  ref.read(appAnalyticsProvider).log(
+                                    AnalyticsEvent.onboardingGoalSelected,
+                                    {'goal': selected.wireName},
+                                  );
+                                  context.push('/onboarding/shape');
+                                },
                     ),
                     if (!finishing) ...[
                       const SizedBox(height: AppSpacing.xs),
                       OnboardingLoginLink(
                         // The answers stay on disk: someone who logs in to an
                         // account with no plan gets them back pre-filled.
-                        onPressed: () => context.go('/login?mode=login'),
+                        onPressed: () {
+                          ref.read(appAnalyticsProvider).log(
+                            AnalyticsEvent.onboardingAbandoned,
+                            {'last_screen': 'goal'},
+                          );
+                          context.go('/login?mode=login');
+                        },
                       ),
                     ],
                   ],

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/observability/app_analytics.dart';
 import '../application/fitness_plan.dart';
 import '../application/onboarding_controller.dart';
 import '../domain/fitness_profile.dart';
@@ -209,6 +210,17 @@ class ShapeScreen extends ConsumerWidget {
                         onPressed: ready
                             ? () {
                                 controller.confirmShape();
+                                ref.read(appAnalyticsProvider).log(
+                                  AnalyticsEvent.onboardingShaped,
+                                  {
+                                    'focus': draft.secondaryFocus?.wireName ??
+                                        'none',
+                                    'level': draft.fitnessLevel!.wireName,
+                                    'equipment':
+                                        draft.equipment!.first.wireName,
+                                    'days': draft.weeklyGoalDays!,
+                                  },
+                                );
                                 context.push('/onboarding/plan');
                               }
                             : null,

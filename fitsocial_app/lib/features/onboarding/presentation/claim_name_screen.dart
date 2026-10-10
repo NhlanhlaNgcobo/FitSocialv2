@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/observability/app_analytics.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/services/profile_photo_picker.dart';
 import '../../auth/application/app_session.dart';
@@ -154,7 +155,14 @@ class _ClaimNameScreenState extends ConsumerState<ClaimNameScreen> {
     );
     // The router moves on by itself once the stage changes. The in-memory
     // answers go with it, so a later sign-out starts Step 1 fresh.
-    if (saved && mounted) ref.invalidate(onboardingControllerProvider);
+    if (saved && mounted) {
+      // Firebase takes no booleans, so 0 or 1.
+      ref.read(appAnalyticsProvider).log(
+        AnalyticsEvent.onboardingIdentitySaved,
+        {'had_photo': _imagePath == null ? 0 : 1},
+      );
+      ref.invalidate(onboardingControllerProvider);
+    }
   }
 
   /// Back from here means leaving the account half-made. Confirmed first,
@@ -182,6 +190,10 @@ class _ClaimNameScreenState extends ConsumerState<ClaimNameScreen> {
     );
     if (leave != true || !mounted) return;
     final router = GoRouter.of(context);
+    ref.read(appAnalyticsProvider).log(
+      AnalyticsEvent.onboardingAbandoned,
+      {'last_screen': 'name'},
+    );
     await ref.read(appSessionProvider).abandonSignUp();
     router.go('/onboarding/plan');
   }

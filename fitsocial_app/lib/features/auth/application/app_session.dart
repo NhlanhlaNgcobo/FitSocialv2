@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/observability/app_analytics.dart';
 import '../../../core/observability/crash_reporter.dart';
 import '../../notifications/application/push_registrar.dart';
 import '../../onboarding/application/onboarding_draft_providers.dart';
@@ -30,6 +31,7 @@ class AppSession extends ChangeNotifier {
     this.crashReporter = const NoopCrashReporter(),
     this.pushRegistrar = const NoopPushRegistrar(),
     this.onboarding = const NoopOnboardingSync(),
+    this.analytics = const NoopAppAnalytics(),
   }) {
     _bootstrap();
   }
@@ -54,6 +56,10 @@ class AppSession extends ChangeNotifier {
   /// the stage leaves [AuthStage.profileSetup]. Defaults to a no-op for the
   /// same reason [crashReporter] does.
   final OnboardingSync onboarding;
+
+  /// Product events. Only sign-up's own is logged here, because only this
+  /// class knows an account was just created rather than signed back into.
+  final AppAnalytics analytics;
   AuthStage _stage = AuthStage.initializing;
   bool _isLoading = false;
   String? _email;
@@ -204,6 +210,7 @@ class AppSession extends ChangeNotifier {
     if (email.trim().isEmpty || password.trim().isEmpty) return;
     await _authenticate(
       () => authRepository.signUpWithEmail(email: email, password: password),
+      method: 'email',
     );
   }
 
@@ -212,6 +219,7 @@ class AppSession extends ChangeNotifier {
     _pendingLink = null;
     return _authenticate(
       () => authRepository.continueWithProvider(providerName),
+      method: providerName,
     );
   }
 
@@ -241,7 +249,13 @@ class AppSession extends ChangeNotifier {
   /// loading the profile, deciding between setup and the app proper, turning a
   /// thrown error into a sentence — is the same regardless, and was previously
   /// copied out once per sign-in method.
-  Future<void> _authenticate(Future<String> Function() signIn) async {
+  ///
+  /// [method] names the way in (`google`, `apple`, `email`) for the sign-up
+  /// funnel; null for plain logins, which never create an account.
+  Future<void> _authenticate(
+    Future<String> Function() signIn, {
+    String? method,
+  }) async {
     _setLoading(true);
     _errorMessage = null;
     try {
@@ -255,6 +269,12 @@ class AppSession extends ChangeNotifier {
       if (_profile == null) {
         final uid = authRepository.currentUserId();
         if (uid != null) await onboarding.afterSignUp(uid);
+        if (method != null) {
+          analytics.log(
+            AnalyticsEvent.onboardingAccountCreated,
+            {'provider': method},
+          );
+        }
       }
       // No profile means the account exists but was never finished, so setup
       // is where they land rather than the feed.
@@ -516,5 +536,6 @@ final appSessionProvider = ChangeNotifierProvider<AppSession>((ref) {
     crashReporter: ref.watch(crashReporterProvider),
     pushRegistrar: ref.watch(pushRegistrarProvider),
     onboarding: ref.watch(onboardingSyncProvider),
+    analytics: ref.watch(appAnalyticsProvider),
   );
 });
