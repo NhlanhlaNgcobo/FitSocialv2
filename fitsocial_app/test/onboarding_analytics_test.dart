@@ -35,7 +35,7 @@ void main() {
 
     test('a new account via Google logs its provider', () async {
       await (await session()).continueWithProvider('google');
-      expectEvents(analytics, <(String, Map<String, Object>)>[
+      _expectEvents(analytics, <(String, Map<String, Object>)>[
         ('onboarding_account_created', {'provider': 'google'}),
       ]);
     });
@@ -114,7 +114,7 @@ void main() {
       await tap(tester, 'Get Lean');
       expect(analytics.events, isEmpty, reason: 'a tap is not an answer yet');
       await tap(tester, 'Continue');
-      expectEvents(analytics, <(String, Map<String, Object>)>[
+      _expectEvents(analytics, <(String, Map<String, Object>)>[
         ('onboarding_goal_selected', {'goal': 'getLean'}),
       ]);
     });
@@ -128,7 +128,7 @@ void main() {
       ));
       await pump(tester, '/onboarding/shape');
       await tap(tester, 'Continue');
-      expectEvents(analytics, <(String, Map<String, Object>)>[
+      _expectEvents(analytics, <(String, Map<String, Object>)>[
         (
           'onboarding_shaped',
           {
@@ -144,7 +144,7 @@ void main() {
     testWidgets('leaving for Log in logs where it happened', (tester) async {
       await pump(tester, '/onboarding/goal');
       await tap(tester, 'Log in');
-      expectEvents(analytics, <(String, Map<String, Object>)>[
+      _expectEvents(analytics, <(String, Map<String, Object>)>[
         ('onboarding_abandoned', {'last_screen': 'goal'}),
       ]);
     });
@@ -153,7 +153,7 @@ void main() {
 
 /// Records compare their maps by type as well as content, so names and
 /// parameters are checked separately.
-void expectEvents(
+void _expectEvents(
   _RecordingAnalytics analytics,
   List<(String, Map<String, Object>)> expected,
 ) {
