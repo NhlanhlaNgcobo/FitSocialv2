@@ -295,6 +295,7 @@ class _MacroSummaryCard extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           _InsightRow(summary: summary),
+          const _TargetInputsPrompt(),
         ],
       ),
     );
@@ -857,6 +858,40 @@ class _SummaryError extends StatelessWidget {
             ),
             onPressed: onRetry,
             child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The nutrition-target ask (spec §5.4): shown while the targets are the
+/// defaults because the calculation is missing an input. Gone once the
+/// user's own targets or a calculated set takes over.
+class _TargetInputsPrompt extends ConsumerWidget {
+  const _TargetInputsPrompt();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final goals = ref.watch(macroGoalsProvider).valueOrNull;
+    if (goals == null || goals.isCustom || goals.isDerived) {
+      return const SizedBox.shrink();
+    }
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Your calorie target needs your height, weight, age and sex. '
+              'Private to you.',
+              style: TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
+            ),
+          ),
+          TextButton(
+            onPressed: () => context.push('/bmi'),
+            child: const Text('Add them'),
           ),
         ],
       ),

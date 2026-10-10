@@ -28,6 +28,31 @@ enum MeasurementUnits {
   String get weightLabel => this == MeasurementUnits.metric ? 'kg' : 'lb';
 }
 
+/// Sex, as the calorie target's BMR formula needs it — and only for that.
+///
+/// [unspecified] is a real answer, not a missing one: the target then uses the
+/// midpoint of the two formulas, which is honest about not knowing and still
+/// gives a usable number.
+enum Sex {
+  female('female', 'Female'),
+  male('male', 'Male'),
+  unspecified('unspecified', 'Prefer not to say');
+
+  const Sex(this.wireName, this.label);
+
+  final String wireName;
+  final String label;
+
+  /// Null for anything unrecognised: an unknown sex reads as unanswered, so
+  /// the user is asked again rather than handed a target built on a guess.
+  static Sex? fromWire(Object? value) {
+    for (final sex in values) {
+      if (sex.wireName == value) return sex;
+    }
+    return null;
+  }
+}
+
 /// The WHO adult bands. Ordered lightest to heaviest, which is the order the
 /// scale on the BMI card draws them in.
 enum BmiCategory {
@@ -87,6 +112,10 @@ const double maxHeightCm = 260;
 const double minWeightKg = 20;
 const double maxWeightKg = 400;
 
+/// The app's own age floor, and a ceiling past which the number is a typo.
+const int minAge = 13;
+const int maxAge = 120;
+
 /// Parses a number out of a measurement field.
 ///
 /// Accepts a comma as the decimal separator. Keyboards in locales that use one
@@ -144,6 +173,8 @@ class BodyMetrics {
       heightCm: (data['heightCm'] as num?)?.toDouble(),
       weightKg: (data['weightKg'] as num?)?.toDouble(),
       units: MeasurementUnits.fromName(data['units'] as String?),
+      age: (data['age'] as num?)?.toInt(),
+      sex: Sex.fromWire(data['sex']),
     );
   }
 
@@ -151,7 +182,23 @@ class BodyMetrics {
     this.heightCm,
     this.weightKg,
     this.units = MeasurementUnits.metric,
+    this.age,
+    this.sex,
   });
+
+  /// Whole years, or null before the user has entered one. Feeds the calorie
+  /// target only; BMI does not use it.
+  final int? age;
+
+  /// Null before the user has answered. Feeds the calorie target only.
+  final Sex? sex;
+
+  /// [age] when it is one worth calculating with.
+  int? get usableAge {
+    final value = age;
+    if (value == null || value < minAge || value > maxAge) return null;
+    return value;
+  }
 
   /// Height in centimetres, or null before the user has entered one.
   final double? heightCm;
@@ -233,11 +280,15 @@ class BodyMetrics {
     double? heightCm,
     double? weightKg,
     MeasurementUnits? units,
+    int? age,
+    Sex? sex,
   }) {
     return BodyMetrics(
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
       units: units ?? this.units,
+      age: age ?? this.age,
+      sex: sex ?? this.sex,
     );
   }
 
@@ -245,6 +296,8 @@ class BodyMetrics {
         if (heightCm != null) 'heightCm': heightCm,
         if (weightKg != null) 'weightKg': weightKg,
         'units': units.name,
+        if (age != null) 'age': age,
+        if (sex != null) 'sex': sex!.wireName,
       };
 }
 
