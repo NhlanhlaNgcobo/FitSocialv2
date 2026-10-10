@@ -1188,6 +1188,7 @@ class FirestoreContentRepository implements ContentRepository {
       startedAt: startedAt,
       duration: Duration(minutes: minutes),
       calories: intFromStoredValue(data['calories']),
+      caloriesAreEstimated: boolFromStoredValue(data['caloriesEstimated']),
       exerciseCount: data.containsKey('exerciseCount')
           ? intFromStoredValue(data['exerciseCount'])
           : null,
@@ -1630,6 +1631,7 @@ class FirestoreContentRepository implements ContentRepository {
       'title': title.isEmpty ? 'Workout' : title,
       'durationMinutes': draft.durationMinutes,
       'calories': draft.calories,
+      if (draft.caloriesEstimated) 'caloriesEstimated': true,
       'duration': draft.durationLabel,
       'caloriesLabel': draft.caloriesLabel,
       'exerciseCount': draft.exercises.length,

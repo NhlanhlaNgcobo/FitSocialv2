@@ -21,9 +21,11 @@ import '../../../shared/widgets/quick_toast.dart';
 import '../../../shared/widgets/run_summary_card.dart'
     show localBackgroundImage;
 import '../../../shared/widgets/save_workout_card_row.dart';
+import '../../auth/application/body_metrics_providers.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../tracking/application/tracking_providers.dart';
 import '../../tracking/data/workout_prefill_service.dart';
+import '../../workouts/domain/workout_energy.dart';
 import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
 import '../application/content_providers.dart';
@@ -106,7 +108,22 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
 
   int get _durationMinutes => parseTypedInt(_durationController.text) ?? 0;
 
-  int get _calories => parseTypedInt(_caloriesController.text) ?? 0;
+  /// What the user typed, or null for a blank field.
+  int? get _typedCalories => parseTypedInt(_caloriesController.text);
+
+  /// The bodyweight on file, read in [build]. Null until the user has one.
+  double? _bodyweightKg;
+
+  /// The calorie estimate for the form as it stands, or null without a
+  /// duration or a bodyweight. Shown in the blank Calories cell and saved
+  /// only when nothing was typed.
+  int? get _caloriesEstimate => estimateWorkoutCalories(
+        exercises: _exercises,
+        durationMinutes: _durationMinutes,
+        bodyweightKg: _bodyweightKg,
+      );
+
+  int get _calories => _typedCalories ?? _caloriesEstimate ?? 0;
 
   List<ExerciseEntry> get _exercises => [for (final row in _rows) row.toEntry()];
 
@@ -135,6 +152,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
         title: _titleController.text.trim(),
         durationMinutes: _durationMinutes,
         calories: _calories,
+        caloriesEstimated: _typedCalories == null && _caloriesEstimate != null,
         exercises: _exercises,
         notes: _notesController.text.trim(),
         shareToFeed: _shareToFeed,
@@ -376,6 +394,13 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     // Watched so it is loaded by the time an exercise is picked: a new card is
     // filled in from the last time that movement was logged.
     ref.watch(workoutHistoryProvider);
+    _bodyweightKg = ref.watch(bodyMetricsProvider).valueOrNull?.weightKg;
+    final estimate = _typedCalories == null ? _caloriesEstimate : null;
+    // The ask, only where it would change something: a duration is in, the
+    // field is blank, and the one missing input is the user's weight.
+    final askForWeight = _bodyweightKg == null &&
+        _durationMinutes > 0 &&
+        _typedCalories == null;
 
     return Scaffold(
       appBar: AppBar(
@@ -435,7 +460,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                   volumeKg: _volumeKg,
                   totalSets: _totalSets,
                   totalReps: _totalReps,
+                  caloriesEstimate: estimate,
                 ),
+                if (askForWeight) const _AddWeightPrompt(),
                 const SizedBox(height: AppSpacing.lg),
                 _ExerciseCards(
                   rows: _rows,
@@ -824,7 +851,11 @@ class _MetricGrid extends StatelessWidget {
     required this.volumeKg,
     required this.totalSets,
     required this.totalReps,
+    this.caloriesEstimate,
   });
+
+  /// Shown in the blank Calories cell, marked as an estimate.
+  final int? caloriesEstimate;
 
   final TextEditingController durationController;
   final TextEditingController caloriesController;
@@ -875,6 +906,7 @@ class _MetricGrid extends StatelessWidget {
                     unit: 'kcal',
                     controller: caloriesController,
                     onChanged: onChanged,
+                    estimate: caloriesEstimate,
                   ),
                 ),
               ],
@@ -960,6 +992,7 @@ class _EditableMetric extends StatelessWidget {
     required this.unit,
     required this.controller,
     required this.onChanged,
+    this.estimate,
   });
 
   final IconData icon;
@@ -967,6 +1000,10 @@ class _EditableMetric extends StatelessWidget {
   final String unit;
   final TextEditingController controller;
   final VoidCallback onChanged;
+
+  /// A figure to show while the field is blank, in place of `0`, with an
+  /// "estimate" caption. Typing replaces it.
+  final int? estimate;
 
   @override
   Widget build(BuildContext context) {
@@ -1001,7 +1038,7 @@ class _EditableMetric extends StatelessWidget {
                     focusedBorder: InputBorder.none,
                     filled: false,
                     isDense: true,
-                    hintText: '0',
+                    hintText: estimate == null ? '0' : '$estimate',
                     hintStyle: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w800,
@@ -1023,6 +1060,11 @@ class _EditableMetric extends StatelessWidget {
               ),
             ],
           ),
+          if (estimate != null && controller.text.isEmpty)
+            Text(
+              'Estimate · type to change',
+              style: TextStyle(fontSize: 11, color: palette.muted),
+            ),
         ],
       ),
     );
@@ -1770,6 +1812,34 @@ class _ErrorBanner extends StatelessWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// The ask behind the calorie estimate (spec §5.4): the one input missing is
+/// the user's weight. Opens the BMI screen, where it is entered.
+class _AddWeightPrompt extends StatelessWidget {
+  const _AddWeightPrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Add your weight and we can estimate calories burned.',
+              style: TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
+            ),
+          ),
+          TextButton(
+            onPressed: () => context.push('/bmi'),
+            child: const Text('Add it'),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:fitsocial_app/app/theme/app_theme.dart';
+import 'package:fitsocial_app/features/auth/application/body_metrics_providers.dart';
+import 'package:fitsocial_app/features/auth/domain/body_metrics.dart';
 import 'package:fitsocial_app/features/main/application/active_workout_controller.dart';
 import 'package:fitsocial_app/features/main/application/activity_actions.dart';
 import 'package:fitsocial_app/features/main/data/active_workout_store.dart';
@@ -117,6 +119,7 @@ Future<void> pumpScreen(
   List<RecentWorkout> recents = const [],
   List<List<ExerciseEntry>> history = const [],
   ActivityActions? actions,
+  double? bodyweightKg,
 }) async {
   tester.view.physicalSize = const Size(390, 1400);
   tester.view.devicePixelRatio = 1.0;
@@ -129,6 +132,9 @@ Future<void> pumpScreen(
           _StubRepository(recents, history: history),
         ),
         if (actions != null) activityActionsProvider.overrideWithValue(actions),
+        bodyMetricsProvider.overrideWith(
+          (ref) async => BodyMetrics(weightKg: bodyweightKg),
+        ),
       ],
       child: MaterialApp(
         theme: AppTheme.darkTheme,
@@ -260,6 +266,64 @@ void main() {
     expect((bench.sets, bench.reps, bench.weightKg), (3, 10, 82.5));
     expect(dips.exerciseId, 'chest-dip');
     expect((dips.sets, dips.reps, dips.weightKg), (3, 0, null));
+  });
+
+  testWidgets('a blank calories field shows an estimate and saves it',
+      (tester) async {
+    final actions = _RecordingActions();
+    await pumpScreen(tester, actions: actions, bodyweightKg: 80);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Chest');
+    await tester.enterText(find.byType(TextField).at(1), '45');
+    await pickExercise(tester, 'push up', 'Push Up');
+    await tester.pump();
+
+    expect(find.text('Estimate · type to change'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final draft = actions.saved.single;
+    // 3 × 10 push-ups at 0.64 × 80 kg over 45 min: 3.5 MET, 4.9 kcal/min.
+    expect(draft.calories, (3.5 * 3.5 * 80 / 200 * 45).round());
+    expect(draft.caloriesEstimated, isTrue);
+    expect(draft.caloriesLabel, startsWith('~'));
+  });
+
+  testWidgets('a typed calorie figure always wins', (tester) async {
+    final actions = _RecordingActions();
+    await pumpScreen(tester, actions: actions, bodyweightKg: 80);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Chest');
+    await tester.enterText(find.byType(TextField).at(1), '45');
+    await tester.enterText(find.byType(TextField).at(2), '400');
+    await pickExercise(tester, 'push up', 'Push Up');
+    await tester.pump();
+
+    expect(find.text('Estimate · type to change'), findsNothing);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final draft = actions.saved.single;
+    expect(draft.calories, 400);
+    expect(draft.caloriesEstimated, isFalse);
+  });
+
+  testWidgets('with no weight on file it asks for one instead',
+      (tester) async {
+    final actions = _RecordingActions();
+    await pumpScreen(tester, actions: actions);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Chest');
+    await tester.enterText(find.byType(TextField).at(1), '45');
+    await tester.pump();
+
+    expect(
+      find.text('Add your weight and we can estimate calories burned.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(actions.saved.single.calories, 0, reason: 'never invented');
   });
 
   testWidgets('a repeat chip refills the whole form', (tester) async {

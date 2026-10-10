@@ -855,9 +855,15 @@ class WorkoutLogDraft {
     this.backgroundImagePath,
     this.loggedAt,
     this.taggedUsers = const [],
+    this.caloriesEstimated = false,
   });
 
   final String title;
+
+  /// [calories] came from the estimator (`estimateWorkoutCalories`), not from
+  /// the user or a health store. Stored so every later reading can label it
+  /// an estimate.
+  final bool caloriesEstimated;
 
   /// The people attached to the shared post. Ignored when [shareToFeed] is
   /// off: with no post there is nothing to tag them in.
@@ -872,8 +878,9 @@ class WorkoutLogDraft {
   /// Progress tab can add durations up; the label is derived where it is shown.
   final int durationMinutes;
 
-  /// Energy burned in kcal, as entered. Zero when the user left it blank —
-  /// the field is optional and no figure is invented for a workout.
+  /// Energy burned in kcal: as typed, or else the estimate from the session's
+  /// volume, duration and bodyweight ([caloriesEstimated]). Zero when there
+  /// was neither — a missing duration or bodyweight is never filled in.
   final int calories;
 
   final List<ExerciseEntry> exercises;
@@ -890,8 +897,11 @@ class WorkoutLogDraft {
   /// "45 min", for the post's metric strip.
   String get durationLabel => '$durationMinutes min';
 
-  /// "320 kcal", for the post's metric strip.
-  String get caloriesLabel => '$calories kcal';
+  /// "320 kcal", for the post's metric strip — "~320 kcal" when estimated,
+  /// so the card never presents a guess as a measurement. Readers pull the
+  /// digits out of the label, so the tilde costs them nothing.
+  String get caloriesLabel =>
+      caloriesEstimated ? '~$calories kcal' : '$calories kcal';
 
   /// The map the post carries as `workoutData`, in the shape
   /// `WorkoutSummaryCard` reads.
