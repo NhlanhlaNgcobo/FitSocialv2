@@ -321,17 +321,23 @@ final macroGoalsProvider = FutureProvider<MacroGoals>((ref) async {
   ref.watch(appSessionProvider);
   final stored = await ref.watch(contentRepositoryProvider).getMacroGoals();
   if (stored.isCustom) return stored;
+  final calculated = await ref.watch(calculatedMacroGoalsProvider.future);
+  // The step-bonus switch is the user's even when the targets are not.
+  return calculated?.copyWith(stepBonus: stored.stepBonus) ?? stored;
+});
+
+/// The targets worked out from the user's body and plan, whether or not their
+/// own targets are overriding them -- the targets sheet offers these back to
+/// someone who set their own. Null while an input is missing or unreadable.
+final calculatedMacroGoalsProvider = FutureProvider<MacroGoals?>((ref) async {
+  ref.watch(appSessionProvider);
   try {
     final body = await ref.watch(bodyMetricsProvider.future);
     final plan = await ref.watch(fitnessProfileProvider.future);
-    // The step-bonus switch is the user's even when the targets are not.
-    return deriveMacroGoals(body, plan)?.copyWith(
-          stepBonus: stored.stepBonus,
-        ) ??
-        stored;
+    return deriveMacroGoals(body, plan);
   } catch (_) {
     // Body or plan unreadable: the defaults are a usable page.
-    return stored;
+    return null;
   }
 });
 
