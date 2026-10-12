@@ -72,64 +72,71 @@ class MilestoneCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 64,
-            height: 64,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              color: Color(0x33050505),
-              shape: BoxShape.circle,
-            ),
-            child: Text(emoji, style: const TextStyle(fontSize: 34)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  look.label,
-                  style: const TextStyle(
-                    color: AppColors.onMedia,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.4,
-                  ),
+          Row(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Color(0x33050505),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  milestone.title,
-                  style: const TextStyle(
-                    color: AppColors.onMedia,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    height: 1.15,
-                  ),
-                ),
-                if (milestone.subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    milestone.subtitle,
-                    style: const TextStyle(
-                      // Brighter than onMediaMuted: this sits on a saturated
-                      // colour, not on a dark photo scrim.
-                      color: Color(0xE6F7F7F7),
-                      fontSize: 14,
-                      height: 1.3,
+                child: Text(emoji, style: const TextStyle(fontSize: 34)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      look.label,
+                      style: const TextStyle(
+                        color: AppColors.onMedia,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.4,
+                      ),
                     ),
-                  ),
-                ],
-                if (explainable) ...[
-                  const SizedBox(height: 12),
-                  _HowEarnedLink(
-                    onTap: () => showMilestoneExplainer(context, milestone),
-                  ),
-                ],
-              ],
-            ),
+                    const SizedBox(height: 4),
+                    Text(
+                      milestone.title,
+                      style: const TextStyle(
+                        color: AppColors.onMedia,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        height: 1.15,
+                      ),
+                    ),
+                    if (milestone.subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        milestone.subtitle,
+                        style: const TextStyle(
+                          // Brighter than onMediaMuted: this sits on a saturated
+                          // colour, not on a dark photo scrim.
+                          color: Color(0xE6F7F7F7),
+                          fontSize: 14,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
+          // Under the whole row rather than in the words' column, which on a
+          // small phone is too narrow for it.
+          if (explainable) ...[
+            const SizedBox(height: 14),
+            _HowEarnedLink(
+              onTap: () => showMilestoneExplainer(context, milestone),
+            ),
+          ],
         ],
       ),
     );
@@ -166,12 +173,14 @@ class _HowEarnedLink extends StatelessWidget {
                   color: AppColors.onMedia,
                 ),
                 SizedBox(width: 6),
-                Text(
-                  "How it's earned",
-                  style: TextStyle(
-                    color: AppColors.onMedia,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    "How it's earned",
+                    style: TextStyle(
+                      color: AppColors.onMedia,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
