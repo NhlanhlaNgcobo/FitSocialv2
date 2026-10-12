@@ -95,12 +95,20 @@ test("custom goals are capped in length", () => {
 });
 
 test("each metric reads its own stats field", () => {
-  const stats = { steps: 1, activeMinutes: 2, sessions: 3, meals: 4, longestStreak: 5 };
+  const stats = {
+    steps: 1,
+    activeMinutes: 2,
+    sessions: 3,
+    meals: 4,
+    longestStreak: 5,
+    activeDays: 6,
+  };
   assert.strictEqual(metricValue(stats, "steps"), 1);
   assert.strictEqual(metricValue(stats, "active_minutes"), 2);
   assert.strictEqual(metricValue(stats, "workouts"), 3);
   assert.strictEqual(metricValue(stats, "meals_logged"), 4);
   assert.strictEqual(metricValue(stats, "streak"), 5);
+  assert.strictEqual(metricValue(stats, "active_days"), 6);
   assert.strictEqual(metricValue(null, "steps"), 0);
 });
 
@@ -130,4 +138,20 @@ test("completion is sticky within its period", () => {
   assert.strictEqual(later.record.completed, true);
   assert.strictEqual(later.newlyCompleted, false);
   assert.strictEqual(later.record.progress, 3, "progress still shows the truth");
+});
+
+test("a training-days goal fits the week it runs in", () => {
+  const ok = validateGoal(
+    { metric: "active_days", period: "weekly", target: 4 },
+    "2026-10-12"
+  );
+  assert.strictEqual(ok.metric, "active_days");
+  assert.throws(
+    () =>
+      validateGoal(
+        { metric: "active_days", period: "weekly", target: 8 },
+        "2026-10-12"
+      ),
+    /more than the period can hold/
+  );
 });

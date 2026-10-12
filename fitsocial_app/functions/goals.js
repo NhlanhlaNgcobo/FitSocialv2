@@ -42,7 +42,16 @@ const stats = require("./stats")._internals;
 
 // --- Rules ------------------------------------------------------------------
 
-const METRICS = ["steps", "active_minutes", "workouts", "meals_logged", "streak"];
+// active_days is the "days a week" sign-up asks for: days with at least one
+// session, so two workouts on one day still count once.
+const METRICS = [
+  "steps",
+  "active_minutes",
+  "workouts",
+  "meals_logged",
+  "streak",
+  "active_days",
+];
 const PERIODS = ["weekly", "monthly", "annual", "custom"];
 
 /** Active goals one person may hold. A ceiling, not the free tier's limit. */
@@ -58,6 +67,7 @@ const DAILY_CEILING = {
   workouts: 20,
   meals_logged: 20,
   streak: 1,
+  active_days: 1,
 };
 
 /** The stats field each metric reads. */
@@ -74,6 +84,8 @@ function metricValue(periodStats, metric) {
       return periodStats.meals || 0;
     case "streak":
       return periodStats.longestStreak || 0;
+    case "active_days":
+      return periodStats.activeDays || 0;
     default:
       return 0;
   }

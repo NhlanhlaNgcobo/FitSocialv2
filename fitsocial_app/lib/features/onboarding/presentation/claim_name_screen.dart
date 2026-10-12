@@ -16,6 +16,7 @@ import '../../auth/application/username_availability_checker.dart';
 import '../../auth/data/username_repository.dart';
 import '../../auth/domain/username.dart';
 import '../../auth/presentation/username_availability_hint.dart';
+import '../../goals/application/goal_providers.dart';
 import '../application/onboarding_controller.dart';
 import 'onboarding_chrome.dart';
 
@@ -146,6 +147,8 @@ class _ClaimNameScreenState extends ConsumerState<ClaimNameScreen> {
       if (!(_formKey.currentState?.validate() ?? false)) return;
     }
 
+    // Read before the save: a successful one clears the answers.
+    final days = ref.read(onboardingControllerProvider).weeklyGoalDays;
     final saved = await session.completeProfile(
       displayName: _nameController.text,
       handle: _handleController.text,
@@ -162,6 +165,17 @@ class _ClaimNameScreenState extends ConsumerState<ClaimNameScreen> {
         {'had_photo': _imagePath == null ? 0 : 1},
       );
       ref.invalidate(onboardingControllerProvider);
+      // "Days a week" becomes a tracked goal. Not awaited, and its failure is
+      // only logged: the account is made either way, and editing the plan
+      // later creates it.
+      if (days != null) {
+        ref
+            .read(goalActionsProvider)
+            .syncTrainingDays(days)
+            .catchError((Object error) {
+          debugPrint('Training-days goal not created: $error');
+        });
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../auth/application/app_session.dart';
+import '../../goals/application/goal_providers.dart';
 import '../../main/application/content_providers.dart';
 import '../../main/data/content_repository.dart';
 import '../domain/fitness_profile.dart';
@@ -59,6 +60,13 @@ class FitnessPlanActions {
     );
     if (draft.weeklyGoalDays case final days?) {
       await _ref.read(contentRepositoryProvider).setWeeklyGoalDays(days);
+      // The goal follows the answer. Its failure costs the ring, never the
+      // saved plan, so it is not allowed to fail the save.
+      try {
+        await _ref.read(goalActionsProvider).syncTrainingDays(days);
+      } catch (error) {
+        debugPrint('Training-days goal not updated: $error');
+      }
     }
 
     await _ref.read(onboardingDraftStoreProvider).clear();

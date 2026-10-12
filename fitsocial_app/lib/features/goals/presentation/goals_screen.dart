@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/input/typed_number.dart';
@@ -32,8 +33,16 @@ class GoalsScreen extends ConsumerWidget {
                   'set another.',
                 )
             : () => showCreateGoalSheet(context),
+        // The app's orange, like every primary button, rather than the
+        // theme's default FAB fill.
+        backgroundColor: palette.brand,
+        foregroundColor: AppColors.onBrand,
+        shape: const StadiumBorder(),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('New goal'),
+        label: const Text(
+          'New goal',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
       // The plan from sign-up sits above the goals: it is what they serve,
       // and before it was here nothing in the app ever showed it again.
