@@ -102,6 +102,38 @@ vec3 backdropAt(vec2 px) {
   return texture(uBackdrop, clamp(uv, vec2(0.0), vec2(1.0))).rgb;
 }
 
+// How far the backdrop shifts at a given depth inside the pane, 0 to 1.
+//
+// Ported from quick-liquid's optics (PHYSICS.md there). The bezel is a quarter
+// ellipse of height T over width B; an orthographic ray hitting it is refracted
+// by vector Snell and walks the glass's depth to the backdrop. With the ratio
+// T/B and the index fixed, the curve depends on s alone.
+//
+// T/B is 24/34 and the index 1.5, quick-liquid's defaults. kLensPeak is the
+// curve's maximum for exactly those two numbers, at s = 0.123, so the result
+// tops out at 1 and uRefraction stays the pane's peak shift in pixels. Change
+// either constant and kLensPeak has to be recomputed with them.
+const float kLensRatio = 0.70588235;
+const float kLensEta = 0.66666667;
+const float kLensPeak = 0.17872669;
+
+float lensShift(float depth) {
+  // A pill's bezel cannot be wider than half the pane, or the two sides would
+  // overlap and leave a ridge down the middle.
+  float bezel = max(min(uEdge, min(uSize.x, uSize.y) * 0.5), 0.001);
+  float s = depth / bezel;
+  if (s <= 0.0 || s >= 1.0) return 0.0;
+
+  float root = sqrt(s * (2.0 - s));
+  float slope = kLensRatio * (1.0 - s) / root;
+  float cosI = inversesqrt(1.0 + slope * slope);
+  float sinI = slope * cosI;
+  float k = kLensEta * cosI
+          - sqrt(max(0.0, 1.0 - kLensEta * kLensEta * sinI * sinI));
+  float shift = root * abs(k * sinI / (k * cosI - kLensEta));
+  return shift / kLensPeak;
+}
+
 void main() {
   vec2 px = FlutterFragCoord().xy;
   float d = shape(px);
@@ -121,16 +153,22 @@ void main() {
     shape(px + e.yx) - shape(px - e.yx)
   ) + vec2(1e-6));
 
-  // Thickness profile. Squared so the bend stays an edge event instead of
-  // warping the middle of the pane.
+  // How steeply the surface turns here. Drives the lighting below -- the
+  // reflection, the specular and the meniscus -- not the bend.
   float rim = 1.0 - smoothstep(0.0, max(uEdge, 0.001), -d);
   float bend = rim * rim;
 
-  vec2 off = n * bend * uRefraction;
+  // The bend itself, traced rather than shaped: a ray refracted through a
+  // convex bezel of width uEdge, by Snell's law. Zero at the rim, where the
+  // glass has no depth to carry it, peaking just inside, and gone where the
+  // bezel meets the flat top -- clear middle, bent edge. It samples *inward*,
+  // so the edge magnifies the way a drop of water does.
+  vec2 off = -n * lensShift(-d) * uRefraction;
   vec3 col;
-  col.r = backdropAt(px + off * (1.0 + uAberration * 0.10)).r;
+  // Blue bends most and red least, which is crown glass's own ordering.
+  col.r = backdropAt(px + off * (1.0 - uAberration * 0.10)).r;
   col.g = backdropAt(px + off).g;
-  col.b = backdropAt(px + off * (1.0 - uAberration * 0.10)).b;
+  col.b = backdropAt(px + off * (1.0 + uAberration * 0.14)).b;
 
   col = mix(col, uTintColor, uTint);
 

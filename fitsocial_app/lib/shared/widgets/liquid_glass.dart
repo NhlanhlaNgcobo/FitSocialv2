@@ -81,7 +81,7 @@ class LiquidGlass extends StatefulWidget {
     this.borderRadius = const BorderRadius.all(Radius.circular(24)),
     this.refraction = 24,
     this.edge = 22,
-    this.aberration = 0.55,
+    this.aberration = 0.2,
     this.reflect = 0,
     this.light = const Offset(-0.55, -0.78),
     this.clip = true,
@@ -105,6 +105,10 @@ class LiquidGlass extends StatefulWidget {
   final double edge;
 
   /// Per-channel spread at the lens edge, 0 to 1.
+  ///
+  /// Kept low because the lens magnifies: the strongest bend sits just inside
+  /// the rim, over the content, so at the old 0.55 white text split into a
+  /// rainbow there. 0.2 is quick-liquid's own fringe at our refraction.
   final double aberration;
 
   /// How much of the bevel is reflection rather than refraction.
