@@ -115,6 +115,16 @@ class PushTapRouter {
       return;
     }
 
+    openTrusted(route, wasRunning: wasRunning);
+  }
+
+  /// Opens [route], already checked by whoever is asking, with the same care
+  /// over what sits underneath it and over a session still restoring.
+  ///
+  /// The way in for local notifications — the workout left open in the
+  /// background — whose routes are checked against
+  /// `LocalNotificationsHub.routes` rather than the push whitelist.
+  void openTrusted(String route, {required bool wasRunning}) {
     if (_ref.read(appSessionProvider).stage == AuthStage.authenticated) {
       _navigate(route, layHomeFirst: !wasRunning);
       return;

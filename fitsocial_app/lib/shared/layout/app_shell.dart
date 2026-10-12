@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme/app_palette.dart';
 import '../../features/challenges/application/daily_steps_sync.dart';
 import '../../features/main/application/meal_repeat_sync.dart';
+import '../../features/main/presentation/workout_resume_pill.dart';
 import '../../features/tracking/application/run_import_sync.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/offline_banner.dart';
@@ -122,13 +123,21 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ],
       ),
-      bottomNavigationBar: ValueListenableBuilder<bool>(
-        valueListenable: _visibility.hidden,
-        builder: (context, hidden, _) => FitSocialBottomNav(
-          currentIndex: widget.navigationShell.currentIndex,
-          onTap: _onTap,
-          hidden: hidden,
-        ),
+      // A workout left open rides above the nav on every tab, so the way back
+      // to it is never more than a tap away.
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const WorkoutResumePill(),
+          ValueListenableBuilder<bool>(
+            valueListenable: _visibility.hidden,
+            builder: (context, hidden, _) => FitSocialBottomNav(
+              currentIndex: widget.navigationShell.currentIndex,
+              onTap: _onTap,
+              hidden: hidden,
+            ),
+          ),
+        ],
       ),
     );
   }

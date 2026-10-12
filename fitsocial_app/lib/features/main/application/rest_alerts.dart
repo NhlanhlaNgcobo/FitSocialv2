@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../../core/notifications/local_notifications_hub.dart';
 import '../domain/active_workout.dart';
 import 'active_workout_controller.dart';
 
@@ -55,13 +55,20 @@ class NoopRestAlerts implements RestAlerts {
 /// notification alone, which iOS delivers on time. There is no countdown.
 class LocalRestAlerts implements RestAlerts {
   LocalRestAlerts({
-    FlutterLocalNotificationsPlugin? plugin,
+    required LocalNotificationsHub hub,
     DateTime Function()? now,
-  })  : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+  })  : _hub = hub,
+        _plugin = hub.plugin,
         _now = now ?? DateTime.now;
 
+  /// Owns the plugin's initialisation and its one tap callback — see
+  /// [LocalNotificationsHub] for why nobody else may.
+  final LocalNotificationsHub _hub;
   final FlutterLocalNotificationsPlugin _plugin;
   final DateTime Function() _now;
+
+  /// Where tapping a rest notification goes: back to the sets.
+  static const _route = '/workout-session';
 
   /// One id for the countdown and the alert, so the alert replaces the
   /// countdown rather than sitting under it.
@@ -86,21 +93,10 @@ class LocalRestAlerts implements RestAlerts {
 
   Future<bool>? _ready;
   Timer? _fallback;
-  bool _askedPermission = false;
 
   Future<bool> _init() => _ready ??= () async {
+        if (!await _hub.ready()) return false;
         try {
-          await _plugin.initialize(
-            settings: const InitializationSettings(
-              android: AndroidInitializationSettings('ic_stat_fitsocial'),
-              iOS: DarwinInitializationSettings(
-                // Asked for in requestPermission, not at start-up.
-                requestAlertPermission: false,
-                requestBadgePermission: false,
-                requestSoundPermission: false,
-              ),
-            ),
-          );
           final android = _android;
           await android?.createNotificationChannel(_countdownChannel);
           await android?.createNotificationChannel(_alertChannel);
@@ -111,26 +107,10 @@ class LocalRestAlerts implements RestAlerts {
         }
       }();
 
-  AndroidFlutterLocalNotificationsPlugin? get _android =>
-      _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-
-  IOSFlutterLocalNotificationsPlugin? get _ios =>
-      _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+  AndroidFlutterLocalNotificationsPlugin? get _android => _hub.android;
 
   @override
-  Future<void> requestPermission() async {
-    if (_askedPermission) return;
-    _askedPermission = true;
-    if (!await _init()) return;
-    try {
-      await _android?.requestNotificationsPermission();
-      await _ios?.requestPermissions(alert: true, sound: true);
-    } catch (error) {
-      debugPrint('Could not ask for notification permission: $error');
-    }
-  }
+  Future<void> requestPermission() => _hub.requestPermission();
 
   static NotificationDetails get _alertDetails => NotificationDetails(
         android: AndroidNotificationDetails(
@@ -168,6 +148,7 @@ class LocalRestAlerts implements RestAlerts {
           id: _id,
           title: 'Resting',
           body: 'Your next set is up when this reaches zero.',
+          payload: _route,
           notificationDetails: NotificationDetails(
             android: AndroidNotificationDetails(
               _countdownChannel.id,
@@ -197,6 +178,7 @@ class LocalRestAlerts implements RestAlerts {
         title: _alertTitle,
         body: _alertBody,
         notificationDetails: _alertDetails,
+        payload: _route,
         androidScheduleMode: exact
             ? AndroidScheduleMode.exactAllowWhileIdle
             : AndroidScheduleMode.inexactAllowWhileIdle,
@@ -221,6 +203,7 @@ class LocalRestAlerts implements RestAlerts {
         title: _alertTitle,
         body: _alertBody,
         notificationDetails: _alertDetails,
+        payload: _route,
       );
     } catch (error) {
       debugPrint('Could not show the rest alert: $error');
@@ -243,10 +226,9 @@ class LocalRestAlerts implements RestAlerts {
 }
 
 final restAlertsProvider = Provider<RestAlerts>((ref) {
-  if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) {
-    return const NoopRestAlerts();
-  }
-  final alerts = LocalRestAlerts();
+  final hub = ref.watch(localNotificationsHubProvider);
+  if (hub == null) return const NoopRestAlerts();
+  final alerts = LocalRestAlerts(hub: hub);
   ref.onDispose(alerts.dispose);
   return alerts;
 });

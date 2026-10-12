@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -29,9 +30,12 @@ import '../../workouts/domain/workout_energy.dart';
 import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
 import '../application/content_providers.dart';
+import '../application/workout_background_notice.dart';
+import '../application/workout_log_form_controller.dart';
 import '../application/workout_library_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/exercise_library.dart';
+import '../domain/workout_log_form.dart';
 import '../domain/workout_math.dart';
 import 'exercise_picker_sheet.dart';
 import 'tag_people_sheet.dart';
@@ -91,22 +95,137 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// Why the last pull produced nothing, shown under the card.
   String? _healthNote;
 
+  /// Keeps the form on disk while it is filled in, so leaving the app — and
+  /// Android reclaiming it — no longer throws a half-typed workout away.
+  /// Held rather than looked up, because [dispose] flushes it.
+  late final WorkoutLogFormController _form;
+
+  /// True until any saved form has been read and applied. Nothing is written
+  /// before then, or a blank screen would overwrite the form it is about to
+  /// restore.
+  bool _restoring = true;
+
+  /// The workout was saved. Nothing may be written after that, or the form
+  /// just cleared would come back the next time the screen opens.
+  bool _finished = false;
+
+  /// The form on screen was picked back up from an earlier visit, which is
+  /// said at the top with a way to start over instead.
+  bool _restored = false;
+
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController();
     _durationController = TextEditingController();
     _caloriesController = TextEditingController();
-    _notesController = TextEditingController();
-    if (widget.startWithCardio) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _addExercise(cardioOnly: true);
-      });
+    // The only field that changes the form without going through setState.
+    _notesController = TextEditingController()..addListener(_persist);
+    _form = ref.read(workoutLogFormProvider.notifier);
+    unawaited(_restore());
+  }
+
+  /// Picks up an unsaved form, then — for the run screen's way in — opens the
+  /// cardio picker, so the machine is added to what was there rather than
+  /// replacing it.
+  Future<void> _restore() async {
+    await _form.ready;
+    if (!mounted) return;
+    final saved = ref.read(workoutLogFormProvider);
+    _restoring = false;
+    if (saved != null && !_snapshot().hasContent) {
+      _apply(saved);
+    } else {
+      _persist();
     }
+    if (widget.startWithCardio && mounted) {
+      await _addExercise(cardioOnly: true);
+    }
+  }
+
+  /// Every change to the form goes through here, so every change is kept.
+  ///
+  /// Hooking setState rather than each of the dozen places that edit the form
+  /// is deliberate: a field added later is saved without anyone remembering
+  /// to wire it up. The write is debounced by the controller.
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _persist();
+  }
+
+  void _persist() {
+    if (_restoring || _finished || !mounted) return;
+    _form.update(_snapshot());
+  }
+
+  /// The form as it stands, as text.
+  WorkoutLogForm _snapshot() => WorkoutLogForm(
+        savedAt: DateTime.now(),
+        loggedAt: _loggedAt,
+        title: _titleController.text,
+        duration: _durationController.text,
+        calories: _caloriesController.text,
+        notes: _notesController.text,
+        shareToFeed: _shareToFeed,
+        backgroundPath: _backgroundPath,
+        taggedUsers: _taggedUsers,
+        rows: [for (final row in _rows) row.toForm()],
+      );
+
+  void _apply(WorkoutLogForm saved) {
+    // A photo picked last time may have been cleaned out of the cache since.
+    final background = saved.backgroundPath;
+    final photoStillThere =
+        background != null && (kIsWeb || File(background).existsSync());
+    setState(() {
+      _titleController.text = saved.title;
+      _durationController.text = saved.duration;
+      _caloriesController.text = saved.calories;
+      _notesController.text = saved.notes;
+      _shareToFeed = saved.shareToFeed;
+      _backgroundPath = photoStillThere ? background : null;
+      _taggedUsers = saved.taggedUsers;
+      _loggedAt = saved.loggedAt;
+      for (final row in _rows) {
+        row.dispose();
+      }
+      _rows
+        ..clear()
+        ..addAll(saved.rows.map((r) => _LogRow.fromForm(_nextRowId++, r)));
+      _restored = true;
+    });
+  }
+
+  /// Throws away the form picked back up, for a fresh one.
+  void _startOver() {
+    _form.clear();
+    setState(() {
+      _titleController.clear();
+      _durationController.clear();
+      _caloriesController.clear();
+      _notesController.clear();
+      _shareToFeed = true;
+      _backgroundPath = null;
+      _taggedUsers = const [];
+      _loggedAt = DateTime.now();
+      _healthPrefill = null;
+      _healthNote = null;
+      _errorMessage = null;
+      for (final row in _rows) {
+        row.dispose();
+      }
+      _rows.clear();
+      _restored = false;
+    });
   }
 
   @override
   void dispose() {
+    // Backing out of the screen keeps the form: it is offered back next time,
+    // and from the banner on the way out. Written now rather than when the
+    // debounce would have.
+    unawaited(_form.flush());
     _titleController.dispose();
     _durationController.dispose();
     _caloriesController.dispose();
@@ -312,6 +431,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// replaced from here — on top of this screen, so backing out of it lands
   /// back on the log.
   Future<void> _startLiveWorkout() async {
+    // The moment the "workout in progress" notice makes sense to ask about:
+    // it is what keeps this session in sight once the app is left.
+    unawaited(ref.read(workoutBackgroundNoticeProvider).requestPermission());
     await ref.read(activeWorkoutProvider.notifier).ensureStarted();
     if (mounted) context.push('/workout-session');
   }
@@ -329,6 +451,11 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// filled from last time when there was one and left blank when there was
   /// not — there is no sensible default length for a session on the rower.
   void _addPicked(PickedExercise picked) {
+    // The first card is where the form becomes worth coming back to, and so
+    // the moment to ask whether it may say so from the notification shade.
+    if (_rows.isEmpty) {
+      unawaited(ref.read(workoutBackgroundNoticeProvider).requestPermission());
+    }
     final last = _lastLogged(picked.name, picked.id);
     final cardio =
         picked.isCardio || _isCardio(picked.id) || (last?.isCardio ?? false);
@@ -418,6 +545,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     try {
       final result =
           await ref.read(activityActionsProvider).saveWorkout(_draft);
+      // Saved: nothing is left to pick back up.
+      _finished = true;
+      _form.clear();
       if (!mounted) return;
       showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
@@ -468,6 +598,10 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                 AppSpacing.md,
               ),
               children: [
+                if (_restored) ...[
+                  _RestoredBanner(onStartOver: _isSaving ? null : _startOver),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 _LiveWorkoutCard(
                   inProgress: ref.watch(activeWorkoutProvider) != null,
                   onTap: _isSaving ? null : _startLiveWorkout,
@@ -1235,6 +1369,48 @@ class _DerivedMetric extends StatelessWidget {
   }
 }
 
+/// Says the form on screen is the one left unsaved earlier, and offers a blank
+/// one instead.
+class _RestoredBanner extends StatelessWidget {
+  const _RestoredBanner({required this.onStartOver});
+
+  final VoidCallback? onStartOver;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: palette.brandSoft,
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        border: Border.all(color: palette.brandSoftStroke),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.history_rounded, size: 18, color: palette.brandText),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Picked up where you left off',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onStartOver,
+            child: const Text('Start over'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// One exercise on the log, being filled in. Holds its own controllers so the
 /// numbers typed into it survive a reorder.
 class _LogRow {
@@ -1263,9 +1439,32 @@ class _LogRow {
               distanceKm == null || distanceKm <= 0 ? '' : _trimmed(distanceKm),
         );
 
+  /// A card as it was left on an earlier visit, every field as typed.
+  _LogRow.fromForm(this.id, WorkoutLogFormRow saved)
+      : name = saved.name,
+        exerciseId = saved.exerciseId,
+        cardio = saved.cardio,
+        sets = TextEditingController(text: saved.sets),
+        reps = TextEditingController(text: saved.reps),
+        weight = TextEditingController(text: saved.weight),
+        minutes = TextEditingController(text: saved.minutes),
+        distance = TextEditingController(text: saved.distance);
+
   /// A cardio machine — the rower, the elliptical, the stairs — logged as
   /// time and distance instead of sets, reps and load.
   final bool cardio;
+
+  /// The card as text, for the form kept on disk.
+  WorkoutLogFormRow toForm() => WorkoutLogFormRow(
+        name: name,
+        exerciseId: exerciseId,
+        cardio: cardio,
+        sets: sets.text,
+        reps: reps.text,
+        weight: weight.text,
+        minutes: minutes.text,
+        distance: distance.text,
+      );
 
   /// Cardio only: minutes on the machine, and the distance off its display.
   final TextEditingController minutes;
