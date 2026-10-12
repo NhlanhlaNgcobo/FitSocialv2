@@ -9,6 +9,7 @@ import '../data/challenge_repository_contract.dart';
 import '../domain/challenge_badges.dart';
 import '../domain/challenge_clock.dart';
 import '../domain/challenge_models.dart';
+import '../domain/challenge_points.dart';
 import '../domain/challenge_task.dart';
 import '../domain/daily_health.dart';
 
@@ -136,6 +137,14 @@ final myPointsProvider = StreamProvider<int>((ref) {
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) return Stream.value(0);
   return ref.watch(challengeRepositoryProvider).watchPoints(userId);
+});
+
+/// The signed-in user's latest point awards, each with its reason.
+final myPointsHistoryProvider = StreamProvider<List<PointsEntry>>((ref) {
+  ref.watch(appSessionProvider);
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return Stream.value(const []);
+  return ref.watch(challengeRepositoryProvider).watchPointsHistory(userId);
 });
 
 /// How many people are on a challenge, for the detail screen.

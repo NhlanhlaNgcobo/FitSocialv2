@@ -27,6 +27,7 @@ import '../../features/main/presentation/bmi_screen.dart';
 import '../../features/main/presentation/connections_screen.dart';
 import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
+import '../../features/main/presentation/milestones_guide_screen.dart';
 import '../../features/main/presentation/home_screen.dart';
 import '../../features/main/presentation/manual_run_entry_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
@@ -270,6 +271,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/achievements',
         builder: (context, state) => const AchievementsScreen(),
+      ),
+      GoRoute(
+        path: '/milestones',
+        builder: (context, state) => const MilestonesGuideScreen(),
       ),
       GoRoute(path: '/bmi', builder: (context, state) => const BmiScreen()),
       GoRoute(

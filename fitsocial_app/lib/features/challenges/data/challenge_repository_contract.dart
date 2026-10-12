@@ -1,4 +1,5 @@
 import '../domain/challenge_badges.dart';
+import '../domain/challenge_points.dart';
 import '../domain/daily_health.dart';
 import '../domain/challenge_models.dart';
 import '../domain/challenge_task.dart';
@@ -97,6 +98,10 @@ abstract class ChallengeRepository {
 
   /// The user's lifetime points total.
   Stream<int> watchPoints(String userId);
+
+  /// The user's most recent point awards, newest first — what the total on
+  /// Achievements is made of.
+  Stream<List<PointsEntry>> watchPointsHistory(String userId);
 
   /// How many people are running and have finished a challenge. Read from a
   /// document the server aggregates, not counted live.

@@ -9,6 +9,7 @@ import 'package:fitsocial_app/features/challenges/domain/challenge_badges.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_clock.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_copy.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_models.dart';
+import 'package:fitsocial_app/features/challenges/domain/challenge_points.dart';
 import 'package:fitsocial_app/features/challenges/domain/challenge_task.dart';
 import 'package:fitsocial_app/features/challenges/domain/daily_health.dart';
 import 'package:fitsocial_app/features/challenges/presentation/challenge_outcome_screen.dart';
@@ -127,6 +128,10 @@ class _FakeChallengeRepository implements ChallengeRepository {
 
   @override
   Stream<int> watchPoints(String userId) => Stream.value(0);
+
+  @override
+  Stream<List<PointsEntry>> watchPointsHistory(String userId) =>
+      Stream.value(const []);
 
   @override
   Stream<ChallengeStats> watchStats(ChallengeKey challengeKey) =>

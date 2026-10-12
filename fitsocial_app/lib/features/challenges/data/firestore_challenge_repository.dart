@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../domain/challenge_badges.dart';
 import '../domain/challenge_clock.dart';
 import '../domain/challenge_models.dart';
+import '../domain/challenge_points.dart';
 import '../domain/challenge_task.dart';
 import '../domain/daily_health.dart';
 import 'challenge_repository_contract.dart';
@@ -294,6 +295,48 @@ class FirestoreChallengeRepository implements ChallengeRepository {
         .doc(userId)
         .snapshots()
         .map((doc) => _int(doc.data()?['totalPoints']));
+  }
+
+  /// How many awards the history shows. One screenful: it is there to say
+  /// where the total came from, not to be an audit log.
+  static const int _pointsHistoryLimit = 30;
+
+  @override
+  Stream<List<PointsEntry>> watchPointsHistory(String userId) {
+    // Served by the (userId, createdAt desc) index already in
+    // firestore.indexes.json, and allowed by the ledger's owner-only read rule
+    // because the query is filtered to the reader's own rows.
+    return _firestore
+        .collection('pointsLedger')
+        .where('userId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .limit(_pointsHistoryLimit)
+        .snapshots()
+        .map((snapshot) {
+      final entries = <PointsEntry>[];
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        // A kind of award this build does not know is left out rather than
+        // shown with no reason — the same rule the badge shelf follows.
+        final event = PointsEvent.byKey((data['eventType'] as String?) ?? '');
+        if (event == null) continue;
+        entries.add(PointsEntry(
+          id: doc.id,
+          event: event,
+          amount: _int(data['amount']),
+          // Null only for the instant before the server stamps it, which this
+          // client never sees — it is not the writer.
+          createdAt:
+              (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          sourceId: data['sourceId'] as String?,
+          multiplier: (data['multiplier'] as num?)?.toDouble() ?? 1.0,
+          dayKey: data['dayKey'] as String?,
+          enrollmentId: data['enrollmentId'] as String?,
+          taskKey: data['taskKey'] as String?,
+        ));
+      }
+      return entries;
+    });
   }
 
   @override
