@@ -16,6 +16,7 @@ import '../../../shared/widgets/glass_top_bar.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../goals/presentation/goals_home_card.dart';
+import '../../onboarding/presentation/finish_plan_home_card.dart';
 import '../../insights/presentation/weekly_insight_card.dart';
 import '../../up_next/presentation/up_next_carousel.dart';
 import '../../pulse/presentation/pulse_tray.dart';
@@ -173,6 +174,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // at the streak, not somewhere to change the window.
       const ActivityGridCard(fixedRange: ActivityRange.week),
       const SizedBox(height: AppSpacing.sm),
+      // An account with no plan is pointed at one before anything that runs
+      // on it. Carries its own spacing, and draws nothing once there is one.
+      const FinishPlanHomeCard(),
       // Today's suggestions, first thing under the week: the one row here that
       // says what to do next. Draws nothing while Up Next is off or empty.
       const UpNextCarousel(),
