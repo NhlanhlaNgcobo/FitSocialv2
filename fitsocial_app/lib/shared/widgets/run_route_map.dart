@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
+import 'run_map_markers.dart';
 
 /// How a [RunRouteMap] behaves.
 enum RunRouteMapMode {
@@ -24,7 +25,7 @@ enum RunRouteMapMode {
   spectator,
 }
 
-/// Themed Google Map that draws a run route as a deep-orange polyline.
+/// Themed Google Map that draws a run route as an orange polyline.
 ///
 /// The map takes the app's own styling in both themes, because it is not a
 /// photo — it is chrome. A black map sitting inside a white card on the light
@@ -94,40 +95,60 @@ class _RunRouteMapState extends State<RunRouteMap> {
   /// doesn't yank a map the user has panned back to the default framing.
   bool _hasFramedRoute = false;
 
+  /// The hand-drawn pins, null until they are painted — the first frame or two
+  /// falls back to Google's defaults rather than showing no pins at all.
+  Map<RunMapMarker, BitmapDescriptor>? _icons;
+  double? _iconsRatio;
+
   // Pure-black map style to match the FitSocial surface (#000000). POIs and
-  // transit are hidden so the orange route is the only thing that draws the eye.
+  // transit are hidden so the orange route is the only thing that draws the
+  // eye — except parks and water, kept as faint tints so the map still reads as
+  // a place. Small-street names and road shields go: at a run's zoom they are
+  // clutter, and the main roads keep their names.
   static const _darkStyle = '''
 [
   {"elementType":"geometry","stylers":[{"color":"#000000"}]},
+  {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
   {"elementType":"labels.text.fill","stylers":[{"color":"#5c5c5c"}]},
   {"elementType":"labels.text.stroke","stylers":[{"color":"#000000"}]},
   {"featureType":"administrative","elementType":"geometry","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative.land_parcel","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative.neighborhood","elementType":"labels","stylers":[{"visibility":"off"}]},
   {"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#0a0a0a"}]},
   {"featureType":"poi","stylers":[{"visibility":"off"}]},
+  {"featureType":"poi.park","elementType":"geometry","stylers":[{"visibility":"on"},{"color":"#0d1a10"}]},
   {"featureType":"road","elementType":"geometry","stylers":[{"color":"#1c1c1c"}]},
   {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#6b6b6b"}]},
+  {"featureType":"road.local","elementType":"labels","stylers":[{"visibility":"off"}]},
   {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#2b2b2b"}]},
   {"featureType":"transit","stylers":[{"visibility":"off"}]},
-  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#050505"}]}
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#0a1820"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#2c4450"}]}
 ]
 ''';
 
   // The light counterpart, built on the same rules: the app's cream page as the
   // landmass, roads a shade off it, POIs and transit hidden so nothing competes
-  // with the orange route.
+  // with the orange route, parks and water kept as soft tints.
   static const _lightStyle = '''
 [
   {"elementType":"geometry","stylers":[{"color":"#F5F1EA"}]},
+  {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
   {"elementType":"labels.text.fill","stylers":[{"color":"#8A857C"}]},
   {"elementType":"labels.text.stroke","stylers":[{"color":"#F5F1EA"}]},
   {"featureType":"administrative","elementType":"geometry","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative.land_parcel","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative.neighborhood","elementType":"labels","stylers":[{"visibility":"off"}]},
   {"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#EFEAE1"}]},
   {"featureType":"poi","stylers":[{"visibility":"off"}]},
+  {"featureType":"poi.park","elementType":"geometry","stylers":[{"visibility":"on"},{"color":"#E2E8D5"}]},
   {"featureType":"road","elementType":"geometry","stylers":[{"color":"#FFFFFF"}]},
   {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#8A857C"}]},
+  {"featureType":"road.local","elementType":"labels","stylers":[{"visibility":"off"}]},
   {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#E7E0D4"}]},
   {"featureType":"transit","stylers":[{"visibility":"off"}]},
-  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#DCE4E6"}]}
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#CFDFE4"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#7C969E"}]}
 ]
 ''';
 
@@ -140,6 +161,24 @@ class _RunRouteMapState extends State<RunRouteMap> {
   bool get _isLive => widget.mode != RunRouteMapMode.completed;
 
   bool get _isSpectator => widget.mode == RunRouteMapMode.spectator;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ratio = MediaQuery.devicePixelRatioOf(context);
+    if (ratio == _iconsRatio) return;
+    _iconsRatio = ratio;
+    _loadIcons(ratio);
+  }
+
+  Future<void> _loadIcons(double ratio) async {
+    final icons = {
+      for (final marker in RunMapMarker.values)
+        marker: await runMapMarkerIcon(marker, ratio),
+    };
+    if (!mounted || ratio != _iconsRatio) return;
+    setState(() => _icons = icons);
+  }
 
   @override
   void didUpdateWidget(RunRouteMap old) {
@@ -186,17 +225,33 @@ class _RunRouteMapState extends State<RunRouteMap> {
     );
   }
 
-  Set<Polyline> _buildPolylines() {
+  Set<Polyline> _buildPolylines(bool isDark) {
     if (widget.route.length < 2) return const {};
     return {
+      // A wider line under the route gives it depth. On the black map it is a
+      // faint orange glow; on the cream one a glow only muddies the paper, so
+      // it is a crisp white casing instead.
+      Polyline(
+        polylineId: const PolylineId('run_route_underlay'),
+        points: widget.route,
+        color: isDark
+            ? AppColors.orangeBright.withValues(alpha: 0.28)
+            : Colors.white,
+        width: isDark ? 14 : 9,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
+        jointType: JointType.round,
+      ),
       Polyline(
         polylineId: const PolylineId('run_route'),
         points: widget.route,
-        color: AppColors.orange,
+        // The lit orange carries on black; the deep one holds its own on cream.
+        color: isDark ? AppColors.orangeBright : AppColors.orange,
         width: 5,
         startCap: Cap.roundCap,
         endCap: Cap.roundCap,
         jointType: JointType.round,
+        zIndex: 1,
       ),
     };
   }
@@ -205,12 +260,13 @@ class _RunRouteMapState extends State<RunRouteMap> {
     if (widget.route.isEmpty) return const {};
 
     return {
-      // Start of the run — green, matching the app's success accent.
       Marker(
         markerId: const MarkerId('run_start'),
         position: widget.route.first,
         anchor: const Offset(0.5, 0.5),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        icon: _icons?[RunMapMarker.start] ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        zIndexInt: 1,
         infoWindow: const InfoWindow(title: 'Start'),
       ),
       // Only worth a second marker once the runner has actually moved.
@@ -219,9 +275,11 @@ class _RunRouteMapState extends State<RunRouteMap> {
           markerId: MarkerId(_isLive ? 'run_current' : 'run_finish'),
           position: widget.route.last,
           anchor: const Offset(0.5, 0.5),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueOrange,
-          ),
+          icon: _icons?[_isLive ? RunMapMarker.current : RunMapMarker.finish] ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          // Above the start pin, so a loop that ends where it began shows
+          // where the runner is rather than where they set off.
+          zIndexInt: 2,
           infoWindow: InfoWindow(
             title: switch (widget.mode) {
               RunRouteMapMode.live => 'You',
@@ -235,6 +293,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.palette.isDark;
     final initialTarget =
         widget.route.isNotEmpty ? widget.route.last : _fallbackTarget;
 
@@ -250,7 +309,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
                 target: initialTarget,
                 zoom: 16,
               ),
-              style: context.palette.isDark ? _darkStyle : _lightStyle,
+              style: isDark ? _darkStyle : _lightStyle,
               // The blue "my location" dot only makes sense while running —
               // on somebody else's run it would put the viewer on their map.
               myLocationEnabled: _isLive && !_isSpectator,
@@ -265,7 +324,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
               rotateGesturesEnabled: false,
               tiltGesturesEnabled: false,
               padding: widget.padding,
-              polylines: _buildPolylines(),
+              polylines: _buildPolylines(isDark),
               markers: _buildMarkers(),
               onTap: widget.onTap == null ? null : (_) => widget.onTap!(),
               onMapCreated: (controller) {
