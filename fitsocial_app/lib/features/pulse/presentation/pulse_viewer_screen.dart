@@ -882,15 +882,27 @@ class _PulseFrame extends StatelessWidget {
                   AppSpacing.lg,
                   168,
                 ),
-                child: Center(
-                  child: SharedPostCard(
-                    post: post,
-                    // The card is the way through to the post it came from. Its
-                    // own gesture wins over the viewer's tap zones, so tapping
-                    // it opens the post instead of advancing the Pulse.
-                    onTap: onOpenSharedPost == null
-                        ? null
-                        : () => onOpenSharedPost!(post.postId),
+                // A long workout's log sheet is taller than the gap between
+                // the header and the reaction bar. The card shrinks to fit
+                // rather than scroll: a vertical drag here already means
+                // dismiss. The width is fixed up front because FittedBox lays
+                // its child out unconstrained.
+                child: LayoutBuilder(
+                  builder: (context, box) => Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SharedPostCard(
+                        post: post,
+                        width: SharedPostCard.widthFor(box.maxWidth),
+                        // The card is the way through to the post it came
+                        // from. Its own gesture wins over the viewer's tap
+                        // zones, so tapping it opens the post instead of
+                        // advancing the Pulse.
+                        onTap: onOpenSharedPost == null
+                            ? null
+                            : () => onOpenSharedPost!(post.postId),
+                      ),
+                    ),
                   ),
                 ),
               ),
