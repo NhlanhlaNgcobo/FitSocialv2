@@ -308,6 +308,13 @@ class PostCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: LiquidGlass(
         borderRadius: BorderRadius.circular(_cardRadius),
+        // The real lens, so the backdrop bends at the rim as the feed scrolls
+        // past it. Affordable only because every post card reads the one
+        // shared copy of the screen, and skips the softening it has no text
+        // behind it to need -- see [LiquidGlass.feedBackdrop].
+        lens: true,
+        backdropKey: LiquidGlass.feedBackdrop,
+        soften: false,
         // The Container already clips to this shape.
         clip: false,
         child: Column(

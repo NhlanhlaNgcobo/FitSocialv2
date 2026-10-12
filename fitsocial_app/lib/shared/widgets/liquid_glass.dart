@@ -88,8 +88,21 @@ class LiquidGlass extends StatefulWidget {
     this.clip = true,
     this.tintScale = 1,
     this.lens = false,
+    this.backdropKey,
+    this.soften = true,
     super.key,
   });
+
+  /// The shared backdrop for lens panes laid out side by side in a feed.
+  ///
+  /// Every lens pane normally makes its own copy of the screen to bend, and
+  /// on a feed that is a copy per card per frame -- the stutter the A06
+  /// showed. Cards in a list never overlap, so what each one needs from the
+  /// screen is the same picture; with one key they share one copy. Never give
+  /// it to a pane that floats *over* other panes, like the nav or a sheet:
+  /// that pane needs the panes beneath it already painted, and a shared copy
+  /// may have been taken before they were.
+  static final BackdropKey feedBackdrop = BackdropKey();
 
   /// The bottom nav's material, which every pane takes by default: the lens
   /// sheets bend and reflect exactly as the capsule does, and a painted card
@@ -179,6 +192,18 @@ class LiquidGlass extends StatefulWidget {
   /// over the screen it came from. There the bend is the whole point, and there
   /// is only ever one of them on screen at a time.
   final bool lens;
+
+  /// Which shared copy of the screen this lens reads, if any. See
+  /// [feedBackdrop]. Null gives the pane a copy of its own.
+  final BackdropKey? backdropKey;
+
+  /// Whether the lens softens the backdrop before bending it.
+  ///
+  /// The softening is there for text: displaced type aliases without it. A
+  /// pane with only the app's backdrop behind it -- a card in the feed -- has
+  /// no type to protect, and the blur is the most expensive half of its
+  /// filter, so it turns this off.
+  final bool soften;
 
   /// A gentle softening applied *under* the refraction. Liquid glass wants
   /// almost none — enough to take the aliasing off displaced text, not enough
@@ -344,7 +369,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
       widget.light,
       tint,
       Object.hash(rim, sheen, palette.isDark, widget.tintScale, dpr),
-      Object.hash(reflect, floor),
+      Object.hash(reflect, floor, widget.soften),
     );
     if (signature == _builtFrom && _ready) return;
 
@@ -397,6 +422,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
       ..setFloat(24, pane.top)
       ..setFloat(25, pane.width)
       ..setFloat(26, pane.height);
+    if (!widget.soften) return ui.ImageFilter.shader(_shader!);
     return ui.ImageFilter.compose(
       outer: ui.ImageFilter.shader(_shader!),
       inner: _underBlur,
@@ -491,6 +517,7 @@ class _LiquidGlassState extends State<LiquidGlass> {
     final glass = _LensBackdrop(
       material: _builtFrom,
       filterFor: _filterFor,
+      backdropKey: widget.backdropKey,
       child: _content(context),
     );
 
@@ -621,8 +648,11 @@ class _LensBackdrop extends SingleChildRenderObjectWidget {
   const _LensBackdrop({
     required this.material,
     required this.filterFor,
+    required this.backdropKey,
     required super.child,
   });
+
+  final BackdropKey? backdropKey;
 
   /// Changes whenever the shader's other uniforms do, so a new theme or a new
   /// radius still gets a new filter on a pane that has not moved.
@@ -635,6 +665,7 @@ class _LensBackdrop extends SingleChildRenderObjectWidget {
     return _RenderLensBackdrop(
       material: material,
       filterFor: filterFor,
+      backdropKey: backdropKey,
       devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
     );
   }
@@ -645,6 +676,7 @@ class _LensBackdrop extends SingleChildRenderObjectWidget {
     renderObject
       ..material = material
       ..filterFor = filterFor
+      ..backdropKey = backdropKey
       ..devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
   }
 }
@@ -653,11 +685,21 @@ class _RenderLensBackdrop extends RenderProxyBox {
   _RenderLensBackdrop({
     required Object? material,
     required this.filterFor,
+    required BackdropKey? backdropKey,
     required double devicePixelRatio,
   })  : _material = material,
+        _backdropKey = backdropKey,
         _devicePixelRatio = devicePixelRatio;
 
   ui.ImageFilter Function(Rect pane) filterFor;
+
+  BackdropKey? get backdropKey => _backdropKey;
+  BackdropKey? _backdropKey;
+  set backdropKey(BackdropKey? value) {
+    if (value == _backdropKey) return;
+    _backdropKey = value;
+    markNeedsPaint();
+  }
 
   Object? get material => _material;
   Object? _material;
@@ -714,7 +756,9 @@ class _RenderLensBackdrop extends RenderProxyBox {
     }
 
     layer ??= BackdropFilterLayer();
-    layer!.filter = _filter!;
+    layer!
+      ..filter = _filter!
+      ..backdropKey = _backdropKey;
     context.pushLayer(layer!, super.paint, offset);
   }
 }
