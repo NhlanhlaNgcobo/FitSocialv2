@@ -156,7 +156,10 @@ void main() {
     expect(find.text('Add exercise'), findsOneWidget);
     expect(find.text('Finish workout'), findsOneWidget);
     expect(find.text('DURATION'), findsOneWidget);
-    expect(find.text('0:00'), findsOneWidget);
+    // The workout's start and the clock both read the real wall clock, so a
+    // slow machine can let a second tick over between them: "0:01" is as
+    // right as "0:00". What matters is that it starts from zero.
+    expect(find.textContaining(RegExp(r'^0:0\d$')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
