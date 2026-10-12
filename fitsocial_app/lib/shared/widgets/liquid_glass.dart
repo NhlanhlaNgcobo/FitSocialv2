@@ -514,14 +514,39 @@ class _LiquidGlassState extends State<LiquidGlass> {
       return _shaped(frosted, shape, palette);
     }
 
+    // A pane inside a scroll view moves without repainting: the list slides
+    // the card's finished layer and never calls paint, so the lens would keep
+    // the place it was last painted at and draw its rim there -- a second
+    // outline trailing the card. Repainting on every scroll frame keeps it on
+    // the card. The content goes behind its own boundary so that only the
+    // lens re-runs, not the card's whole recording.
+    final scrolls = _scrollsAbove(context);
     final glass = _LensBackdrop(
       material: _builtFrom,
       filterFor: _filterFor,
       backdropKey: widget.backdropKey,
-      child: _content(context),
+      repaint: scrolls,
+      child: scrolls == null
+          ? _content(context)
+          : RepaintBoundary(child: _content(context)),
     );
 
     return _shaped(glass, shape, palette);
+  }
+
+  /// Every scroll position this pane rides on, nearest first, merged into one
+  /// signal -- a card in a horizontal carousel inside the feed moves with
+  /// both. Null when nothing above it scrolls, which is the nav and the
+  /// sheets.
+  static Listenable? _scrollsAbove(BuildContext context) {
+    final positions = <Listenable>[];
+    var scrollable = Scrollable.maybeOf(context);
+    while (scrollable != null) {
+      positions.add(scrollable.position);
+      scrollable = Scrollable.maybeOf(scrollable.context);
+    }
+    if (positions.isEmpty) return null;
+    return positions.length == 1 ? positions.single : Listenable.merge(positions);
   }
 
   /// What every pane of glass becomes under reduced transparency: [palette]'s
@@ -649,10 +674,14 @@ class _LensBackdrop extends SingleChildRenderObjectWidget {
     required this.material,
     required this.filterFor,
     required this.backdropKey,
+    required this.repaint,
     required super.child,
   });
 
   final BackdropKey? backdropKey;
+
+  /// Fires when the pane moves without being repainted -- a scroll.
+  final Listenable? repaint;
 
   /// Changes whenever the shader's other uniforms do, so a new theme or a new
   /// radius still gets a new filter on a pane that has not moved.
@@ -666,6 +695,7 @@ class _LensBackdrop extends SingleChildRenderObjectWidget {
       material: material,
       filterFor: filterFor,
       backdropKey: backdropKey,
+      repaint: repaint,
       devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
     );
   }
@@ -677,6 +707,7 @@ class _LensBackdrop extends SingleChildRenderObjectWidget {
       ..material = material
       ..filterFor = filterFor
       ..backdropKey = backdropKey
+      ..repaint = repaint
       ..devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
   }
 }
@@ -686,12 +717,35 @@ class _RenderLensBackdrop extends RenderProxyBox {
     required Object? material,
     required this.filterFor,
     required BackdropKey? backdropKey,
+    required Listenable? repaint,
     required double devicePixelRatio,
   })  : _material = material,
         _backdropKey = backdropKey,
+        _repaint = repaint,
         _devicePixelRatio = devicePixelRatio;
 
   ui.ImageFilter Function(Rect pane) filterFor;
+
+  Listenable? get repaint => _repaint;
+  Listenable? _repaint;
+  set repaint(Listenable? value) {
+    if (identical(value, _repaint)) return;
+    if (attached) _repaint?.removeListener(markNeedsPaint);
+    _repaint = value;
+    if (attached) _repaint?.addListener(markNeedsPaint);
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _repaint?.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _repaint?.removeListener(markNeedsPaint);
+    super.detach();
+  }
 
   BackdropKey? get backdropKey => _backdropKey;
   BackdropKey? _backdropKey;
