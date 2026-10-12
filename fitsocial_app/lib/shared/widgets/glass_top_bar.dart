@@ -214,8 +214,7 @@ class _GlassTopBarState extends State<GlassTopBar>
           // behind them, and the reason the screen has to extend its body up
           // here: the feed passes under this rim on every scrolled frame.
           lens: true,
-          // The nav's thickness, matched. These two are the only panes in the
-          // app that reflect, and they are the pair the user sees together.
+          // The nav's thickness, matched -- the pair the user sees together.
           reflect: 0.75,
           child: Padding(
             // The glass reaches behind the status bar; the row does not.

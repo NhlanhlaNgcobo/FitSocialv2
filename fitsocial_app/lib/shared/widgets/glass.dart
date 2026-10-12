@@ -18,6 +18,7 @@
 /// is the same light landing on a surface that happens to be solid.
 library;
 
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
 
@@ -31,12 +32,20 @@ import '../../app/theme/app_palette.dart';
 /// Drawn as a foreground painter *outside* any [BackdropFilter] on purpose. It
 /// changes only with the theme, and keeping it out of the filtered subtree
 /// spares it the per-frame repaint the blur itself cannot avoid.
+///
+/// With [reflect] above zero it draws the nav capsule's bevel instead — the
+/// lens's lighting, painted. See [_paintBevel].
 class GlassRim extends CustomPainter {
   const GlassRim({
     required this.radius,
     required this.highlight,
     required this.soft,
     this.inset = 0,
+    this.floor = const Color(0xFF000000),
+    this.reflect = 0,
+    this.sheen = 1,
+    this.edge = 16,
+    this.light = const Offset(-0.55, -0.78),
   });
 
   /// Where the light hits — the top edge.
@@ -51,6 +60,24 @@ class GlassRim extends CustomPainter {
   /// rim; one stroke's worth for a card that already has a border, so the lit
   /// line sits just inside that border rather than fighting it.
   final double inset;
+
+  /// The dark half of what the bevel reflects; [highlight] is the bright half.
+  /// Only read when [reflect] is above zero.
+  final Color floor;
+
+  /// How thick the pane reads, 0 to 1 — the same number the lens takes as
+  /// [LiquidGlass.reflect]. Zero is the plain rim above.
+  final double reflect;
+
+  /// Scales the lit edge, as the lens's own sheen does: full on dark, dialled
+  /// back on light, where the rim already carries the edge.
+  final double sheen;
+
+  /// How deep the bevel reaches into the pane, in logical pixels.
+  final double edge;
+
+  /// Where the light comes from, y down — the lens's own `uLight`.
+  final Offset light;
 
   LinearGradient get _gradient => LinearGradient(
         begin: Alignment.topCenter,
@@ -67,6 +94,11 @@ class GlassRim extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (reflect > 0) {
+      _paintBevel(canvas, size);
+      return;
+    }
+
     final bounds = Offset.zero & size;
     // Inset by half the stroke so the line lands inside the clip instead of
     // being sliced in half by it.
@@ -84,12 +116,128 @@ class GlassRim extends CustomPainter {
     );
   }
 
+  /// Rings painted inside the edge to stand in for the lens's bevel. Five
+  /// reads as a smooth falloff at phone density; each is one stroked rrect.
+  static const int _bevelRings = 5;
+
+  /// The nav capsule's edge, without reading the screen behind it.
+  ///
+  /// Each term is the shader's own, in `liquid_glass.frag`, taken at the rim
+  /// and painted rather than traced -- so a card and the capsule agree about
+  /// where the light is and how thick the glass is, and the card still costs
+  /// no render pass:
+  ///
+  /// * the bevel band: the upper edge returns the sky ([highlight]) and the
+  ///   broad specular sheet, the lower edge the floor -- the shader's Fresnel
+  ///   reflection, falling off as the surface flattens toward the middle;
+  /// * the lit hairline, all the way round, strongest where it faces [light];
+  /// * the meniscus, a dark line on the side turned away from it.
+  ///
+  /// What is left out is the bend, which is about what is behind the pane and
+  /// needs the backdrop.
+  void _paintBevel(Canvas canvas, Size size) {
+    final bounds = Offset.zero & size;
+    final r = math.max(radius - inset, 0.0);
+    final rgb = highlight.withValues(alpha: 1);
+    final dark = floor.withValues(alpha: 1);
+
+    // Same rule the shader uses for a pill: the bevel can't be wider than half
+    // the pane, or the two sides would meet in a ridge.
+    final depth = math.min(edge, size.shortestSide / 2);
+    if (depth > 0) {
+      final step = depth / _bevelRings;
+      for (var i = 0; i < _bevelRings; i++) {
+        final at = inset + step * (i + 0.5);
+        // The shader's own falloff: rim goes 1 to 0 across the bevel, and the
+        // surface turns as its square.
+        final rim = 1 - (at - inset) / depth;
+        final bend = rim * rim;
+        final sky = reflect * (0.14 * sheen * bend + 0.1 * math.pow(bend, 2.5));
+        final ground = reflect * 0.1 * math.pow(bend, 2.5);
+        if (sky < 0.004 && ground < 0.004) continue;
+
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            bounds.deflate(at),
+            Radius.circular(math.max(r - (at - inset), 0)),
+          ),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = step
+            // Vertical, because the reflection is: the shader picks sky or
+            // floor by which way the reflected ray points, up or down.
+            ..shader = LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                rgb.withValues(alpha: sky.clamp(0.0, 1.0)),
+                rgb.withValues(alpha: 0),
+                dark.withValues(alpha: 0),
+                dark.withValues(alpha: ground.clamp(0.0, 1.0)),
+              ],
+              stops: const [0, 0.42, 0.58, 1],
+            ).createShader(bounds),
+        );
+      }
+    }
+
+    final line = RRect.fromRectAndRadius(
+      bounds.deflate(0.5 + inset),
+      Radius.circular(math.max(r, 0)),
+    );
+    // Across the pane from the light to the far side, so a rim facing the
+    // light is lit and one facing away is not.
+    final toward = Alignment(light.dx, light.dy);
+    final away = Alignment(-light.dx, -light.dy);
+
+    // The lit hairline. The shader draws it about one physical pixel wide at
+    // 0.85 strength; a logical pixel is wider than that, so it is painted
+    // lighter for the same weight.
+    canvas.drawRRect(
+      line,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: toward,
+          end: away,
+          colors: [
+            rgb.withValues(alpha: (0.5 * sheen).clamp(0.0, 1.0)),
+            rgb.withValues(alpha: (0.2 * sheen).clamp(0.0, 1.0)),
+          ],
+        ).createShader(bounds),
+    );
+
+    // The meniscus, on the same line: nothing on the lit side, pooling dark on
+    // the far one.
+    canvas.drawRRect(
+      line,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: toward,
+          end: away,
+          colors: [
+            dark.withValues(alpha: 0),
+            dark.withValues(alpha: (0.3 * reflect).clamp(0.0, 1.0)),
+          ],
+          stops: const [0.45, 1],
+        ).createShader(bounds),
+    );
+  }
+
   @override
   bool shouldRepaint(GlassRim oldDelegate) =>
       oldDelegate.radius != radius ||
       oldDelegate.highlight != highlight ||
       oldDelegate.soft != soft ||
-      oldDelegate.inset != inset;
+      oldDelegate.inset != inset ||
+      oldDelegate.floor != floor ||
+      oldDelegate.reflect != reflect ||
+      oldDelegate.sheen != sheen ||
+      oldDelegate.edge != edge ||
+      oldDelegate.light != light;
 }
 
 /// The pane between a backdrop and the content sitting on it.

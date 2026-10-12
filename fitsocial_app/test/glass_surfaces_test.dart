@@ -121,6 +121,30 @@ void main() {
         expect(rim.radius, DarkCard.radius);
       }
     });
+
+    testWidgets('draws the nav capsule\'s bevel, dimmed on light as the lens is',
+        (tester) async {
+      for (final dark in [true, false]) {
+        await pumpCard(tester, dark: dark);
+
+        final rim = tester
+            .widgetList<CustomPaint>(find.byType(CustomPaint))
+            .map((paint) => paint.foregroundPainter)
+            .whereType<GlassRim>()
+            .single;
+        expect(rim.reflect, LiquidGlass.navReflect * (dark ? 1.0 : 0.55));
+        expect(rim.edge, LiquidGlass.navEdge);
+      }
+    });
+  });
+
+  group('every pane', () {
+    test('takes the nav capsule\'s material unless it asks otherwise', () {
+      const pane = LiquidGlass(lens: true, child: SizedBox());
+      expect(pane.refraction, LiquidGlass.navRefraction);
+      expect(pane.edge, LiquidGlass.navEdge);
+      expect(pane.reflect, LiquidGlass.navReflect);
+    });
   });
 
   group('glass bloom', () {

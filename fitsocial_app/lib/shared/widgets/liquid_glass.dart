@@ -80,16 +80,24 @@ class LiquidGlass extends StatefulWidget {
   const LiquidGlass({
     required this.child,
     this.borderRadius = const BorderRadius.all(Radius.circular(24)),
-    this.refraction = 24,
-    this.edge = 22,
+    this.refraction = navRefraction,
+    this.edge = navEdge,
     this.aberration = 0.2,
-    this.reflect = 0,
+    this.reflect = navReflect,
     this.light = const Offset(-0.55, -0.78),
     this.clip = true,
     this.tintScale = 1,
     this.lens = false,
     super.key,
   });
+
+  /// The bottom nav's material, which every pane takes by default: the lens
+  /// sheets bend and reflect exactly as the capsule does, and a painted card
+  /// draws the same bevel by hand. One set of numbers, so the app reads as one
+  /// glass.
+  static const double navRefraction = 20;
+  static const double navEdge = 16;
+  static const double navReflect = 0.75;
 
   final Widget child;
 
@@ -114,20 +122,16 @@ class LiquidGlass extends StatefulWidget {
 
   /// How much of the bevel is reflection rather than refraction.
   ///
-  /// **Zero everywhere except the nav capsule, deliberately.** At zero the
-  /// shader's reflection terms multiply out and the material is exactly what
-  /// it was before they existed -- so every sheet and every card is
-  /// unaffected by them, and the one surface that asks for thickness is the
-  /// only one that pays for it.
-  ///
   /// Above zero the rim starts returning the room instead of the feed,
   /// weighted by Fresnel so it only happens where the surface turns. It also
   /// brings in the broader second specular lobe and the meniscus on the unlit
   /// side; all three scale together because they are one physical claim --
   /// that the pane has a thickness, and that you are seeing its edge.
   ///
-  /// Only meaningful with [lens] on. A painted pane has no bevel to reflect
-  /// anything with.
+  /// The nav capsule's [navReflect] by default, everywhere. A painted pane
+  /// draws the same three terms by hand -- see [GlassRim] -- so it reads as
+  /// thick without reading the backdrop. Zero is the old thin material: a
+  /// lens with a lit edge, or a painted rim that fades out at the bottom.
   final double reflect;
 
   /// Where the light comes from, in the pane's own space with y pointing down.
@@ -534,10 +538,18 @@ class _LiquidGlassState extends State<LiquidGlass> {
     final tint = palette.liquidTint;
 
     return CustomPaint(
+      // The lens's bevel, painted, under the same light-theme dimming [_sync]
+      // gives the shader -- so a held lens and a painted card match the live
+      // capsule as closely as a pane that cannot see behind itself can.
       foregroundPainter: GlassRim(
         radius: shape.topLeft.x,
         highlight: palette.glassRimHigh,
         soft: palette.glassRimSoft,
+        floor: palette.glassFloor,
+        reflect: widget.reflect * (palette.isDark ? 1.0 : 0.55),
+        sheen: palette.isDark ? 1.0 : 0.35,
+        edge: widget.edge,
+        light: widget.light,
       ),
       child: Stack(
         // Whatever this stands in for has to hand the child the same
