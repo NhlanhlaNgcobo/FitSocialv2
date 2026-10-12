@@ -7,6 +7,7 @@ import 'app/theme/theme_mode_controller.dart';
 import 'core/bootstrap/app_bootstrap.dart';
 import 'core/bootstrap/bootstrap_status.dart';
 import 'shared/widgets/liquid_glass.dart';
+import 'shared/widgets/run_map_style.dart';
 
 Future<void> main() async {
   final bootstrapStatus = await bootstrapApp();
@@ -19,6 +20,9 @@ Future<void> main() async {
   // Same reasoning: an accessibility choice that took a beat to apply would be
   // the one setting that visibly failed to hold on cold start.
   final accessibilityPrefs = await const AccessibilityPreferencesStore().read();
+
+  // And the map style, so a run map never opens in one look and flips.
+  await RunMapPrefs.load();
 
   // Compiled before the first frame for the same reason as the theme above: the
   // glass would otherwise start frosted and visibly change material a beat

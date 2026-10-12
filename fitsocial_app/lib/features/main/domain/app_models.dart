@@ -954,14 +954,27 @@ class RecentWorkout {
 /// crosses the domain and Firestore boundaries, and the map plugin's `LatLng`
 /// is a presentation concern. The UI converts at the widget edge.
 class RoutePoint {
-  const RoutePoint({required this.latitude, required this.longitude});
+  const RoutePoint({
+    required this.latitude,
+    required this.longitude,
+    this.seconds,
+  });
 
   final double latitude;
   final double longitude;
 
-  /// Firestore representation — a plain `{lat, lng}` map, so a route persists
-  /// as `List<Map<String, double>>`.
-  Map<String, double> toMap() => {'lat': latitude, 'lng': longitude};
+  /// Time since the run started when this fix was taken, in seconds — what
+  /// lets a map colour the route by pace. Null on routes recorded before it
+  /// was kept, and on single positions that are not part of a run.
+  final double? seconds;
+
+  /// Firestore representation — a plain `{lat, lng, t}` map, so a route
+  /// persists as `List<Map<String, double>>`. `t` is left out when unknown.
+  Map<String, double> toMap() => {
+        'lat': latitude,
+        'lng': longitude,
+        if (seconds != null) 't': seconds!,
+      };
 
   /// Returns null when [value] isn't a usable coordinate pair, so a single bad
   /// entry can be skipped instead of failing the whole document read.
@@ -977,7 +990,22 @@ class RoutePoint {
     final lng = (value['lng'] as num?)?.toDouble();
     if (lat == null || lng == null) return null;
     if (lat.abs() > 90 || lng.abs() > 180) return null;
-    return RoutePoint(latitude: lat, longitude: lng);
+    final t = value['t'];
+    return RoutePoint(
+      latitude: lat,
+      longitude: lng,
+      // A bad time only costs the pace colouring, never the point.
+      seconds: t is num && t >= 0 ? t.toDouble() : null,
+    );
+  }
+
+  /// The times of [route] as one list for a map, or null unless every point
+  /// has one — a route half-timed cannot be coloured honestly.
+  static List<double>? secondsOf(List<RoutePoint> route) {
+    if (route.isEmpty || route.any((point) => point.seconds == null)) {
+      return null;
+    }
+    return [for (final point in route) point.seconds!];
   }
 
   static List<RoutePoint> listFromFirestore(Object? value) {

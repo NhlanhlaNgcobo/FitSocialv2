@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
@@ -138,4 +139,73 @@ void _chequers(Canvas canvas, Offset centre, double radius) {
     }
   }
   canvas.restore();
+}
+
+final _kmCache = <(int, double), Future<BitmapDescriptor>>{};
+
+/// The badge at each whole kilometre: the number in white on a dark disc with
+/// a white rim, small enough to sit on the line without hiding it.
+Future<BitmapDescriptor> runMapKmIcon(int km, double devicePixelRatio) {
+  return _kmCache.putIfAbsent(
+    (km, devicePixelRatio),
+    () => _drawKm(km, devicePixelRatio),
+  );
+}
+
+Future<BitmapDescriptor> _drawKm(int km, double dpr) async {
+  final label = TextPainter(
+    text: TextSpan(
+      text: '$km',
+      style: const TextStyle(
+        color: Color(0xFFFFFFFF),
+        fontSize: 10,
+        fontWeight: FontWeight.w800,
+        height: 1,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+
+  // A disc for one digit, a pill once the number outgrows it.
+  const height = 18.0;
+  final width = math.max(height, label.width + 10);
+  const bleed = 3.0;
+  final logicalWidth = width + bleed * 2;
+  const logicalHeight = height + bleed * 2;
+
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)..scale(dpr);
+  final pill = RRect.fromRectAndRadius(
+    const Offset(bleed, bleed) & Size(width, height),
+    const Radius.circular(height / 2),
+  );
+  canvas
+    ..drawRRect(
+      pill.shift(const Offset(0, 1)),
+      Paint()
+        ..color = const Color(0x59000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5),
+    )
+    ..drawRRect(pill, Paint()..color = const Color(0xFFFFFFFF))
+    ..drawRRect(pill.deflate(1.5), Paint()..color = const Color(0xFF151515));
+  label.paint(
+    canvas,
+    Offset(
+      bleed + (width - label.width) / 2,
+      bleed + (height - label.height) / 2,
+    ),
+  );
+
+  final image = await recorder.endRecording().toImage(
+        (logicalWidth * dpr).ceil(),
+        (logicalHeight * dpr).ceil(),
+      );
+  final png = await image.toByteData(format: ui.ImageByteFormat.png);
+  image.dispose();
+
+  return BitmapDescriptor.bytes(
+    png!.buffer.asUint8List(),
+    width: logicalWidth,
+    height: logicalHeight,
+  );
 }

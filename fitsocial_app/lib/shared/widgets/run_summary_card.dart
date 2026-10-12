@@ -209,6 +209,7 @@ class RunSummaryCard extends StatelessWidget {
                       for (final point in route)
                         LatLng(point.latitude, point.longitude),
                     ],
+                    routeSeconds: RoutePoint.secondsOf(route),
                     mode: RunRouteMapMode.completed,
                     showBadge: false,
                     // Room for the wordmark chip above and the stat chips
