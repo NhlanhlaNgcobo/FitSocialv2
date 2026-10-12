@@ -11,7 +11,7 @@ import '../../../shared/widgets/staggered_fade_in.dart';
 import '../application/insight_providers.dart';
 import '../data/insight_repository.dart';
 import '../domain/weekly_insight.dart';
-import 'weekly_insight_card.dart' show AiGeneratedLabel, WellbeingNote;
+import 'weekly_insight_card.dart' show WellbeingNote;
 
 /// Last week's insight in full: a hero with the headline and summary, then
 /// wins, trends against the week before and one thing to focus on, each its
@@ -303,8 +303,6 @@ class _Hero extends StatelessWidget {
               style: TextStyle(color: palette.muted, fontSize: 12.5),
             ),
           ],
-          const SizedBox(height: AppSpacing.md),
-          const AiGeneratedLabel(),
         ],
       ),
     );

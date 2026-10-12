@@ -111,28 +111,6 @@ class WeeklyInsightCard extends ConsumerWidget {
   }
 }
 
-/// "Written by AI from your logged data", on the full insight screen.
-class AiGeneratedLabel extends StatelessWidget {
-  const AiGeneratedLabel({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Row(
-      children: [
-        Icon(Icons.info_outline_rounded, size: 13, color: palette.muted),
-        const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            'Written by AI from your logged data',
-            style: TextStyle(color: palette.muted, fontSize: 11.5),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// The gentle note shown when the server flagged the week's meal logging.
 class WellbeingNote extends StatelessWidget {
   const WellbeingNote({super.key});

@@ -193,13 +193,14 @@ void main() {
   group('insight screen', () {
     final ready = WeeklyInsight.fromMap('2026-W39', _readyDoc());
 
-    testWidgets('lays out every section, with the AI label', (tester) async {
+    testWidgets('lays out every section, with no AI label', (tester) async {
       await tester
           .pumpWidget(_screenHost(_FakeInsightRepository(insight: ready)));
       await tester.pumpAndSettle();
       expect(find.text('Five sessions and a four-day streak'), findsOneWidget);
       expect(find.text('WEEK OF 21 SEP'), findsOneWidget);
-      expect(find.text('Written by AI from your logged data'), findsOneWidget);
+      // Removed at the user's request, on 2026-10-12: no AI label anywhere.
+      expect(find.text('Written by AI from your logged data'), findsNothing);
       expect(find.text('WINS'), findsOneWidget);
       expect(find.text('Five sessions'), findsOneWidget);
       expect(find.text('AGAINST THE WEEK BEFORE'), findsOneWidget);
