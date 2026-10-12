@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -35,6 +36,41 @@ ImageProvider localBackgroundImage(String path) {
 /// light one, so a saved card still reads as the card that was on screen.
 Color runCardExportGround(AppPalette palette) =>
     Color.alphaBlend(palette.liquidTint, palette.background);
+
+/// How a run card is framed.
+enum RunCardFrame {
+  /// The rounded, bordered card the app shows everywhere.
+  card,
+
+  /// Edge to edge, with no rounded corners and no border: a picture that fills
+  /// an Instagram story, rather than a card sitting in the middle of one.
+  fullBleed,
+
+  /// No backdrop at all — the line, the numbers and the wordmark on nothing,
+  /// for a transparent PNG a runner can lay over any story as a sticker.
+  sticker,
+}
+
+/// Inset between a run card's edge and the box its route line is fitted into,
+/// clear of the wordmark chip above and the stat chips below.
+///
+/// A [RoutePlacement] is measured against this box, so anything that turns a
+/// drag into a placement has to use the same inset.
+const EdgeInsets kRunCardRouteInset =
+    EdgeInsets.fromLTRB(AppSpacing.lg, 44, AppSpacing.lg, 52);
+
+/// Where the wordmark and the stat chips sit on an edge-to-edge story.
+///
+/// Instagram lays its own progress bar and name over the top of a story, and
+/// the reply box over the bottom, so the branding comes in clear of both
+/// rather than hugging the edges the way it does on a card.
+const EdgeInsets _storyBrandingInset =
+    EdgeInsets.fromLTRB(AppSpacing.md, 72, AppSpacing.md, 96);
+
+/// The route's box on a story: the card's inset, pushed in by as much as the
+/// branding moved, so the line keeps the same clearance from the chips.
+const EdgeInsets _storyRouteInset =
+    EdgeInsets.fromLTRB(AppSpacing.lg, 100, AppSpacing.lg, 132);
 
 /// A finished run drawn the way it is shared: the route as a bare orange line,
 /// the two numbers that describe it, and the wordmark.
@@ -71,6 +107,9 @@ class RunSummaryCard extends StatelessWidget {
     this.margin = EdgeInsets.zero,
     this.aspectRatio,
     this.forExport = false,
+    this.routePlacement = RoutePlacement.centred,
+    this.onRoutePlacementChanged,
+    this.frame = RunCardFrame.card,
     super.key,
   });
 
@@ -125,6 +164,19 @@ class RunSummaryCard extends StatelessWidget {
   /// Only [renderRunCardPng] sets this. Every on-screen card leaves it false.
   final bool forExport;
 
+  /// Where the runner moved the route line to on the photo, and how big they
+  /// made it. Centred by default, which is how every run posted before this
+  /// existed is drawn.
+  final RoutePlacement routePlacement;
+
+  /// Turns the card into an editor for [routePlacement]: one finger drags the
+  /// line, two pinch it. Null — every card but the one being adjusted — leaves
+  /// the card a picture that taps and scrolls pass straight through.
+  final ValueChanged<RoutePlacement>? onRoutePlacementChanged;
+
+  /// Card, edge-to-edge story, or transparent sticker. See [RunCardFrame].
+  final RunCardFrame frame;
+
   /// The distance from a run post's metric strip.
   ///
   /// Matched on shape rather than taken by index, because the strip is written
@@ -165,15 +217,151 @@ class RunSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final hasRoute = RouteSparkline.canDraw(route);
+    final sticker = frame == RunCardFrame.sticker;
+    final framed = frame == RunCardFrame.card;
+    // A sticker has no backdrop of any kind — not a photo, not a map.
+    final photo = sticker ? null : background;
+    final map = showMap && !sticker;
     // A map already captured to a picture. The route and the branding were
     // drawn into it when it was posted, so it is shown as it is: no line, no
     // chips and no live map on top.
-    final mapPicture = showMap && background != null;
-    final liveMap = showMap && hasRoute && !mapPicture;
+    final mapPicture = map && photo != null;
+    final liveMap = map && hasRoute && !mapPicture;
     // A live map wears the same frosted chips a photo does, because that is
-    // how its picture is branded when it is captured.
-    final onPhoto = liveMap || (!showMap && background != null);
+    // how its picture is branded when it is captured. So does a sticker: it is
+    // going to be laid over somebody's photo, it just isn't carrying one.
+    final onPhoto = sticker || liveMap || (!map && photo != null);
     final skin = _RunSkin.resolve(palette, onPhoto: onPhoto);
+    final onPlacementChanged = onRoutePlacementChanged;
+    final adjusting = onPlacementChanged != null && hasRoute && !map;
+    final story = frame == RunCardFrame.fullBleed;
+    final routeInset = story ? _storyRouteInset : kRunCardRouteInset;
+
+    Widget content = Stack(
+      fit: StackFit.expand,
+      children: [
+        if (sticker)
+          const SizedBox.shrink()
+        else if (mapPicture)
+          Image(
+            image: photo,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                ColoredBox(color: skin.photoFallback),
+          )
+        else if (liveMap)
+          // The map is a backdrop, not a control: the card's own taps and the
+          // feed's scroll pass straight over it.
+          IgnorePointer(
+            child: RunRouteMap(
+              route: [
+                for (final point in route)
+                  LatLng(point.latitude, point.longitude),
+              ],
+              routeSeconds: RoutePoint.secondsOf(route),
+              mode: RunRouteMapMode.completed,
+              showBadge: false,
+              // Room for the wordmark chip above and the stat chips below, so
+              // the framed route clears both.
+              framePadding: 64,
+              onMapReady: onMapReady,
+            ),
+          )
+        else
+          _Backdrop(
+            background: photo,
+            skin: skin,
+            forExport: forExport,
+          ),
+        if (hasRoute && !map)
+          Padding(
+            // Keeps the line clear of the branding chips in every corner, so
+            // the two never collide on a route that happens to run into one.
+            padding: routeInset,
+            child: DecoratedBox(
+              // While the runner is placing the line, the box it is measured
+              // against is outlined, so a drag has a frame to read against.
+              decoration: adjusting
+                  ? BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0x8CF7F7F7),
+                        width: 1.2,
+                      ),
+                    )
+                  : const BoxDecoration(),
+              child: RouteSparkline(
+                route: route,
+                strokeWidth: 3.5,
+                padding: 2,
+                onMedia: onPhoto,
+                // Only over a photo: the ramp's yellow end washes out on the
+                // light theme's card, where the plain brand line holds.
+                colourByPace: onPhoto,
+                placement: routePlacement,
+              ),
+            ),
+          ),
+        if (!mapPicture)
+          Padding(
+            padding: story
+                ? _storyBrandingInset
+                : const EdgeInsets.all(AppSpacing.md),
+            child: onPhoto
+                ? _PhotoBranding(
+                    skin: skin,
+                    distanceLabel: distanceLabel,
+                    durationLabel: durationLabel,
+                    paceLabel: paceLabel,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Same lockup and the same size as the one in the app
+                      // bar, so a run shared out of the app is signed the way
+                      // the app signs itself.
+                      FitSocialLogo(
+                        size: 15,
+                        animated: false,
+                        color: skin.wordmark,
+                      ),
+                      const Spacer(),
+                      _StatRow(
+                        distanceLabel: distanceLabel,
+                        durationLabel: durationLabel,
+                        paceLabel: paceLabel,
+                        skin: skin,
+                      ),
+                    ],
+                  ),
+          ),
+      ],
+    );
+
+    if (adjusting) {
+      // Over the whole card rather than just the line, so a drag that starts
+      // on a stat chip or on empty sky still moves the route.
+      content = _RouteAdjuster(
+        placement: routePlacement,
+        onChanged: onPlacementChanged,
+        routeInset: routeInset,
+        child: content,
+      );
+    }
+
+    content = PhotoAspectRatio(
+      background: photo,
+      pinned: aspectRatio,
+      // Portrait with no photo; a photo of another shape sets its own.
+      fallback: kPictureAspectRatio,
+      child: content,
+    );
+
+    if (!framed) {
+      // A story fills the screen it is posted to and a sticker floats on
+      // someone else's: neither wants the card's rounded frame.
+      return Padding(padding: margin, child: content);
+    }
 
     return Container(
       margin: margin,
@@ -185,99 +373,92 @@ class RunSummaryCard extends StatelessWidget {
         // Inset by the border width so the photo stops at the inside edge of
         // the stroke rather than painting over it.
         borderRadius: BorderRadius.circular(19),
-        child: PhotoAspectRatio(
-          background: background,
-          pinned: aspectRatio,
-          // Portrait with no photo; a photo of another shape sets its own.
-          fallback: kPictureAspectRatio,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (mapPicture)
-                Image(
-                  image: background!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
-                      ColoredBox(color: skin.photoFallback),
-                )
-              else if (liveMap)
-                // The map is a backdrop, not a control: the card's own taps
-                // and the feed's scroll pass straight over it.
-                IgnorePointer(
-                  child: RunRouteMap(
-                    route: [
-                      for (final point in route)
-                        LatLng(point.latitude, point.longitude),
-                    ],
-                    routeSeconds: RoutePoint.secondsOf(route),
-                    mode: RunRouteMapMode.completed,
-                    showBadge: false,
-                    // Room for the wordmark chip above and the stat chips
-                    // below, so the framed route clears both.
-                    framePadding: 64,
-                    onMapReady: onMapReady,
-                  ),
-                )
-              else
-                _Backdrop(
-                  background: background,
-                  skin: skin,
-                  forExport: forExport,
-                ),
-              if (hasRoute && !showMap)
-                Padding(
-                  // Keeps the line clear of the branding chips in every
-                  // corner, so the two never collide on a route that happens
-                  // to run into one.
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.lg,
-                    44,
-                    AppSpacing.lg,
-                    52,
-                  ),
-                  child: RouteSparkline(
-                    route: route,
-                    strokeWidth: 3.5,
-                    padding: 2,
-                    onMedia: onPhoto,
-                  ),
-                ),
-              if (!mapPicture)
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: onPhoto
-                      ? _PhotoBranding(
-                          skin: skin,
-                          distanceLabel: distanceLabel,
-                          durationLabel: durationLabel,
-                          paceLabel: paceLabel,
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Same lockup and the same size as the one in the
-                            // app bar, so a run shared out of the app is
-                            // signed the way the app signs itself.
-                            FitSocialLogo(
-                              size: 15,
-                              animated: false,
-                              color: skin.wordmark,
-                            ),
-                            const Spacer(),
-                            _StatRow(
-                              distanceLabel: distanceLabel,
-                              durationLabel: durationLabel,
-                              paceLabel: paceLabel,
-                              skin: skin,
-                            ),
-                          ],
-                        ),
-                ),
-            ],
-          ),
-        ),
+        child: content,
       ),
     );
+  }
+}
+
+/// Lets the runner drag the route line with one finger and pinch it with two.
+///
+/// Movement is measured against the box the line is fitted into, so the
+/// fractions it reports mean the same thing at every size the card is drawn.
+class _RouteAdjuster extends StatefulWidget {
+  const _RouteAdjuster({
+    required this.placement,
+    required this.onChanged,
+    required this.routeInset,
+    required this.child,
+  });
+
+  final RoutePlacement placement;
+  final ValueChanged<RoutePlacement> onChanged;
+
+  /// The inset the line's box sits at, which is what a drag is measured
+  /// against.
+  final EdgeInsets routeInset;
+  final Widget child;
+
+  @override
+  State<_RouteAdjuster> createState() => _RouteAdjusterState();
+}
+
+class _RouteAdjusterState extends State<_RouteAdjuster> {
+  RoutePlacement _from = RoutePlacement.centred;
+  Offset _focalFrom = Offset.zero;
+  Size _box = Size.zero;
+
+  void _onStart(ScaleStartDetails details) {
+    _from = widget.placement;
+    _focalFrom = details.localFocalPoint;
+  }
+
+  void _onUpdate(ScaleUpdateDetails details) {
+    if (_box.width <= 0 || _box.height <= 0) return;
+    final moved = details.localFocalPoint - _focalFrom;
+    widget.onChanged(
+      RoutePlacement(
+        dx: _from.dx + moved.dx / _box.width,
+        dy: _from.dy + moved.dy / _box.height,
+        scale: _from.scale * details.scale,
+      ).clamped(),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _box = widget.routeInset.deflateSize(constraints.biggest);
+        return RawGestureDetector(
+          behavior: HitTestBehavior.opaque,
+          gestures: {
+            _EagerScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<
+                _EagerScaleGestureRecognizer>(
+              _EagerScaleGestureRecognizer.new,
+              (recognizer) => recognizer
+                ..onStart = _onStart
+                ..onUpdate = _onUpdate,
+            ),
+          },
+          child: widget.child,
+        );
+      },
+    );
+  }
+}
+
+/// A scale recognizer that claims the pointer the moment it lands.
+///
+/// The card being adjusted sits inside a scrolling sheet, and the sheet's own
+/// drag would otherwise win every vertical swipe before the scale gesture had
+/// moved far enough to claim it. Only used while the runner has asked to move
+/// the route, so the sheet scrolls normally the rest of the time.
+class _EagerScaleGestureRecognizer extends ScaleGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }
 

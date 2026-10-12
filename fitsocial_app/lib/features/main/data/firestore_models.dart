@@ -120,6 +120,7 @@ class FirestorePostRecord {
       mealData: (data['mealData'] as Map<String, dynamic>?),
       routePoints: RoutePoint.listFromFirestore(data['routePoints']),
       showRouteMap: (data['showRouteMap'] as bool?) ?? false,
+      routePlacement: RoutePlacement.fromMap(data['routePlacement']),
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
       imageAspectRatio: (data['imageAspectRatio'] as num?)?.toDouble(),
       taggedUsers: TaggedUser.listFrom(data['taggedUsers']),
@@ -152,6 +153,7 @@ class FirestorePostRecord {
     this.mealData,
     this.routePoints = const [],
     this.showRouteMap = false,
+    this.routePlacement = RoutePlacement.centred,
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
@@ -198,6 +200,10 @@ class FirestorePostRecord {
   /// Whether the author opted in to showing the map under [routePoints].
   /// Absent — every post written before the choice existed — reads as false.
   final bool showRouteMap;
+
+  /// Where the author placed the route line on their photo. Absent reads as
+  /// centred, which is where every run before this was drawn.
+  final RoutePlacement routePlacement;
 
   /// Author's profile photo at the time of posting.
   ///

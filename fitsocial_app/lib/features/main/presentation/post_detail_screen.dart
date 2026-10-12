@@ -155,6 +155,7 @@ class _PostPageState extends ConsumerState<_PostPage> {
             background: post.imageUrl == null || post.imageUrl!.isEmpty
                 ? null
                 : appPhoto(post.imageUrl!),
+            routePlacement: post.routePlacement,
           )
         : null;
     final mealCard = media == _MediaKind.meal
@@ -460,6 +461,7 @@ class _MediaBlock extends StatelessWidget {
               ? null
               : appPhoto(post.imageUrl!),
           showMap: post.showRouteMap,
+          routePlacement: post.routePlacement,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         );
         if (!RunReplayScreen.canReplay(post.routePoints)) return card;

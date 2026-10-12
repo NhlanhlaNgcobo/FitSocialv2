@@ -1783,6 +1783,11 @@ class FirestoreContentRepository implements ContentRepository {
       routePoints: route,
       // Only meaningful with a trace to put on it; a manual run has none.
       showRouteMap: draft.showRouteMap && route.length >= 2,
+      // The map frames the route itself, so a placement only means anything
+      // for the line drawn over a photo.
+      routePlacement: draft.showRouteMap
+          ? RoutePlacement.centred
+          : draft.routePlacement,
       taggedUsers: draft.taggedUsers,
     );
     await _linkLogToPost(logRef, result.post.id);
@@ -2201,6 +2206,7 @@ class FirestoreContentRepository implements ContentRepository {
     Map<String, dynamic>? mealData,
     List<Map<String, double>> routePoints = const [],
     bool showRouteMap = false,
+    RoutePlacement routePlacement = RoutePlacement.centred,
     double? imageAspectRatio,
     List<TaggedUser> taggedUsers = const [],
     PostPoll? poll,
@@ -2234,6 +2240,7 @@ class FirestoreContentRepository implements ContentRepository {
       mealData: mealData,
       routePoints: RoutePoint.listFromFirestore(routePoints),
       showRouteMap: showRouteMap,
+      routePlacement: routePlacement,
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
       // The author can't tag themselves — their name is already on the post —
@@ -2256,6 +2263,9 @@ class FirestoreContentRepository implements ContentRepository {
         .where((uid) => !taggedIds.contains(uid))
         .toList(growable: false);
 
+    final placementMap = routePoints.length >= 2 && !showRouteMap
+        ? routePlacement.toMap()
+        : null;
     final synced = await _settleWrite(document.set({
       'authorId': record.authorId,
       'authorName': record.authorName,
@@ -2279,6 +2289,8 @@ class FirestoreContentRepository implements ContentRepository {
       // Written only when chosen, so a post without it is shaped exactly like
       // every run shared before the choice existed.
       if (showRouteMap) 'showRouteMap': true,
+      // Same rule: only written when the runner actually moved the line.
+      if (placementMap != null) 'routePlacement': placementMap,
       if (record.taggedUsers.isNotEmpty)
         'taggedUsers': record.taggedUsers
             .map((tagged) => tagged.toMap())

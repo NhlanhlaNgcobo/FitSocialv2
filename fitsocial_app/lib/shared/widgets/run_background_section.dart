@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/app_models.dart';
 import 'picture_ratio.dart';
 import 'background_picker.dart';
 import 'form_section_header.dart';
+import 'route_sparkline.dart';
 import 'run_summary_card.dart';
+import 'save_run_card_row.dart' show CardActionButton;
 
 /// Chooses the photo behind a run, previewing the actual card the whole time.
 ///
@@ -19,8 +22,12 @@ import 'run_summary_card.dart';
 /// rather than a surprise, while a manually logged run has nothing but numbers
 /// to show on a blank card and only previews once there is a photo.
 ///
+/// With a route and an [onRoutePlacementChanged], the runner can also move the
+/// line off whatever it is covering: "Move route" turns the preview into an
+/// editor — drag to move, pinch to resize — until they tap Done.
+///
 /// Shared by the manual run form and the sheet that closes a tracked run.
-class RunBackgroundSection extends StatelessWidget {
+class RunBackgroundSection extends StatefulWidget {
   const RunBackgroundSection({
     required this.imagePath,
     required this.onPick,
@@ -32,6 +39,8 @@ class RunBackgroundSection extends StatelessWidget {
     this.paceLabel,
     this.showMap = false,
     this.onMapReady,
+    this.routePlacement = RoutePlacement.centred,
+    this.onRoutePlacementChanged,
     super.key,
   });
 
@@ -61,9 +70,50 @@ class RunBackgroundSection extends StatelessWidget {
   /// The preview map's controller, for capturing it on the way out.
   final ValueChanged<GoogleMapController>? onMapReady;
 
+  /// Where the line sits on the photo. Owned by the caller, because it goes
+  /// out with the run as well as into the saved card.
+  final RoutePlacement routePlacement;
+
+  /// Null hides the Move route control — a run with no line, or a caller with
+  /// nowhere to keep the answer.
+  final ValueChanged<RoutePlacement>? onRoutePlacementChanged;
+
+  @override
+  State<RunBackgroundSection> createState() => _RunBackgroundSectionState();
+}
+
+class _RunBackgroundSectionState extends State<RunBackgroundSection> {
+  /// Whether the preview is currently taking drags and pinches. Off by
+  /// default, so the sheet around it scrolls the way a sheet should.
+  bool _adjusting = false;
+
+  @override
+  void didUpdateWidget(covariant RunBackgroundSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The map took over the backdrop, or the line went away: there is nothing
+    // left to move, so stop listening for it.
+    if (_adjusting && !_canAdjust) _adjusting = false;
+  }
+
+  bool get _canAdjust =>
+      widget.onRoutePlacementChanged != null &&
+      !widget.showMap &&
+      RouteSparkline.canDraw(widget.route);
+
   @override
   Widget build(BuildContext context) {
-    final path = imagePath;
+    final path = widget.imagePath;
+    final route = widget.route;
+    final previewWithoutImage = widget.previewWithoutImage;
+    final distanceLabel = widget.distanceLabel;
+    final durationLabel = widget.durationLabel;
+    final paceLabel = widget.paceLabel;
+    final showMap = widget.showMap;
+    final onMapReady = widget.onMapReady;
+    final onPick = widget.onPick;
+    final onRemove = widget.onRemove;
+    final canAdjust = _canAdjust;
+    final adjusting = _adjusting && canAdjust;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,16 +138,101 @@ class RunBackgroundSection extends StatelessWidget {
             // Portrait, because this map is what gets captured, and the
             // posted picture is always 9:16.
             aspectRatio: showMap ? kPictureAspectRatio : null,
+            routePlacement: widget.routePlacement,
+            onRoutePlacementChanged:
+                adjusting ? widget.onRoutePlacementChanged : null,
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
-        if (!showMap) ...[
+        if (canAdjust && (path != null || previewWithoutImage)) ...[
+          _MoveRouteControls(
+            adjusting: adjusting,
+            moved: !widget.routePlacement.isCentred,
+            onStart: () => setState(() => _adjusting = true),
+            onDone: () => setState(() => _adjusting = false),
+            onReset: () =>
+                widget.onRoutePlacementChanged?.call(RoutePlacement.centred),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        // Hidden while adjusting: one job at a time, and a photo swapped
+        // mid-drag would move the ground under the line.
+        if (!showMap && !adjusting) ...[
           BackgroundPickerRow(
             hasImage: path != null,
             onPick: onPick,
             onRemove: onRemove,
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// "Move route", or, while moving it, a hint and Reset / Done.
+class _MoveRouteControls extends StatelessWidget {
+  const _MoveRouteControls({
+    required this.adjusting,
+    required this.moved,
+    required this.onStart,
+    required this.onDone,
+    required this.onReset,
+  });
+
+  final bool adjusting;
+
+  /// Whether the line is anywhere but its default, which is all Reset is for.
+  final bool moved;
+  final VoidCallback onStart;
+  final VoidCallback onDone;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!adjusting) {
+      return CardActionButton(
+        icon: Icons.open_with_rounded,
+        label: moved ? 'Adjust route' : 'Move route',
+        working: false,
+        onTap: onStart,
+      );
+    }
+
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Drag to move the route · pinch to resize',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: palette.muted,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: CardActionButton(
+                icon: Icons.center_focus_strong_rounded,
+                label: 'Reset',
+                working: false,
+                onTap: moved ? onReset : null,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: CardActionButton(
+                icon: Icons.check_rounded,
+                label: 'Done',
+                working: false,
+                onTap: onDone,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

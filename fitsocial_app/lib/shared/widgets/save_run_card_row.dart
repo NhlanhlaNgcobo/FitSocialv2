@@ -10,6 +10,9 @@ import 'quick_toast.dart';
 /// Takes the run card off the screen and puts it somewhere the runner keeps
 /// things: the camera roll, or whatever the OS share sheet offers.
 ///
+/// Three shapes to take it in: the card as posted, a full 1080 × 1920 story,
+/// or a transparent sticker to lay over a story of their own.
+///
 /// Sits under the card it acts on, and acts on exactly what is being previewed
 /// — including the photo, if one has been picked. Never navigates and never
 /// touches the save the screen around it is there to make: this is a side
@@ -30,13 +33,22 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
   /// a double tap cannot start a second capture.
   _CardAction? _busy;
 
+  /// Which shape the next save or share comes out in.
+  RunCardFormat _format = RunCardFormat.post;
+
   Future<void> _run(_CardAction action) async {
     if (_busy != null) return;
     setState(() => _busy = action);
     try {
-      final bytes = await renderRunCardPng(context, widget.card);
+      final format = _format;
+      final bytes =
+          await renderRunCardPng(context, widget.card, format: format);
       if (!mounted) return;
-      final name = runCardFileName();
+      final name = switch (format) {
+        RunCardFormat.post => runCardFileName(),
+        RunCardFormat.story => '${runCardFileName()}-story',
+        RunCardFormat.sticker => '${runCardFileName()}-sticker',
+      };
       switch (action) {
         case _CardAction.save:
           await saveImageToGallery(bytes, name: name);
@@ -61,6 +73,21 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
   Widget build(BuildContext context) {
     final busy = _busy != null;
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _FormatPicker(
+          value: _format,
+          onChanged: busy ? null : (format) => setState(() => _format = format),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _buttons(busy),
+      ],
+    );
+  }
+
+  Widget _buttons(bool busy) {
     return Row(
       children: [
         Expanded(
@@ -86,6 +113,90 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
 }
 
 enum _CardAction { save, share }
+
+/// Post · Story · Sticker, as one segmented control.
+class _FormatPicker extends StatelessWidget {
+  const _FormatPicker({required this.value, required this.onChanged});
+
+  final RunCardFormat value;
+  final ValueChanged<RunCardFormat>? onChanged;
+
+  static const _options = [
+    (format: RunCardFormat.post, label: 'Post', icon: Icons.crop_portrait),
+    (format: RunCardFormat.story, label: 'Story', icon: Icons.smartphone),
+    (
+      format: RunCardFormat.sticker,
+      label: 'Sticker',
+      icon: Icons.layers_outlined,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.stroke),
+      ),
+      child: Row(
+        children: [
+          for (final option in _options)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: option.format == value,
+                child: Material(
+                  color: option.format == value
+                      ? palette.brandSoft
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(11),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(11),
+                    onTap: onChanged == null
+                        ? null
+                        : () => onChanged!(option.format),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            option.icon,
+                            size: 16,
+                            color: option.format == value
+                                ? palette.brand
+                                : palette.muted,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              option.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: option.format == value
+                                    ? palette.text
+                                    : palette.muted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 /// One half of a save/share row: an icon that becomes a spinner while
 /// [working], glass-styled to match the photo picker sitting above it. Shared

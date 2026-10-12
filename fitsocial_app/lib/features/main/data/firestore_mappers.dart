@@ -82,6 +82,7 @@ class FirestoreMapper {
       mealData: post.mealData,
       routePoints: post.routePoints,
       showRouteMap: post.showRouteMap,
+      routePlacement: post.routePlacement,
       authorAvatarUrl: post.authorAvatarUrl,
       imageAspectRatio: post.imageAspectRatio,
       taggedUsers: post.taggedUsers,

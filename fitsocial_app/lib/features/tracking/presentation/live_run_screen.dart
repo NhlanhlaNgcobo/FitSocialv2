@@ -289,6 +289,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
               startedAt: result.startedAt,
               routePoints: route,
               showRouteMap: choice.showRouteMap,
+              routePlacement: choice.routePlacement,
               backgroundImagePath: choice.backgroundImagePath,
               heartRate: heartRate.hasData ? heartRate : null,
               taggedUsers: choice.taggedUsers,

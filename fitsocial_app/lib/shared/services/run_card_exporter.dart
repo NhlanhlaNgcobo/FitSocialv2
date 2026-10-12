@@ -13,6 +13,24 @@ import '../widgets/route_sparkline.dart';
 import '../widgets/run_summary_card.dart';
 import 'held_image.dart';
 
+/// The shape a run card is saved in.
+enum RunCardFormat {
+  /// The card as it looks in the app, at its photo's own shape.
+  post,
+
+  /// Edge to edge at 1080 × 1920, the size of an Instagram story. The photo is
+  /// cropped to fill it.
+  story,
+
+  /// The line, the numbers and the wordmark on a transparent background, to be
+  /// laid over any story as a sticker.
+  sticker,
+}
+
+/// The width / height of a story, and of the canvas a sticker is drawn on.
+const double _storyRatio = 9 / 16;
+const double _stickerRatio = 4 / 5;
+
 /// Everything the run card needs to draw itself into a file.
 ///
 /// [background] is an [ImageProvider] rather than a path or a URL because the
@@ -26,6 +44,7 @@ class RunCardExport {
     this.durationLabel,
     this.paceLabel,
     this.background,
+    this.routePlacement = RoutePlacement.centred,
   });
 
   final List<RoutePoint> route;
@@ -33,6 +52,10 @@ class RunCardExport {
   final String? durationLabel;
   final String? paceLabel;
   final ImageProvider? background;
+
+  /// Where the runner put the line on the photo. A sticker ignores it: with no
+  /// photo under it, the line simply sits in the middle.
+  final RoutePlacement routePlacement;
 
   /// Whether there is anything worth drawing. A run with no line is fine — a
   /// treadmill run is nothing but numbers — but a card with no line, no photo
@@ -42,6 +65,15 @@ class RunCardExport {
       background != null ||
       (distanceLabel?.trim().isNotEmpty ?? false) ||
       (durationLabel?.trim().isNotEmpty ?? false);
+
+  /// Whether there is anything worth drawing in [format]. A sticker has no
+  /// photo, so it needs a line or a number of its own.
+  bool hasContentFor(RunCardFormat format) => switch (format) {
+        RunCardFormat.sticker => RouteSparkline.canDraw(route) ||
+            (distanceLabel?.trim().isNotEmpty ?? false) ||
+            (durationLabel?.trim().isNotEmpty ?? false),
+        _ => hasContent,
+      };
 }
 
 /// A capture that could not be made, carrying the line to show the user.
@@ -70,7 +102,7 @@ const double _logicalWidth = 360;
 /// cache entries they are each holding open.
 bool _capturing = false;
 
-/// Draws [spec] as a PNG, off screen, at [width] pixels wide.
+/// Draws [spec] as a PNG, off screen, at [width] pixels wide, in [format].
 ///
 /// Returns the encoded bytes. Throws [RunCardExportException] with a line the
 /// caller can show as-is: when there is nothing to draw, when the backdrop
@@ -79,11 +111,12 @@ Future<Uint8List> renderRunCardPng(
   BuildContext context,
   RunCardExport spec, {
   int width = kRunCardExportWidth,
+  RunCardFormat format = RunCardFormat.post,
 }) async {
   if (kIsWeb) {
     throw const RunCardExportException('Saving the card needs the app.');
   }
-  if (!spec.hasContent) {
+  if (!spec.hasContentFor(format)) {
     throw const RunCardExportException("There's nothing on this card yet.");
   }
   if (_capturing) {
@@ -112,7 +145,9 @@ Future<Uint8List> renderRunCardPng(
     // background here also measures it — the ratio below is the photo's own,
     // never a forced crop, and it is what gets handed to the card so it does
     // not have to resolve the same image a second time inside the overlay.
-    final background = spec.background;
+    final sticker = format == RunCardFormat.sticker;
+    // A sticker is drawn on nothing, so there is no photo to wait for.
+    final background = sticker ? null : spec.background;
     var ratio = kPictureAspectRatio;
     if (background != null) {
       try {
@@ -139,7 +174,32 @@ Future<Uint8List> renderRunCardPng(
       // is not, a card signed with nothing is still a card.
     }
 
+    // A story and a sticker have fixed shapes; only a post follows its photo.
+    ratio = switch (format) {
+      RunCardFormat.post => ratio,
+      RunCardFormat.story => _storyRatio,
+      RunCardFormat.sticker => _stickerRatio,
+    };
     final size = Size(_logicalWidth, _logicalWidth / ratio);
+    final card = SizedBox.fromSize(
+      size: size,
+      child: RunSummaryCard(
+        route: spec.route,
+        distanceLabel: spec.distanceLabel,
+        durationLabel: spec.durationLabel,
+        paceLabel: spec.paceLabel,
+        background: background,
+        aspectRatio: ratio,
+        forExport: true,
+        routePlacement:
+            sticker ? RoutePlacement.centred : spec.routePlacement,
+        frame: switch (format) {
+          RunCardFormat.post => RunCardFrame.card,
+          RunCardFormat.story => RunCardFrame.fullBleed,
+          RunCardFormat.sticker => RunCardFrame.sticker,
+        },
+      ),
+    );
     final boundaryKey = GlobalKey();
 
     entry = OverlayEntry(
@@ -174,21 +234,10 @@ Future<Uint8List> renderRunCardPng(
                     // corners are rounded, and the wedges outside them would
                     // otherwise be transparent. Instagram flattens alpha to
                     // black, which would put black notches on a light card.
-                    child: ColoredBox(
-                      color: ground,
-                      child: SizedBox.fromSize(
-                        size: size,
-                        child: RunSummaryCard(
-                          route: spec.route,
-                          distanceLabel: spec.distanceLabel,
-                          durationLabel: spec.durationLabel,
-                          paceLabel: spec.paceLabel,
-                          background: spec.background,
-                          aspectRatio: ratio,
-                          forExport: true,
-                        ),
-                      ),
-                    ),
+                    // A sticker is the exception — transparent is the point.
+                    child: sticker
+                        ? card
+                        : ColoredBox(color: ground, child: card),
                   ),
                 ),
               ),

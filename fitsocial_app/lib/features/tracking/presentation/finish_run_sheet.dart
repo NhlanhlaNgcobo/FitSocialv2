@@ -26,6 +26,7 @@ class FinishRunChoice {
     this.backgroundImagePath,
     this.discard = false,
     this.showRouteMap = false,
+    this.routePlacement = RoutePlacement.centred,
     this.taggedUsers = const [],
   });
 
@@ -50,6 +51,10 @@ class FinishRunChoice {
   /// Whether the post shows the route on the real map. Off unless the runner
   /// switched it on.
   final bool showRouteMap;
+
+  /// Where the runner moved the route line to on their photo. Centred unless
+  /// they moved it.
+  final RoutePlacement routePlacement;
 
   /// Local path of the photo to sit behind the run card, or null for the
   /// gradient. With [showRouteMap] this is the picture of the map instead.
@@ -118,6 +123,10 @@ class _FinishRunSheet extends StatefulWidget {
 class _FinishRunSheetState extends State<_FinishRunSheet> {
   String? _backgroundPath;
   bool _shareToFeed = true;
+
+  /// Where the line sits on the photo — the preview, the saved card and the
+  /// post all draw it here.
+  RoutePlacement _routePlacement = RoutePlacement.centred;
   List<TaggedUser> _taggedUsers = const [];
 
   /// Off to start with: the map names where the run began, so it is shown
@@ -159,6 +168,7 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
         shareToFeed: _shareToFeed,
         backgroundImagePath: backgroundPath,
         showRouteMap: _showMap,
+        routePlacement: _routePlacement,
         taggedUsers: _shareToFeed ? _taggedUsers : const [],
       ),
     );
@@ -268,6 +278,11 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                   onMapReady: (controller) => _map = controller,
                   onPick: _pickBackground,
                   onRemove: () => setState(() => _backgroundPath = null),
+                  routePlacement: _routePlacement,
+                  onRoutePlacementChanged: _saving
+                      ? null
+                      : (placement) =>
+                          setState(() => _routePlacement = placement),
                 ),
                 // Close to the preview rather than a full gap away: this acts
                 // on the card above it, not on the decision below it.
@@ -282,6 +297,7 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                       background: _backgroundPath == null
                           ? null
                           : localBackgroundImage(_backgroundPath!),
+                      routePlacement: _routePlacement,
                     ),
                   ),
                 ],

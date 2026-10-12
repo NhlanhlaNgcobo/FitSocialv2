@@ -54,6 +54,7 @@ class PostCard extends StatelessWidget {
     this.mealData,
     this.routePoints = const [],
     this.showRouteMap = false,
+    this.routePlacement = RoutePlacement.centred,
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
@@ -97,6 +98,7 @@ class PostCard extends StatelessWidget {
       mealData: post.mealData,
       routePoints: post.routePoints,
       showRouteMap: post.showRouteMap,
+      routePlacement: post.routePlacement,
       authorAvatarUrl: post.authorAvatarUrl,
       imageAspectRatio: post.imageAspectRatio,
       taggedUsers: post.taggedUsers,
@@ -147,6 +149,9 @@ class PostCard extends StatelessWidget {
 
   /// Whether the author chose to show [routePoints] on the real map.
   final bool showRouteMap;
+
+  /// Where the author placed the route line on their photo.
+  final RoutePlacement routePlacement;
 
   /// Author's profile photo, denormalised onto the post. Null falls back to
   /// the initials avatar.
@@ -211,6 +216,7 @@ class PostCard extends StatelessWidget {
           durationLabel: RunSummaryCard.durationFrom(metricLabels),
           paceLabel: RunSummaryCard.paceFrom(metricLabels),
           background: imageUrl == null ? null : appPhoto(imageUrl!),
+          routePlacement: routePlacement,
         )
       : null;
 
@@ -577,6 +583,7 @@ class PostCard extends StatelessWidget {
       paceLabel: RunSummaryCard.paceFrom(metricLabels),
       background: imageUrl == null ? null : appPhoto(imageUrl!),
       showMap: showRouteMap,
+      routePlacement: routePlacement,
       margin: const EdgeInsets.symmetric(horizontal: _gutter),
     );
   }

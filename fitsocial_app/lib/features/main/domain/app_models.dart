@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/reactions/fit_reaction.dart';
 import 'activity_kind.dart';
+import 'route_placement.dart';
 import 'workout_models.dart';
+
+export 'route_placement.dart';
 
 /// What a post is, as recorded on the document.
 ///
@@ -347,6 +350,7 @@ class FeedPost {
     this.mealData,
     this.routePoints = const [],
     this.showRouteMap = false,
+    this.routePlacement = RoutePlacement.centred,
     this.authorAvatarUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
@@ -399,6 +403,10 @@ class FeedPost {
   /// unless they switched it on: a map names the streets a run started on,
   /// so it is the runner's call, never a default.
   final bool showRouteMap;
+
+  /// Where the runner moved the route line to on their photo, and how big
+  /// they made it. Centred on every run nobody adjusted.
+  final RoutePlacement routePlacement;
 
   /// Author's profile photo as it was when the post was created. Null for
   /// posts written before avatars were stored, and for authors without one.
@@ -467,6 +475,7 @@ class FeedPost {
       mealData: mealData,
       routePoints: routePoints,
       showRouteMap: showRouteMap,
+      routePlacement: routePlacement,
       authorAvatarUrl: authorAvatarUrl,
       imageAspectRatio: imageAspectRatio,
       taggedUsers: taggedUsers,
@@ -497,6 +506,7 @@ class FeedPost {
     Map<String, dynamic>? mealData,
     List<RoutePoint>? routePoints,
     bool? showRouteMap,
+    RoutePlacement? routePlacement,
     String? authorAvatarUrl,
     double? imageAspectRatio,
     List<TaggedUser>? taggedUsers,
@@ -523,6 +533,7 @@ class FeedPost {
       mealData: mealData ?? this.mealData,
       routePoints: routePoints ?? this.routePoints,
       showRouteMap: showRouteMap ?? this.showRouteMap,
+      routePlacement: routePlacement ?? this.routePlacement,
       authorAvatarUrl: authorAvatarUrl ?? this.authorAvatarUrl,
       imageAspectRatio: imageAspectRatio ?? this.imageAspectRatio,
       taggedUsers: taggedUsers ?? this.taggedUsers,
@@ -1087,6 +1098,7 @@ class RunLogDraft {
     this.elevationGainMeters,
     this.routePoints = const [],
     this.showRouteMap = false,
+    this.routePlacement = RoutePlacement.centred,
     this.startedAt,
     this.backgroundImagePath,
     this.heartRate,
@@ -1122,6 +1134,10 @@ class RunLogDraft {
   /// Whether the shared post shows the real map under the route rather than
   /// the bare line. The runner's choice, off unless they ask for it.
   final bool showRouteMap;
+
+  /// Where the runner placed the line on their photo. Ignored with
+  /// [showRouteMap], where the map frames the route itself.
+  final RoutePlacement routePlacement;
 
   /// When the run began, when known (GPS-tracked runs only).
   final DateTime? startedAt;
