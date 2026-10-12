@@ -94,6 +94,12 @@ test("a cumulative, target and streak challenge can each be created", async () =
       activityChallenge({ metric: "workouts", mode: "streak", target: 1 })
     )
   );
+  await assertSucceeds(
+    setDoc(
+      doc(db(CREATOR), "challenges/c4"),
+      activityChallenge({ metric: "meal_quality" })
+    )
+  );
 });
 
 test("the definition is checked", async () => {

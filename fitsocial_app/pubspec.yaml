@@ -76,6 +76,9 @@ dependencies:
   flutter_svg: ^2.0.10
   spotify_sdk: ^3.0.2
   share_plus: ^12.0.2
+  # Unzips the data export, which the server gzips. Already in the tree under
+  # another package; pinned here because the app now calls it directly.
+  archive: ^4.0.9
   url_launcher: ^6.3.2
   # The "Send alert" entry on the app icon's long-press menu. The Flutter
   # team's own package, over Android app shortcuts and iOS Home Screen Quick

@@ -16,6 +16,8 @@ import '../../notifications/domain/notification_models.dart';
 import '../domain/app_models.dart';
 import '../domain/comment_threads.dart';
 import '../domain/explore_models.dart';
+import '../domain/meal_quality.dart';
+import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
@@ -981,6 +983,12 @@ class FirestoreContentRepository implements ContentRepository {
       itemCount: intFromStoredValue(data['itemCount']),
       sharedToFeed: boolFromStoredValue(data['sharedToFeed']),
       postId: data['postId'] as String?,
+      items: [
+        for (final item in (data['items'] as List?) ?? const [])
+          if (MealFoodItem.fromMap(item) case final parsed?) parsed,
+      ],
+      notes: (data['notes'] as String?) ?? '',
+      repeatId: data['repeatId'] as String?,
     );
   }
 
@@ -1020,6 +1028,187 @@ class FirestoreContentRepository implements ContentRepository {
   Future<void> deleteLoggedMeal(String id) async {
     _requireCurrentUser();
     await _settleWrite(mealsCollection.doc(id).delete());
+  }
+
+  @override
+  Future<Map<String, int>> getDailySteps(List<String> dayKeys) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null || dayKeys.isEmpty) return const {};
+    // By id rather than a range query: the ids are `<uid>_<dayKey>` already,
+    // a month is 31 reads at most, and a range over userId and dayKey would
+    // need a composite index for this one screen.
+    final steps = _firestore.collection('dailySteps');
+    final snapshots = await Future.wait([
+      for (final dayKey in dayKeys) steps.doc('${user.uid}_$dayKey').get(),
+    ]);
+    return {
+      for (var i = 0; i < dayKeys.length; i++)
+        if (intFromStoredValue(snapshots[i].data()?['steps']) case final count
+            when count > 0)
+          dayKeys[i]: count,
+    };
+  }
+
+  @override
+  Future<void> relogMeal(LoggedMeal meal) async {
+    final user = _requireCurrentUser();
+    // Private, whatever the original was: the same meal posted twice is a
+    // duplicate in everyone's feed, and the first post is still there.
+    await _settleWrite(mealsCollection.doc().set(_copiedMealFields(
+      authorId: user.uid,
+      name: meal.name,
+      calories: meal.calories,
+      protein: meal.protein,
+      carbs: meal.carbs,
+      fat: meal.fat,
+      items: meal.items,
+      notes: meal.notes,
+      imageUrl: meal.imageUrl,
+      loggedAt: DateTime.now(),
+    )));
+    await _incrementUser(mealsDelta: 1);
+  }
+
+  /// Every repeat lives in one owner-only document beside the macro goals:
+  /// there are at most [MealRepeat.limit] of them, they are always read
+  /// together, and the `private` rules already cover it.
+  DocumentReference<Map<String, dynamic>> _mealRepeatsRef(String userId) =>
+      usersCollection.doc(userId).collection('private').doc('mealRepeats');
+
+  @override
+  Future<List<MealRepeat>> getMealRepeats() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return const [];
+    final snapshot = await _mealRepeatsRef(user.uid).get();
+    return _repeatsFrom(snapshot.data());
+  }
+
+  static List<MealRepeat> _repeatsFrom(Map<String, dynamic>? data) => [
+        for (final entry in (data?['repeats'] as List?) ?? const [])
+          if (MealRepeat.fromMap(entry) case final repeat?) repeat,
+      ];
+
+  Future<void> _writeRepeats(String userId, List<MealRepeat> repeats) {
+    return _mealRepeatsRef(userId).set({
+      'repeats': repeats.map((repeat) => repeat.toMap()).toList(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  @override
+  Future<void> saveMealRepeat(MealRepeat repeat) async {
+    final user = _requireCurrentUser();
+    final repeats = await getMealRepeats();
+    final index = repeats.indexWhere((existing) => existing.id == repeat.id);
+    if (index >= 0) {
+      repeats[index] = repeat;
+    } else {
+      if (repeats.length >= MealRepeat.limit) {
+        throw StateError(
+          'You can repeat up to ${MealRepeat.limit} meals. Remove one first.',
+        );
+      }
+      repeats.add(repeat);
+    }
+    await _settleWrite(_writeRepeats(user.uid, repeats));
+  }
+
+  @override
+  Future<void> deleteMealRepeat(String id) async {
+    final user = _requireCurrentUser();
+    final repeats = await getMealRepeats()
+      ..removeWhere((repeat) => repeat.id == id);
+    await _settleWrite(_writeRepeats(user.uid, repeats));
+  }
+
+  @override
+  Future<int> logDueMealRepeats(DateTime now) async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return 0;
+
+    final repeats = await getMealRepeats();
+    final due = repeats.where((repeat) => repeat.isDueAt(now)).toList();
+    if (due.isEmpty) return 0;
+
+    final today = MealRepeat.dayKey(now);
+    final batch = _firestore.batch();
+    for (final repeat in due) {
+      // One id per repeat per day. Two devices catching up the same morning
+      // write the same document instead of two meals.
+      final ref = mealsCollection.doc('repeat-${repeat.id}-$today');
+      batch.set(
+        ref,
+        _copiedMealFields(
+          authorId: user.uid,
+          name: repeat.name,
+          calories: repeat.calories,
+          protein: repeat.protein,
+          carbs: repeat.carbs,
+          fat: repeat.fat,
+          items: repeat.items,
+          notes: '',
+          imageUrl: repeat.imageUrl,
+          // Stamped at the scheduled time rather than now, so a breakfast
+          // caught up at lunch still sits in the morning.
+          loggedAt: repeat.timeOn(now),
+          repeatId: repeat.id,
+        ),
+      );
+    }
+    // The day is marked in the same batch as the meals, so a meal is never
+    // logged without its day being marked, or the other way round.
+    final dueIds = {for (final repeat in due) repeat.id};
+    batch.set(_mealRepeatsRef(user.uid), {
+      'repeats': [
+        for (final repeat in repeats)
+          (dueIds.contains(repeat.id)
+                  ? repeat.copyWith(lastLoggedDay: today)
+                  : repeat)
+              .toMap(),
+      ],
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await _settleWrite(batch.commit());
+    await _incrementUser(mealsDelta: due.length);
+    return due.length;
+  }
+
+  /// A `meals` document for a meal logged from an earlier one: again by hand,
+  /// or by a repeat. Never shared.
+  Map<String, dynamic> _copiedMealFields({
+    required String authorId,
+    required String name,
+    required int calories,
+    required int protein,
+    required int carbs,
+    required int fat,
+    required List<MealFoodItem> items,
+    required String notes,
+    required String? imageUrl,
+    required DateTime loggedAt,
+    String? repeatId,
+  }) {
+    final quality = MealQuality.of(items);
+    return {
+      'authorId': authorId,
+      'name': name.trim(),
+      'calories': calories,
+      'protein': protein,
+      'carbs': carbs,
+      'fat': fat,
+      'notes': notes.trim(),
+      'items': items.map((item) => item.toMap()).toList(),
+      'itemCount': items.length,
+      if (quality != null) ...{
+        'qualityScore': quality.score,
+        'qualityVersion': MealQuality.version,
+      },
+      'sharedToFeed': false,
+      if (imageUrl != null) 'imageUrl': imageUrl,
+      if (repeatId != null) 'repeatId': repeatId,
+      'loggedAt': Timestamp.fromDate(loggedAt),
+      'createdAt': FieldValue.serverTimestamp(),
+    };
   }
 
   /// The user's runs and workouts as recorded on their posts.
@@ -1732,6 +1921,10 @@ class FirestoreContentRepository implements ContentRepository {
         'protein': draft.protein.trim(),
         'carbs': draft.carbs.trim(),
         'fat': draft.fat.trim(),
+        // Only an analysed meal has the items to score; one typed in by hand
+        // posts without it rather than with a guess.
+        if (MealQuality.of(draft.items) case final quality?)
+          'quality': quality.score,
       },
     );
     await _linkLogToPost(logRef, result.post.id);
@@ -3041,6 +3234,7 @@ class FirestoreContentRepository implements ContentRepository {
         double.tryParse(value.trim())?.round() ??
         0;
 
+    final quality = MealQuality.of(draft.items);
     final ref = mealsCollection.doc();
     await _settleWrite(ref.set({
       'authorId': user.uid,
@@ -3052,6 +3246,12 @@ class FirestoreContentRepository implements ContentRepository {
       'notes': draft.notes.trim(),
       'items': draft.items.map((item) => item.toMap()).toList(),
       'itemCount': draft.items.length,
+      // Stored with the version of the rules that produced it, so anything
+      // ranking on it later can tell an old score from a current one.
+      if (quality != null) ...{
+        'qualityScore': quality.score,
+        'qualityVersion': MealQuality.version,
+      },
       'sharedToFeed': draft.shareToFeed,
       if (draft.imageUrl != null) 'imageUrl': draft.imageUrl,
       // Stamped client-side, as workouts already are, so the meal lands in the

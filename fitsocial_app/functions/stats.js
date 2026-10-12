@@ -42,6 +42,7 @@ const {
 } = require("./challenges")._internals;
 const periods = require("./period_keys");
 const remoteConfig = require("./remote_config");
+const mealQuality = require("./meal_quality");
 
 /** Features that read these stats. Any one being on keeps the pipeline live. */
 const READER_FLAGS = [
@@ -71,6 +72,9 @@ function nullableInt(value) {
  *   activeMinutes  workout minutes plus run/hike/ride minutes
  *   sessions       workouts plus runs/hikes/rides, one each
  *   meals          meals logged
+ *   mealQualityPoints  healthy-eating points: the day's best four meal
+ *                  scores, rescored here from their foods, plus a bonus for
+ *                  logging at all (meal_quality.js)
  *   active         at least one session -- what a streak counts
  */
 function dayStatsFrom({ steps, workouts = [], runs = [], meals = [] }, caps) {
@@ -106,6 +110,7 @@ function dayStatsFrom({ steps, workouts = [], runs = [], meals = [] }, caps) {
       : activeMinutes,
     sessions,
     meals: meals.length,
+    mealQualityPoints: mealQuality.dayPoints(meals),
     active: sessions > 0,
     hasSteps: steps != null,
     avgHeartRate: nullableInt(steps?.avgHeartRate),

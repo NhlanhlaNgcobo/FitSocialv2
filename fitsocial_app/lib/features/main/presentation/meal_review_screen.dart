@@ -17,11 +17,13 @@ import '../application/activity_actions.dart';
 import '../application/create_flow_controller.dart';
 import '../data/content_repository.dart';
 import '../domain/app_models.dart';
+import '../domain/meal_quality.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/fit_social_logo.dart';
 import '../../../shared/widgets/macro_ring.dart';
+import '../../../shared/widgets/meal_quality_badge.dart';
 import '../../../shared/widgets/network_photo_aspect.dart';
 import '../../../shared/widgets/picture_ratio.dart';
 import '../../../shared/widgets/save_meal_card_row.dart';
@@ -317,6 +319,10 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
             )
           else
             _EmptyBreakdownCard(onAddFood: _addFoodFromDatabase),
+          if (MealQuality.of(_items) case final quality?) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _MealQualityCard(quality: quality),
+          ],
           const SizedBox(height: AppSpacing.lg),
           _buildNutritionCard(context),
           const SizedBox(height: AppSpacing.lg),
@@ -553,6 +559,8 @@ class _MealReviewScreenState extends ConsumerState<MealReviewScreen> {
               'protein': _valueOf(_proteinController),
               'carbs': _valueOf(_carbsController),
               'fat': _valueOf(_fatController),
+              if (MealQuality.of(_items) case final quality?)
+                'quality': quality.score,
             },
             background: imageUrl == null ? null : appPhoto(imageUrl),
           ),
@@ -930,6 +938,77 @@ class _BreakdownCard extends StatelessWidget {
           ],
           const SizedBox(height: AppSpacing.md),
           _AddFoodButton(onTap: onAddFood),
+        ],
+      ),
+    );
+  }
+}
+
+/// The meal's balance score and the reasons behind it.
+///
+/// Read off the detected foods, so it moves as portions are corrected — the
+/// same score the meal is saved and shared with.
+class _MealQualityCard extends StatelessWidget {
+  const _MealQualityCard({required this.quality});
+
+  final MealQuality quality;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final band = quality.band;
+    final color = mealQualityColor(band);
+    final notes = quality.notes;
+
+    return DarkCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Text(
+              '${quality.score}',
+              style: TextStyle(
+                color: color,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Meal quality · ${band.label}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  notes.isEmpty
+                      ? 'Scored out of 10 on protein, veg and fruit, treats '
+                          'and fat.'
+                      : notes.join(' · '),
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

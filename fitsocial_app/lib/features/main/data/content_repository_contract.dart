@@ -4,6 +4,7 @@ import '../../../shared/reactions/fit_reaction.dart';
 
 import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
+import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 import '../domain/workout_models.dart';
@@ -64,6 +65,25 @@ abstract class ContentRepository {
   /// Removes a logged meal. The log only — a shared meal keeps its post, the
   /// same way [deleteActivitySession] leaves a session's post alone.
   Future<void> deleteLoggedMeal(String id);
+
+  /// The signed-in user's step count for each day in [dayKeys] that has one,
+  /// from the `dailySteps` records the app keeps. Days with none are absent.
+  Future<Map<String, int>> getDailySteps(List<String> dayKeys);
+
+  /// Logs [meal] again, now, as a new private meal with the same foods.
+  Future<void> relogMeal(LoggedMeal meal);
+
+  /// The signed-in user's repeating meals. Empty when signed out.
+  Future<List<MealRepeat>> getMealRepeats();
+
+  /// Adds [repeat], or replaces the one with its id.
+  Future<void> saveMealRepeat(MealRepeat repeat);
+
+  Future<void> deleteMealRepeat(String id);
+
+  /// Logs every repeat due at [now] that today has not had yet, and returns
+  /// how many were logged. Today only: missed days are not filled in.
+  Future<int> logDueMealRepeats(DateTime now);
 
   /// Days a week the user is aiming to train — the consistency denominator.
   /// Falls back to the default when they have never set one.
