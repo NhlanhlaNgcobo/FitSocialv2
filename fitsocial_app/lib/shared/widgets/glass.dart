@@ -4,11 +4,11 @@
 ///
 /// * **True glass** blurs what is *already on the screen* behind it, with
 ///   [BackdropFilter]. It only reads as glass when something varied is passing
-///   underneath — the bottom nav over a scrolling feed, a sheet over a page.
+///   underneath â€” the bottom nav over a scrolling feed, a sheet over a page.
 ///   Over the app's flat [AppPalette.background] it would cost a `saveLayer`
 ///   every frame and hand back the same flat colour it started with.
-/// * **Lit glass** blurs a backdrop the widget *paints itself* — artwork
-///   ([FrostedImage]) or a wash of colour ([GlassBloom]) — and is what a card
+/// * **Lit glass** blurs a backdrop the widget *paints itself* â€” artwork
+///   ([FrostedImage]) or a wash of colour ([GlassBloom]) â€” and is what a card
 ///   sitting on the flat page uses. No per-frame filter, and something worth
 ///   looking through.
 ///
@@ -21,6 +21,7 @@ library;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -33,7 +34,7 @@ import '../../app/theme/app_palette.dart';
 /// changes only with the theme, and keeping it out of the filtered subtree
 /// spares it the per-frame repaint the blur itself cannot avoid.
 ///
-/// With [reflect] above zero it draws the nav capsule's bevel instead — the
+/// With [reflect] above zero it draws the nav capsule's bevel instead â€” the
 /// lens's lighting, painted. See [_paintBevel].
 class GlassRim extends CustomPainter {
   const GlassRim({
@@ -48,7 +49,7 @@ class GlassRim extends CustomPainter {
     this.light = const Offset(-0.55, -0.78),
   });
 
-  /// Where the light hits — the top edge.
+  /// Where the light hits â€” the top edge.
   final Color highlight;
 
   /// The rim as it turns away from the light, before it goes out entirely.
@@ -65,7 +66,7 @@ class GlassRim extends CustomPainter {
   /// Only read when [reflect] is above zero.
   final Color floor;
 
-  /// How thick the pane reads, 0 to 1 — the same number the lens takes as
+  /// How thick the pane reads, 0 to 1 â€” the same number the lens takes as
   /// [LiquidGlass.reflect]. Zero is the plain rim above.
   final double reflect;
 
@@ -76,7 +77,7 @@ class GlassRim extends CustomPainter {
   /// How deep the bevel reaches into the pane, in logical pixels.
   final double edge;
 
-  /// Where the light comes from, y down — the lens's own `uLight`.
+  /// Where the light comes from, y down â€” the lens's own `uLight`.
   final Offset light;
 
   LinearGradient get _gradient => LinearGradient(
@@ -116,10 +117,6 @@ class GlassRim extends CustomPainter {
     );
   }
 
-  /// Rings painted inside the edge to stand in for the lens's bevel. Five
-  /// reads as a smooth falloff at phone density; each is one stroked rrect.
-  static const int _bevelRings = 5;
-
   /// The nav capsule's edge, without reading the screen behind it.
   ///
   /// Each term is the shader's own, in `liquid_glass.frag`, taken at the rim
@@ -135,6 +132,14 @@ class GlassRim extends CustomPainter {
   ///
   /// What is left out is the bend, which is about what is behind the pane and
   /// needs the backdrop.
+  ///
+  /// Two draws, because this runs for every card on every scrolled frame: one
+  /// filled rrect for the band and one stroke for the line. A fill is the
+  /// cheap shape for the GPU and a stroke is not, so the band -- which would
+  /// naturally be drawn as rings -- is a fill whose gradient only has colour
+  /// near the top and bottom edges. The sides go without it; the shader puts
+  /// little there anyway, since its reflection only picks sky or floor by
+  /// which way the reflected ray points, up or down.
   void _paintBevel(Canvas canvas, Size size) {
     final bounds = Offset.zero & size;
     final r = math.max(radius - inset, 0.0);
@@ -143,86 +148,65 @@ class GlassRim extends CustomPainter {
 
     // Same rule the shader uses for a pill: the bevel can't be wider than half
     // the pane, or the two sides would meet in a ridge.
-    final depth = math.min(edge, size.shortestSide / 2);
-    if (depth > 0) {
-      final step = depth / _bevelRings;
-      for (var i = 0; i < _bevelRings; i++) {
-        final at = inset + step * (i + 0.5);
-        // The shader's own falloff: rim goes 1 to 0 across the bevel, and the
-        // surface turns as its square.
-        final rim = 1 - (at - inset) / depth;
+    final depth = math.min(edge, size.shortestSide / 2 - inset);
+    if (depth > 0 && size.height > 0) {
+      // The shader's own falloff, sampled across the bevel: rim goes 1 to 0,
+      // the surface turns as its square, and the sky carries the broad
+      // specular sheet as well as the reflection.
+      double sky(double rim) {
         final bend = rim * rim;
-        final sky = reflect * (0.14 * sheen * bend + 0.1 * math.pow(bend, 2.5));
-        final ground = reflect * 0.1 * math.pow(bend, 2.5);
-        if (sky < 0.004 && ground < 0.004) continue;
-
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            bounds.deflate(at),
-            Radius.circular(math.max(r - (at - inset), 0)),
-          ),
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = step
-            // Vertical, because the reflection is: the shader picks sky or
-            // floor by which way the reflected ray points, up or down.
-            ..shader = LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                rgb.withValues(alpha: sky.clamp(0.0, 1.0)),
-                rgb.withValues(alpha: 0),
-                dark.withValues(alpha: 0),
-                dark.withValues(alpha: ground.clamp(0.0, 1.0)),
-              ],
-              stops: const [0, 0.42, 0.58, 1],
-            ).createShader(bounds),
-        );
+        return reflect * (0.14 * sheen * bend + 0.1 * math.pow(bend, 2.5));
       }
+
+      double ground(double rim) => reflect * 0.1 * math.pow(rim * rim, 2.5);
+
+      final h = size.height;
+      const samples = [0.0, 0.25, 0.5, 1.0];
+      final stops = <double>[
+        for (final t in samples) (inset + depth * t) / h,
+        for (final t in samples.reversed) (h - inset - depth * t) / h,
+      ];
+      final colors = <Color>[
+        for (final t in samples)
+          rgb.withValues(alpha: sky(1 - t).clamp(0.0, 1.0)),
+        for (final t in samples.reversed)
+          dark.withValues(alpha: ground(1 - t).clamp(0.0, 1.0)),
+      ];
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(bounds.deflate(inset), Radius.circular(r)),
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset.zero,
+            Offset(0, h),
+            colors,
+            stops,
+          ),
+      );
     }
 
-    final line = RRect.fromRectAndRadius(
-      bounds.deflate(0.5 + inset),
-      Radius.circular(math.max(r, 0)),
-    );
-    // Across the pane from the light to the far side, so a rim facing the
-    // light is lit and one facing away is not.
-    final toward = Alignment(light.dx, light.dy);
-    final away = Alignment(-light.dx, -light.dy);
-
-    // The lit hairline. The shader draws it about one physical pixel wide at
-    // 0.85 strength; a logical pixel is wider than that, so it is painted
-    // lighter for the same weight.
+    // The lit hairline and the meniscus, as one line. Across the pane from the
+    // light to the far side: lit where it faces the light, then turning to the
+    // dark pool on the side away from it. The shader draws the hairline about
+    // one physical pixel wide at 0.85; a logical pixel is wider, so it is
+    // painted lighter for the same weight.
     canvas.drawRRect(
-      line,
+      RRect.fromRectAndRadius(
+        bounds.deflate(0.5 + inset),
+        Radius.circular(r),
+      ),
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
         ..shader = LinearGradient(
-          begin: toward,
-          end: away,
+          begin: Alignment(light.dx, light.dy),
+          end: Alignment(-light.dx, -light.dy),
           colors: [
             rgb.withValues(alpha: (0.5 * sheen).clamp(0.0, 1.0)),
-            rgb.withValues(alpha: (0.2 * sheen).clamp(0.0, 1.0)),
-          ],
-        ).createShader(bounds),
-    );
-
-    // The meniscus, on the same line: nothing on the lit side, pooling dark on
-    // the far one.
-    canvas.drawRRect(
-      line,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..shader = LinearGradient(
-          begin: toward,
-          end: away,
-          colors: [
-            dark.withValues(alpha: 0),
+            rgb.withValues(alpha: (0.3 * sheen).clamp(0.0, 1.0)),
             dark.withValues(alpha: (0.3 * reflect).clamp(0.0, 1.0)),
           ],
-          stops: const [0.45, 1],
+          stops: const [0, 0.45, 1],
         ).createShader(bounds),
     );
   }
@@ -244,13 +228,13 @@ class GlassRim extends CustomPainter {
 ///
 /// Two layers: a tint pulled from the theme's own surfaces, and a band of light
 /// along the top edge. The tint is what keeps body text legible over a bright
-/// backdrop — it is doing contrast work, not decoration, which is why it is not
+/// backdrop â€” it is doing contrast work, not decoration, which is why it is not
 /// dialled down for prettier artwork.
 class GlassPane extends StatelessWidget {
   const GlassPane({this.opacity = 1, super.key});
 
   /// Thins the whole pane. Below 1 the backdrop comes through harder, which
-  /// suits a wash of colour but not a photograph — see the note on the tint.
+  /// suits a wash of colour but not a photograph â€” see the note on the tint.
   final double opacity;
 
   @override
@@ -288,7 +272,7 @@ class GlassPane extends StatelessWidget {
   }
 }
 
-/// Just the sheen — the band of light along the top edge, with no tint under
+/// Just the sheen â€” the band of light along the top edge, with no tint under
 /// it.
 ///
 /// This is the third tier: a card that keeps its solid surface, because it has
@@ -321,7 +305,7 @@ class GlassSheen extends StatelessWidget {
   }
 }
 
-/// A wash of colour, blurred past the point of having edges — the backdrop for
+/// A wash of colour, blurred past the point of having edges â€” the backdrop for
 /// a card with no photograph to look through but something to say with colour.
 ///
 /// The blobs are placed in fractions of the surface, so one bloom works at
@@ -330,12 +314,12 @@ class GlassSheen extends StatelessWidget {
 class GlassBloom extends StatelessWidget {
   const GlassBloom({required this.colors, this.intensity = 1, super.key});
 
-  /// Up to three hues, painted back to front. Fewer is usually better — two
+  /// Up to three hues, painted back to front. Fewer is usually better â€” two
   /// colours bleeding into each other reads as light; five reads as a mess.
   final List<Color> colors;
 
   /// Scales every blob's opacity together, for a card whose colour should say
-  /// *how much* and not merely *which* — a streak barely alight against one
+  /// *how much* and not merely *which* â€” a streak barely alight against one
   /// that is roaring.
   final double intensity;
 
@@ -416,7 +400,7 @@ class _Blob extends StatelessWidget {
   }
 }
 
-/// A picture, overscaled and blurred down to glass — the backdrop for anything
+/// A picture, overscaled and blurred down to glass â€” the backdrop for anything
 /// with real artwork to look through.
 ///
 /// [ImageFiltered] and not [BackdropFilter], because the image is a layer this
@@ -429,7 +413,7 @@ class FrostedImage extends StatelessWidget {
     super.key,
   });
 
-  /// Artwork in either of the two forms the app hands back — an https URL, or
+  /// Artwork in either of the two forms the app hands back â€” an https URL, or
   /// bytes already decoded in memory. Bytes win when both are present.
   final String? imageUrl;
   final Uint8List? imageBytes;
@@ -437,7 +421,7 @@ class FrostedImage extends StatelessWidget {
   final double sigma;
 
   /// The picture is only ever seen through a heavy blur, so it is decoded well
-  /// below its native size — enough to keep a full-resolution bitmap out of the
+  /// below its native size â€” enough to keep a full-resolution bitmap out of the
   /// filter, but wide enough to cover the surface without the blur having
   /// nothing left to work with.
   static const int _sourceWidth = 256;
