@@ -10,8 +10,8 @@ import 'quick_toast.dart';
 /// Takes the run card off the screen and puts it somewhere the runner keeps
 /// things: the camera roll, or whatever the OS share sheet offers.
 ///
-/// Three shapes to take it in: the card as posted, a full 1080 × 1920 story,
-/// or a transparent sticker to lay over a story of their own.
+/// Three shapes to take it in: the card as posted, a full 1080 × 1920 Pulse,
+/// or a transparent sticker to lay over a Pulse of their own.
 ///
 /// Sits under the card it acts on, and acts on exactly what is being previewed
 /// — including the photo, if one has been picked. Never navigates and never
@@ -46,7 +46,7 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
       if (!mounted) return;
       final name = switch (format) {
         RunCardFormat.post => runCardFileName(),
-        RunCardFormat.story => '${runCardFileName()}-story',
+        RunCardFormat.pulse => '${runCardFileName()}-pulse',
         RunCardFormat.sticker => '${runCardFileName()}-sticker',
       };
       switch (action) {
@@ -114,7 +114,7 @@ class _SaveRunCardRowState extends State<SaveRunCardRow> {
 
 enum _CardAction { save, share }
 
-/// Post · Story · Sticker, as one segmented control.
+/// Post · Pulse · Sticker, as one segmented control.
 class _FormatPicker extends StatelessWidget {
   const _FormatPicker({required this.value, required this.onChanged});
 
@@ -123,7 +123,7 @@ class _FormatPicker extends StatelessWidget {
 
   static const _options = [
     (format: RunCardFormat.post, label: 'Post', icon: Icons.crop_portrait),
-    (format: RunCardFormat.story, label: 'Story', icon: Icons.smartphone),
+    (format: RunCardFormat.pulse, label: 'Pulse', icon: Icons.smartphone),
     (
       format: RunCardFormat.sticker,
       label: 'Sticker',

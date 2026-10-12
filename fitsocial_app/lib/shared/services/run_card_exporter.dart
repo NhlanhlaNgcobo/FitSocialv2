@@ -18,17 +18,17 @@ enum RunCardFormat {
   /// The card as it looks in the app, at its photo's own shape.
   post,
 
-  /// Edge to edge at 1080 × 1920, the size of an Instagram story. The photo is
+  /// Edge to edge at 1080 × 1920, the size of a Pulse. The photo is
   /// cropped to fill it.
-  story,
+  pulse,
 
   /// The line, the numbers and the wordmark on a transparent background, to be
-  /// laid over any story as a sticker.
+  /// laid over any Pulse as a sticker.
   sticker,
 }
 
-/// The width / height of a story, and of the canvas a sticker is drawn on.
-const double _storyRatio = 9 / 16;
+/// The width / height of a Pulse.
+const double _pulseRatio = 9 / 16;
 const double _stickerRatio = 4 / 5;
 
 /// Everything the run card needs to draw itself into a file.
@@ -174,10 +174,10 @@ Future<Uint8List> renderRunCardPng(
       // is not, a card signed with nothing is still a card.
     }
 
-    // A story and a sticker have fixed shapes; only a post follows its photo.
+    // A Pulse and a sticker have fixed shapes; only a post follows its photo.
     ratio = switch (format) {
       RunCardFormat.post => ratio,
-      RunCardFormat.story => _storyRatio,
+      RunCardFormat.pulse => _pulseRatio,
       RunCardFormat.sticker => _stickerRatio,
     };
     final size = Size(_logicalWidth, _logicalWidth / ratio);
@@ -195,7 +195,7 @@ Future<Uint8List> renderRunCardPng(
             sticker ? RoutePlacement.centred : spec.routePlacement,
         frame: switch (format) {
           RunCardFormat.post => RunCardFrame.card,
-          RunCardFormat.story => RunCardFrame.fullBleed,
+          RunCardFormat.pulse => RunCardFrame.fullBleed,
           RunCardFormat.sticker => RunCardFrame.sticker,
         },
       ),

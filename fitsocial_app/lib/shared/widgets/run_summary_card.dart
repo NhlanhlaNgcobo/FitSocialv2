@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
@@ -43,33 +42,33 @@ enum RunCardFrame {
   card,
 
   /// Edge to edge, with no rounded corners and no border: a picture that fills
-  /// an Instagram story, rather than a card sitting in the middle of one.
+  /// a Pulse, rather than a card sitting in the middle of one.
   fullBleed,
 
   /// No backdrop at all — the line, the numbers and the wordmark on nothing,
-  /// for a transparent PNG a runner can lay over any story as a sticker.
+  /// for a transparent PNG a runner can lay over any Pulse as a sticker.
   sticker,
 }
 
 /// Inset between a run card's edge and the box its route line is fitted into,
-/// clear of the wordmark chip above and the stat chips below.
+/// clear of the wordmark above and the stats below.
 ///
 /// A [RoutePlacement] is measured against this box, so anything that turns a
 /// drag into a placement has to use the same inset.
 const EdgeInsets kRunCardRouteInset =
     EdgeInsets.fromLTRB(AppSpacing.lg, 44, AppSpacing.lg, 52);
 
-/// Where the wordmark and the stat chips sit on an edge-to-edge story.
+/// Where the wordmark and the stats sit on an edge-to-edge Pulse.
 ///
-/// Instagram lays its own progress bar and name over the top of a story, and
-/// the reply box over the bottom, so the branding comes in clear of both
+/// A Pulse viewer lays its progress bar and name over the top of the picture,
+/// and the reply box over the bottom, so the branding comes in clear of both
 /// rather than hugging the edges the way it does on a card.
-const EdgeInsets _storyBrandingInset =
+const EdgeInsets _pulseBrandingInset =
     EdgeInsets.fromLTRB(AppSpacing.md, 72, AppSpacing.md, 96);
 
-/// The route's box on a story: the card's inset, pushed in by as much as the
-/// branding moved, so the line keeps the same clearance from the chips.
-const EdgeInsets _storyRouteInset =
+/// The route's box on a Pulse: the card's inset, pushed in by as much as the
+/// branding moved, so the line keeps the same clearance from the stats.
+const EdgeInsets _pulseRouteInset =
     EdgeInsets.fromLTRB(AppSpacing.lg, 100, AppSpacing.lg, 132);
 
 /// A finished run drawn the way it is shared: the route as a bare orange line,
@@ -87,7 +86,7 @@ const EdgeInsets _storyRouteInset =
 /// the branding already on it, captured once on the runner's phone when they
 /// posted, so the feed pays for an image rather than a live map per card and
 /// draws nothing over it. Without one — the finish sheet's preview, or a post
-/// whose capture failed — the map is drawn live under the photo chips.
+/// whose capture failed — the map is drawn live under the photo branding.
 ///
 /// With a [background] the line and the numbers sit directly on the user's
 /// photo — no scrim, no crop. The card takes the photo's own shape rather than
@@ -174,7 +173,7 @@ class RunSummaryCard extends StatelessWidget {
   /// the card a picture that taps and scrolls pass straight through.
   final ValueChanged<RoutePlacement>? onRoutePlacementChanged;
 
-  /// Card, edge-to-edge story, or transparent sticker. See [RunCardFrame].
+  /// Card, edge-to-edge Pulse, or transparent sticker. See [RunCardFrame].
   final RunCardFrame frame;
 
   /// The distance from a run post's metric strip.
@@ -224,18 +223,18 @@ class RunSummaryCard extends StatelessWidget {
     final map = showMap && !sticker;
     // A map already captured to a picture. The route and the branding were
     // drawn into it when it was posted, so it is shown as it is: no line, no
-    // chips and no live map on top.
+    // stats and no live map on top.
     final mapPicture = map && photo != null;
     final liveMap = map && hasRoute && !mapPicture;
-    // A live map wears the same frosted chips a photo does, because that is
+    // A live map wears the same photo branding a photo does, because that is
     // how its picture is branded when it is captured. So does a sticker: it is
     // going to be laid over somebody's photo, it just isn't carrying one.
     final onPhoto = sticker || liveMap || (!map && photo != null);
     final skin = _RunSkin.resolve(palette, onPhoto: onPhoto);
     final onPlacementChanged = onRoutePlacementChanged;
     final adjusting = onPlacementChanged != null && hasRoute && !map;
-    final story = frame == RunCardFrame.fullBleed;
-    final routeInset = story ? _storyRouteInset : kRunCardRouteInset;
+    final pulse = frame == RunCardFrame.fullBleed;
+    final routeInset = pulse ? _pulseRouteInset : kRunCardRouteInset;
 
     Widget content = Stack(
       fit: StackFit.expand,
@@ -261,7 +260,7 @@ class RunSummaryCard extends StatelessWidget {
               routeSeconds: RoutePoint.secondsOf(route),
               mode: RunRouteMapMode.completed,
               showBadge: false,
-              // Room for the wordmark chip above and the stat chips below, so
+              // Room for the wordmark above and the stats below, so
               // the framed route clears both.
               framePadding: 64,
               onMapReady: onMapReady,
@@ -275,7 +274,7 @@ class RunSummaryCard extends StatelessWidget {
           ),
         if (hasRoute && !map)
           Padding(
-            // Keeps the line clear of the branding chips in every corner, so
+            // Keeps the line clear of the branding in every corner, so
             // the two never collide on a route that happens to run into one.
             padding: routeInset,
             child: DecoratedBox(
@@ -304,8 +303,8 @@ class RunSummaryCard extends StatelessWidget {
           ),
         if (!mapPicture)
           Padding(
-            padding: story
-                ? _storyBrandingInset
+            padding: pulse
+                ? _pulseBrandingInset
                 : const EdgeInsets.all(AppSpacing.md),
             child: onPhoto
                 ? _PhotoBranding(
@@ -340,7 +339,7 @@ class RunSummaryCard extends StatelessWidget {
 
     if (adjusting) {
       // Over the whole card rather than just the line, so a drag that starts
-      // on a stat chip or on empty sky still moves the route.
+      // on a stat or on empty sky still moves the route.
       content = _RouteAdjuster(
         placement: routePlacement,
         onChanged: onPlacementChanged,
@@ -358,7 +357,7 @@ class RunSummaryCard extends StatelessWidget {
     );
 
     if (!framed) {
-      // A story fills the screen it is posted to and a sticker floats on
+      // A Pulse fills the screen it is posted to and a sticker floats on
       // someone else's: neither wants the card's rounded frame.
       return Padding(padding: margin, child: content);
     }
@@ -635,8 +634,9 @@ class _Backdrop extends StatelessWidget {
 /// The wordmark and the three stats, each in its own small frosted plate:
 /// wordmark alone top-left, then distance, pace and time along the bottom
 /// edge — distance at the left, time at the right, pace between the two.
-/// Nothing darkens the photo itself — each plate carries its own contrast, so
-/// the picture stays fully visible everywhere else.
+/// Nothing darkens the photo itself and nothing sits behind the type — each
+/// label carries its own soft shadow, so the picture stays fully visible
+/// right up to the letters.
 class _PhotoBranding extends StatelessWidget {
   const _PhotoBranding({
     required this.skin,
@@ -660,8 +660,7 @@ class _PhotoBranding extends StatelessWidget {
       children: [
         Align(
           alignment: Alignment.topLeft,
-          child: _Chip(
-            skin: skin,
+          child: _PhotoLabel(
             child: FitSocialLogo(
               size: 15,
               animated: false,
@@ -672,24 +671,21 @@ class _PhotoBranding extends StatelessWidget {
         if (distance != null && distance.isNotEmpty)
           Align(
             alignment: Alignment.bottomLeft,
-            child: _Chip(
-              skin: skin,
+            child: _PhotoLabel(
               child: _CompactStat(value: distance, skin: skin),
             ),
           ),
         if (pace != null && pace.isNotEmpty)
           Align(
             alignment: Alignment.bottomCenter,
-            child: _Chip(
-              skin: skin,
+            child: _PhotoLabel(
               child: _CompactStat(value: pace, skin: skin),
             ),
           ),
         if (duration != null && duration.isNotEmpty)
           Align(
             alignment: Alignment.bottomRight,
-            child: _Chip(
-              skin: skin,
+            child: _PhotoLabel(
               child: _CompactStat(value: duration, skin: skin),
             ),
           ),
@@ -698,30 +694,29 @@ class _PhotoBranding extends StatelessWidget {
   }
 }
 
-/// A small frosted-glass plate: the same trick a photo's caption sticker
-/// uses, borrowed here so the branding never needs to darken the picture
-/// under it to stay legible.
-class _Chip extends StatelessWidget {
-  const _Chip({required this.skin, required this.child});
+/// One piece of the branding over a photo, with no plate behind it: just the
+/// type, lifted off the picture by a soft shadow so it holds on a bright sky as
+/// well as a dark one.
+///
+/// Keeps the padding the frosted plates used to have, so the labels sit where
+/// they always did and the route keeps its clearance from them.
+class _PhotoLabel extends StatelessWidget {
+  const _PhotoLabel({required this.child});
 
-  final _RunSkin skin;
   final Widget child;
+
+  static const _shadows = [
+    Shadow(color: Color(0x99000000), blurRadius: 6, offset: Offset(0, 1)),
+    Shadow(color: Color(0x4D000000), blurRadius: 14),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-          decoration: BoxDecoration(
-            color: skin.chipFill,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: skin.chipBorder),
-          ),
-          child: child,
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(shadows: _shadows),
+        child: child,
       ),
     );
   }
@@ -735,8 +730,8 @@ class _Chip extends StatelessWidget {
   return (value.substring(0, gap), value.substring(gap + 1));
 }
 
-/// One measurement, on one line, sized to sit inside a [_Chip] rather than a
-/// whole corner of the card.
+/// One measurement, on one line, sized to sit in a corner of the card as a
+/// small label rather than fill it.
 class _CompactStat extends StatelessWidget {
   const _CompactStat({required this.value, required this.skin});
 
@@ -779,7 +774,7 @@ class _CompactStat extends StatelessWidget {
 /// corner.
 ///
 /// Only ever drawn on the themed gradient — a photo uses [_PhotoBranding]'s
-/// corner chips instead, so this keeps the plain-text look the workout card's
+/// corner labels instead, so this keeps the plain-text look the workout card's
 /// stats already have.
 class _StatRow extends StatelessWidget {
   const _StatRow({
@@ -892,8 +887,6 @@ class _RunSkin {
     required this.border,
     required this.photoFallback,
     required this.ground,
-    required this.chipFill,
-    required this.chipBorder,
   });
 
   factory _RunSkin.resolve(AppPalette palette, {required bool onPhoto}) {
@@ -907,9 +900,6 @@ class _RunSkin {
         border: palette.stroke,
         photoFallback: palette.surfaceHigh,
         ground: runCardExportGround(palette),
-        // Unused on the themed gradient — nothing there sits in a [_Chip].
-        chipFill: Colors.transparent,
-        chipBorder: Colors.transparent,
       );
     }
 
@@ -920,8 +910,6 @@ class _RunSkin {
       border: Color(0x38F7F7F7),
       photoFallback: Color(0xFF1E1E1E),
       ground: Color(0xFF1E1E1E),
-      chipFill: Color(0x66050505),
-      chipBorder: Color(0x29F7F7F7),
     );
   }
 
@@ -939,9 +927,4 @@ class _RunSkin {
   /// The opaque colour the card sits on when it is drawn into a file. Unused on
   /// screen, where the card is transparent by design.
   final Color ground;
-
-  /// Fill and border of the frosted plate each branding chip sits in, over a
-  /// photo.
-  final Color chipFill;
-  final Color chipBorder;
 }
