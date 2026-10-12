@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/input/typed_number.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 import '../../challenges/domain/challenge_clock.dart';
 import '../../main/domain/progress_models.dart' show formatThousands;
 import '../../onboarding/presentation/training_plan_card.dart';
@@ -25,7 +25,7 @@ class GoalsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('GOALS')),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: _NewGoalButton(
         onPressed: count >= kMaxActiveGoals
             ? () => _say(
                   context,
@@ -33,16 +33,6 @@ class GoalsScreen extends ConsumerWidget {
                   'set another.',
                 )
             : () => showCreateGoalSheet(context),
-        // The app's orange, like every primary button, rather than the
-        // theme's default FAB fill.
-        backgroundColor: palette.brand,
-        foregroundColor: AppColors.onBrand,
-        shape: const StadiumBorder(),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text(
-          'New goal',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
       ),
       // The plan from sign-up sits above the goals: it is what they serve,
       // and before it was here nothing in the app ever showed it again.
@@ -569,4 +559,57 @@ class _Message extends StatelessWidget {
 
 void _say(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+}
+
+/// "New goal" as a glass capsule, the material of the nav bar and the cards,
+/// rather than a Material FAB in the theme's default colour. It floats over
+/// the list, so it reads the backdrop like the nav does.
+class _NewGoalButton extends StatelessWidget {
+  const _NewGoalButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    const radius = BorderRadius.all(Radius.circular(999));
+    return Semantics(
+      button: true,
+      label: 'New goal',
+      excludeSemantics: true,
+      child: LiquidGlass(
+        borderRadius: radius,
+        lens: true,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: onPressed,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: palette.stroke),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded, color: palette.brand, size: 22),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    'New goal',
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
