@@ -75,6 +75,19 @@ uniform float uReflect;
 // below, which on a phone held upright is very nearly true.
 uniform vec3 uFloorColor;
 
+// Where the pane actually is, in the backdrop's own pixels: its top-left
+// corner and its size.
+//
+// The backdrop handed to this filter is not the pane. It is the whole screen
+// behind it -- measured on the A06, uSize came through as 720x1600 for a
+// 652x116 capsule -- so a shape built from uSize put the rim around the edge
+// of the display, where the clip throws it away, and the pane showed nothing
+// but tint. Every length below is in these same physical pixels.
+//
+// Appended last, like everything after uRimColor. Do not insert above.
+uniform vec2 uOrigin;
+uniform vec2 uPane;
+
 uniform sampler2D uBackdrop;
 
 out vec4 fragColor;
@@ -89,8 +102,8 @@ float sdRoundBox(vec2 p, vec2 b, vec4 radii) {
 }
 
 float shape(vec2 p) {
-  vec2 halfSize = uSize * 0.5;
-  return sdRoundBox(p - halfSize, halfSize, uRadii);
+  vec2 halfSize = uPane * 0.5;
+  return sdRoundBox(p - uOrigin - halfSize, halfSize, uRadii);
 }
 
 vec3 backdropAt(vec2 px) {
@@ -120,7 +133,7 @@ const float kLensPeak = 0.17872669;
 float lensShift(float depth) {
   // A pill's bezel cannot be wider than half the pane, or the two sides would
   // overlap and leave a ridge down the middle.
-  float bezel = max(min(uEdge, min(uSize.x, uSize.y) * 0.5), 0.001);
+  float bezel = max(min(uEdge, min(uPane.x, uPane.y) * 0.5), 0.001);
   float s = depth / bezel;
   if (s <= 0.0 || s >= 1.0) return 0.0;
 
