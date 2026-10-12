@@ -238,6 +238,10 @@ void main() {
 
     await tester.tap(find.text('Finish'));
     await tester.pumpAndSettle();
+    // The finish sheet's card and save-as controls push Save below a test
+    // screen's fold.
+    await tester.ensureVisible(find.textContaining('Save Run'));
+    await tester.pumpAndSettle();
     await tester.tap(find.textContaining('Save Run'));
     await tester.pumpAndSettle();
 
@@ -265,6 +269,10 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.text('Finish'));
+    await tester.pumpAndSettle();
+    // The finish sheet's card and save-as controls push Save below a test
+    // screen's fold.
+    await tester.ensureVisible(find.textContaining('Save Run'));
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('Save Run'));
     await tester.pumpAndSettle();

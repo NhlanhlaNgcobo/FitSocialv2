@@ -146,7 +146,11 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
 
   Future<void> _save() async {
     String? backgroundPath = _backgroundPath;
-    if (_showMap) {
+    // A run kept off the feed keeps the runner's own photo and the map
+    // switch, not a picture of the map: it is reopened in the editor from
+    // "Not shared", where the live map is drawn again and captured if it
+    // goes out.
+    if (_showMap && _shareToFeed) {
       final map = _map;
       setState(() => _saving = true);
       // The picture of the map is what the post carries. If it cannot be

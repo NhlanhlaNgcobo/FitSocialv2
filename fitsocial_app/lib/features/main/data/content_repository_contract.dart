@@ -7,6 +7,7 @@ import '../domain/app_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
+import '../domain/unshared_run.dart';
 import '../domain/workout_models.dart';
 
 abstract class ContentRepository {
@@ -206,6 +207,20 @@ abstract class ContentRepository {
   Future<ActivitySaveResult> saveRun(
     UserProfileDraft? profile,
     RunLogDraft draft,
+  );
+
+  /// The signed-in user's GPS activities that were saved but never posted,
+  /// newest first — the "Not shared" list on their profile.
+  Future<List<UnsharedRun>> getUnsharedRuns();
+
+  /// Posts a run that was saved without sharing, with the card as the runner
+  /// left it in the editor, and links the post back to the run's log.
+  ///
+  /// The run was counted when it was saved, so this posts it and counts
+  /// nothing again.
+  Future<ActivitySaveResult> shareUnsharedRun(
+    UserProfileDraft? profile,
+    UnsharedRunShare share,
   );
   Future<ActivitySaveResult> saveMeal(
     UserProfileDraft? profile,

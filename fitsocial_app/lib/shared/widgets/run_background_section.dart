@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../features/main/domain/app_models.dart';
+import 'app_photo.dart';
 import 'picture_ratio.dart';
 import 'background_picker.dart';
 import 'form_section_header.dart';
@@ -31,6 +32,7 @@ class RunBackgroundSection extends StatefulWidget {
   const RunBackgroundSection({
     required this.imagePath,
     required this.onPick,
+    this.imageUrl,
     required this.onRemove,
     this.route = const [],
     this.previewWithoutImage = true,
@@ -46,6 +48,10 @@ class RunBackgroundSection extends StatefulWidget {
 
   /// Local path of the chosen photo, or null for the gradient.
   final String? imagePath;
+
+  /// An already-uploaded photo, shown when there is no [imagePath] — a saved
+  /// run reopened in the editor.
+  final String? imageUrl;
 
   final ValueChanged<ImageSource>? onPick;
   final VoidCallback? onRemove;
@@ -103,6 +109,12 @@ class _RunBackgroundSectionState extends State<RunBackgroundSection> {
   @override
   Widget build(BuildContext context) {
     final path = widget.imagePath;
+    final url = widget.imageUrl;
+    final photo = path != null
+        ? localBackgroundImage(path)
+        : url != null
+            ? appPhoto(url)
+            : null;
     final route = widget.route;
     final previewWithoutImage = widget.previewWithoutImage;
     final distanceLabel = widget.distanceLabel;
@@ -123,7 +135,7 @@ class _RunBackgroundSectionState extends State<RunBackgroundSection> {
           label: 'Background',
           hint: 'Optional',
         ),
-        if (path != null || previewWithoutImage) ...[
+        if (photo != null || previewWithoutImage) ...[
           RunSummaryCard(
             route: route,
             distanceLabel: distanceLabel,
@@ -131,8 +143,7 @@ class _RunBackgroundSectionState extends State<RunBackgroundSection> {
             paceLabel: paceLabel,
             // With the map on, the preview is the live map, which is what gets
             // captured; a photo picked earlier waits for the map to go off.
-            background:
-                path == null || showMap ? null : localBackgroundImage(path),
+            background: showMap ? null : photo,
             showMap: showMap,
             onMapReady: onMapReady,
             // Portrait, because this map is what gets captured, and the
@@ -144,7 +155,7 @@ class _RunBackgroundSectionState extends State<RunBackgroundSection> {
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
-        if (canAdjust && (path != null || previewWithoutImage)) ...[
+        if (canAdjust && (photo != null || previewWithoutImage)) ...[
           _MoveRouteControls(
             adjusting: adjusting,
             moved: !widget.routePlacement.isCentred,
@@ -159,7 +170,7 @@ class _RunBackgroundSectionState extends State<RunBackgroundSection> {
         // mid-drag would move the ground under the line.
         if (!showMap && !adjusting) ...[
           BackgroundPickerRow(
-            hasImage: path != null,
+            hasImage: photo != null,
             onPick: onPick,
             onRemove: onRemove,
           ),

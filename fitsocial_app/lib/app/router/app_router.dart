@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/application/app_session.dart';
 import '../../features/main/domain/activity_kind.dart';
 import '../../features/main/domain/app_models.dart';
+import '../../features/main/domain/unshared_run.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/edit_profile_screen.dart';
@@ -36,6 +37,7 @@ import '../../features/main/presentation/post_compose_screen.dart';
 import '../../features/main/presentation/prompt_answers_screen.dart';
 import '../../features/main/presentation/social_compose_screens.dart';
 import '../../features/main/domain/daily_prompts.dart';
+import '../../features/main/presentation/not_shared_runs_screen.dart';
 import '../../features/main/presentation/post_detail_screen.dart';
 import '../../features/main/presentation/workout_session_screen.dart';
 import '../../features/main/presentation/profile_screen.dart';
@@ -297,6 +299,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      // The runs saved without posting, and the editor each one reopens in.
+      // Outside the shell, like the post screen: opened from the profile and
+      // returned from.
+      GoRoute(
+        path: '/not-shared',
+        builder: (context, state) => const NotSharedRunsScreen(),
+      ),
+      GoRoute(
+        path: '/not-shared/:runId',
+        builder: (context, state) => UnsharedRunEditorScreen(
+          runId: state.pathParameters['runId']!,
+          initialRun: state.extra as UnsharedRun?,
+        ),
       ),
       GoRoute(
         path: '/settings',

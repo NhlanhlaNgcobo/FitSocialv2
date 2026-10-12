@@ -85,7 +85,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // posts by what kind of activity they are.
                     _MediaGrid(mediaOnly: true),
                     _MediaGrid(filter: ExploreFilter.workouts),
-                    _MediaGrid(filter: ExploreFilter.runs),
+                    // The runs tab leads with the ones that never went out,
+                    // so they sit beside the runs that did.
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _NotSharedEntry(),
+                        Expanded(
+                          child: _MediaGrid(filter: ExploreFilter.runs),
+                        ),
+                      ],
+                    ),
                     _MediaGrid(filter: ExploreFilter.meals),
                   ],
                 ),
@@ -347,6 +357,68 @@ class _SectionIndicator extends StatelessWidget {
           palette.muted.withValues(alpha: 0.35),
           AppColors.orange,
           t,
+        ),
+      ),
+    );
+  }
+}
+
+/// "Not shared · 3", leading to the runs saved without posting.
+///
+/// Only there when there is something behind it: an empty list is not worth a
+/// row on everybody's profile, and a failed read is not worth an error here —
+/// the page itself says so.
+class _NotSharedEntry extends ConsumerWidget {
+  const _NotSharedEntry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final count = ref.watch(unsharedRunsProvider).valueOrNull?.length ?? 0;
+    if (count == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        0,
+      ),
+      child: Material(
+        color: palette.surfaceHigh,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => context.push('/not-shared'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 12,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.lock_outline_rounded,
+                    size: 18, color: palette.brandText),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Not shared',
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Text(
+                  '$count',
+                  style: TextStyle(color: palette.muted, fontSize: 14),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, color: palette.muted),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -17,6 +17,7 @@ import '../domain/explore_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
+import '../domain/unshared_run.dart';
 
 // ---------------------------------------------------------------------------
 // Feed posts — StateNotifier for optimistic like toggling
@@ -217,6 +218,13 @@ final weeklyGoalDaysProvider = FutureProvider.autoDispose<int>((ref) {
 /// cached result outlives the day it was built for, and the grid would still
 /// be showing yesterday's week after midnight. Logging an activity also
 /// invalidates it — see [ActivityActions].
+/// The signed-in user's runs, hikes and rides that were saved but never
+/// posted — the "Not shared" list on their profile.
+final unsharedRunsProvider =
+    FutureProvider.autoDispose<List<UnsharedRun>>((ref) {
+  return ref.watch(contentRepositoryProvider).getUnsharedRuns();
+});
+
 final activitySessionsProvider =
     FutureProvider.autoDispose<List<ActivitySession>>((ref) {
   return ref.watch(contentRepositoryProvider).getActivitySessions();

@@ -5,6 +5,7 @@ import '../../auth/domain/auth_models.dart';
 import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
+import '../domain/unshared_run.dart';
 import 'content_providers.dart';
 
 class ActivityActions {
@@ -22,6 +23,25 @@ class ActivityActions {
     return _saveAndRefresh(
       (repository, profile) => repository.saveRun(profile, draft),
     );
+  }
+
+  /// Posts a run that was saved without sharing, from the "Not shared" list.
+  Future<ActivitySaveResult> shareUnsharedRun(UnsharedRunShare share) {
+    return _saveAndRefresh(
+      (repository, profile) => repository.shareUnsharedRun(profile, share),
+    );
+  }
+
+  /// Deletes a run from the "Not shared" list. It has no post, so the log is
+  /// the whole of it.
+  Future<void> deleteUnsharedRun(UnsharedRun run) async {
+    await _ref
+        .read(contentRepositoryProvider)
+        .deleteActivitySession(run.id, run.kind);
+    _ref
+      ..invalidate(unsharedRunsProvider)
+      ..invalidate(activitySessionsProvider)
+      ..invalidate(progressMetricsProvider);
   }
 
   Future<ActivitySaveResult> saveMeal(MealLogDraft draft) {
@@ -70,6 +90,9 @@ class ActivityActions {
       // without this the square for today keeps the value it was first built
       // with and a run logged mid-session never lights up.
       ..invalidate(activitySessionsProvider)
+      // And the profile's "Not shared" list, which a private run joins and a
+      // run posted from it leaves.
+      ..invalidate(unsharedRunsProvider)
       // And the log screen's repeat chips, so the session just saved is
       // offered as a template the next time it opens.
       ..invalidate(recentWorkoutsProvider)

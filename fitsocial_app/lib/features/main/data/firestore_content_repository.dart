@@ -21,6 +21,7 @@ import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
+import '../domain/unshared_run.dart';
 import '../domain/workout_models.dart';
 import 'activity_session_parsing.dart';
 import 'author_identity_cache.dart';
@@ -1755,39 +1756,16 @@ class FirestoreContentRepository implements ContentRepository {
       return ActivitySaveResult(message: '$noun saved.');
     }
 
-    final result = await _createPost(
+    final result = await _createRunPost(
       profile: profile,
-      // The post's one record of which activity this was. Every renderer
-      // already prints this field, so naming it correctly here is what makes a
-      // hike read as a hike everywhere it appears — and it is what
-      // _kindFromActivityLabel reads back when a post is the only trace left.
-      activity: noun,
-      caption: 'Finished a ${draft.distanceKm.toStringAsFixed(2)} km '
-          '${noun.toLowerCase()}.',
-      metricLabels: [
-        '${draft.distanceKm.toStringAsFixed(2)} km',
-        _formatDuration(draft.elapsed),
-        draft.averagePace,
-      ],
-      themeKey: 'sunset',
-      // Stamped so a run is identifiable without inspecting its contents. A
-      // manually entered run carries no route, which is why the route alone
-      // was never enough to tell one apart.
-      postType: 'run',
-      // The backdrop the run card draws its line and its numbers on. Like a
-      // workout's, it is decoration on the session rather than a photo post —
-      // the renderers decide that from the post type, not from this field.
+      kind: draft.activityKind,
+      distanceKm: draft.distanceKm,
+      elapsed: draft.elapsed,
+      averagePace: draft.averagePace,
+      route: route,
       imageUrl: backgroundUrl,
-      // Denormalised onto the post so the feed renders the route from the
-      // documents it already streams, with no extra read per card.
-      routePoints: route,
-      // Only meaningful with a trace to put on it; a manual run has none.
-      showRouteMap: draft.showRouteMap && route.length >= 2,
-      // The map frames the route itself, so a placement only means anything
-      // for the line drawn over a photo.
-      routePlacement: draft.showRouteMap
-          ? RoutePlacement.centred
-          : draft.routePlacement,
+      showRouteMap: draft.showRouteMap,
+      routePlacement: draft.routePlacement,
       taggedUsers: draft.taggedUsers,
     );
     await _linkLogToPost(logRef, result.post.id);
@@ -1862,6 +1840,164 @@ class FirestoreContentRepository implements ContentRepository {
     return ref;
   }
 
+  /// The feed post for a run, hike or ride — shared by a run posted as it is
+  /// saved and one posted later from the "Not shared" list, so the two can
+  /// never drift into different-looking cards.
+  Future<({FeedPost post, bool synced})> _createRunPost({
+    required UserProfileDraft? profile,
+    required ActivityKind kind,
+    required double distanceKm,
+    required Duration elapsed,
+    required String averagePace,
+    required List<Map<String, double>> route,
+    required String? imageUrl,
+    required bool showRouteMap,
+    required RoutePlacement routePlacement,
+    required List<TaggedUser> taggedUsers,
+  }) {
+    final noun = kind.descriptor.singular;
+    return _createPost(
+      profile: profile,
+      // The post's one record of which activity this was. Every renderer
+      // already prints this field, so naming it correctly here is what makes a
+      // hike read as a hike everywhere it appears — and it is what
+      // _kindFromActivityLabel reads back when a post is the only trace left.
+      activity: noun,
+      caption: 'Finished a ${distanceKm.toStringAsFixed(2)} km '
+          '${noun.toLowerCase()}.',
+      metricLabels: [
+        '${distanceKm.toStringAsFixed(2)} km',
+        _formatDuration(elapsed),
+        averagePace,
+      ],
+      themeKey: 'sunset',
+      // Stamped so a run is identifiable without inspecting its contents. A
+      // manually entered run carries no route, which is why the route alone
+      // was never enough to tell one apart.
+      postType: 'run',
+      // The backdrop the run card draws its line and its numbers on. Like a
+      // workout's, it is decoration on the session rather than a photo post —
+      // the renderers decide that from the post type, not from this field.
+      imageUrl: imageUrl,
+      // Denormalised onto the post so the feed renders the route from the
+      // documents it already streams, with no extra read per card.
+      routePoints: route,
+      // Only meaningful with a trace to put on it; a manual run has none.
+      showRouteMap: showRouteMap && route.length >= 2,
+      // The map frames the route itself, so a placement only means anything
+      // for the line drawn over a photo.
+      routePlacement: showRouteMap ? RoutePlacement.centred : routePlacement,
+      taggedUsers: taggedUsers,
+    );
+  }
+
+  @override
+  Future<List<UnsharedRun>> getUnsharedRuns() async {
+    final user = _requireCurrentUser();
+    // The same authorId-only query every other history in here uses, filtered
+    // in Dart: one person's run log is small, and it needs no new index.
+    // Errors are left to surface, unlike [_activityLogs] — an empty list here
+    // would tell the runner their saved runs are gone.
+    final snapshot =
+        await runsCollection.where('authorId', isEqualTo: user.uid).get();
+    final runs = <UnsharedRun>[];
+    for (final doc in snapshot.docs) {
+      try {
+        final run = _toUnsharedRun(doc);
+        if (run != null) runs.add(run);
+      } catch (error) {
+        debugPrint('Not shared: skipping ${doc.reference.path} — $error');
+      }
+    }
+    runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    return runs;
+  }
+
+  /// A run document as an unshared run, or null when it was shared, has a
+  /// post, or carries no usable date.
+  static UnsharedRun? _toUnsharedRun(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    // Either one means it went out: a post id on a log written before the
+    // flag existed, or the flag on a post that has not linked back yet.
+    if (boolFromStoredValue(data['sharedToFeed'])) return null;
+    if (_text(data['postId']) != null) return null;
+
+    final startedAt = _firstTimestamp(data, const ['startedAt', 'createdAt']);
+    if (startedAt == null) return null;
+    final route = RoutePoint.listFromFirestore(data['routePoints']);
+
+    return UnsharedRun(
+      id: doc.id,
+      kind: ActivityKindX.fromWire(data['activityType']),
+      startedAt: startedAt,
+      distanceKm: doubleFromStoredValue(data['distanceKm']) ?? 0,
+      elapsed: Duration(seconds: intFromStoredValue(data['durationSeconds'])),
+      averagePace: _text(data['averagePace']) ?? '--',
+      routePoints: route,
+      imageUrl: _text(data['imageUrl']),
+      showRouteMap:
+          boolFromStoredValue(data['showRouteMap']) && route.length >= 2,
+      routePlacement: RoutePlacement.fromMap(data['routePlacement']),
+    );
+  }
+
+  @override
+  Future<ActivitySaveResult> shareUnsharedRun(
+    UserProfileDraft? profile,
+    UnsharedRunShare share,
+  ) async {
+    _requireCurrentUser();
+    final run = share.run;
+    final newImageUrl = await _tryUploadBackground(share.backgroundImagePath);
+    final imageUrl = share.backgroundImagePath != null
+        ? newImageUrl
+        : share.keepExistingImage
+            ? run.imageUrl
+            : null;
+    final route = _serializeRoute(run.routePoints);
+    final showRouteMap = share.showRouteMap && route.length >= 2;
+
+    final result = await _createRunPost(
+      profile: profile,
+      kind: run.kind,
+      distanceKm: run.distanceKm,
+      elapsed: run.elapsed,
+      averagePace: run.averagePace,
+      route: route,
+      imageUrl: imageUrl,
+      showRouteMap: showRouteMap,
+      routePlacement: share.routePlacement,
+      taggedUsers: share.taggedUsers,
+    );
+
+    // The log follows the post: shared, linked, and carrying the card that
+    // went out. A failure here leaves a posted run still listed as not
+    // shared, which is the same risk [_linkLogToPost] already takes — the post
+    // is what mattered, and it is out.
+    final placement = showRouteMap ? null : share.routePlacement.toMap();
+    try {
+      await _settleWrite(runsCollection.doc(run.id).update({
+        'sharedToFeed': true,
+        'postId': result.post.id,
+        'imageUrl': imageUrl ?? FieldValue.delete(),
+        'showRouteMap': showRouteMap ? true : FieldValue.delete(),
+        'routePlacement': placement ?? FieldValue.delete(),
+      }));
+    } on FirebaseException catch (error) {
+      debugPrint('Could not mark runs/${run.id} shared: ${error.code}');
+    }
+
+    return ActivitySaveResult(
+      message: _sharedMessage(
+        run.kind.descriptor.singular,
+        synced: result.synced,
+      ),
+      createdPost: result.post,
+    );
+  }
+
   /// Persists the run to `runs/{id}` — distance, timings and the GPS trace.
   ///
   /// No calories field: a run's energy cost is worked out from its distance on
@@ -1895,6 +2031,14 @@ class FirestoreContentRepository implements ContentRepository {
       if (draft.elevationGainMeters case final gain?)
         'elevationGainMeters': gain,
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
+      // How the runner left the card, so a run kept off the feed can be
+      // reopened in the editor exactly as it was and posted later. Both are
+      // omitted at their defaults, so an ordinary run's document keeps its
+      // shape.
+      if (draft.showRouteMap && route.length >= 2) 'showRouteMap': true,
+      if (!draft.showRouteMap && route.length >= 2)
+        if (draft.routePlacement.toMap() case final placement?)
+          'routePlacement': placement,
       // Omitted rather than written as zeros when no strap was connected, so a
       // run without one is shaped exactly like every run logged before straps
       // were recorded and nothing needs migrating.
