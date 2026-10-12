@@ -1025,6 +1025,26 @@ class FirestoreContentRepository implements ContentRepository {
   }
 
   @override
+  Future<void> clearCustomMacroGoals({required bool stepBonus}) async {
+    final user = _requireCurrentUser();
+    // The target fields go rather than being zeroed: their presence is what
+    // marks the targets as the user's own (MacroGoals.fromMap).
+    await _settleWrite(
+      _nutritionRef(user.uid).set(
+        {
+          'calorieGoal': FieldValue.delete(),
+          'proteinGoal': FieldValue.delete(),
+          'carbsGoal': FieldValue.delete(),
+          'fatGoal': FieldValue.delete(),
+          'stepBonus': stepBonus,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      ),
+    );
+  }
+
+  @override
   Future<void> deleteLoggedMeal(String id) async {
     _requireCurrentUser();
     await _settleWrite(mealsCollection.doc(id).delete());
