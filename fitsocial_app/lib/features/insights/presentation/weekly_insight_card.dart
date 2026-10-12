@@ -8,8 +8,9 @@ import '../../../shared/widgets/liquid_glass.dart';
 import '../application/insight_providers.dart';
 import '../domain/weekly_insight.dart';
 
-/// Last week's insight on the home feed: the headline and summary, labelled as
-/// AI-written, and a way in to the rest.
+/// Last week's insight on the home feed: the headline and summary, and a way
+/// in to the rest. The AI-written label is on the full insight screen, not
+/// here.
 ///
 /// Draws nothing at all -- not even its spacing -- while the feature is off or
 /// hidden, while it loads, and for an insight that failed: a card that might
@@ -96,8 +97,6 @@ class WeeklyInsightCard extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: palette.text, fontSize: 14),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  const AiGeneratedLabel(),
                 ],
                 if (insight.wellbeingNote) ...[
                   const SizedBox(height: AppSpacing.sm),
@@ -112,7 +111,7 @@ class WeeklyInsightCard extends ConsumerWidget {
   }
 }
 
-/// "Written by AI from your logged data" -- on every surface an insight shows.
+/// "Written by AI from your logged data", on the full insight screen.
 class AiGeneratedLabel extends StatelessWidget {
   const AiGeneratedLabel({super.key});
 
