@@ -210,7 +210,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/log-workout',
-        builder: (context, state) => const WorkoutLogScreen(),
+        builder: (context, state) => WorkoutLogScreen(
+          startWithCardio: state.uri.queryParameters['cardio'] == '1',
+        ),
       ),
       GoRoute(
         path: '/workout-session',

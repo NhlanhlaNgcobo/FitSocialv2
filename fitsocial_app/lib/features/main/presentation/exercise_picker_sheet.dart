@@ -11,30 +11,45 @@ import 'custom_exercise_sheet.dart';
 
 /// What the picker returns: a library entry, or a name the user typed.
 class PickedExercise {
-  const PickedExercise({required this.name, this.id});
+  const PickedExercise({required this.name, this.id, this.equipment});
 
   final String name;
 
   /// Null for a typed name that is not in the library.
   final String? id;
+
+  /// What it is done on, where known. `cardio` for a typed name added while
+  /// the picker was showing cardio only — "Concept2" typed there is a machine
+  /// to log a time on, not a lift.
+  final String? equipment;
+
+  bool get isCardio => equipment == 'cardio';
 }
 
 /// Opens the exercise picker.
 ///
 /// Searches the bundled library and the user's own exercises together, and can
 /// save a typed name as a new custom exercise. Returns null on dismissal.
-Future<PickedExercise?> showExercisePicker(BuildContext context) {
+///
+/// [cardioOnly] opens it showing cardio machines and activities alone, for
+/// the way in from the run screen; the filter can be switched off in the sheet.
+Future<PickedExercise?> showExercisePicker(
+  BuildContext context, {
+  bool cardioOnly = false,
+}) {
   return showModalBottomSheet<PickedExercise>(
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.55),
     isScrollControlled: true,
-    builder: (sheetContext) => const _ExercisePickerSheet(),
+    builder: (sheetContext) => _ExercisePickerSheet(cardioOnly: cardioOnly),
   );
 }
 
 class _ExercisePickerSheet extends ConsumerStatefulWidget {
-  const _ExercisePickerSheet();
+  const _ExercisePickerSheet({this.cardioOnly = false});
+
+  final bool cardioOnly;
 
   @override
   ConsumerState<_ExercisePickerSheet> createState() =>
@@ -43,6 +58,11 @@ class _ExercisePickerSheet extends ConsumerStatefulWidget {
 
 class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
   final _query = TextEditingController();
+
+  /// Showing cardio alone. A chip at the top turns it on and off, so a rower
+  /// or a stair climber is two taps away rather than a search for a word the
+  /// user has to guess.
+  late bool _cardioOnly = widget.cardioOnly;
 
   /// A long list is the whole point of a library, but drawing every row of it
   /// into a sheet is not.
@@ -58,7 +78,11 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
     final saved = await showCustomExerciseSheet(context, initialName: name);
     if (saved == null || !mounted) return;
     Navigator.of(context).pop(
-      PickedExercise(name: saved.name, id: customExerciseId(saved.id)),
+      PickedExercise(
+        name: saved.name,
+        id: customExerciseId(saved.id),
+        equipment: saved.equipment,
+      ),
     );
   }
 
@@ -79,7 +103,9 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
           equipment: c.equipment,
         ),
     ];
-    final results = ExerciseLibrary.search(typed, extra: extra);
+    final results = ExerciseLibrary.search(typed, extra: extra)
+        .where((e) => !_cardioOnly || e.equipment == 'cardio')
+        .toList();
     final shown = results.take(_maxRows).toList();
     final exactMatch =
         results.any((e) => e.name.toLowerCase() == typed.toLowerCase());
@@ -113,13 +139,30 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Add exercise',
-                style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  color: palette.text,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _cardioOnly ? 'Add cardio' : 'Add exercise',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        color: palette.text,
+                      ),
+                    ),
+                  ),
+                  FilterChip(
+                    label: const Text('Cardio machines'),
+                    avatar: Icon(
+                      Icons.directions_bike_rounded,
+                      size: 16,
+                      color: _cardioOnly ? palette.brandText : palette.muted,
+                    ),
+                    selected: _cardioOnly,
+                    showCheckmark: false,
+                    onSelected: (value) => setState(() => _cardioOnly = value),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               GlassWell(
@@ -136,7 +179,9 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     icon: Icon(Icons.search_rounded, color: palette.muted),
-                    hintText: 'Search, e.g. incline dumbbell',
+                    hintText: _cardioOnly
+                        ? 'Search, e.g. rower or stairs'
+                        : 'Search, e.g. incline dumbbell',
                     hintStyle: TextStyle(color: palette.muted),
                     contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   ),
@@ -166,8 +211,12 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
                           'Use your own name for it',
                           style: TextStyle(color: palette.muted),
                         ),
-                        onTap: () => Navigator.of(context)
-                            .pop(PickedExercise(name: typed)),
+                        onTap: () => Navigator.of(context).pop(
+                          PickedExercise(
+                            name: typed,
+                            equipment: _cardioOnly ? 'cardio' : null,
+                          ),
+                        ),
                       ),
                     if (typed.isNotEmpty && !exactMatch)
                       ListTile(
@@ -204,7 +253,10 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
                         ),
                         onTap: () => Navigator.of(context).pop(
                           PickedExercise(
-                              name: exercise.name, id: exercise.id),
+                            name: exercise.name,
+                            id: exercise.id,
+                            equipment: exercise.equipment,
+                          ),
                         ),
                       ),
                     if (results.length > _maxRows)

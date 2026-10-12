@@ -51,6 +51,46 @@ class ExerciseLibrary {
     return null;
   }
 
+  /// The equipment behind [exerciseId], from the library or [custom]. Null
+  /// for a free-text name, which could be anything.
+  static String? equipmentFor(
+    String? exerciseId, {
+    Iterable<CustomExercise> custom = const [],
+  }) {
+    if (exerciseId == null) return null;
+    final library = byId(exerciseId);
+    if (library != null) return library.equipment;
+    for (final c in custom) {
+      // The id shape `customExerciseId` gives a custom exercise in the picker.
+      if ('custom-${c.id}' == exerciseId) return c.equipment;
+    }
+    return null;
+  }
+
+  /// Whether [exerciseId] is a cardio machine or activity — logged as time and
+  /// distance rather than as sets of reps at a load.
+  static bool isCardio(
+    String? exerciseId, {
+    Iterable<CustomExercise> custom = const [],
+  }) =>
+      equipmentFor(exerciseId, custom: custom) == 'cardio';
+
+  /// Other names people search a movement by, keyed by its library name.
+  ///
+  /// Searched but never shown: "rower" should find the Rowing Machine without
+  /// the library growing a second row for the same machine, which would split
+  /// its history in two.
+  static const _aliases = {
+    'Rowing Machine': 'rower rowerg erg concept2 indoor row',
+    'Stair Climber': 'stair stepper stairmaster stepmill steps stairs',
+    'Elliptical': 'cross trainer crosstrainer',
+    'Stationary Bike': 'spin bike exercise bike bikeerg indoor cycle',
+    'Assault Bike': 'air bike airdyne echo bike fan bike',
+    'Ski Erg': 'skierg ski machine',
+    'Treadmill Run': 'running machine',
+    'Treadmill Walk': 'walking machine',
+  };
+
   /// Name-or-muscle-or-equipment search, case-insensitive. Every word in
   /// [query] must match somewhere, so "incline db" finds the incline dumbbell
   /// press. Names that start with the query rank first.
@@ -68,7 +108,8 @@ class ExerciseLibrary {
 
     final hits = pool.where((exercise) {
       final haystack =
-          '${exercise.name} ${exercise.muscles.join(' ')} ${exercise.equipment}'
+          '${exercise.name} ${exercise.muscles.join(' ')} ${exercise.equipment} '
+                  '${_aliases[exercise.name] ?? ''}'
               .toLowerCase();
       return words.every(haystack.contains);
     }).toList();
@@ -333,6 +374,16 @@ class ExerciseLibrary {
     'High Knees|cardio|bodyweight',
     'Shadow Boxing|cardio|bodyweight',
     'Hiking|cardio,glutes|cardio',
+    'Recumbent Bike|cardio,quads|cardio',
+    'Arc Trainer|cardio,quads|cardio',
+    'VersaClimber|cardio,full body|cardio',
+    "Jacob's Ladder|cardio,full body|cardio",
+    'Curved Treadmill|cardio|cardio',
+    'Rowing (Water)|cardio,back|cardio',
+    'Kayaking|cardio,back|cardio',
+    'Spin Class|cardio,quads|cardio',
+    'Aerobics Class|cardio|cardio',
+    'Dancing|cardio|cardio',
     // Machines, bands and extras
     'Smith Machine Bench Press|chest,triceps|machine',
     'Smith Machine Overhead Press|shoulders,triceps|machine',

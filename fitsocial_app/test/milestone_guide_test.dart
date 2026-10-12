@@ -122,10 +122,10 @@ void main() {
 
   testWidgets('the milestone card explains itself on tap', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
           body: MilestoneCard(
-            milestone: const PostMilestone(
+            milestone: PostMilestone(
               kind: 'badge',
               key: 'POINTS_CENTURY',
               title: 'Century',

@@ -761,6 +761,8 @@ class ExerciseEntry {
         weightKg: (map['weightKg'] as num?)?.toDouble(),
         exerciseId: map['exerciseId'] as String?,
         supersetGroup: map['supersetGroup'] as String?,
+        durationSeconds: (map['durationSeconds'] as num?)?.toInt(),
+        distanceKm: (map['distanceKm'] as num?)?.toDouble(),
         setLog: (map['setLog'] as List<dynamic>?)
                 ?.whereType<Map<String, dynamic>>()
                 .map(ExerciseSet.fromMap)
@@ -781,6 +783,26 @@ class ExerciseEntry {
     String? supersetGroup,
   }) {
     final working = setLog.where((s) => s.type.isWorking).toList();
+    // Cardio intervals add up to one stretch on the machine: 2 × 10 minutes on
+    // the rower is 20 minutes on the rower, not "2 sets".
+    final timed = setLog.where(
+      (s) => s.durationSeconds != null || s.distanceKm != null,
+    );
+    if (timed.isNotEmpty) {
+      final seconds =
+          timed.fold<int>(0, (sum, s) => sum + (s.durationSeconds ?? 0));
+      final km = timed.fold<double>(0, (sum, s) => sum + (s.distanceKm ?? 0));
+      return ExerciseEntry(
+        name: name,
+        sets: 0,
+        reps: 0,
+        exerciseId: exerciseId,
+        supersetGroup: supersetGroup,
+        durationSeconds: seconds > 0 ? seconds : null,
+        distanceKm: km > 0 ? km : null,
+        setLog: List.unmodifiable(setLog),
+      );
+    }
     final count = working.length;
     final reps = count == 0
         ? 0
@@ -808,11 +830,24 @@ class ExerciseEntry {
     this.exerciseId,
     this.supersetGroup,
     this.setLog = const [],
+    this.durationSeconds,
+    this.distanceKm,
   });
 
   final String name;
   final int sets;
   final int reps;
+
+  /// Time on a cardio machine — the rower, the elliptical, the stairs. Null on
+  /// a lift, which is counted in [sets] and [reps] instead, and on every entry
+  /// written before cardio had numbers of its own.
+  final int? durationSeconds;
+
+  /// Distance off the machine's display. Null where there is none.
+  final double? distanceKm;
+
+  /// Whether this is a timed cardio entry rather than sets of a lift.
+  bool get isCardio => durationSeconds != null || distanceKm != null;
 
   /// The library or custom exercise this was picked from. Null for free-text
   /// names, which is every entry written before the library existed.
@@ -848,6 +883,8 @@ class ExerciseEntry {
         if (weightKg != null) 'weightKg': weightKg,
         if (exerciseId != null) 'exerciseId': exerciseId,
         if (supersetGroup != null) 'supersetGroup': supersetGroup,
+        if (durationSeconds != null) 'durationSeconds': durationSeconds,
+        if (distanceKm != null) 'distanceKm': distanceKm,
         if (setLog.isNotEmpty) 'setLog': setLog.map((s) => s.toMap()).toList(),
       };
 
@@ -861,6 +898,8 @@ class ExerciseEntry {
         'sets': sets,
         'reps': reps,
         if (weightKg != null) 'weightKg': weightKg,
+        if (durationSeconds != null) 'durationSeconds': durationSeconds,
+        if (distanceKm != null) 'distanceKm': distanceKm,
       };
 }
 
