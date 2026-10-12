@@ -48,6 +48,11 @@ const snap = (data) => ({ data: () => data, get: (f) => data[f] });
 const posts = (store) =>
   [...store.entries()].filter(([p]) => p.startsWith("posts/"));
 
+const inbox = (store, userId) =>
+  [...store.entries()].filter(([p]) =>
+    p.startsWith(`users/${userId}/notifications/`)
+  );
+
 test("a streak milestone is reported only on the day it is crossed", () => {
   const { crossedStreakMilestone } = _internals;
   assert.strictEqual(crossedStreakMilestone(2, 3), 3);
@@ -154,6 +159,59 @@ test("a retried trigger does not post twice", async () => {
   await module.onBadgeAwardedMilestone.handler(event);
   await module.onBadgeAwardedMilestone.handler(event);
   assert.strictEqual(posts(store).length, 1);
+});
+
+test("the earner is notified, pointing at the post", async () => {
+  const { module, store } = load({
+    "users/u1": { displayName: "Lerato", avatarUrl: "https://a/p.jpg" },
+  });
+  await module.onBadgeAwardedMilestone.handler({
+    params: { userId: "u1", badgeKey: "POINTS_CENTURY" },
+  });
+
+  const rows = inbox(store, "u1");
+  assert.strictEqual(rows.length, 1);
+  const [path, row] = rows[0];
+  const [, post] = posts(store)[0];
+  assert.strictEqual(path, "users/u1/notifications/ms_u1_POINTS_CENTURY");
+  assert.strictEqual(row.type, "milestone");
+  assert.strictEqual(row.actorId, "u1");
+  assert.strictEqual(row.postId, "ms_u1_POINTS_CENTURY");
+  assert.strictEqual(row.milestoneTitle, post.milestone.title);
+  assert.strictEqual(row.milestoneSubtitle, post.milestone.subtitle);
+  assert.strictEqual(row.milestoneKey, "POINTS_CENTURY");
+  assert.strictEqual(row.read, false);
+});
+
+test("a retried trigger does not notify twice", async () => {
+  const { module, store } = load({ "users/u1": { displayName: "Lerato" } });
+  const event = { params: { userId: "u1", badgeKey: "FIRST_PULSE" } };
+  await module.onBadgeAwardedMilestone.handler(event);
+  await module.onBadgeAwardedMilestone.handler(event);
+  assert.strictEqual(inbox(store, "u1").length, 1);
+});
+
+test("a trigger that died after posting still notifies on retry", async () => {
+  const { module, store } = load({
+    "users/u1": { displayName: "Lerato" },
+    "posts/ms_u1_FIRST_PULSE": { authorId: "u1", postType: "milestone" },
+  });
+  await module.onBadgeAwardedMilestone.handler({
+    params: { userId: "u1", badgeKey: "FIRST_PULSE" },
+  });
+  assert.strictEqual(inbox(store, "u1").length, 1);
+});
+
+test("somebody who opted out is still told, privately", async () => {
+  const { module, store } = load({
+    "users/u1": { displayName: "Lerato", shareMilestones: false },
+  });
+  await module.onBadgeAwardedMilestone.handler({
+    params: { userId: "u1", badgeKey: "FIRST_PULSE" },
+  });
+  const rows = inbox(store, "u1");
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0][1].postId, undefined);
 });
 
 test("nothing is posted for somebody who opted out", async () => {

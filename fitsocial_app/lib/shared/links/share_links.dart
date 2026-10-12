@@ -141,6 +141,10 @@ abstract final class FitSocialLinks {
     final path = Uri.tryParse(location)?.path ?? location;
     final segments = path.split('/').where((s) => s.isNotEmpty).toList();
 
+    // A milestone earned with sharing turned off has no post to open, so it
+    // opens the earner's own achievements.
+    if (segments.length == 1 && segments[0] == 'achievements') return true;
+
     // Checked undecoded, unlike [isShareableRoute]: `_isSafeId` rejects `%`
     // outright, so a percent-escape could never pass anyway, and decoding a
     // malformed one throws.

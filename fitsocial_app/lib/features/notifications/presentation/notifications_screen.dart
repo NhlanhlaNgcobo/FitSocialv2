@@ -258,6 +258,10 @@ Color _accentFor(FitNotification notification, AppPalette palette) {
     case FitNotificationType.safetyAccepted:
     case FitNotificationType.safetyRevoked:
       return palette.accent(const Color(0xFF2E9C94));
+    // The gold the milestone card and the Share-my-milestones setting already
+    // wear, so all three read as the same thing.
+    case FitNotificationType.milestone:
+      return palette.accent(const Color(0xFFF2B01E));
   }
 }
 
@@ -398,7 +402,7 @@ class _NotificationRow extends StatelessWidget {
                       TextSpan(
                         children: [
                           TextSpan(
-                            text: notification.actorName,
+                            text: notification.lead,
                             style: TextStyle(
                               color: palette.text,
                               fontWeight: FontWeight.w700,
@@ -531,6 +535,8 @@ class _ActorAvatar extends StatelessWidget {
         return Icons.verified_user_rounded;
       case FitNotificationType.safetyRevoked:
         return Icons.remove_moderator_outlined;
+      case FitNotificationType.milestone:
+        return Icons.workspace_premium_rounded;
     }
   }
 }

@@ -92,6 +92,9 @@ class FirestoreNotificationRepository implements NotificationRepository {
       challengeTitle: data['challengeTitle'] as String?,
       finalRank: (data['finalRank'] as num?)?.toInt(),
       participantCount: (data['participantCount'] as num?)?.toInt(),
+      milestoneTitle: data['milestoneTitle'] as String?,
+      milestoneSubtitle: data['milestoneSubtitle'] as String?,
+      milestoneEmoji: data['milestoneEmoji'] as String?,
     );
   }
 }

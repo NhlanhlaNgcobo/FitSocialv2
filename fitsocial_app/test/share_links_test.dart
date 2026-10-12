@@ -130,6 +130,12 @@ void main() {
       expect(FitSocialLinks.isShareableRoute('/challenge/board/ch1'), isFalse);
     });
 
+    test('a push may open achievements, for a milestone with no post', () {
+      expect(FitSocialLinks.isPushRoute('/achievements'), isTrue);
+      expect(FitSocialLinks.isShareableRoute('/achievements'), isFalse);
+      expect(FitSocialLinks.isPushRoute('/achievements/x'), isFalse);
+    });
+
     test('a push may open a safety alert and the contacts page', () {
       expect(FitSocialLinks.isPushRoute('/safety/alert/evt123'), isTrue);
       expect(FitSocialLinks.isPushRoute('/safety/contacts'), isTrue);
