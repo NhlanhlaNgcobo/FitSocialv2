@@ -13,6 +13,7 @@ import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/mention_text.dart';
 import '../../../shared/widgets/post_card.dart';
 import '../../../shared/widgets/post_gradient.dart';
+import '../../../shared/widgets/run_replay_screen.dart';
 import '../../../shared/services/meal_card_exporter.dart';
 import '../../../shared/services/run_card_exporter.dart';
 import '../../../shared/services/workout_card_exporter.dart';
@@ -450,7 +451,7 @@ class _MediaBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (kind) {
       case _MediaKind.run:
-        return RunSummaryCard(
+        final card = RunSummaryCard(
           route: post.routePoints,
           distanceLabel: RunSummaryCard.distanceFrom(post.metricLabels),
           durationLabel: RunSummaryCard.durationFrom(post.metricLabels),
@@ -460,6 +461,18 @@ class _MediaBlock extends StatelessWidget {
               : appPhoto(post.imageUrl!),
           showMap: post.showRouteMap,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        );
+        if (!RunReplayScreen.canReplay(post.routePoints)) return card;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            card,
+            const SizedBox(height: AppSpacing.sm),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: _ReplayRouteButton(route: post.routePoints),
+            ),
+          ],
         );
       case _MediaKind.photo:
         return _Photo(post: post);
@@ -966,6 +979,30 @@ class _Message extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Opens the run's route full screen and plays it back. Outlined in the brand
+/// orange so it reads as an action on the card above, not a second card.
+class _ReplayRouteButton extends StatelessWidget {
+  const _ReplayRouteButton({required this.route});
+
+  final List<RoutePoint> route;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => openRunReplay(context, route),
+      icon: const Icon(Icons.play_arrow_rounded),
+      label: const Text('Replay route'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.orangeBright,
+        side: const BorderSide(color: AppColors.orangeBright, width: 1.5),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        textStyle: const TextStyle(fontWeight: FontWeight.w800),
       ),
     );
   }

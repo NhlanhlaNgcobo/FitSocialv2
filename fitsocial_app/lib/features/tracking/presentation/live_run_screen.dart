@@ -13,6 +13,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../core/connectivity/backend_reachability.dart';
 import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/quick_toast.dart';
+import '../../../shared/widgets/run_map_style_sheet.dart';
 import '../../../shared/widgets/run_route_map.dart';
 import '../../../shared/widgets/staggered_fade_in.dart';
 import '../../auth/application/body_metrics_providers.dart';
@@ -220,17 +221,22 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       // offers itself back for recovery on every launch.
       unawaited(ref.read(runCheckpointStoreProvider).clear());
       setState(() {
-        _errorMessage =
-            '${widget.kind.descriptor.singular} too short to save '
+        _errorMessage = '${widget.kind.descriptor.singular} too short to save '
             '(${(result.distanceKm * 1000).round()} m).';
       });
       return;
     }
 
     final distanceKm = double.parse(result.distanceKm.toStringAsFixed(2));
-    final route = result.points
-        .map((p) => RoutePoint(latitude: p.latitude, longitude: p.longitude))
-        .toList(growable: false);
+    final seconds = RunPoint.secondsSinceStart(result.points);
+    final route = [
+      for (var i = 0; i < result.points.length; i++)
+        RoutePoint(
+          latitude: result.points[i].latitude,
+          longitude: result.points[i].longitude,
+          seconds: seconds[i],
+        ),
+    ];
 
     // The run is over and the numbers are final; this only asks what it should
     // look like on the way out. Dismissing the sheet saves, so nothing here
@@ -357,7 +363,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
       if (!mounted) return;
       setState(() => _errorMessage =
           'Could not save this run to your phone: $e. Tap Finish to try '
-          'again.');
+              'again.');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -478,6 +484,7 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
                 itemCount: _sectionCount,
                 child: _RouteStage(
                   route: runState.isTracking ? runState.routePoints : null,
+                  routeSeconds: runState.routeSeconds,
                   onExpand: _expandMap,
                   readout: RunMapReadout(
                     statusLabel: statusLabel,
@@ -675,12 +682,14 @@ class _LiveRunScreenState extends ConsumerState<LiveRunScreen>
 class _RouteStage extends StatelessWidget {
   const _RouteStage({
     required this.route,
+    required this.routeSeconds,
     required this.onExpand,
     required this.readout,
   });
 
   /// Null before tracking starts.
   final List<LatLng>? route;
+  final List<double> routeSeconds;
   final VoidCallback onExpand;
   final RunMapReadout readout;
 
@@ -713,6 +722,7 @@ class _RouteStage extends StatelessWidget {
           if (route != null)
             RunRouteMap(
               route: route,
+              routeSeconds: routeSeconds,
               height: _height,
               onTap: onExpand,
               // Keeps the Google logo and the camera's centre clear of the
@@ -751,6 +761,12 @@ class _RouteStage extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+          if (route != null)
+            const Positioned(
+              top: 52,
+              right: 8,
+              child: RunMapStyleButton(),
             ),
           Positioned(
             left: _inset,

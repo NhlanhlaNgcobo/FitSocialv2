@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/run_map_style_sheet.dart';
 import '../../../shared/widgets/run_route_map.dart';
 import '../../main/domain/activity_kind.dart';
 import '../../music/application/music_player_controller.dart';
@@ -70,7 +71,8 @@ class LiveRunMapScreen extends ConsumerWidget {
     });
 
     final (String statusLabel, bool statusAccent) = switch (runState) {
-      _ when runState.isTracking &&
+      _
+          when runState.isTracking &&
               !runState.isPaused &&
               !runState.isAutoPaused =>
         ('LIVE', true),
@@ -91,6 +93,7 @@ class LiveRunMapScreen extends ConsumerWidget {
           Positioned.fill(
             child: RunRouteMap(
               route: runState.routePoints,
+              routeSeconds: runState.routeSeconds,
               height: double.infinity,
               borderRadius: BorderRadius.zero,
               showBadge: false,
@@ -135,6 +138,14 @@ class LiveRunMapScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          ),
+          Positioned(
+            top: viewPadding.top +
+                AppSpacing.sm +
+                RunMapReadout.approximateHeight +
+                AppSpacing.sm,
+            right: AppSpacing.md,
+            child: const RunMapStyleButton(size: 48, iconSize: 22),
           ),
           // Bottom edge: the transport above the run controls, so the thing
           // that ends the run is the lowest and largest — under the thumb,

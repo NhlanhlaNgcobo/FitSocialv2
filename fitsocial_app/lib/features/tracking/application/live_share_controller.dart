@@ -211,10 +211,20 @@ class LiveShareController extends StateNotifier<LiveShareState> {
         elapsed: run.elapsed,
         paceLabel: run.formattedAverageFor(_kind),
         isPaused: run.isPaused,
-        route: run.points
-            .map((p) => RoutePoint(latitude: p.latitude, longitude: p.longitude))
-            .toList(growable: false),
+        route: _routeOf(run.points),
       );
+
+  static List<RoutePoint> _routeOf(List<RunPoint> points) {
+    final seconds = RunPoint.secondsSinceStart(points);
+    return [
+      for (var i = 0; i < points.length; i++)
+        RoutePoint(
+          latitude: points[i].latitude,
+          longitude: points[i].longitude,
+          seconds: seconds[i],
+        ),
+    ];
+  }
 
   @override
   void dispose() {

@@ -5,6 +5,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
+import 'run_map_markers.dart';
+import 'run_map_style.dart';
+import 'run_route_geometry.dart';
 
 /// How a [RunRouteMap] behaves.
 enum RunRouteMapMode {
@@ -24,19 +27,20 @@ enum RunRouteMapMode {
   spectator,
 }
 
-/// Themed Google Map that draws a run route as a deep-orange polyline.
+/// Google Map that draws a run route in the runner's chosen [RunMapStyle].
 ///
-/// The map takes the app's own styling in both themes, because it is not a
-/// photo — it is chrome. A black map sitting inside a white card on the light
-/// theme reads as a broken tile, so the base geometry follows the palette while
-/// the orange route stays the one constant.
+/// What the runner can change lives in [RunMapPrefs]: the base map, whether
+/// the route is coloured by pace, and whether a live run is followed by a
+/// tilted camera turned to their heading. Every map in the app reads the same
+/// choice, so the feed, a live share and the map a runner posts all match.
 ///
-/// Shared by the live run screen and the finished-run preview in the feed —
-/// the only difference between the two is [mode].
+/// Shared by the live run screen, the finished-run preview in the feed and the
+/// replay screen — the differences are [mode] and [replayProgress].
 class RunRouteMap extends StatefulWidget {
   const RunRouteMap({
     super.key,
     required this.route,
+    this.routeSeconds,
     this.mode = RunRouteMapMode.live,
     this.height = 220,
     this.showBadge = true,
@@ -46,11 +50,18 @@ class RunRouteMap extends StatefulWidget {
     this.onTap,
     this.framePadding = 32,
     this.onMapReady,
+    this.replayProgress,
   });
 
   /// Ordered GPS trace. Fewer than two points draws no line (there is nothing
   /// to connect yet), but a single point still anchors the camera.
   final List<LatLng> route;
+
+  /// Each fix's time since the start, in seconds, one per point of [route].
+  /// Without it — or with a list that does not line up — the route is drawn
+  /// in one solid colour, since there is no pace to colour it by.
+  final List<double>? routeSeconds;
+
   final RunRouteMapMode mode;
   final double height;
   final bool showBadge;
@@ -83,6 +94,10 @@ class RunRouteMap extends StatefulWidget {
   /// this widget is disposed.
   final ValueChanged<GoogleMapController>? onMapReady;
 
+  /// How much of a finished route to draw, 0–1, with the camera riding the
+  /// end of it. Null draws the whole route framed, as normal.
+  final double? replayProgress;
+
   @override
   State<RunRouteMap> createState() => _RunRouteMapState();
 }
@@ -94,46 +109,31 @@ class _RunRouteMapState extends State<RunRouteMap> {
   /// doesn't yank a map the user has panned back to the default framing.
   bool _hasFramedRoute = false;
 
-  // Pure-black map style to match the FitSocial surface (#000000). POIs and
-  // transit are hidden so the orange route is the only thing that draws the eye.
-  static const _darkStyle = '''
-[
-  {"elementType":"geometry","stylers":[{"color":"#000000"}]},
-  {"elementType":"labels.text.fill","stylers":[{"color":"#5c5c5c"}]},
-  {"elementType":"labels.text.stroke","stylers":[{"color":"#000000"}]},
-  {"featureType":"administrative","elementType":"geometry","stylers":[{"visibility":"off"}]},
-  {"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#0a0a0a"}]},
-  {"featureType":"poi","stylers":[{"visibility":"off"}]},
-  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#1c1c1c"}]},
-  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#6b6b6b"}]},
-  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#2b2b2b"}]},
-  {"featureType":"transit","stylers":[{"visibility":"off"}]},
-  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#050505"}]}
-]
-''';
+  /// The hand-drawn pins, null until they are painted — the first frame or two
+  /// falls back to Google's defaults rather than showing no pins at all.
+  Map<RunMapMarker, BitmapDescriptor>? _icons;
+  final Map<int, BitmapDescriptor> _kmIcons = {};
+  double? _iconsRatio;
 
-  // The light counterpart, built on the same rules: the app's cream page as the
-  // landmass, roads a shade off it, POIs and transit hidden so nothing competes
-  // with the orange route.
-  static const _lightStyle = '''
-[
-  {"elementType":"geometry","stylers":[{"color":"#F5F1EA"}]},
-  {"elementType":"labels.text.fill","stylers":[{"color":"#8A857C"}]},
-  {"elementType":"labels.text.stroke","stylers":[{"color":"#F5F1EA"}]},
-  {"featureType":"administrative","elementType":"geometry","stylers":[{"visibility":"off"}]},
-  {"featureType":"landscape","elementType":"geometry","stylers":[{"color":"#EFEAE1"}]},
-  {"featureType":"poi","stylers":[{"visibility":"off"}]},
-  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#FFFFFF"}]},
-  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#8A857C"}]},
-  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#E7E0D4"}]},
-  {"featureType":"transit","stylers":[{"visibility":"off"}]},
-  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#DCE4E6"}]}
-]
-''';
+  /// Worked out once per change of route rather than on every build.
+  List<KmSplit> _splits = const [];
+  List<PaceSpan>? _paceSpans;
+
+  /// The last heading the camera was turned to, held while the runner stands
+  /// still so the map does not swing back to north at every traffic light.
+  double _bearing = 0;
+
+  /// Whether the camera is currently tilted, so turning 3D off can level it.
+  bool _tilted = false;
+
+  RunMapPrefs _prefs = RunMapPrefs.current.value;
 
   // Johannesburg — only ever shown for the instant before the first GPS fix
   // arrives, since a GoogleMap requires some initial camera target.
   static const _fallbackTarget = LatLng(-26.2041, 28.0473);
+
+  static const _followZoom = 17.0;
+  static const _tilt = 55.0;
 
   /// Whether the camera follows the newest fix and the map takes gestures —
   /// true of a run being tracked and of one being watched.
@@ -141,17 +141,137 @@ class _RunRouteMapState extends State<RunRouteMap> {
 
   bool get _isSpectator => widget.mode == RunRouteMapMode.spectator;
 
+  bool get _isReplaying => widget.replayProgress != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _measureRoute();
+    RunMapPrefs.current.addListener(_onPrefsChanged);
+  }
+
+  void _onPrefsChanged() {
+    final previous = _prefs;
+    setState(() => _prefs = RunMapPrefs.current.value);
+    if (previous.tilt3d != _prefs.tilt3d) _syncCamera();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ratio = MediaQuery.devicePixelRatioOf(context);
+    if (ratio == _iconsRatio) return;
+    _iconsRatio = ratio;
+    _kmIcons.clear();
+    _loadIcons(ratio);
+    _loadKmIcons();
+  }
+
+  Future<void> _loadIcons(double ratio) async {
+    final icons = {
+      for (final marker in RunMapMarker.values)
+        marker: await runMapMarkerIcon(marker, ratio),
+    };
+    if (!mounted || ratio != _iconsRatio) return;
+    setState(() => _icons = icons);
+  }
+
+  Future<void> _loadKmIcons() async {
+    final ratio = _iconsRatio;
+    if (ratio == null) return;
+    final missing = [
+      for (final split in _shownSplits)
+        if (!_kmIcons.containsKey(split.km)) split.km,
+    ];
+    if (missing.isEmpty) return;
+    final drawn = {
+      for (final km in missing) km: await runMapKmIcon(km, ratio),
+    };
+    if (!mounted || ratio != _iconsRatio) return;
+    setState(() => _kmIcons.addAll(drawn));
+  }
+
+  void _measureRoute() {
+    _splits = kmSplits(widget.route);
+    _paceSpans = paceSpans(widget.route, widget.routeSeconds);
+  }
+
+  /// The kilometre badges worth drawing. A long run on a small card would be
+  /// a string of beads, so past fifteen only every fifth is kept.
+  Iterable<KmSplit> get _shownSplits => _splits.length > 15
+      ? _splits.where((split) => split.km % 5 == 0)
+      : _splits;
+
   @override
   void didUpdateWidget(RunRouteMap old) {
     super.didUpdateWidget(old);
-    if (widget.route.length != old.route.length) _syncCamera();
+    // The live screen hands over a fresh list every second, so compare what
+    // matters — its length and where it ends — not the list itself.
+    final routeChanged = widget.route.length != old.route.length ||
+        widget.routeSeconds?.length != old.routeSeconds?.length ||
+        (widget.route.isNotEmpty && widget.route.last != old.route.last);
+    if (routeChanged) {
+      _measureRoute();
+      _loadKmIcons();
+    }
+    if (widget.route.length != old.route.length ||
+        widget.replayProgress != old.replayProgress) {
+      _syncCamera();
+    }
   }
 
   Future<void> _syncCamera() async {
     final map = _map;
     if (map == null || widget.route.isEmpty) return;
 
+    if (_isReplaying && widget.replayProgress! < 1) {
+      final drawn = routePrefix(widget.route, widget.replayProgress!);
+      _bearing = headingAt(drawn, lookBackMeters: 40) ?? _bearing;
+      await map.moveCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: drawn.last,
+            zoom: _prefs.tilt3d ? 17 : 16,
+            tilt: _prefs.tilt3d ? _tilt : 0,
+            bearing: _prefs.tilt3d ? _bearing : 0,
+          ),
+        ),
+      );
+      _hasFramedRoute = false;
+      return;
+    }
+
     if (_isLive) {
+      if (_prefs.tilt3d) {
+        _bearing = headingAt(widget.route) ?? _bearing;
+        // Keeps whatever zoom the runner pinched to; only the first follow
+        // sets it.
+        final zoom = _tilted ? await map.getZoomLevel() : _followZoom;
+        _tilted = true;
+        await map.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: widget.route.last,
+              zoom: zoom,
+              tilt: _tilt,
+              bearing: _bearing,
+            ),
+          ),
+        );
+        return;
+      }
+      if (_tilted) {
+        _tilted = false;
+        await map.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: widget.route.last,
+              zoom: await map.getZoomLevel(),
+            ),
+          ),
+        );
+        return;
+      }
       await map.animateCamera(CameraUpdate.newLatLng(widget.route.last));
       return;
     }
@@ -186,46 +306,123 @@ class _RunRouteMapState extends State<RunRouteMap> {
     );
   }
 
-  Set<Polyline> _buildPolylines() {
-    if (widget.route.length < 2) return const {};
+  /// The part of the route on screen: all of it, or a replay's prefix.
+  List<LatLng> get _drawnRoute => _isReplaying
+      ? routePrefix(widget.route, widget.replayProgress!)
+      : widget.route;
+
+  /// Index of the last whole fix a replay has reached.
+  int get _replayIndex => _isReplaying
+      ? (widget.replayProgress!.clamp(0.0, 1.0) * (widget.route.length - 1))
+          .floor()
+      : widget.route.length - 1;
+
+  Set<Polyline> _buildPolylines(bool darkGround) {
+    final drawn = _drawnRoute;
+    if (drawn.length < 2) return const {};
+
+    Polyline line(
+            String id, List<LatLng> points, Color color, double width, int z) =>
+        Polyline(
+          polylineId: PolylineId(id),
+          points: points,
+          color: color,
+          width: width.round(),
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+          jointType: JointType.round,
+          zIndex: z,
+        );
+
+    // A wider line under the route gives it depth. On dark ground it is a
+    // faint orange glow; on light ground a glow only muddies the paper, so it
+    // is a crisp white casing instead.
+    final underlay = line(
+      'run_route_underlay',
+      drawn,
+      darkGround
+          ? AppColors.orangeBright.withValues(alpha: 0.28)
+          : Colors.white,
+      darkGround ? 14 : 9,
+      0,
+    );
+
+    final spans = _prefs.paceColours ? _paceSpans : null;
+    if (spans == null) {
+      return {
+        underlay,
+        // The lit orange carries on dark ground; the deep one holds its own
+        // on light.
+        line('run_route', drawn,
+            darkGround ? AppColors.orangeBright : AppColors.orange, 5, 1),
+      };
+    }
+
+    // Coloured by pace: one line per stretch run in the same band, cut short
+    // where a replay has got to.
+    final reached = _replayIndex;
     return {
-      Polyline(
-        polylineId: const PolylineId('run_route'),
-        points: widget.route,
-        color: AppColors.orange,
-        width: 5,
-        startCap: Cap.roundCap,
-        endCap: Cap.roundCap,
-        jointType: JointType.round,
-      ),
+      underlay,
+      for (final span in spans)
+        if (span.start <= reached)
+          line(
+            'run_route_pace_${span.start}',
+            span.start + span.points.length - 1 <= reached || !_isReplaying
+                ? span.points
+                : [
+                    ...span.points.take(reached - span.start + 1),
+                    drawn.last,
+                  ],
+            paceColour(span.band),
+            5,
+            1,
+          ),
     };
   }
 
   Set<Marker> _buildMarkers() {
     if (widget.route.isEmpty) return const {};
 
+    final drawn = _drawnRoute;
+    final finished = !_isLive && (!_isReplaying || widget.replayProgress! >= 1);
+    final reached = _replayIndex;
+
     return {
-      // Start of the run — green, matching the app's success accent.
       Marker(
         markerId: const MarkerId('run_start'),
         position: widget.route.first,
         anchor: const Offset(0.5, 0.5),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        icon: _icons?[RunMapMarker.start] ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         infoWindow: const InfoWindow(title: 'Start'),
+        zIndexInt: 1,
       ),
-      // Only worth a second marker once the runner has actually moved.
-      if (widget.route.length > 1)
-        Marker(
-          markerId: MarkerId(_isLive ? 'run_current' : 'run_finish'),
-          position: widget.route.last,
-          anchor: const Offset(0.5, 0.5),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueOrange,
+      for (final split in _shownSplits)
+        if (split.index <= reached && _kmIcons[split.km] != null)
+          Marker(
+            markerId: MarkerId('run_km_${split.km}'),
+            position: split.at,
+            anchor: const Offset(0.5, 0.5),
+            icon: _kmIcons[split.km]!,
+            infoWindow: InfoWindow(title: 'Kilometre ${split.km}'),
+            zIndexInt: 1,
           ),
+      // Only worth a second marker once the runner has actually moved.
+      if (drawn.length > 1)
+        Marker(
+          markerId: MarkerId(finished ? 'run_finish' : 'run_current'),
+          position: drawn.last,
+          anchor: const Offset(0.5, 0.5),
+          icon: _icons?[
+                  finished ? RunMapMarker.finish : RunMapMarker.current] ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+          // Above the start pin, so a loop that ends where it began shows
+          // where the runner is rather than where they set off.
+          zIndexInt: 2,
           infoWindow: InfoWindow(
             title: switch (widget.mode) {
               RunRouteMapMode.live => 'You',
-              RunRouteMapMode.completed => 'Finish',
+              RunRouteMapMode.completed => finished ? 'Finish' : 'You',
               RunRouteMapMode.spectator => widget.currentMarkerTitle ?? 'Them',
             },
           ),
@@ -235,6 +432,8 @@ class _RunRouteMapState extends State<RunRouteMap> {
 
   @override
   Widget build(BuildContext context) {
+    final style = _prefs.style.resolve(appIsDark: context.palette.isDark);
+    final followsTilted = _isLive && _prefs.tilt3d;
     final initialTarget =
         widget.route.isNotEmpty ? widget.route.last : _fallbackTarget;
 
@@ -248,9 +447,12 @@ class _RunRouteMapState extends State<RunRouteMap> {
             GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: initialTarget,
-                zoom: 16,
+                zoom: followsTilted ? _followZoom : 16,
+                tilt: followsTilted ? _tilt : 0,
               ),
-              style: context.palette.isDark ? _darkStyle : _lightStyle,
+              mapType: style.mapType,
+              style: style.json,
+              buildingsEnabled: true,
               // The blue "my location" dot only makes sense while running —
               // on somebody else's run it would put the viewer on their map.
               myLocationEnabled: _isLive && !_isSpectator,
@@ -265,7 +467,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
               rotateGesturesEnabled: false,
               tiltGesturesEnabled: false,
               padding: widget.padding,
-              polylines: _buildPolylines(),
+              polylines: _buildPolylines(style.isDarkGround),
               markers: _buildMarkers(),
               onTap: widget.onTap == null ? null : (_) => widget.onTap!(),
               onMapCreated: (controller) {
@@ -292,6 +494,7 @@ class _RunRouteMapState extends State<RunRouteMap> {
 
   @override
   void dispose() {
+    RunMapPrefs.current.removeListener(_onPrefsChanged);
     _map?.dispose();
     super.dispose();
   }

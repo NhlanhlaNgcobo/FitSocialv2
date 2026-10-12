@@ -27,6 +27,17 @@ class RunPoint {
   final double latitude;
   final double longitude;
   final DateTime timestamp;
+
+  /// Each of [points]' time since the first of them, in seconds — the clock a
+  /// saved route and a map's pace colouring run on.
+  static List<double> secondsSinceStart(List<RunPoint> points) {
+    if (points.isEmpty) return const [];
+    final start = points.first.timestamp;
+    return [
+      for (final point in points)
+        point.timestamp.difference(start).inMilliseconds / 1000,
+    ];
+  }
 }
 
 /// Snapshot of an in-progress run pushed to the UI once per position update.
@@ -41,6 +52,7 @@ class LiveRunState {
     required this.currentPaceMinPerKm,
     required this.points,
     required this.routePoints,
+    this.routeSeconds = const [],
     this.startedAt,
     this.fixStats = RunFixStats.empty,
     this.fusion = RunFusionStats.empty,
@@ -92,6 +104,10 @@ class LiveRunState {
   /// route polyline can be handed straight to [GoogleMap] without rebuilding
   /// the list on every widget build. Built once per emit (~1 Hz).
   final List<LatLng> routePoints;
+
+  /// The time of each of [routePoints], in seconds since the first, for
+  /// colouring the route by pace. Built alongside it, once per emit.
+  final List<double> routeSeconds;
 
   /// Wall-clock start of the run; null before tracking begins. Recorded on the
   /// saved run log so the route can be placed on a timeline later.
@@ -1457,6 +1473,7 @@ class LiveRunService {
         routePoints: List.unmodifiable(
           _points.map((p) => LatLng(p.latitude, p.longitude)),
         ),
+        routeSeconds: List.unmodifiable(RunPoint.secondsSinceStart(_points)),
         startedAt: _startedAt,
         fixStats: _fixStats,
         fusion: _fusionStats,
