@@ -132,6 +132,13 @@ class _CreateChallengeScreenState extends ConsumerState<CreateChallengeScreen> {
                     ),
                 ],
               ),
+              if (metric?.howItCounts case final howItCounts?) ...[
+                const SizedBox(height: 6),
+                Text(
+                  howItCounts,
+                  style: TextStyle(color: palette.muted, fontSize: 12),
+                ),
+              ],
             ],
             if (metric != null)
               ..._activityFields(metric, palette)

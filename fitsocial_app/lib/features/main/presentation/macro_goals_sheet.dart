@@ -37,6 +37,8 @@ class _MacroGoalsSheet extends StatefulWidget {
 }
 
 class _MacroGoalsSheetState extends State<_MacroGoalsSheet> {
+  late bool _stepBonus = widget.initial.stepBonus;
+
   late final Map<MacroKind, TextEditingController> _controllers = {
     for (final kind in MacroKind.values)
       kind: TextEditingController(text: '${widget.initial.of(kind)}'),
@@ -66,6 +68,7 @@ class _MacroGoalsSheetState extends State<_MacroGoalsSheet> {
         protein: _read(MacroKind.protein),
         carbs: _read(MacroKind.carbs),
         fat: _read(MacroKind.fat),
+        stepBonus: _stepBonus,
       ),
     );
   }
@@ -124,6 +127,23 @@ class _MacroGoalsSheetState extends State<_MacroGoalsSheet> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ],
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _stepBonus,
+                    onChanged: (value) => setState(() => _stepBonus = value),
+                    title: Text(
+                      'Add calories for steps',
+                      style: TextStyle(
+                        color: palette.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Walking past ${formatMacroValue(StepCalories.baselineSteps)} '
+                      'steps raises the calorie target for that day.',
+                      style: TextStyle(color: palette.muted, fontSize: 12.5),
+                    ),
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   PrimaryButton(label: 'Save targets', onPressed: _save),
                 ],

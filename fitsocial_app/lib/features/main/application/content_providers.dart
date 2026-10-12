@@ -14,6 +14,7 @@ import '../data/content_repository_contract.dart';
 import '../domain/app_models.dart';
 import '../domain/daily_prompts.dart';
 import '../domain/explore_models.dart';
+import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/progress_models.dart';
 
@@ -323,10 +324,37 @@ final macroGoalsProvider = FutureProvider<MacroGoals>((ref) async {
   try {
     final body = await ref.watch(bodyMetricsProvider.future);
     final plan = await ref.watch(fitnessProfileProvider.future);
-    return deriveMacroGoals(body, plan) ?? stored;
+    // The step-bonus switch is the user's even when the targets are not.
+    return deriveMacroGoals(body, plan)?.copyWith(
+          stepBonus: stored.stepBonus,
+        ) ??
+        stored;
   } catch (_) {
     // Body or plan unreadable: the defaults are a usable page.
     return stored;
+  }
+});
+
+/// The user's repeating meals, for the tracking page's list of them.
+final mealRepeatsProvider = FutureProvider.autoDispose<List<MealRepeat>>((ref) {
+  ref.watch(appSessionProvider);
+  return ref.watch(contentRepositoryProvider).getMealRepeats();
+});
+
+/// Each day's steps in a window, for the calorie target's step bonus.
+///
+/// Never fails the page: steps are a bonus on the target, and a summary with
+/// the plain target beats an error where the meals should be.
+final windowStepsProvider = FutureProvider.autoDispose
+    .family<Map<String, int>, ProgressWindow>((ref, window) async {
+  final dayKeys = [
+    for (var i = 0; i < window.dayCount; i++)
+      mealDayKey(ActivityCalendar.addDays(window.start, i)),
+  ];
+  try {
+    return await ref.watch(contentRepositoryProvider).getDailySteps(dayKeys);
+  } catch (_) {
+    return const {};
   }
 });
 
@@ -335,7 +363,24 @@ final mealWindowSummaryProvider = FutureProvider.autoDispose
     .family<MealWindowSummary, ProgressWindow>((ref, window) async {
   final meals = await ref.watch(loggedMealsProvider.future);
   final goals = await ref.watch(macroGoalsProvider.future);
-  return MealWindowSummary.from(meals: meals, window: window, goals: goals);
+  final steps = goals.stepBonus
+      ? await ref.watch(windowStepsProvider(window).future)
+      : const <String, int>{};
+  double? weightKg;
+  if (goals.stepBonus && steps.isNotEmpty) {
+    try {
+      weightKg = (await ref.watch(bodyMetricsProvider.future)).weightKg;
+    } catch (_) {
+      // StepCalories has a default weight for exactly this.
+    }
+  }
+  return MealWindowSummary.from(
+    meals: meals,
+    window: window,
+    goals: goals,
+    stepsByDay: steps,
+    weightKg: weightKg,
+  );
 });
 
 /// Following / Followers / Likes for one profile. Keyed by user id so the
@@ -519,8 +564,8 @@ final todaysPromptProvider = Provider<PostPrompt>((ref) {
 });
 
 /// Everything written in answer to the question asked on [promptId].
-final promptAnswersProvider = FutureProvider.autoDispose
-    .family<List<FeedPost>, String>((ref, promptId) {
+final promptAnswersProvider =
+    FutureProvider.autoDispose.family<List<FeedPost>, String>((ref, promptId) {
   return ref.watch(contentRepositoryProvider).fetchPromptAnswers(promptId);
 });
 

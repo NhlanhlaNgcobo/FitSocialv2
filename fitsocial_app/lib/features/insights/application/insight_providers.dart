@@ -28,8 +28,7 @@ final weeklyInsightsEnabledProvider = Provider<bool>((ref) {
   return !(ref.watch(insightsHiddenProvider).valueOrNull ?? false);
 });
 
-String _dayKey(DateTime date) =>
-    '${date.year.toString().padLeft(4, '0')}-'
+String _dayKey(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
     '${date.month.toString().padLeft(2, '0')}-'
     '${date.day.toString().padLeft(2, '0')}';
 

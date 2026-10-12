@@ -197,6 +197,9 @@ async function resolveItem(item, index, usdaKey) {
     name,
     matchedFood: food.name,
     foodId: food.id,
+    // The table's food group, which the app's meal quality score reads. A
+    // USDA match only says "usda" here, and the app places it by name.
+    category: food.category,
     grams,
     quantity: String(item.quantity ?? "").trim() || `${grams}g`,
     source,
@@ -228,8 +231,8 @@ function sumTotals(items) {
  *
  * Returns:
  *   { name, calories, protein, carbs, fat, confidence, notes,
- *     foodItems: [{ name, matchedFood, grams, quantity, source, per100g,
- *                   calories, protein, carbs, fat }],
+ *     foodItems: [{ name, matchedFood, category, grams, quantity, source,
+ *                   per100g, calories, protein, carbs, fat }],
  *     databaseCoverage }
  */
 exports.analyzeMeal = onCall(
@@ -613,6 +616,15 @@ exports.searchFoods = onCall(
 // self-contained sweep over every collection in the database, and the one
 // thing it must never become is a function somebody edits without reading.
 for (const [name, handler] of Object.entries(require("./account_deletion"))) {
+  if (name === "_internals") continue;
+  exports[name] = handler;
+}
+
+// --- Data export ------------------------------------------------------------
+//
+// The counterpart to account deletion: what that module erases, this one hands
+// over, and the two lists of collections are kept in step.
+for (const [name, handler] of Object.entries(require("./data_export"))) {
   if (name === "_internals") continue;
   exports[name] = handler;
 }

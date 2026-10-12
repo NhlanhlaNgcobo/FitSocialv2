@@ -84,6 +84,24 @@ void main() {
       );
     });
 
+    test('healthy eating reads in points', () {
+      expect(ActivityMetric.byKey('meal_quality'), ActivityMetric.mealQuality);
+      expect(
+        _activity(metric: ActivityMetric.mealQuality).goalLabel,
+        'Most points',
+      );
+      expect(
+        _activity(
+          metric: ActivityMetric.mealQuality,
+          mode: ActivityMode.streak,
+          target: 20,
+        ).goalLabel,
+        'Days of 20+ points in a row',
+      );
+      expect(ActivityMetric.mealQuality.howItCounts, contains('best four'));
+      expect(ActivityMetric.steps.howItCounts, isNull);
+    });
+
     test('a running challenge still reads in km', () {
       const running = RunningChallenge(
         id: 'r',
@@ -159,6 +177,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('WHAT COUNTS'), findsNothing);
       expect(find.text('Total distance'), findsOneWidget);
+    });
+
+    testWidgets('healthy eating explains how it is scored', (tester) async {
+      await tester.pumpWidget(_host(_RecordingRepository(), enabled: true));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Healthy eating'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('best four meals'), findsOneWidget);
+      expect(
+        find.text('Whoever has the most points at the end wins.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('creates a steps challenge with a target', (tester) async {

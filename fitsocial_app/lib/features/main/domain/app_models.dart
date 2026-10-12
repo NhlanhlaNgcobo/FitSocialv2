@@ -1189,6 +1189,7 @@ class MealFoodItem {
     this.quantity = '',
     this.source = MacroSource.estimate,
     this.per100g,
+    this.category,
   });
 
   /// What the analyzer called this item, e.g. "grilled chicken breast".
@@ -1210,6 +1211,11 @@ class MealFoodItem {
   /// items, which is what lets a corrected portion be recalculated on device
   /// instead of re-running the analysis.
   final FoodComposition? per100g;
+
+  /// The nutrition table's food group — "vegetable", "dessert", "protein" and
+  /// so on. Null for estimates, and for meals analysed before it was sent;
+  /// [MealQuality] falls back to the item's name when it is missing.
+  final String? category;
 
   final int calories;
   final int protein;
@@ -1244,6 +1250,7 @@ class MealFoodItem {
     String? quantity,
     MacroSource? source,
     FoodComposition? per100g,
+    String? category,
     int? calories,
     int? protein,
     int? carbs,
@@ -1257,6 +1264,7 @@ class MealFoodItem {
       quantity: quantity ?? this.quantity,
       source: source ?? this.source,
       per100g: per100g ?? this.per100g,
+      category: category ?? this.category,
       calories: calories ?? this.calories,
       protein: protein ?? this.protein,
       carbs: carbs ?? this.carbs,
@@ -1283,6 +1291,7 @@ class MealFoodItem {
     }
 
     final grams = readInt('grams');
+    final category = (value['category'] ?? '').toString().trim();
     return MealFoodItem(
       name: name,
       matchedFood: (value['matchedFood'] as Object?)?.toString(),
@@ -1291,6 +1300,7 @@ class MealFoodItem {
       quantity: (value['quantity'] ?? '').toString(),
       source: MacroSource.fromName((value['source'] ?? '').toString()),
       per100g: FoodComposition.fromMap(value['per100g']),
+      category: category.isEmpty ? null : category,
       calories: readInt('calories'),
       protein: readInt('protein'),
       carbs: readInt('carbs'),
@@ -1315,6 +1325,7 @@ class MealFoodItem {
         if (quantity.isNotEmpty) 'quantity': quantity,
         'source': source.name,
         if (per100g != null) 'per100g': per100g!.toMap(),
+        if (category != null) 'category': category,
         'calories': calories,
         'protein': protein,
         'carbs': carbs,
@@ -1378,6 +1389,7 @@ class FoodSearchResult {
       quantity: '${portion}g',
       source: MacroSource.database,
       per100g: per100g,
+      category: category.isEmpty ? null : category,
       calories: (per100g.calories * factor).round(),
       protein: (per100g.protein * factor).round(),
       carbs: (per100g.carbs * factor).round(),

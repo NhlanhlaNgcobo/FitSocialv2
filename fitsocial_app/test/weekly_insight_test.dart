@@ -1,8 +1,10 @@
+import 'package:fitsocial_app/app/theme/app_theme.dart';
 import 'package:fitsocial_app/core/config/feature_flags.dart';
 import 'package:fitsocial_app/features/insights/application/insight_providers.dart';
 import 'package:fitsocial_app/features/insights/data/insight_repository.dart';
 import 'package:fitsocial_app/features/insights/domain/weekly_insight.dart';
 import 'package:fitsocial_app/features/insights/presentation/weekly_insight_card.dart';
+import 'package:fitsocial_app/features/insights/presentation/weekly_insight_screen.dart';
 import 'package:fitsocial_app/features/main/application/content_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,6 +72,22 @@ Widget _host(_FakeInsightRepository repository, {bool enabled = true}) {
   );
 }
 
+Widget _screenHost(_FakeInsightRepository repository, {ThemeData? theme}) {
+  final flags =
+      FeatureFlags.defaults.withFlag(FeatureFlag.weeklyInsights, true);
+  return ProviderScope(
+    overrides: [
+      currentUserIdProvider.overrideWithValue('me'),
+      insightRepositoryProvider.overrideWithValue(repository),
+      featureFlagsProvider.overrideWith((ref) => Stream.value(flags)),
+    ],
+    child: MaterialApp(
+      theme: theme ?? AppTheme.darkTheme,
+      home: const WeeklyInsightScreen(),
+    ),
+  );
+}
+
 void main() {
   group('reading a stored insight', () {
     test('a ready document keeps only well-formed parts', () {
@@ -108,11 +126,11 @@ void main() {
   group('home card', () {
     final ready = WeeklyInsight.fromMap('2026-W39', _readyDoc());
 
-    testWidgets('shows the headline, labelled as AI-written', (tester) async {
+    testWidgets('shows the headline, without the AI label', (tester) async {
       await tester.pumpWidget(_host(_FakeInsightRepository(insight: ready)));
       await tester.pumpAndSettle();
       expect(find.text('Five sessions and a four-day streak'), findsOneWidget);
-      expect(find.text('Written by AI from your logged data'), findsOneWidget);
+      expect(find.text('Written by AI from your logged data'), findsNothing);
       expect(find.text(kWellbeingNote), findsNothing);
     });
 
@@ -169,6 +187,51 @@ void main() {
       await tester.pumpWidget(_host(repository));
       await tester.pumpAndSettle();
       expect(repository.requests, 1);
+    });
+  });
+
+  group('insight screen', () {
+    final ready = WeeklyInsight.fromMap('2026-W39', _readyDoc());
+
+    testWidgets('lays out every section, with no AI label', (tester) async {
+      await tester
+          .pumpWidget(_screenHost(_FakeInsightRepository(insight: ready)));
+      await tester.pumpAndSettle();
+      expect(find.text('Five sessions and a four-day streak'), findsOneWidget);
+      expect(find.text('WEEK OF 21 SEP'), findsOneWidget);
+      // Removed at the user's request, on 2026-10-12: no AI label anywhere.
+      expect(find.text('Written by AI from your logged data'), findsNothing);
+      expect(find.text('WINS'), findsOneWidget);
+      expect(find.text('Five sessions'), findsOneWidget);
+      expect(find.text('AGAINST THE WEEK BEFORE'), findsOneWidget);
+      expect(find.text('One more.'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Hide Weekly Insights'), 200);
+      expect(find.text('YOUR FOCUS THIS WEEK'), findsOneWidget);
+      expect(find.text('One short walk on Sunday.'), findsOneWidget);
+      expect(find.text('Very helpful'), findsOneWidget);
+    });
+
+    for (final (name, theme) in [
+      ('dark', AppTheme.darkTheme),
+      ('light', AppTheme.lightTheme),
+    ]) {
+      testWidgets('fits a small phone without overflow ($name)',
+          (tester) async {
+        tester.view.physicalSize = const Size(320, 640);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          _screenHost(_FakeInsightRepository(insight: ready), theme: theme),
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('says so when there is no insight', (tester) async {
+      await tester.pumpWidget(_screenHost(_FakeInsightRepository()));
+      await tester.pumpAndSettle();
+      expect(find.text('No insight for last week yet.'), findsOneWidget);
     });
   });
 }

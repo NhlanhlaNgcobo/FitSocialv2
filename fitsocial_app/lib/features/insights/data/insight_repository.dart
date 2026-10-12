@@ -45,11 +45,7 @@ class FirestoreInsightRepository implements InsightRepository {
 
   @override
   Stream<WeeklyInsight?> watchInsight(String userId, String weekId) =>
-      _user(userId)
-          .collection('insights')
-          .doc(weekId)
-          .snapshots()
-          .map(
+      _user(userId).collection('insights').doc(weekId).snapshots().map(
             (doc) => doc.exists
                 ? WeeklyInsight.fromMap(weekId, doc.data() ?? const {})
                 : null,
@@ -73,13 +69,14 @@ class FirestoreInsightRepository implements InsightRepository {
   DocumentReference<Map<String, dynamic>> _feedback(
     String userId,
     String weekId,
-  ) => _firestore.collection('insightFeedback').doc('${userId}_$weekId');
+  ) =>
+      _firestore.collection('insightFeedback').doc('${userId}_$weekId');
 
   @override
   Stream<InsightRating?> watchRating(String userId, String weekId) => _feedback(
-    userId,
-    weekId,
-  ).snapshots().map((doc) => InsightRating.fromKey(doc.data()?['rating']));
+        userId,
+        weekId,
+      ).snapshots().map((doc) => InsightRating.fromKey(doc.data()?['rating']));
 
   @override
   Future<void> rate(String userId, String weekId, InsightRating rating) =>
@@ -92,8 +89,8 @@ class FirestoreInsightRepository implements InsightRepository {
 
   @override
   Stream<bool> watchHidden(String userId) => _user(
-    userId,
-  ).snapshots().map((doc) => doc.data()?['insightsHidden'] == true);
+        userId,
+      ).snapshots().map((doc) => doc.data()?['insightsHidden'] == true);
 
   @override
   Future<void> setHidden(String userId, bool hidden) =>
@@ -110,8 +107,8 @@ class UnconfiguredInsightRepository implements InsightRepository {
 
   @override
   Future<InsightStatus> request({bool regenerate = false}) => Future.error(
-    const InsightRefused('Weekly Insights need a connection to FitSocial.'),
-  );
+        const InsightRefused('Weekly Insights need a connection to FitSocial.'),
+      );
 
   @override
   Stream<InsightRating?> watchRating(String userId, String weekId) =>

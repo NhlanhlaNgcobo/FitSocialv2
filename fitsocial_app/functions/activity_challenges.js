@@ -1,6 +1,6 @@
 /**
  * Activity challenges: friends against each other on steps, active minutes,
- * sessions or meals logged, between two dates.
+ * sessions, meals logged or healthy-eating points, between two dates.
  *
  * The third challenge engine, and the thinnest. It shares everything it can
  * with running challenges -- the `challenges/{id}` document, the participant
@@ -77,9 +77,14 @@ async function backfillParticipant(challengeDoc, participantDoc) {
   }
 
   // Days nobody built stats for yet -- the pipeline sleeps while every Build
-  // 11 feature is off -- are built now, a month at most.
+  // 11 feature is off -- are built now, a month at most. So are days built
+  // before the metric's field existed: healthy-eating points arrived after
+  // dailyStats did, and a day without them would rank as zero.
   let days = await stats.readDays(uid, dayKeys);
-  const missing = dayKeys.filter((k) => !days[k]).slice(-31);
+  const field = ranking.METRIC_FIELDS[challenge.metric];
+  const missing = dayKeys
+    .filter((k) => !days[k] || days[k][field] === undefined)
+    .slice(-31);
   for (const k of missing) await stats.recomputeDay(uid, k, offset);
   if (missing.length > 0) days = await stats.readDays(uid, dayKeys);
 

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_palette.dart';
 import '../../features/challenges/application/daily_steps_sync.dart';
+import '../../features/main/application/meal_repeat_sync.dart';
 import '../../features/tracking/application/run_import_sync.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/offline_banner.dart';
@@ -80,11 +81,13 @@ class _AppShellState extends ConsumerState<AppShell> {
               systemNavigationBarColor: palette.background,
               systemNavigationBarIconBrightness: Brightness.dark,
             ),
-      // Both wrappers live here for the same reason: they have to keep working
+      // The wrappers live here for the same reason: they have to keep working
       // whichever tab the user is sitting on, and this is the one widget alive
       // for all five.
       child: DailyStepsSync(
-        child: RunImportSync(child: _buildScaffold()),
+        child: RunImportSync(
+          child: MealRepeatSync(child: _buildScaffold()),
+        ),
       ),
     );
   }

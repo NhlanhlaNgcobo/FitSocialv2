@@ -20,6 +20,9 @@ class LoggedMeal {
     this.itemCount = 0,
     this.sharedToFeed = false,
     this.postId,
+    this.items = const [],
+    this.notes = '',
+    this.repeatId,
   });
 
   final String id;
@@ -43,6 +46,18 @@ class LoggedMeal {
   /// The post this meal created, when it was shared. Null otherwise, and for
   /// meals logged before the id was recorded.
   final String? postId;
+
+  /// The analysed breakdown, when there was one. Carried so a meal logged
+  /// again keeps its foods — and with them its quality score.
+  final List<MealFoodItem> items;
+
+  final String notes;
+
+  /// The [MealRepeat] that logged this meal, when one did.
+  final String? repeatId;
+
+  /// Logged by a repeat rather than by hand.
+  bool get isRepeat => repeatId != null;
 
   /// Local midnight of the day this meal belongs to.
   DateTime get day => ActivityCalendar.dateOnly(loggedAt);
@@ -110,6 +125,7 @@ class MacroGoals {
     this.fat = defaultFat,
     this.isCustom = false,
     this.isDerived = false,
+    this.stepBonus = true,
   });
 
   /// A stored document holding any target counts as the user's own: the
@@ -126,6 +142,9 @@ class MacroGoals {
       carbs: read('carbsGoal', defaultCarbs),
       fat: read('fatGoal', defaultFat),
       isCustom: keys.any(data.containsKey),
+      // On unless switched off: a missing field is everyone who set their
+      // targets before the bonus existed.
+      stepBonus: data['stepBonus'] != false,
     );
   }
 
@@ -146,6 +165,9 @@ class MacroGoals {
   final int carbs;
   final int fat;
 
+  /// Whether walking raises the calorie target ([StepCalories]).
+  final bool stepBonus;
+
   int of(MacroKind kind) => switch (kind) {
         MacroKind.calories => calories,
         MacroKind.protein => protein,
@@ -162,12 +184,22 @@ class MacroGoals {
   int overWindow(MacroKind kind, ProgressWindow window) =>
       of(kind) * window.dayCount;
 
-  MacroGoals copyWith({int? calories, int? protein, int? carbs, int? fat}) {
+  MacroGoals copyWith({
+    int? calories,
+    int? protein,
+    int? carbs,
+    int? fat,
+    bool? stepBonus,
+  }) {
     return MacroGoals(
       calories: calories ?? this.calories,
       protein: protein ?? this.protein,
       carbs: carbs ?? this.carbs,
       fat: fat ?? this.fat,
+      stepBonus: stepBonus ?? this.stepBonus,
+      // Where the targets came from does not change with a field.
+      isCustom: isCustom,
+      isDerived: isDerived,
     );
   }
 
@@ -176,7 +208,46 @@ class MacroGoals {
         'proteinGoal': protein,
         'carbsGoal': carbs,
         'fatGoal': fat,
+        'stepBonus': stepBonus,
       };
+}
+
+/// Calories a day's walking adds to the target.
+///
+/// Only steps past [baselineSteps] count. A calorie target already assumes an
+/// ordinary day of moving about, so crediting every step would pay twice for
+/// the walk to the car. Past that, each step burns roughly half a calorie per
+/// thousand kilograms of body weight (0.035 kcal a step at 70 kg), the usual
+/// walking estimate, and deliberately on the low side: overstating what a walk
+/// earns is the error that undoes a diet.
+///
+/// Capped per day, so a hike or a step counter on a swinging arm cannot
+/// hand out a second dinner.
+class StepCalories {
+  const StepCalories._();
+
+  static const int baselineSteps = 5000;
+  static const double kcalPerStepPerKg = 0.0005;
+
+  /// Used when the user has not entered a weight.
+  static const double defaultWeightKg = 70;
+
+  static const int maxPerDay = 800;
+
+  static int forDay(int steps, {double? weightKg}) {
+    final extra = steps - baselineSteps;
+    if (extra <= 0) return 0;
+    final weight =
+        (weightKg != null && weightKg > 0) ? weightKg : defaultWeightKg;
+    final kcal = (extra * kcalPerStepPerKg * weight).round();
+    return kcal > maxPerDay ? maxPerDay : kcal;
+  }
+}
+
+/// "2026-10-02": the key `dailySteps` documents are filed under.
+String mealDayKey(DateTime day) {
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${day.year}-${two(day.month)}-${two(day.day)}';
 }
 
 /// One macro's number against its target.
@@ -213,6 +284,8 @@ class MealWindowSummary {
     required this.window,
     required this.meals,
     required this.goals,
+    this.stepsByDay = const {},
+    this.weightKg,
   });
 
   /// Builds a summary from every logged meal, keeping the ones inside [window].
@@ -220,6 +293,8 @@ class MealWindowSummary {
     required List<LoggedMeal> meals,
     required ProgressWindow window,
     required MacroGoals goals,
+    Map<String, int> stepsByDay = const {},
+    double? weightKg,
   }) {
     final inside = meals
         .where((meal) => window.contains(meal.loggedAt))
@@ -228,7 +303,13 @@ class MealWindowSummary {
       // the bottom, which is how the meals actually happened.
       ..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
 
-    return MealWindowSummary(window: window, meals: inside, goals: goals);
+    return MealWindowSummary(
+      window: window,
+      meals: inside,
+      goals: goals,
+      stepsByDay: stepsByDay,
+      weightKg: weightKg,
+    );
   }
 
   final ProgressWindow window;
@@ -238,7 +319,41 @@ class MealWindowSummary {
 
   final MacroGoals goals;
 
+  /// Each day's step count, by [mealDayKey]. Days outside the window are
+  /// ignored, so a wider read can be passed in whole.
+  final Map<String, int> stepsByDay;
+
+  /// For [StepCalories]; null falls back to its default.
+  final double? weightKg;
+
   bool get isEmpty => meals.isEmpty;
+
+  /// Steps walked inside the window.
+  int get steps {
+    var sum = 0;
+    for (final day in _windowDayKeys) {
+      sum += stepsByDay[day] ?? 0;
+    }
+    return sum;
+  }
+
+  /// What walking added to the window's calorie target. Worked out day by day,
+  /// because the baseline and the cap are both per day: a week's steps summed
+  /// first would clear the baseline once instead of seven times.
+  int get stepCalories {
+    if (!goals.stepBonus) return 0;
+    var sum = 0;
+    for (final day in _windowDayKeys) {
+      sum += StepCalories.forDay(stepsByDay[day] ?? 0, weightKg: weightKg);
+    }
+    return sum;
+  }
+
+  Iterable<String> get _windowDayKeys sync* {
+    for (var i = 0; i < window.dayCount; i++) {
+      yield mealDayKey(ActivityCalendar.addDays(window.start, i));
+    }
+  }
 
   int total(MacroKind kind) {
     var sum = 0;
@@ -253,10 +368,13 @@ class MealWindowSummary {
     return sum;
   }
 
+  /// Calories carry the step bonus; the macros keep their fixed targets,
+  /// because walking does not change how much protein a body needs.
   MacroProgress progress(MacroKind kind) => MacroProgress(
         kind: kind,
         total: total(kind),
-        goal: goals.overWindow(kind, window),
+        goal: goals.overWindow(kind, window) +
+            (kind == MacroKind.calories ? stepCalories : 0),
       );
 
   List<MacroProgress> get allProgress =>

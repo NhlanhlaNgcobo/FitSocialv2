@@ -172,13 +172,29 @@ enum ActivityMetric {
   steps('steps', 'Steps', 'steps'),
   activeMinutes('active_minutes', 'Active minutes', 'min'),
   workouts('workouts', 'Sessions', 'sessions'),
-  mealsLogged('meals_logged', 'Meals logged', 'meals');
+  mealsLogged('meals_logged', 'Meals logged', 'meals'),
+
+  /// Healthy-eating points, scored on the server from each meal's foods
+  /// (functions/meal_quality.js).
+  mealQuality('meal_quality', 'Healthy eating', 'points');
 
   const ActivityMetric(this.key, this.label, this.unit);
 
   final String key;
   final String label;
   final String unit;
+
+  /// How the metric is counted, when that is not obvious from its name.
+  /// The four and the five are MEALS_COUNTED_PER_DAY and DAY_LOGGED_BONUS in
+  /// functions/meal_quality.js.
+  String? get howItCounts => switch (this) {
+        ActivityMetric.mealQuality =>
+          'Each analysed meal scores 0 to 10 for balance. A day adds up its '
+              'best four meals, plus 5 points for logging that day. Meals '
+              'typed in by hand do not score, and nobody sees what you ate, '
+              'only your points.',
+        _ => null,
+      };
 
   static ActivityMetric? byKey(String? key) {
     for (final value in values) {
