@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/observability/app_analytics.dart';
 import '../../../core/observability/crash_reporter.dart';
 import '../../notifications/application/push_registrar.dart';
+import '../../onboarding/application/onboarding_draft_providers.dart';
+import '../../onboarding/application/onboarding_sync.dart';
 import '../data/auth_repository_contract.dart';
 import '../data/auth_repository.dart';
 import '../data/user_profile_repository_contract.dart';
@@ -27,6 +30,8 @@ class AppSession extends ChangeNotifier {
     required this.userProfileRepository,
     this.crashReporter = const NoopCrashReporter(),
     this.pushRegistrar = const NoopPushRegistrar(),
+    this.onboarding = const NoopOnboardingSync(),
+    this.analytics = const NoopAppAnalytics(),
   }) {
     _bootstrap();
   }
@@ -45,6 +50,16 @@ class AppSession extends ChangeNotifier {
   /// and the instant before a sign-out. Defaults to a no-op for the same reason
   /// [crashReporter] does.
   final PushRegistrar pushRegistrar;
+
+  /// Carries the sign-up answers into the new account. Hooked in here because
+  /// its ordering is this class's: the fitness profile must be written before
+  /// the stage leaves [AuthStage.profileSetup]. Defaults to a no-op for the
+  /// same reason [crashReporter] does.
+  final OnboardingSync onboarding;
+
+  /// Product events. Only sign-up's own is logged here, because only this
+  /// class knows an account was just created rather than signed back into.
+  final AppAnalytics analytics;
   AuthStage _stage = AuthStage.initializing;
   bool _isLoading = false;
   String? _email;
@@ -108,6 +123,11 @@ class AppSession extends ChangeNotifier {
       await _discardStaleSession();
       return;
     }
+
+    // A flush an earlier launch started and did not finish. Not awaited:
+    // launch must not wait on it, and it never throws.
+    final uid = authRepository.currentUserId();
+    if (uid != null) unawaited(onboarding.retryPending(uid));
 
     _setStage(AuthStage.authenticated);
     notifyListeners();
@@ -190,6 +210,7 @@ class AppSession extends ChangeNotifier {
     if (email.trim().isEmpty || password.trim().isEmpty) return;
     await _authenticate(
       () => authRepository.signUpWithEmail(email: email, password: password),
+      method: 'email',
     );
   }
 
@@ -198,6 +219,7 @@ class AppSession extends ChangeNotifier {
     _pendingLink = null;
     return _authenticate(
       () => authRepository.continueWithProvider(providerName),
+      method: providerName,
     );
   }
 
@@ -227,13 +249,33 @@ class AppSession extends ChangeNotifier {
   /// loading the profile, deciding between setup and the app proper, turning a
   /// thrown error into a sentence — is the same regardless, and was previously
   /// copied out once per sign-in method.
-  Future<void> _authenticate(Future<String> Function() signIn) async {
+  ///
+  /// [method] names the way in (`google`, `apple`, `email`) for the sign-up
+  /// funnel; null for plain logins, which never create an account.
+  Future<void> _authenticate(
+    Future<String> Function() signIn, {
+    String? method,
+  }) async {
     _setLoading(true);
     _errorMessage = null;
     try {
       _email = await signIn();
       _identifyForCrashReports();
       _profile = await userProfileRepository.loadCurrentProfile();
+      // No profile means a new account, or one whose sign-up was never
+      // finished. Its onboarding answers go up now, before the stage changes:
+      // the profile written on the next screen is what opens /home, and the
+      // goal has to be on file first. Bounded and never throws.
+      if (_profile == null) {
+        final uid = authRepository.currentUserId();
+        if (uid != null) await onboarding.afterSignUp(uid);
+        if (method != null) {
+          analytics.log(
+            AnalyticsEvent.onboardingAccountCreated,
+            {'provider': method},
+          );
+        }
+      }
       // No profile means the account exists but was never finished, so setup
       // is where they land rather than the feed.
       _setStage(
@@ -271,6 +313,13 @@ class AppSession extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
     try {
+      final uid = authRepository.currentUserId();
+      // Only on the first save. Edits from the profile screen come through
+      // here too, and must not reset a goal the user has since changed.
+      final isFirstSave = _stage == AuthStage.profileSetup;
+      final weeklyGoalDays = isFirstSave && uid != null
+          ? await onboarding.pendingWeeklyGoalDays(uid)
+          : null;
       _profile = await userProfileRepository.saveProfile(
         displayName: displayName.trim(),
         handle: handle.trim(),
@@ -279,7 +328,9 @@ class AppSession extends ChangeNotifier {
         avatarLocalPath: avatarLocalPath,
         pronouns: pronouns.trim(),
         links: links.trim(),
+        weeklyGoalDays: weeklyGoalDays,
       );
+      if (isFirstSave && uid != null) await onboarding.afterProfileSaved(uid);
       _setStage(AuthStage.authenticated);
       return true;
     } catch (error) {
@@ -363,6 +414,15 @@ class AppSession extends ChangeNotifier {
     } finally {
       notifyListeners();
     }
+  }
+
+  /// Backs out of "Claim your name": releases the onboarding answers from
+  /// this account, then signs out. The answers stay on the phone for the next
+  /// sign-in, which may well be a different account.
+  Future<void> abandonSignUp() async {
+    final uid = authRepository.currentUserId();
+    if (uid != null) await onboarding.abandon(uid);
+    await signOut();
   }
 
   /// Permanently deletes the account and drops the session.
@@ -475,5 +535,7 @@ final appSessionProvider = ChangeNotifierProvider<AppSession>((ref) {
     userProfileRepository: ref.watch(userProfileRepositoryProvider),
     crashReporter: ref.watch(crashReporterProvider),
     pushRegistrar: ref.watch(pushRegistrarProvider),
+    onboarding: ref.watch(onboardingSyncProvider),
+    analytics: ref.watch(appAnalyticsProvider),
   );
 });

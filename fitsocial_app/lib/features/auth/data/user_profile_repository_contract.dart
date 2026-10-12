@@ -12,6 +12,7 @@ abstract class UserProfileRepository {
     String? avatarLocalPath,
     String pronouns = '',
     String links = '',
+    int? weeklyGoalDays,
   });
 
   Future<UserProfileDraft?> loadCurrentProfile();

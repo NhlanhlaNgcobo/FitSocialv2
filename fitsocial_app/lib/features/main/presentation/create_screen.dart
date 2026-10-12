@@ -8,6 +8,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/bottom_nav.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../tracking/presentation/run_drafts_section.dart';
+import '../application/active_workout_controller.dart';
 import '../application/create_flow_controller.dart';
 import '../domain/activity_kind.dart';
 import '../../music/presentation/music_island_action.dart';
@@ -21,10 +22,15 @@ class CreateScreen extends ConsumerWidget {
     final palette = context.palette;
     final flowState = ref.watch(createFlowControllerProvider);
     final flowController = ref.read(createFlowControllerProvider.notifier);
+    final inProgress = ref.watch(activeWorkoutProvider) != null;
     final actions = [
       _CreateAction(
         title: 'Log a Workout',
-        subtitle: 'Track your gym session',
+        // Live sessions start from inside the log screen now, so a workout
+        // left running is announced here, on the way in.
+        subtitle: inProgress
+            ? 'A live workout is in progress. Resume it from here'
+            : 'Live with a timer, or one you have done',
         icon: Icons.fitness_center_rounded,
         accent: _kWorkoutAccent,
         destination: CreateCanvasDestination.workout,

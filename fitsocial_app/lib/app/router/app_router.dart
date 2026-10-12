@@ -8,9 +8,7 @@ import '../../features/main/domain/app_models.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/edit_profile_screen.dart';
-import '../../features/auth/presentation/profile_setup_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
-import '../../features/auth/presentation/welcome_screen.dart';
 import '../../features/challenges/domain/challenge_models.dart';
 import '../../features/challenges/presentation/challenge_detail_screen.dart';
 import '../../features/challenges/presentation/challenge_board_screen.dart';
@@ -38,11 +36,17 @@ import '../../features/main/presentation/prompt_answers_screen.dart';
 import '../../features/main/presentation/social_compose_screens.dart';
 import '../../features/main/domain/daily_prompts.dart';
 import '../../features/main/presentation/post_detail_screen.dart';
+import '../../features/main/presentation/workout_session_screen.dart';
 import '../../features/main/presentation/profile_screen.dart';
 import '../../features/main/presentation/run_log_screen.dart';
 import '../../features/main/presentation/user_profile_screen.dart';
 import '../../features/main/presentation/workout_log_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
+import '../../features/onboarding/presentation/claim_name_screen.dart';
+import '../../features/onboarding/presentation/goal_screen.dart';
+import '../../features/onboarding/presentation/plan_screen.dart';
+import '../../features/onboarding/presentation/plan_setup_screen.dart';
+import '../../features/onboarding/presentation/shape_screen.dart';
 import '../../features/races/presentation/race_detail_screen.dart';
 import '../../features/races/presentation/races_screen.dart';
 import '../../features/races/presentation/saved_races_screen.dart';
@@ -92,7 +96,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final location = state.matchedLocation;
       final stage = session.stage;
-      const authRoutes = {'/welcome', '/login'};
+      // Everywhere a signed-out user may be. The onboarding steps sit here
+      // because they come before the account: Steps 1-2 run with no uid.
+      const authRoutes = {
+        '/welcome',
+        '/login',
+        '/onboarding/goal',
+        '/onboarding/shape',
+        '/onboarding/plan',
+      };
 
       // While restoring a persisted session, stay on the splash screen. A deep
       // link is the usual reason to be anywhere else this early — the platform
@@ -105,30 +117,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Bootstrap finished: move off the splash to the right destination.
       if (location == '/splash') {
-        if (stage == AuthStage.unauthenticated) return '/welcome';
-        if (stage == AuthStage.profileSetup) return '/profile-setup';
+        if (stage == AuthStage.unauthenticated) return '/onboarding/goal';
+        if (stage == AuthStage.profileSetup) return '/onboarding/name';
         return pendingLink.take() ?? '/home';
       }
 
       if (stage == AuthStage.unauthenticated) {
         if (!authRoutes.contains(location)) {
           pendingLink.remember(location);
-          return '/welcome';
+          return '/onboarding/goal';
         }
         return null;
       }
 
+      // Signed in with no profile yet: onboarding Step 4 is the only place
+      // to be. The old /profile-setup is gone from the flow.
       if (stage == AuthStage.profileSetup) {
-        if (location != '/profile-setup') {
+        if (location != '/onboarding/name') {
           pendingLink.remember(location);
-          return '/profile-setup';
+          return '/onboarding/name';
         }
         return null;
       }
 
       // Just signed in, or just finished setting up. Someone who got here by
       // tapping a shared post lands on the post rather than the feed.
-      if (authRoutes.contains(location) || location == '/profile-setup') {
+      if (authRoutes.contains(location) ||
+          location == '/onboarding/name' ||
+          location == '/profile-setup') {
         return pendingLink.take() ?? '/home';
       }
 
@@ -139,9 +155,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
       ),
+      // Replaced by onboarding Step 1, but kept routable: old deep links and
+      // the login screen's back button still point here.
       GoRoute(
         path: '/welcome',
-        builder: (context, state) => const WelcomeScreen(),
+        redirect: (context, state) => '/onboarding/goal',
+      ),
+      GoRoute(
+        path: '/onboarding/goal',
+        builder: (context, state) => const GoalScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/shape',
+        builder: (context, state) => const ShapeScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/plan',
+        builder: (context, state) => const PlanScreen(),
       ),
       GoRoute(
         path: '/login',
@@ -150,9 +180,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return LoginScreen(isLoginMode: isLogin);
         },
       ),
+      // Replaced by onboarding Step 4; kept so anything still pointing here
+      // lands somewhere sensible.
       GoRoute(
         path: '/profile-setup',
-        builder: (context, state) => const ProfileSetupScreen(),
+        redirect: (context, state) => '/onboarding/name',
+      ),
+      GoRoute(
+        path: '/onboarding/name',
+        builder: (context, state) => const ClaimNameScreen(),
+      ),
+      // "Finish your plan": Steps 1-2 again, signed in. Each closes with true
+      // once the plan is saved, so whoever opened it knows to carry on.
+      GoRoute(
+        path: '/plan/goal',
+        builder: (context, state) => const PlanSetupScreen(),
+      ),
+      GoRoute(
+        path: '/plan/shape',
+        builder: (context, state) => const ShapeScreen(finishing: true),
       ),
       GoRoute(
         path: '/edit-profile',
@@ -161,6 +207,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/log-workout',
         builder: (context, state) => const WorkoutLogScreen(),
+      ),
+      GoRoute(
+        path: '/workout-session',
+        builder: (context, state) => const WorkoutSessionScreen(),
       ),
       GoRoute(
         path: '/log-run',
@@ -190,8 +240,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/prompt/:promptId',
         builder: (context, state) {
           final id = state.pathParameters['promptId']!;
-          final prompt =
-              state.extra as PostPrompt? ??
+          final prompt = state.extra as PostPrompt? ??
               PostPrompt(
                 id: id,
                 text: DailyPrompts.forDay(
@@ -357,9 +406,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/challenge/:challengeKey',
         redirect: (context, state) =>
             ChallengeKey.byKey(state.pathParameters['challengeKey'] ?? '') ==
-                null
-            ? '/challenges'
-            : null,
+                    null
+                ? '/challenges'
+                : null,
         builder: (context, state) => ChallengeDetailScreen(
           challengeKey: ChallengeKey.byKey(
             state.pathParameters['challengeKey']!,

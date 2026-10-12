@@ -97,29 +97,44 @@ enum MacroKind {
 
 /// Daily targets for each macro.
 ///
-/// Defaults are a rough middle for an adult rather than anything derived — the
-/// app knows a height and a weight, but not an activity level, a goal or a
-/// body composition, and a number invented from two of the five inputs would
-/// read as advice it has no business giving. The user can set their own.
+/// Three sources, in order of precedence: targets the user set themselves
+/// ([isCustom]), targets calculated from their body and plan ([isDerived], see
+/// `deriveMacroGoals`), and the defaults below — a rough middle for an adult,
+/// used only while the calculation is missing an input. A target is never
+/// invented from partial input.
 class MacroGoals {
   const MacroGoals({
     this.calories = defaultCalories,
     this.protein = defaultProtein,
     this.carbs = defaultCarbs,
     this.fat = defaultFat,
+    this.isCustom = false,
+    this.isDerived = false,
   });
 
+  /// A stored document holding any target counts as the user's own: the
+  /// targets sheet is the only thing that has ever written one, so every
+  /// account that set targets before calculation existed keeps them.
   factory MacroGoals.fromMap(Map<String, dynamic>? data) {
     if (data == null) return const MacroGoals();
     int read(String key, int fallback) =>
         (data[key] as num?)?.toInt() ?? fallback;
+    const keys = ['calorieGoal', 'proteinGoal', 'carbsGoal', 'fatGoal'];
     return MacroGoals(
       calories: read('calorieGoal', defaultCalories),
       protein: read('proteinGoal', defaultProtein),
       carbs: read('carbsGoal', defaultCarbs),
       fat: read('fatGoal', defaultFat),
+      isCustom: keys.any(data.containsKey),
     );
   }
+
+  /// Set by the user on the targets sheet. Always wins over a calculation.
+  final bool isCustom;
+
+  /// Calculated from height, weight, age, sex, goal and activity. Never
+  /// stored: it is worked out fresh, so it follows the body it describes.
+  final bool isDerived;
 
   static const int defaultCalories = 2300;
   static const int defaultProtein = 150;

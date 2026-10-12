@@ -14,7 +14,11 @@ import '../../auth/application/app_session.dart';
 import '../../auth/presentation/account_switcher_sheet.dart';
 import '../../insights/application/insight_providers.dart';
 import '../../main/application/content_providers.dart';
+import '../../onboarding/application/fitness_plan.dart';
+import '../../main/application/workout_preferences.dart';
 import '../../main/data/content_repository.dart';
+import '../../main/data/workout_preferences_store.dart';
+import '../../main/presentation/workout_tool_sheets.dart';
 import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../notifications/application/push_providers.dart';
@@ -37,6 +41,7 @@ const Color _kNotifyAccent = Color(0xFF2ECBFF);
 const Color _kSafetyAccent = Color(0xFF2E9C94);
 const Color _kMilestoneAccent = Color(0xFFF2B01E);
 const Color _kAccessibilityAccent = Color(0xFF8B7CF6);
+const Color _kWorkoutAccent = AppColors.orangeBright;
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -116,6 +121,7 @@ class SettingsScreen extends ConsumerWidget {
                 subtitle: 'Steps, heart rate and connected devices',
                 onTap: () => context.push('/health'),
               ),
+              const _TrainingPlanTile(),
               const _RunImportTile(),
               const _WeeklyInsightsTile(),
             ],
@@ -127,6 +133,11 @@ class SettingsScreen extends ConsumerWidget {
             text:
                 'A run your watch recorded turns up on the Create page as a '
                 'draft. It stays on your phone until you post it.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const _SectionLabel('Workouts'),
+          const _SettingsGroup(
+            children: [_RestTimerTile(), _TrackRpeTile()],
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Feed'),
@@ -609,6 +620,31 @@ class _RunImportTile extends ConsumerWidget {
   }
 }
 
+/// The goal, equipment and days the user signed up with, and the way to
+/// change them. For an account with no plan yet — anyone who signed up before
+/// onboarding asked — it says so, and the same screens fill one in.
+class _TrainingPlanTile extends ConsumerWidget {
+  const _TrainingPlanTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(fitnessProfileProvider);
+    final subtitle = switch (profile) {
+      AsyncData(value: final plan?) =>
+        '${plan.primaryGoal.label} · ${plan.equipment.first.label}',
+      AsyncData() => 'Not set yet. Two quick screens',
+      _ => 'Your goal, equipment and days',
+    };
+    return _SettingsTile(
+      icon: Icons.flag_outlined,
+      accent: _kHealthAccent,
+      label: 'Training plan',
+      subtitle: subtitle,
+      onTap: () => context.push<bool>('/plan/goal'),
+    );
+  }
+}
+
 /// Weekly Insights on or off for this user. Not drawn at all while the feature
 /// is switched off in Remote Config -- a switch for something that does not
 /// exist yet would only confuse. This is the way back on after "Hide Weekly
@@ -627,6 +663,71 @@ class _WeeklyInsightsTile extends ConsumerWidget {
       subtitle: 'A short AI-written look back at your week',
       value: !hidden,
       onChanged: (show) => ref.read(insightActionsProvider).setHidden(!show),
+    );
+  }
+}
+
+/// The rest timer's default length, used for every exercise that does not
+/// set its own.
+class _RestTimerTile extends ConsumerWidget {
+  const _RestTimerTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final seconds = ref.watch(workoutPreferencesProvider).restSeconds;
+    return _SettingsTile(
+      icon: Icons.timer_outlined,
+      accent: _kWorkoutAccent,
+      label: 'Rest timer',
+      subtitle: seconds == 0
+          ? 'Off. Exercises can still set their own'
+          : '${formatRest(seconds)} after each set, unless an exercise sets '
+              'its own',
+      onTap: () async {
+        final picked = await showModalBottomSheet<int>(
+          context: context,
+          showDragHandle: true,
+          builder: (sheetContext) => SafeArea(
+            child: RadioGroup<int>(
+              groupValue: seconds,
+              onChanged: (value) => Navigator.of(sheetContext).pop(value),
+              child: Wrap(
+                children: [
+                  for (final choice in WorkoutPreferences.restChoices)
+                    RadioListTile<int>(
+                      value: choice,
+                      title: Text(formatRest(choice)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+        if (picked != null) {
+          await ref
+              .read(workoutPreferencesProvider.notifier)
+              .setRestSeconds(picked);
+        }
+      },
+    );
+  }
+}
+
+/// Whether set rows carry an RPE column.
+class _TrackRpeTile extends ConsumerWidget {
+  const _TrackRpeTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _SettingsSwitchTile(
+      icon: Icons.speed_rounded,
+      accent: _kWorkoutAccent,
+      label: 'Rate sets (RPE)',
+      subtitle: 'Rate how hard each set was, from 6 to 10',
+      value: ref.watch(workoutPreferencesProvider).trackRpe,
+      onChanged: (next) => ref
+          .read(workoutPreferencesProvider.notifier)
+          .setTrackRpe(enabled: next),
     );
   }
 }

@@ -32,6 +32,7 @@ class FakeProfiles implements UserProfileRepository {
     String? avatarLocalPath,
     String pronouns = '',
     String links = '',
+    int? weeklyGoalDays,
   }) async =>
       throw UnimplementedError();
 }
@@ -52,8 +53,7 @@ Future<void> pumpCalculator(WidgetTester tester, FakeProfiles profiles) async {
   await tester.pumpAndSettle();
 }
 
-Finder fieldWithSuffix(String suffix) =>
-    find.widgetWithText(TextField, suffix);
+Finder fieldWithSuffix(String suffix) => find.widgetWithText(TextField, suffix);
 
 void main() {
   group('bmi calculator', () {
@@ -67,6 +67,69 @@ void main() {
 
       expect(find.text('22.9'), findsOneWidget);
       expect(find.text('Healthy'), findsOneWidget);
+    });
+
+    // Sign-up no longer asks for these, so the first visit here is where
+    // most people are first asked, and the ask says where the numbers go.
+    testWidgets('a first visit says what the numbers are for', (tester) async {
+      await pumpCalculator(tester, FakeProfiles());
+      expect(find.textContaining('Two numbers and we can show your BMI'),
+          findsOneWidget);
+    });
+
+    testWidgets('a returning visit skips the ask', (tester) async {
+      await pumpCalculator(
+        tester,
+        FakeProfiles(stored: const BodyMetrics(heightCm: 175, weightKg: 70)),
+      );
+      expect(find.textContaining('Two numbers and we can show your BMI'),
+          findsNothing);
+    });
+
+    testWidgets('asks for age and sex before showing a calorie target',
+        (tester) async {
+      await pumpCalculator(
+        tester,
+        FakeProfiles(stored: const BodyMetrics(heightCm: 180, weightKg: 80)),
+      );
+      expect(
+        find.textContaining('Your calorie target needs your height, weight'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows the calculated calorie target once it can',
+        (tester) async {
+      await pumpCalculator(
+        tester,
+        FakeProfiles(
+          stored: const BodyMetrics(
+            heightCm: 180,
+            weightKg: 80,
+            age: 30,
+            sex: Sex.male,
+          ),
+        ),
+      );
+      // 1780 BMR × 1.55 moderate, no plan yet: maintenance.
+      expect(find.text('About 2760 kcal a day'), findsOneWidget);
+    });
+
+    testWidgets('saves age and sex with the measurements', (tester) async {
+      final profiles = FakeProfiles(
+        stored: const BodyMetrics(heightCm: 180, weightKg: 80),
+      );
+      await pumpCalculator(tester, profiles);
+      await tester.enterText(fieldWithSuffix('years'), '34');
+      await tester.ensureVisible(find.text('Female'));
+      await tester.tap(find.text('Female'));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(profiles.saved?.age, 34);
+      expect(profiles.saved?.sex, Sex.female);
     });
 
     testWidgets('invites input while the form is untouched', (tester) async {
@@ -140,7 +203,8 @@ void main() {
 
     // The BMI must not move when only the units label does. This is the whole
     // risk of a two-unit form: the number on screen changes, the body does not.
-    testWidgets('switching units converts the figures instead of reading them '
+    testWidgets(
+        'switching units converts the figures instead of reading them '
         'as the new unit', (tester) async {
       await pumpCalculator(tester, FakeProfiles());
 

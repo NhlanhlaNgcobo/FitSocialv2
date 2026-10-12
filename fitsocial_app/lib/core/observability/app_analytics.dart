@@ -34,7 +34,14 @@ enum AnalyticsEvent {
   upnextTapped('upnext_tapped'),
   upnextDismissed('upnext_dismissed'),
   recapGenerated('recap_generated'),
-  recapShared('recap_shared');
+  recapShared('recap_shared'),
+
+  // Sign-up (spec §6.1). The funnel that matters: goal picked → /home.
+  onboardingGoalSelected('onboarding_goal_selected'),
+  onboardingShaped('onboarding_shaped'),
+  onboardingAccountCreated('onboarding_account_created'),
+  onboardingIdentitySaved('onboarding_identity_saved'),
+  onboardingAbandoned('onboarding_abandoned');
 
   const AnalyticsEvent(this.name);
 

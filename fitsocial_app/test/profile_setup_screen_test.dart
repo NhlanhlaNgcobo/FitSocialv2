@@ -239,6 +239,7 @@ class _FakeProfiles implements UserProfileRepository {
     String? avatarLocalPath,
     String pronouns = '',
     String links = '',
+    int? weeklyGoalDays,
   }) async {
     saveCount++;
     savedDisplayName = displayName;

@@ -162,7 +162,9 @@ class ActivityDescriptor {
     icon: Icons.fitness_center_rounded,
     accent: AppColors.orangeBright,
     usesPace: false,
-    // Neither. A workout's calories are typed in by the user.
+    // Neither. A workout's calories are typed in by the user, or estimated
+    // from its volume, duration and bodyweight when left blank — see
+    // estimateWorkoutCalories. A typed figure always wins.
     kcalPerKm: 0,
     kcalPerHour: 0,
   );

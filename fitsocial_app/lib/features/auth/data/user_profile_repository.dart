@@ -23,6 +23,7 @@ class UnconfiguredUserProfileRepository implements UserProfileRepository {
     String? avatarLocalPath,
     String pronouns = '',
     String links = '',
+    int? weeklyGoalDays,
   }) async {
     throw StateError(_firebaseSetupMessage);
   }

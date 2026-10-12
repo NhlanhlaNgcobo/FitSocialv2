@@ -20,6 +20,7 @@ class BodyMetricsFields extends StatefulWidget {
     required this.onChanged,
     this.showReadout = true,
     this.enabled = true,
+    this.showAgeAndSex = true,
     super.key,
   });
 
@@ -32,6 +33,10 @@ class BodyMetricsFields extends StatefulWidget {
 
   final bool enabled;
 
+  /// Age and sex, below the measurements. They feed the calorie target only,
+  /// so a host with no use for one can leave them out.
+  final bool showAgeAndSex;
+
   @override
   State<BodyMetricsFields> createState() => _BodyMetricsFieldsState();
 }
@@ -43,8 +48,10 @@ class _BodyMetricsFieldsState extends State<BodyMetricsFields> {
   /// The inches left over. Unused in metric.
   final _inchesController = TextEditingController();
   final _weightController = TextEditingController();
+  final _ageController = TextEditingController();
 
   late MeasurementUnits _units;
+  Sex? _sex;
 
   @override
   void initState() {
@@ -54,10 +61,12 @@ class _BodyMetricsFieldsState extends State<BodyMetricsFields> {
       heightCm: widget.initial.heightCm,
       weightKg: widget.initial.weightKg,
     );
+    _writeAgeAndSex(widget.initial);
     for (final controller in [
       _heightController,
       _inchesController,
       _weightController,
+      _ageController,
     ]) {
       controller.addListener(_report);
     }
@@ -77,6 +86,18 @@ class _BodyMetricsFieldsState extends State<BodyMetricsFields> {
         weightKg: widget.initial.weightKg,
       );
     }
+    // Same rule for age and sex, judged on their own: a late load fills them
+    // only if the user has not touched them.
+    if (_ageController.text.isEmpty && _sex == null) {
+      _writeAgeAndSex(widget.initial);
+    }
+  }
+
+  /// Sex first: writing the age text reports upward, and that report has to
+  /// carry the seeded sex with it.
+  void _writeAgeAndSex(BodyMetrics metrics) {
+    _sex = metrics.sex;
+    _ageController.text = metrics.age?.toString() ?? '';
   }
 
   @override
@@ -84,6 +105,7 @@ class _BodyMetricsFieldsState extends State<BodyMetricsFields> {
     _heightController.dispose();
     _inchesController.dispose();
     _weightController.dispose();
+    _ageController.dispose();
     super.dispose();
   }
 
@@ -92,7 +114,14 @@ class _BodyMetricsFieldsState extends State<BodyMetricsFields> {
         heightCm: _readHeightCm(),
         weightKg: _readWeightKg(),
         units: _units,
+        age: int.tryParse(_ageController.text.trim()),
+        sex: _sex,
       );
+
+  void _selectSex(Sex sex) {
+    setState(() => _sex = sex);
+    widget.onChanged(current);
+  }
 
   void _report() {
     setState(() {});
@@ -198,6 +227,22 @@ class _BodyMetricsFieldsState extends State<BodyMetricsFields> {
           label: 'Weight',
           suffix: _units.weightLabel,
         ),
+        if (widget.showAgeAndSex) ...[
+          const SizedBox(height: AppSpacing.md),
+          _MeasurementField(
+            controller: _ageController,
+            enabled: widget.enabled,
+            label: 'Age',
+            suffix: 'years',
+            wholeNumber: true,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _SexPicker(
+            selected: _sex,
+            enabled: widget.enabled,
+            onChanged: _selectSex,
+          ),
+        ],
         // Compact hosts still get an answer, just a smaller one: the BMI once
         // there is one, and otherwise the reason there isn't. Silence here is
         // what made a filled-in form look broken.
@@ -628,12 +673,16 @@ class _MeasurementField extends StatelessWidget {
     required this.enabled,
     required this.label,
     required this.suffix,
+    this.wholeNumber = false,
   });
 
   final TextEditingController controller;
   final bool enabled;
   final String label;
   final String suffix;
+
+  /// Digits only — an age has no decimal part.
+  final bool wholeNumber;
 
   @override
   Widget build(BuildContext context) {
@@ -656,12 +705,16 @@ class _MeasurementField extends StatelessWidget {
         TextField(
           controller: controller,
           enabled: enabled,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: TextInputType.numberWithOptions(decimal: !wholeNumber),
           inputFormatters: [
-            // The comma is allowed through, not stripped. Keyboards in locales
-            // that use a decimal comma put one on the decimal key, and
-            // filtering it out silently turned "70,5" into "705".
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+            if (wholeNumber) ...[
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(3),
+            ] else
+              // The comma is allowed through, not stripped. Keyboards in
+              // locales that use a decimal comma put one on the decimal key,
+              // and filtering it out silently turned "70,5" into "705".
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
           ],
           decoration: InputDecoration(
             suffixText: suffix,
@@ -676,6 +729,91 @@ class _MeasurementField extends StatelessWidget {
               borderSide: BorderSide(color: palette.stroke),
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Female / Male / Prefer not to say, styled like the units toggle.
+class _SexPicker extends StatelessWidget {
+  const _SexPicker({
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final Sex? selected;
+  final bool enabled;
+  final ValueChanged<Sex> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Sex',
+          style: TextStyle(
+            color: palette.muted,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (final option in Sex.values) ...[
+              if (option != Sex.values.first)
+                const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: option == selected,
+                  child: GestureDetector(
+                    onTap: enabled ? () => onChanged(option) : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 4,
+                      ),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: option == selected
+                            ? palette.brandSoft
+                            : palette.surfaceHigh,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: option == selected
+                              ? palette.brandSoftStroke
+                              : palette.stroke,
+                        ),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          option.label,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: option == selected
+                                ? palette.brandText
+                                : palette.muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Only used to work out your calorie target. Private to you.',
+          style: TextStyle(color: palette.muted, fontSize: 12),
         ),
       ],
     );

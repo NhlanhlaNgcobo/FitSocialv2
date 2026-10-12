@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/reactions/fit_reaction.dart';
 import '../../auth/application/app_session.dart';
+import '../../auth/application/body_metrics_providers.dart';
+import '../../onboarding/application/fitness_plan.dart';
+import '../../workouts/domain/nutrition_target.dart';
 import '../../auth/domain/auth_models.dart';
 import '../data/content_repository.dart';
 import '../data/content_repository_contract.dart';
@@ -228,6 +231,16 @@ final recentWorkoutsProvider =
   return ref.watch(contentRepositoryProvider).getRecentWorkouts();
 });
 
+/// Every workout's exercises with their per-set logs, newest first — what a
+/// set ticked off now is measured against for a personal record.
+///
+/// autoDispose, and invalidated on every save, so a record set in one session
+/// is the bar the next one has to clear.
+final workoutHistoryProvider =
+    FutureProvider.autoDispose<List<List<ExerciseEntry>>>((ref) {
+  return ref.watch(contentRepositoryProvider).getWorkoutHistory();
+});
+
 /// The gap-filled run/workout calendar behind the streak grid.
 ///
 /// The window is derived from the range here rather than in the widget so the
@@ -299,9 +312,22 @@ final loggedMealsProvider = FutureProvider.autoDispose<List<LoggedMeal>>((ref) {
 
 /// The user's daily macro targets. Not autoDispose: these change rarely, and
 /// they are the denominator on every bar on the page.
-final macroGoalsProvider = FutureProvider<MacroGoals>((ref) {
+///
+/// Targets the user set win. Otherwise they are calculated from body and
+/// plan, and recalculated when either is saved — both providers are watched.
+/// Only when the calculation is missing an input do the stored defaults show.
+final macroGoalsProvider = FutureProvider<MacroGoals>((ref) async {
   ref.watch(appSessionProvider);
-  return ref.watch(contentRepositoryProvider).getMacroGoals();
+  final stored = await ref.watch(contentRepositoryProvider).getMacroGoals();
+  if (stored.isCustom) return stored;
+  try {
+    final body = await ref.watch(bodyMetricsProvider.future);
+    final plan = await ref.watch(fitnessProfileProvider.future);
+    return deriveMacroGoals(body, plan) ?? stored;
+  } catch (_) {
+    // Body or plan unreadable: the defaults are a usable page.
+    return stored;
+  }
 });
 
 /// Everything the tracking page reports for one window.
