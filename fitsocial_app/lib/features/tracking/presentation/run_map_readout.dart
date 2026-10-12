@@ -92,14 +92,31 @@ class RunMapReadout extends StatelessWidget {
                   ),
                 ),
               ),
-              const Spacer(),
-              _SmallMetric(label: 'TIME', value: elapsedLabel),
               const SizedBox(width: AppSpacing.md),
-              _SmallMetric(label: paceLabel, value: paceValue),
-              if (climbMeters != null) ...[
-                const SizedBox(width: AppSpacing.md),
-                _SmallMetric(label: 'CLIMB M', value: climbMeters!),
-              ],
+              // The small figures take what the distance leaves and shrink to
+              // fit it. Four of them — a hike's climb, an hour on the clock —
+              // beside the close button on the full-screen map do not fit a
+              // narrow phone at full size, and overflowing is the one thing the
+              // plate a runner reads mid-stride must never do.
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.bottomRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _SmallMetric(label: 'TIME', value: elapsedLabel),
+                      const SizedBox(width: AppSpacing.md),
+                      _SmallMetric(label: paceLabel, value: paceValue),
+                      if (climbMeters != null) ...[
+                        const SizedBox(width: AppSpacing.md),
+                        _SmallMetric(label: 'CLIMB M', value: climbMeters!),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ],
