@@ -7,6 +7,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/input/typed_number.dart';
 import '../../challenges/domain/challenge_clock.dart';
 import '../../main/domain/progress_models.dart' show formatThousands;
+import '../../onboarding/presentation/training_plan_card.dart';
 import '../application/goal_providers.dart';
 import '../data/goal_repository.dart';
 import '../domain/goal.dart';
@@ -34,48 +35,62 @@ class GoalsScreen extends ConsumerWidget {
         icon: const Icon(Icons.add_rounded),
         label: const Text('New goal'),
       ),
-      body: goals.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => _Message(
-          icon: Icons.cloud_off_rounded,
-          title: 'Goals could not load',
-          body: 'Check your connection and pull down to try again.',
-          onRetry: () => ref.invalidate(activeGoalsProvider),
+      // The plan from sign-up sits above the goals: it is what they serve,
+      // and before it was here nothing in the app ever showed it again.
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          96,
         ),
-        data: (list) {
-          if (list.isEmpty) {
-            return _Message(
-              icon: Icons.track_changes_rounded,
-              title: 'No goals yet',
-              body: 'Set a target for the week, the month or the year. '
-                  'FitSocial keeps count from your logs and your steps.',
-              action: FilledButton(
-                onPressed: () => showCreateGoalSheet(context),
-                child: const Text('Set a goal'),
+        children: [
+          const TrainingPlanCard(),
+          const SizedBox(height: AppSpacing.md),
+          ...goals.when(
+            loading: () => const [
+              Padding(
+                padding: EdgeInsets.all(AppSpacing.xl),
+                child: Center(child: CircularProgressIndicator()),
               ),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.md,
-              AppSpacing.md,
-              96,
-            ),
-            itemCount: list.length + 1,
-            separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-            itemBuilder: (context, index) {
-              if (index == list.length) {
-                return Text(
+            ],
+            error: (_, __) => [
+              _Message(
+                icon: Icons.cloud_off_rounded,
+                title: 'Goals could not load',
+                body: 'Check your connection and pull down to try again.',
+                onRetry: () => ref.invalidate(activeGoalsProvider),
+              ),
+            ],
+            data: (list) {
+              if (list.isEmpty) {
+                return [
+                  _Message(
+                    icon: Icons.track_changes_rounded,
+                    title: 'No goals yet',
+                    body: 'Set a target for the week, the month or the year. '
+                        'FitSocial keeps count from your logs and your steps.',
+                    action: FilledButton(
+                      onPressed: () => showCreateGoalSheet(context),
+                      child: const Text('Set a goal'),
+                    ),
+                  ),
+                ];
+              }
+              return [
+                for (final goal in list) ...[
+                  GoalTile(goal: goal),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+                Text(
                   'Progress updates a minute or two after a log or a step '
                   'sync. Steps come from Health Connect.',
                   style: TextStyle(color: palette.muted, fontSize: 12),
-                );
-              }
-              return GoalTile(goal: list[index]);
+                ),
+              ];
             },
-          );
-        },
+          ),
+        ],
       ),
     );
   }
