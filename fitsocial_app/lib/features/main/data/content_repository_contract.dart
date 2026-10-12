@@ -62,6 +62,10 @@ abstract class ContentRepository {
 
   Future<void> setMacroGoals(MacroGoals goals);
 
+  /// Drops the user's own targets so the calculated ones apply again, keeping
+  /// only the step-bonus switch, which is the user's either way.
+  Future<void> clearCustomMacroGoals({required bool stepBonus});
+
   /// Removes a logged meal. The log only — a shared meal keeps its post, the
   /// same way [deleteActivitySession] leaves a session's post alone.
   Future<void> deleteLoggedMeal(String id);

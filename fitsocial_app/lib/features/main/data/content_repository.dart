@@ -76,6 +76,11 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<void> clearCustomMacroGoals({required bool stepBonus}) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<void> deleteLoggedMeal(String id) async {
     throw StateError(_firebaseSetupMessage);
   }
