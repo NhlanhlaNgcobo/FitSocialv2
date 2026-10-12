@@ -83,6 +83,7 @@ const EVERY_TYPE = [
   ["mention", { postId: "p1", postType: "image" }],
   ["comment", { postId: "p1", commentId: "c1", postType: "meal" }],
   ["reply", { postId: "p1", commentId: "c1" }],
+  ["commentLike", { postId: "p1", commentId: "c1" }],
   ["tag", { postId: "p1", postType: "workout" }],
   ["pulseShare", { postId: "p1", postType: "run" }],
   ["challengeInvite", { challengeId: "ch1", challengeTitle: "September 100" }],
@@ -148,6 +149,11 @@ test("the sentences match the ones the app's own list renders", async () => {
       { type: "reply", postId: "p1", commentId: "c1" },
       "Bear",
       "replied to your comment",
+    ],
+    [
+      { type: "commentLike", postId: "p1", commentId: "c1" },
+      "Bear",
+      "liked your comment",
     ],
     // An unknown postType falls back to "post", which is true of everything.
     [

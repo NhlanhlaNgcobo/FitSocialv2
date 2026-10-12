@@ -230,6 +230,10 @@ Color _accentFor(FitNotification notification, AppPalette palette) {
       return palette.accent(
         notification.reaction?.accent ?? const Color(0xFFE23D5A),
       );
+    // The heart's red, as a like from before reactions has: it is the same
+    // gesture, made on the words instead of the post.
+    case FitNotificationType.commentLike:
+      return palette.accent(const Color(0xFFE23D5A));
     case FitNotificationType.mention:
     case FitNotificationType.tag:
       return palette.accent(const Color(0xFF3AA9C9));
@@ -500,6 +504,7 @@ class _ActorAvatar extends StatelessWidget {
       case FitNotificationType.follow:
         return Icons.person_add_alt_1_rounded;
       case FitNotificationType.like:
+      case FitNotificationType.commentLike:
         return Icons.favorite_rounded;
       case FitNotificationType.mention:
       case FitNotificationType.tag:

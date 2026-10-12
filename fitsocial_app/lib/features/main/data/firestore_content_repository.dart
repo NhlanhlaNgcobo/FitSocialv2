@@ -2587,6 +2587,60 @@ class FirestoreContentRepository implements ContentRepository {
     );
   }
 
+  @override
+  Future<void> setCommentLike(
+    String postId,
+    String commentId,
+    String userId, {
+    required bool liked,
+    UserProfileDraft? profile,
+  }) async {
+    final comments = postsCollection.doc(postId).collection('comments');
+
+    // arrayUnion / arrayRemove rather than a read-modify-write: two people
+    // liking at once can't overwrite each other, and a double tap lands as one
+    // like. The security rule checks the list moved by exactly this uid.
+    //
+    // Started before the author lookup below rather than batched with the
+    // notification: a batch would make the heart wait on that read, and the
+    // heart is what the person tapping is looking at.
+    final likeUpdate = comments.doc(commentId).update({
+      'likedBy': liked
+          ? FieldValue.arrayUnion([userId])
+          : FieldValue.arrayRemove([userId]),
+    });
+    final authorId = await _commentAuthorId(comments, commentId);
+    await likeUpdate;
+
+    // Nobody is told about liking their own words.
+    if (authorId.isEmpty || authorId == userId) return;
+    final notificationRef = _notifications.ref(
+      authorId,
+      NotificationIds.commentLike(commentId, userId),
+    );
+    try {
+      if (!liked) {
+        // Taking the like back takes the notification with it.
+        await notificationRef.delete();
+        return;
+      }
+      // Written whole rather than patched, so liking again after unliking
+      // lifts the row back to the top of the author's list.
+      await notificationRef.set(
+        _notifications.commentLikePayload(
+          actorId: userId,
+          actorName: await _resolvePublicAuthorName(profile),
+          actorAvatarUrl: await _resolveAuthorAvatarUrl(profile),
+          postId: postId,
+          commentId: commentId,
+        ),
+      );
+    } catch (_) {
+      // A notification that fails to write is a lost courtesy, not a failed
+      // like — the like has already landed, so the heart must not roll back.
+    }
+  }
+
   /// Who wrote [commentId], or empty when the comment has since been removed.
   Future<String> _commentAuthorId(
     CollectionReference<Map<String, dynamic>> comments,

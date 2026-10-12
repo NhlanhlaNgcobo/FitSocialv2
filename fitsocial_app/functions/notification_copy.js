@@ -83,6 +83,8 @@ function messageFor(data) {
       return `commented on your ${noun}`;
     case "reply":
       return "replied to your comment";
+    case "commentLike":
+      return "liked your comment";
     case "tag":
       return `tagged you in a ${noun}`;
     case "pulseShare":
@@ -129,6 +131,7 @@ function routeFor(data) {
     case "mention":
     case "comment":
     case "reply":
+    case "commentLike":
     case "tag":
     case "pulseShare": {
       const postId = String(data.postId ?? "");

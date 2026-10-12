@@ -123,6 +123,22 @@ service cloud.firestore {
                   && after[uid] < resource.data.poll.options.size()));
     }
 
+    // Liking a comment, or taking the like back: likedBy is the only field
+    // touched, it stays a list, and the only uid added or removed is the
+    // caller's own. Comparing as sets is what lets arrayUnion/arrayRemove
+    // through while refusing a write that adds or strips anyone else.
+    function isOwnCommentLike() {
+      let before = resource.data.get('likedBy', []);
+      let after = request.resource.data.get('likedBy', []);
+      let uid = request.auth.uid;
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['likedBy'])
+          && after is list
+          && after.size() <= 10000
+          && (after.toSet() == before.toSet().union([uid].toSet())
+              || after.toSet() == before.toSet().difference([uid].toSet()));
+    }
+
     // Saying you're in for a meetup, or taking it back: the caller's own entry
     // in rsvps and nothing else, stamped with the server's clock so the
     // who's-in order can't be jumped.
@@ -835,8 +851,11 @@ service cloud.firestore {
         allow read: if request.auth != null;
         allow create: if request.auth != null
                       && request.resource.data.authorId == request.auth.uid;
+        // Anyone signed in may like or unlike a comment as themselves; every
+        // other edit stays with its author.
         allow update: if request.auth != null
-                      && resource.data.authorId == request.auth.uid;
+                      && (resource.data.authorId == request.auth.uid
+                          || isOwnCommentLike());
         allow delete: if request.auth != null
                       && (resource.data.authorId == request.auth.uid
                           || get(/databases/$(database)/documents/posts/$(postId))

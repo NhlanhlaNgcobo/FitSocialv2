@@ -872,7 +872,11 @@ class _CommentList extends ConsumerWidget {
                 children: [
                   for (var i = 0; i < threads.length; i++) ...[
                     if (i > 0) const SizedBox(height: AppSpacing.md),
-                    CommentThreadTile(thread: threads[i], onReply: onReply),
+                    CommentThreadTile(
+                      postId: postId,
+                      thread: threads[i],
+                      onReply: onReply,
+                    ),
                   ],
                 ],
               );

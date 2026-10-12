@@ -223,6 +223,7 @@ class FirestoreMapper {
       createdAt: record.createdAt ?? DateTime.now(),
       authorAvatarUrl: record.authorAvatarUrl,
       parentId: record.parentCommentId,
+      likedBy: record.likedBy,
     );
   }
 

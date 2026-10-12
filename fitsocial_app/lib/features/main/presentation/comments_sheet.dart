@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_palette.dart';
@@ -9,7 +10,9 @@ import '../../../shared/widgets/comment_composer.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/mention_text.dart';
 import '../../../shared/widgets/profile_link.dart';
+import '../../auth/application/app_session.dart';
 import '../application/content_providers.dart';
+import '../data/content_repository.dart';
 import '../domain/app_models.dart';
 import '../domain/comment_threads.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -43,7 +46,7 @@ class CommentsSheet extends ConsumerStatefulWidget {
 
   final String postId;
 
-  /// Opens with the keyboard up, for "Add a comment…" on a card — somebody
+  /// Opens with the keyboard up, for "Add a commentâ€¦" on a card â€” somebody
   /// who tapped a box to type in should not then have to tap it again.
   final bool autofocus;
 
@@ -56,7 +59,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   /// in the composer because the Reply button that sets it is up in the list.
   CommentReplyTarget? _replyTo;
 
-  /// Owned by the sheet so tapping Reply can put the cursor in the box — a
+  /// Owned by the sheet so tapping Reply can put the cursor in the box â€” a
   /// banner saying "Replying to Bear" over a keyboard that never came up is
   /// half an action.
   final _composerFocus = FocusNode();
@@ -186,6 +189,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                     separatorBuilder: (_, __) =>
                         const SizedBox(height: AppSpacing.md),
                     itemBuilder: (context, index) => CommentThreadTile(
+                      postId: widget.postId,
                       thread: threads[index],
                       onReply: _replyTapped,
                     ),
@@ -213,7 +217,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
             ),
 
             // Input bar. The sheet floats over its own barrier, so nothing else
-            // lifts the composer clear of the keyboard or the system nav bar —
+            // lifts the composer clear of the keyboard or the system nav bar â€”
             // it pads for whichever is taller itself.
             KeyboardSafeBottomBar(
               child: CommentComposer(
@@ -235,12 +239,16 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
 /// Public for the same reason [CommentTile] is: the post detail page lists
 /// comments in exactly the form the sheet shows them, and a thread that nested
 /// on one screen and not on the other would read as two different apps.
-class CommentThreadTile extends StatefulWidget {
+class CommentThreadTile extends ConsumerStatefulWidget {
   const CommentThreadTile({
+    required this.postId,
     required this.thread,
     required this.onReply,
     super.key,
   });
+
+  /// The post these comments sit under â€” where a like is written.
+  final String postId;
 
   /// How many replies a thread shows before it asks.
   ///
@@ -254,19 +262,20 @@ class CommentThreadTile extends StatefulWidget {
   final ValueChanged<CommentReplyTarget> onReply;
 
   @override
-  State<CommentThreadTile> createState() => _CommentThreadTileState();
+  ConsumerState<CommentThreadTile> createState() => _CommentThreadTileState();
 }
 
-class _CommentThreadTileState extends State<CommentThreadTile> {
+class _CommentThreadTileState extends ConsumerState<CommentThreadTile> {
   bool _expanded = false;
 
-  /// Indent for everything under the parent comment — its avatar's width plus
+  /// Indent for everything under the parent comment â€” its avatar's width plus
   /// the gap beside it, so replies line up with the words they answer.
   static const double _indent = 34 + AppSpacing.sm;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final viewerId = ref.watch(currentUserIdProvider);
     final replies = widget.thread.replies;
     final hidden = replies.length - CommentThreadTile.collapsedReplies;
     final shown = (_expanded || hidden <= 0)
@@ -279,6 +288,10 @@ class _CommentThreadTileState extends State<CommentThreadTile> {
         CommentTile(
           comment: widget.thread.comment,
           onReply: () => _reply(widget.thread.comment),
+          viewerId: viewerId,
+          onLike: viewerId == null
+              ? null
+              : () => _toggleLike(widget.thread.comment, viewerId),
         ),
         for (final reply in shown)
           Padding(
@@ -287,6 +300,9 @@ class _CommentThreadTileState extends State<CommentThreadTile> {
               comment: reply,
               compact: true,
               onReply: () => _reply(reply),
+              viewerId: viewerId,
+              onLike:
+                  viewerId == null ? null : () => _toggleLike(reply, viewerId),
             ),
           ),
         if (hidden > 0)
@@ -315,6 +331,29 @@ class _CommentThreadTileState extends State<CommentThreadTile> {
   static String _moreLabel(int hidden) =>
       'View $hidden more ${hidden == 1 ? 'reply' : 'replies'}';
 
+  /// The heart updates the moment it is tapped: the comment list is a live
+  /// snapshot stream, and Firestore shows a local write before the server
+  /// confirms it. A write the rules refuse rolls the heart back on its own.
+  Future<void> _toggleLike(Comment comment, String viewerId) async {
+    HapticFeedback.lightImpact();
+    try {
+      await ref.read(contentRepositoryProvider).setCommentLike(
+            widget.postId,
+            comment.id,
+            viewerId,
+            liked: !comment.isLikedBy(viewerId),
+            // Names the liker on the notification the comment's author gets,
+            // from the profile the session already holds.
+            profile: ref.read(appSessionProvider).profile,
+          );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text("Couldn't update that like.")),
+      );
+    }
+  }
+
   /// Replies always join the thread they were tapped in; tapping Reply on a
   /// reply never opens a second level. One indent is all a phone has room for,
   /// and who is being answered is carried by the name on the composer's banner
@@ -338,10 +377,19 @@ class CommentTile extends StatelessWidget {
     required this.comment,
     this.onReply,
     this.compact = false,
+    this.onLike,
+    this.viewerId,
     super.key,
   });
 
   final Comment comment;
+
+  /// Likes or unlikes the comment as the viewer. Null hides the heart â€” Pulse
+  /// comments, which have no likes, pass nothing.
+  final VoidCallback? onLike;
+
+  /// Who is looking, to fill the heart for a comment they have liked.
+  final String? viewerId;
 
   /// Opens a reply to this comment. Null where there is nowhere to write one.
   final VoidCallback? onReply;
@@ -432,6 +480,12 @@ class CommentTile extends StatelessWidget {
             ],
           ),
         ),
+        if (onLike != null)
+          _LikeButton(
+            liked: comment.isLikedBy(viewerId),
+            count: comment.likedBy.length,
+            onTap: onLike!,
+          ),
       ],
     );
   }
@@ -443,5 +497,81 @@ class CommentTile extends StatelessWidget {
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays < 7) return '${diff.inDays}d';
     return '${(diff.inDays / 7).floor()}w';
+  }
+}
+
+/// The heart at the end of a comment, with how many have liked it beneath.
+///
+/// The count is left out at zero rather than shown as "0": an empty heart
+/// already says nobody has, and a column of zeros down a thread is noise.
+class _LikeButton extends StatelessWidget {
+  const _LikeButton({
+    required this.liked,
+    required this.count,
+    required this.onTap,
+  });
+
+  final bool liked;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Semantics(
+      button: true,
+      toggled: liked,
+      label: liked ? 'Unlike comment' : 'Like comment',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          // Wider than the icon so a thumb finds it without aiming.
+          padding: const EdgeInsets.only(
+            left: AppSpacing.sm,
+            top: 2,
+            bottom: 4,
+          ),
+          child: SizedBox(
+            width: 28,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: Tween<double>(begin: 0.6, end: 1).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutBack,
+                      ),
+                    ),
+                    child: child,
+                  ),
+                  child: Icon(
+                    liked ? Icons.favorite : Icons.favorite_border,
+                    key: ValueKey(liked),
+                    size: 16,
+                    color: liked ? palette.brand : palette.muted,
+                  ),
+                ),
+                if (count > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

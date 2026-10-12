@@ -246,6 +246,19 @@ abstract class ContentRepository {
     String? parentCommentId,
   });
 
+  /// Likes or unlikes a comment as [userId]. Liking twice, or unliking a
+  /// comment never liked, changes nothing.
+  ///
+  /// Tells the comment's author, named from [profile] on the same terms as
+  /// [setPostReaction]; unliking takes that notification back.
+  Future<void> setCommentLike(
+    String postId,
+    String commentId,
+    String userId, {
+    required bool liked,
+    UserProfileDraft? profile,
+  });
+
   /// Watches which reaction [userId] has given a post, null when none.
   ///
   /// Reads from `likes/{postId}/users/{userId}` — the same document the single

@@ -72,7 +72,44 @@ FitNotification reply({String? postType}) {
   );
 }
 
+const commentLike = FitNotification(
+  id: 'n7',
+  type: FitNotificationType.commentLike,
+  actorId: 'u8',
+  actorName: 'Ayanda',
+  isRead: false,
+  postId: 'p1',
+  postType: 'run',
+  commentId: 'c9',
+);
+
 void main() {
+  group('a comment like', () {
+    test('is about the words, whatever the post was', () {
+      expect(commentLike.message, 'liked your comment');
+    });
+
+    test('opens the post the comment is on', () {
+      expect(commentLike.route, '/post/p1');
+    });
+
+    test('is keyed by comment and liker', () {
+      expect(
+        NotificationIds.commentLike('c1', 'u1'),
+        NotificationIds.commentLike('c1', 'u1'),
+      );
+      expect(
+        NotificationIds.commentLike('c1', 'u1'),
+        isNot(NotificationIds.commentLike('c1', 'u2')),
+      );
+      // Never the same row as a reaction to a post that shares the id.
+      expect(
+        NotificationIds.commentLike('x', 'u1'),
+        isNot(NotificationIds.like('x', 'u1')),
+      );
+    });
+  });
+
   group('notification type keys', () {
     test('round-trip through their stored form', () {
       for (final type in FitNotificationType.values) {

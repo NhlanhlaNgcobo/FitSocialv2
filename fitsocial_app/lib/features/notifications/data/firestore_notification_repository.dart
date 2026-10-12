@@ -226,6 +226,24 @@ class NotificationWrites {
     );
   }
 
+  /// Someone liked a comment the recipient wrote. Routes to the post the
+  /// comment is on, which is where it can be read in context.
+  Map<String, dynamic> commentLikePayload({
+    required String actorId,
+    required String actorName,
+    required String postId,
+    required String commentId,
+    String? actorAvatarUrl,
+  }) {
+    return _payload(
+      type: FitNotificationType.commentLike,
+      actorId: actorId,
+      actorName: actorName,
+      actorAvatarUrl: actorAvatarUrl,
+      extra: {'postId': postId, 'commentId': commentId},
+    );
+  }
+
   /// Someone attached the recipient to a post from its composer.
   Map<String, dynamic> tagPayload({
     required String actorId,

@@ -239,6 +239,17 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<void> setCommentLike(
+    String postId,
+    String commentId,
+    String userId, {
+    required bool liked,
+    UserProfileDraft? profile,
+  }) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
   Future<String> uploadMealImage(String localFilePath) async {
     throw StateError(_firebaseSetupMessage);
   }
@@ -322,8 +333,7 @@ class UnconfiguredContentRepository implements ContentRepository {
   Stream<FeedPost?> watchPost(String postId) => const Stream.empty();
 
   @override
-  Future<List<FeedPost>> fetchPromptAnswers(String promptId) async =>
-      const [];
+  Future<List<FeedPost>> fetchPromptAnswers(String promptId) async => const [];
 
   @override
   Future<List<Comment>> fetchCommentPreview(String postId, {int limit = 2}) {

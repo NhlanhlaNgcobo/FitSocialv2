@@ -30,6 +30,13 @@ enum FitNotificationType {
   /// as often as on your own.
   reply,
 
+  /// Someone liked a comment of yours.
+  ///
+  /// Not folded into [like]: that key means a reaction to a post, and an older
+  /// build reading this as one would tell the user someone loved their post.
+  /// A build that predates this kind drops the row instead — see above.
+  commentLike,
+
   /// Someone attached you to a post from its composer.
   tag,
 
@@ -79,6 +86,8 @@ enum FitNotificationType {
         return 'comment';
       case FitNotificationType.reply:
         return 'reply';
+      case FitNotificationType.commentLike:
+        return 'commentLike';
       case FitNotificationType.tag:
         return 'tag';
       case FitNotificationType.pulseShare:
@@ -112,6 +121,8 @@ enum FitNotificationType {
         return FitNotificationType.comment;
       case 'reply':
         return FitNotificationType.reply;
+      case 'commentLike':
+        return FitNotificationType.commentLike;
       case 'tag':
         return FitNotificationType.tag;
       case 'pulseShare':
@@ -169,6 +180,12 @@ abstract final class NotificationIds {
   static String comment(String commentId) => 'comment_$commentId';
 
   static String reply(String commentId) => 'reply_$commentId';
+
+  /// Keyed by comment and liker, like [like] is by post and liker: liking the
+  /// same comment again can only refresh the one row, and unliking can delete
+  /// it without a search.
+  static String commentLike(String commentId, String actorId) =>
+      'commentLike_${commentId}_$actorId';
 }
 
 /// One line in the notifications list.
@@ -269,6 +286,8 @@ class FitNotification {
         return 'commented on your $_likedNoun';
       case FitNotificationType.reply:
         return 'replied to your comment';
+      case FitNotificationType.commentLike:
+        return 'liked your comment';
       case FitNotificationType.tag:
         return 'tagged you in a $_likedNoun';
       case FitNotificationType.pulseShare:
@@ -334,6 +353,7 @@ class FitNotification {
       case FitNotificationType.mention:
       case FitNotificationType.comment:
       case FitNotificationType.reply:
+      case FitNotificationType.commentLike:
       case FitNotificationType.tag:
       case FitNotificationType.pulseShare:
         final id = postId;

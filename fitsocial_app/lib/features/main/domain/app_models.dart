@@ -681,6 +681,7 @@ class Comment {
     required this.createdAt,
     this.authorAvatarUrl,
     this.parentId,
+    this.likedBy = const [],
   });
 
   final String id;
@@ -688,6 +689,13 @@ class Comment {
   final String authorName;
   final String text;
   final DateTime createdAt;
+
+  /// Everyone who has liked this comment. Empty on comments nobody has liked,
+  /// and on every comment written before comment likes existed.
+  final List<String> likedBy;
+
+  /// Whether [userId] has liked this comment.
+  bool isLikedBy(String? userId) => userId != null && likedBy.contains(userId);
 
   /// Author's profile photo at the time of commenting, denormalised the same
   /// way [authorName] is. Null on comments written before it was recorded.
@@ -718,6 +726,7 @@ class Comment {
       createdAt: createdAt,
       authorAvatarUrl: authorAvatarUrl,
       parentId: parentId,
+      likedBy: likedBy,
     );
   }
 }

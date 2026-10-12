@@ -277,6 +277,9 @@ class FirestoreCommentRecord {
       createdAt: timestamp,
       authorAvatarUrl: data['authorAvatarUrl'] as String?,
       parentCommentId: data['parentCommentId'] as String?,
+      likedBy: (data['likedBy'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(),
     );
   }
   const FirestoreCommentRecord({
@@ -287,6 +290,7 @@ class FirestoreCommentRecord {
     this.createdAt,
     this.authorAvatarUrl,
     this.parentCommentId,
+    this.likedBy = const [],
   });
 
   final String id;
@@ -294,6 +298,10 @@ class FirestoreCommentRecord {
   final String authorName;
   final String text;
   final DateTime? createdAt;
+
+  /// Uids of everyone who has liked the comment. Absent on the document until
+  /// the first like, so older comments read as liked by nobody.
+  final List<String> likedBy;
 
   /// Author's profile photo, denormalised alongside [authorName].
   final String? authorAvatarUrl;
