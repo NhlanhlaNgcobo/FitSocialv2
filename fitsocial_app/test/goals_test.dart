@@ -140,6 +140,7 @@ void main() {
         'workouts',
         'meals_logged',
         'streak',
+        'active_days',
       ]);
       expect(
         GoalPeriod.values.map((p) => p.key),

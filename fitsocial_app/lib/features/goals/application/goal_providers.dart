@@ -57,6 +57,37 @@ class GoalActions {
     });
   }
 
+  /// Makes the "days a week" answer a goal the server keeps count of: one
+  /// weekly [GoalMetric.activeDays] goal at [days].
+  ///
+  /// Called when sign-up finishes and whenever the plan is saved. A goal at
+  /// the same target is left alone; one at a different target is archived
+  /// and replaced, because the server has no "change target" — and a goal
+  /// whose target moved mid-week would misreport the week anyway. Skipped
+  /// while goals are switched off.
+  Future<void> syncTrainingDays(int days) async {
+    if (!_ref.read(goalsEnabledProvider)) return;
+    final userId = _ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    final running = await _repository.watchActiveGoals(userId).first;
+    final current = [
+      for (final goal in running)
+        if (goal.metric == GoalMetric.activeDays &&
+            goal.period == GoalPeriod.weekly)
+          goal,
+    ];
+    if (current.any((goal) => goal.target == days)) return;
+    for (final goal in current) {
+      await _repository.archiveGoal(userId, goal.id);
+    }
+    await create(
+      metric: GoalMetric.activeDays,
+      period: GoalPeriod.weekly,
+      target: days,
+    );
+  }
+
   Future<void> archive(Goal goal) async {
     final userId = _ref.read(currentUserIdProvider);
     if (userId == null) return;

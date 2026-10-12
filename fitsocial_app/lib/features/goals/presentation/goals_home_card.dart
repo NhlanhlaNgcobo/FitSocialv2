@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/liquid_glass.dart';
+import '../../main/application/content_providers.dart';
+import '../../onboarding/application/fitness_plan.dart';
+import '../../onboarding/presentation/training_plan_card.dart';
 import '../application/goal_providers.dart';
 import '../domain/goal.dart';
 
@@ -29,6 +32,12 @@ class GoalsHomeCard extends ConsumerWidget {
     // Nothing while loading: a card that appears and then changes shape is
     // worse than one that appears once.
     if (goals == null) return const SizedBox.shrink();
+    // The sign-up plan, one line. Absent until there is one, so the card
+    // does not change shape over a slow read.
+    final planLine = trainingPlanLine(
+      ref.watch(fitnessProfileProvider).valueOrNull,
+      ref.watch(weeklyGoalDaysProvider).valueOrNull,
+    );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -72,6 +81,19 @@ class GoalsHomeCard extends ConsumerWidget {
                     ),
                   ],
                 ),
+                if (planLine != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Your plan: $planLine',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.sm),
                 if (goals.isEmpty)
                   Text(

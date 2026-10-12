@@ -14,7 +14,11 @@ enum GoalMetric {
   activeMinutes('active_minutes', 'Active minutes', 'min'),
   workouts('workouts', 'Sessions', 'sessions'),
   mealsLogged('meals_logged', 'Meals logged', 'meals'),
-  streak('streak', 'Active-day streak', 'days');
+  streak('streak', 'Active-day streak', 'days'),
+
+  /// The "days a week" sign-up asks for. Sign-up creates one weekly goal of
+  /// this kind from the answer; see `GoalActions.syncTrainingDays`.
+  activeDays('active_days', 'Training days', 'days');
 
   const GoalMetric(this.key, this.label, this.unit);
 
@@ -35,6 +39,9 @@ enum GoalMetric {
         GoalMetric.streak =>
           'Days in a row with at least one session. Your longest run of '
               'days in the period counts.',
+        GoalMetric.activeDays =>
+          'Days with at least one run, walk, ride or workout. Two sessions '
+              'on one day count once.',
       };
 
   /// A sensible starting target for [period], so the sheet never opens blank.
@@ -59,6 +66,10 @@ enum GoalMetric {
         (GoalMetric.streak, GoalPeriod.monthly) => 7,
         (GoalMetric.streak, GoalPeriod.annual) => 30,
         (GoalMetric.streak, GoalPeriod.custom) => 5,
+        (GoalMetric.activeDays, GoalPeriod.weekly) => 4,
+        (GoalMetric.activeDays, GoalPeriod.monthly) => 16,
+        (GoalMetric.activeDays, GoalPeriod.annual) => 180,
+        (GoalMetric.activeDays, GoalPeriod.custom) => 10,
       };
 
   static GoalMetric? byKey(Object? key) {
