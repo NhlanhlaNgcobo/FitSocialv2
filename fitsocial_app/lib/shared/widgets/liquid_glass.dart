@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../app/theme/app_motion.dart';
 import '../../app/theme/app_palette.dart';
@@ -81,7 +82,7 @@ class LiquidGlass extends StatefulWidget {
     this.borderRadius = const BorderRadius.all(Radius.circular(24)),
     this.refraction = 24,
     this.edge = 22,
-    this.aberration = 0.55,
+    this.aberration = 0.2,
     this.reflect = 0,
     this.light = const Offset(-0.55, -0.78),
     this.clip = true,
@@ -105,6 +106,10 @@ class LiquidGlass extends StatefulWidget {
   final double edge;
 
   /// Per-channel spread at the lens edge, 0 to 1.
+  ///
+  /// Kept low because the lens magnifies: the strongest bend sits just inside
+  /// the rim, over the content, so at the old 0.55 white text split into a
+  /// rainbow there. 0.2 is quick-liquid's own fringe at our refraction.
   final double aberration;
 
   /// How much of the bevel is reflection rather than refraction.
@@ -207,7 +212,11 @@ class LiquidGlass extends StatefulWidget {
 
 class _LiquidGlassState extends State<LiquidGlass> {
   ui.FragmentShader? _shader;
-  ui.ImageFilter? _filter;
+
+  /// Whether [_shader] holds this pane's material and can be turned into a
+  /// filter. False means the lens is not available, for any of the reasons in
+  /// [LiquidGlassProgram].
+  bool _ready = false;
 
   /// Whether the app is standing still. A backdrop filter inside a screen
   /// transition has no backdrop to read — see [GlassMotion] — so while one runs
@@ -318,6 +327,11 @@ class _LiquidGlassState extends State<LiquidGlass> {
     // reading as glass and starts reading as a grey smear along the edge.
     final reflect = widget.reflect * (palette.isDark ? 1.0 : 0.55);
 
+    // The shader works in the backdrop's physical pixels, and every length here
+    // is in logical ones. Without this the rim lands at about half the size it
+    // was drawn at -- 1.875 times too small on the A06.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+
     final signature = Object.hash(
       widget.borderRadius,
       refraction,
@@ -325,10 +339,10 @@ class _LiquidGlassState extends State<LiquidGlass> {
       widget.aberration,
       widget.light,
       tint,
-      Object.hash(rim, sheen, palette.isDark, widget.tintScale),
+      Object.hash(rim, sheen, palette.isDark, widget.tintScale, dpr),
       Object.hash(reflect, floor),
     );
-    if (signature == _builtFrom && _filter != null) return;
+    if (signature == _builtFrom && _ready) return;
 
     final shader = _shader ??= program.fragmentShader();
 
@@ -336,12 +350,12 @@ class _LiquidGlassState extends State<LiquidGlass> {
     // index here is offset past them, and they must not be set from Dart.
     final radii = widget.borderRadius;
     shader
-      ..setFloat(2, radii.topLeft.x)
-      ..setFloat(3, radii.topRight.x)
-      ..setFloat(4, radii.bottomRight.x)
-      ..setFloat(5, radii.bottomLeft.x)
-      ..setFloat(6, refraction)
-      ..setFloat(7, widget.edge)
+      ..setFloat(2, radii.topLeft.x * dpr)
+      ..setFloat(3, radii.topRight.x * dpr)
+      ..setFloat(4, radii.bottomRight.x * dpr)
+      ..setFloat(5, radii.bottomLeft.x * dpr)
+      ..setFloat(6, refraction * dpr)
+      ..setFloat(7, widget.edge * dpr)
       ..setFloat(8, widget.aberration)
       ..setFloat(9, widget.light.dx)
       ..setFloat(10, widget.light.dy)
@@ -362,12 +376,27 @@ class _LiquidGlassState extends State<LiquidGlass> {
       ..setFloat(21, floor.g)
       ..setFloat(22, floor.b);
 
-    _filter = ui.ImageFilter.compose(
-      outer: ui.ImageFilter.shader(shader),
-      inner:
-          palette.isDark ? LiquidGlass._underBlur : LiquidGlass._underBlurLight,
-    );
+    _underBlur =
+        palette.isDark ? LiquidGlass._underBlur : LiquidGlass._underBlurLight;
+    _ready = true;
     _builtFrom = signature;
+  }
+
+  ui.ImageFilter _underBlur = LiquidGlass._underBlur;
+
+  /// The filter for this pane standing at [pane], in the backdrop's physical
+  /// pixels. Called from paint, by [_LensBackdrop], and only when the pane has
+  /// moved or the material above has changed.
+  ui.ImageFilter _filterFor(Rect pane) {
+    _shader!
+      ..setFloat(23, pane.left)
+      ..setFloat(24, pane.top)
+      ..setFloat(25, pane.width)
+      ..setFloat(26, pane.height);
+    return ui.ImageFilter.compose(
+      outer: ui.ImageFilter.shader(_shader!),
+      inner: _underBlur,
+    );
   }
 
   /// The child, with any form field beneath it told to stop painting a surface
@@ -400,7 +429,6 @@ class _LiquidGlassState extends State<LiquidGlass> {
 
   @override
   Widget build(BuildContext context) {
-    final filter = _filter;
     final shape = widget.borderRadius;
     final palette = context.palette;
 
@@ -424,14 +452,14 @@ class _LiquidGlassState extends State<LiquidGlass> {
     // from inside a transition's buffer, so the pane drops its filter and
     // paints the rest of the material by hand until the app stands still.
     if (!_settled) {
-      return _shaped(_held(context, palette, shape, frosted: filter == null),
+      return _shaped(_held(context, palette, shape, frosted: !_ready),
           shape, palette);
     }
 
     // No lens on this device, or not compiled yet. The frosted pane is the
     // honest fallback: it needs nothing behind it to look deliberate, and it
     // carries the rim the shader would otherwise have drawn.
-    if (filter == null) {
+    if (!_ready) {
       final frosted = CustomPaint(
         // Outside the filter, which changes only with the theme: keeping it out
         // of the filtered subtree spares it the per-frame repaint the blur
@@ -456,8 +484,9 @@ class _LiquidGlassState extends State<LiquidGlass> {
       return _shaped(frosted, shape, palette);
     }
 
-    final glass = BackdropFilter(
-      filter: filter,
+    final glass = _LensBackdrop(
+      material: _builtFrom,
+      filterFor: _filterFor,
       child: _content(context),
     );
 
@@ -563,5 +592,117 @@ class _LiquidGlassState extends State<LiquidGlass> {
       ),
       child: clipped,
     );
+  }
+}
+
+/// A [BackdropFilter] that knows where it is on screen.
+///
+/// The lens is drawn in the backdrop's coordinates, and that backdrop is the
+/// whole screen, not the pane -- so the shader has to be told where the pane
+/// sits in it. The widget tree cannot know that: the bottom nav slides and
+/// shrinks under a transform, and a sheet moves while it is dragged, all
+/// without rebuilding. Paint is the one moment the real position is settled,
+/// so the filter is resolved there, and only when the pane has moved or the
+/// material has changed -- a pane standing still keeps one filter, which is
+/// what lets the engine reuse its layer.
+class _LensBackdrop extends SingleChildRenderObjectWidget {
+  const _LensBackdrop({
+    required this.material,
+    required this.filterFor,
+    required super.child,
+  });
+
+  /// Changes whenever the shader's other uniforms do, so a new theme or a new
+  /// radius still gets a new filter on a pane that has not moved.
+  final Object? material;
+
+  final ui.ImageFilter Function(Rect pane) filterFor;
+
+  @override
+  _RenderLensBackdrop createRenderObject(BuildContext context) {
+    return _RenderLensBackdrop(
+      material: material,
+      filterFor: filterFor,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
+  }
+
+  @override
+  void updateRenderObject(
+      BuildContext context, _RenderLensBackdrop renderObject) {
+    renderObject
+      ..material = material
+      ..filterFor = filterFor
+      ..devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+  }
+}
+
+class _RenderLensBackdrop extends RenderProxyBox {
+  _RenderLensBackdrop({
+    required Object? material,
+    required this.filterFor,
+    required double devicePixelRatio,
+  })  : _material = material,
+        _devicePixelRatio = devicePixelRatio;
+
+  ui.ImageFilter Function(Rect pane) filterFor;
+
+  Object? get material => _material;
+  Object? _material;
+  set material(Object? value) {
+    if (value == _material) return;
+    _material = value;
+    markNeedsPaint();
+  }
+
+  double get devicePixelRatio => _devicePixelRatio;
+  double _devicePixelRatio;
+  set devicePixelRatio(double value) {
+    if (value == _devicePixelRatio) return;
+    _devicePixelRatio = value;
+    markNeedsPaint();
+  }
+
+  ui.ImageFilter? _filter;
+  Rect? _filterPane;
+  Object? _filterMaterial;
+
+  @override
+  bool get alwaysNeedsCompositing => child != null;
+
+  @override
+  BackdropFilterLayer? get layer => super.layer as BackdropFilterLayer?;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (child == null) {
+      layer = null;
+      return;
+    }
+
+    // Through every transform above it -- the nav's slide and shrink included
+    // -- to the screen, then into the backdrop's physical pixels.
+    final onScreen = MatrixUtils.transformRect(
+      getTransformTo(null),
+      Offset.zero & size,
+    );
+    final pane = Rect.fromLTRB(
+      onScreen.left * _devicePixelRatio,
+      onScreen.top * _devicePixelRatio,
+      onScreen.right * _devicePixelRatio,
+      onScreen.bottom * _devicePixelRatio,
+    );
+
+    if (_filter == null ||
+        pane != _filterPane ||
+        _material != _filterMaterial) {
+      _filter = filterFor(pane);
+      _filterPane = pane;
+      _filterMaterial = _material;
+    }
+
+    layer ??= BackdropFilterLayer();
+    layer!.filter = _filter!;
+    context.pushLayer(layer!, super.paint, offset);
   }
 }
