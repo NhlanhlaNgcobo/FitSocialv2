@@ -67,6 +67,22 @@ class ExerciseLibrary {
     return null;
   }
 
+  /// The muscle groups behind [exerciseId], prime mover first, from the
+  /// library or [custom]. Empty for a free-text name, and for a custom
+  /// exercise since deleted: neither can be credited to anything.
+  static List<String> musclesFor(
+    String? exerciseId, {
+    Iterable<CustomExercise> custom = const [],
+  }) {
+    if (exerciseId == null) return const [];
+    final library = byId(exerciseId);
+    if (library != null) return library.muscles;
+    for (final c in custom) {
+      if ('custom-${c.id}' == exerciseId) return c.muscles;
+    }
+    return const [];
+  }
+
   /// Whether [exerciseId] is a cardio machine or activity — logged as time and
   /// distance rather than as sets of reps at a load.
   static bool isCardio(
