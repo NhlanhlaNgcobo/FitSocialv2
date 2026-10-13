@@ -75,6 +75,67 @@ class ExerciseLibrary {
   }) =>
       equipmentFor(exerciseId, custom: custom) == 'cardio';
 
+  /// How [exerciseId] is logged, from the library or [custom]. A free-text
+  /// name, or a custom exercise not in [custom], is weight × reps — it could
+  /// be anything, and that is the type that assumes least.
+  static TrackingType trackingTypeFor(
+    String? exerciseId, {
+    Iterable<CustomExercise> custom = const [],
+  }) {
+    if (exerciseId == null) return TrackingType.weightReps;
+    final library = byId(exerciseId);
+    if (library != null) return library.trackingType;
+    for (final c in custom) {
+      if ('custom-${c.id}' == exerciseId) return c.trackingType;
+    }
+    return TrackingType.weightReps;
+  }
+
+  /// Static work: time under tension, no reps to multiply. Matched against
+  /// lower-case names.
+  static const holdPatterns = ['plank', 'hold', 'wall sit', 'hollow', 'l-sit'];
+
+  /// Rows the equipment and name get wrong, by id. Checked first.
+  ///
+  /// Never key a type off the word "Weighted": Weighted Russian Twist is a
+  /// dumbbell lift, logged as weight × reps.
+  static const _trackingOverrides = <String, TrackingType>{
+    // Filed under machine, so its assistance used to count as load and could
+    // set a "heaviest weight" record — more assistance is easier, not harder.
+    'assisted-pull-up-machine': TrackingType.assistedBodyweight,
+    'farmer-carry': TrackingType.weightDuration,
+    'suitcase-carry': TrackingType.weightDuration,
+    'shadow-boxing': TrackingType.duration,
+    'battle-ropes': TrackingType.duration,
+    // Bodyweight work filed under "other" for the kit it needs.
+    'ab-wheel-rollout': TrackingType.bodyweightReps,
+    'rope-climb': TrackingType.bodyweightReps,
+    'weighted-pull-up': TrackingType.weightedBodyweight,
+    'weighted-chin-up': TrackingType.weightedBodyweight,
+    'weighted-dip': TrackingType.weightedBodyweight,
+  };
+
+  /// The type a movement is logged as when nothing says otherwise.
+  ///
+  /// [id] is only given for library rows: a custom exercise's id is the
+  /// user's own, and could collide with an override.
+  static TrackingType deriveTrackingType({
+    String? id,
+    required String name,
+    required String equipment,
+  }) {
+    final override = id == null ? null : _trackingOverrides[id];
+    if (override != null) return override;
+    if (equipment == 'cardio') return TrackingType.cardio;
+    if (equipment == 'bodyweight') {
+      final lower = name.toLowerCase();
+      return holdPatterns.any(lower.contains)
+          ? TrackingType.duration
+          : TrackingType.bodyweightReps;
+    }
+    return TrackingType.weightReps;
+  }
+
   /// Other names people search a movement by, keyed by its library name.
   ///
   /// Searched but never shown: "rower" should find the Rowing Machine without
@@ -424,5 +485,10 @@ class ExerciseLibrary {
     'Deficit Deadlift|back,hamstrings,glutes|barbell',
     'Block Pull|back,glutes|barbell',
     'Hex Bar Shrug|back,shoulders|barbell',
+    // Weighted bodyweight: a belt or vest on a bodyweight move. Typed as the
+    // weight added, and counted on top of the bodyweight moved.
+    'Weighted Pull Up|back,biceps|bodyweight',
+    'Weighted Chin Up|back,biceps|bodyweight',
+    'Weighted Dip|chest,triceps|bodyweight',
   ];
 }

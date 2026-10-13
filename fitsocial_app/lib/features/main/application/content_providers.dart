@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/reactions/fit_reaction.dart';
@@ -16,6 +17,7 @@ import '../domain/daily_prompts.dart';
 import '../domain/explore_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
+import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
 
@@ -248,6 +250,21 @@ final recentWorkoutsProvider =
 final workoutHistoryProvider =
     FutureProvider.autoDispose<List<List<ExerciseEntry>>>((ref) {
   return ref.watch(contentRepositoryProvider).getWorkoutHistory();
+});
+
+/// Every saved workout with its date and routine, newest first — what the
+/// PREVIOUS column reads "last time" from.
+///
+/// Empty when it cannot be read: PREVIOUS is a hint, and its absence must
+/// never stop a set being logged offline.
+final workoutHistoryItemsProvider =
+    FutureProvider.autoDispose<List<WorkoutHistoryItem>>((ref) async {
+  try {
+    return await ref.watch(contentRepositoryProvider).getWorkoutHistoryItems();
+  } catch (error) {
+    debugPrint('Could not read workout history for PREVIOUS: $error');
+    return const [];
+  }
 });
 
 /// The gap-filled run/workout calendar behind the streak grid.

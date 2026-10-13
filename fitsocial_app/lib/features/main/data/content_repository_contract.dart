@@ -6,6 +6,7 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
+import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
 import '../domain/workout_models.dart';
@@ -50,6 +51,11 @@ abstract class ContentRepository {
   /// [getRecentWorkouts], which is deduplicated by title and so would hide most
   /// of the history a personal best is measured over.
   Future<List<List<ExerciseEntry>>> getWorkoutHistory({int limit});
+
+  /// [getWorkoutHistory] with each workout's id, date and routine — what the
+  /// PREVIOUS column needs to say "last time" and "last time in this
+  /// routine". Newest first.
+  Future<List<WorkoutHistoryItem>> getWorkoutHistoryItems({int limit});
 
   /// Every meal the signed-in user has logged.
   ///

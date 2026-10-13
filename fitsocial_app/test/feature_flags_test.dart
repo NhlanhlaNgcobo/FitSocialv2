@@ -60,6 +60,7 @@ void main() {
       'f4_compare',
       'f5_recap_cards',
       'f6_leaderboards',
+      'f7_workout_logger_v2',
     ]);
     expect(Tunable.values.map((t) => t.key), [
       'integrity_max_daily_steps',

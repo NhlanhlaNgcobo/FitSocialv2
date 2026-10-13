@@ -20,6 +20,8 @@ import '../../onboarding/application/fitness_plan.dart';
 import '../../main/application/workout_preferences.dart';
 import '../../main/data/content_repository.dart';
 import '../../main/data/workout_preferences_store.dart';
+import '../../../core/config/feature_flags.dart';
+import '../../main/presentation/workout_settings_sheet.dart';
 import '../../main/presentation/workout_tool_sheets.dart';
 import '../../../shared/links/share_links.dart';
 import '../../music/presentation/music_island_action.dart';
@@ -135,14 +137,13 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsNote(
             icon: Icons.directions_run_rounded,
             accent: _kHealthAccent,
-            text:
-                'A run your watch recorded turns up on the Create page as a '
+            text: 'A run your watch recorded turns up on the Create page as a '
                 'draft. It stays on your phone until you post it.',
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Workouts'),
           const _SettingsGroup(
-            children: [_RestTimerTile(), _TrackRpeTile()],
+            children: [_RestTimerTile(), _TrackRpeTile(), _MoreWorkoutTile()],
           ),
           const SizedBox(height: AppSpacing.lg),
           const _SectionLabel('Feed'),
@@ -151,8 +152,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsNote(
             icon: Icons.emoji_events_outlined,
             accent: _kMilestoneAccent,
-            text:
-                'Streaks, badges and personal bests show up in your '
+            text: 'Streaks, badges and personal bests show up in your '
                 "followers' feeds so they can cheer you on. Personal bests "
                 'only come from runs you shared.',
           ),
@@ -176,8 +176,7 @@ class SettingsScreen extends ConsumerWidget {
           const _SettingsNote(
             icon: Icons.notifications_none_rounded,
             accent: _kNotifyAccent,
-            text:
-                'Open someone\'s profile and tap the bell to hear about '
+            text: 'Open someone\'s profile and tap the bell to hear about '
                 'what they post.',
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -718,6 +717,26 @@ class _RestTimerTile extends ConsumerWidget {
   }
 }
 
+/// The rest of the workout settings, in the sheet the session opens too.
+/// Only with the v2 logger on, since that is what they set.
+class _MoreWorkoutTile extends ConsumerWidget {
+  const _MoreWorkoutTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(featureEnabledProvider(FeatureFlag.workoutLoggerV2))) {
+      return const SizedBox.shrink();
+    }
+    return _SettingsTile(
+      icon: Icons.tune_rounded,
+      accent: _kWorkoutAccent,
+      label: 'More workout settings',
+      subtitle: 'Previous values, warm-ups in stats, timers and alerts',
+      onTap: () => showWorkoutSettingsSheet(context),
+    );
+  }
+}
+
 /// Whether set rows carry an RPE column.
 class _TrackRpeTile extends ConsumerWidget {
   const _TrackRpeTile();
@@ -753,8 +772,7 @@ class _ReduceMotionTile extends ConsumerWidget {
       icon: Icons.motion_photos_off_outlined,
       accent: _kAccessibilityAccent,
       label: 'Reduce motion',
-      subtitle:
-          'Shorten and simplify animations, even if your device '
+      subtitle: 'Shorten and simplify animations, even if your device '
           'allows them',
       value: prefs.forceReduceMotion,
       onChanged: (next) => ref

@@ -1,20 +1,37 @@
 import 'app_models.dart';
+import 'exercise_library.dart';
+import 'workout_math.dart';
 import 'workout_models.dart';
 
 /// One exercise in a workout that is happening now.
 class ActiveExercise {
-  factory ActiveExercise.fromJson(Map<String, dynamic> json) => ActiveExercise(
-        key: (json['key'] as String?) ?? '',
-        name: (json['name'] as String?) ?? '',
-        exerciseId: json['exerciseId'] as String?,
-        supersetGroup: json['supersetGroup'] as String?,
-        restSeconds: (json['restSeconds'] as num?)?.toInt(),
-        sets: (json['sets'] as List<dynamic>?)
-                ?.whereType<Map<String, dynamic>>()
-                .map(ExerciseSet.fromMap)
-                .toList() ??
-            const [],
-      );
+  factory ActiveExercise.fromJson(Map<String, dynamic> json) {
+    final exerciseId = json['exerciseId'] as String?;
+    final sets = (json['sets'] as List<dynamic>?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(ExerciseSet.fromMap)
+            .toList() ??
+        const <ExerciseSet>[];
+    return ActiveExercise(
+      key: (json['key'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      exerciseId: exerciseId,
+      supersetGroup: json['supersetGroup'] as String?,
+      restSeconds: (json['restSeconds'] as num?)?.toInt(),
+      sessionNotes: (json['sessionNotes'] as String?) ?? '',
+      routineNotes: json['routineNotes'] as String?,
+      // A session saved before types existed: what the library says, or
+      // cardio when its rows carry a time — the only other kind it could log.
+      trackingType: TrackingType.tryName(json['trackingType']) ??
+          (exerciseId != null && ExerciseLibrary.byId(exerciseId) != null
+              ? ExerciseLibrary.trackingTypeFor(exerciseId)
+              : sets.any(
+                      (s) => s.durationSeconds != null || s.distanceKm != null)
+                  ? TrackingType.cardio
+                  : TrackingType.weightReps),
+      sets: sets,
+    );
+  }
 
   const ActiveExercise({
     required this.key,
@@ -23,6 +40,9 @@ class ActiveExercise {
     this.exerciseId,
     this.supersetGroup,
     this.restSeconds,
+    this.trackingType = TrackingType.weightReps,
+    this.sessionNotes = '',
+    this.routineNotes,
   });
 
   /// Identifies this exercise inside the session, so two "Bench Press" cards
@@ -40,25 +60,56 @@ class ActiveExercise {
   /// [ExerciseSet.completedAt]; the rest are placeholders to be filled in.
   final List<ExerciseSet> sets;
 
+  /// How the exercise is logged. Resolved when it is added, because a custom
+  /// exercise's type lives in a list the session does not keep.
+  final TrackingType trackingType;
+
+  /// Notes for this workout only.
+  final String sessionNotes;
+
+  /// The routine's standing note for this exercise, shown read-only.
+  final String? routineNotes;
+
   Iterable<ExerciseSet> get doneSets =>
       sets.where((set) => set.completedAt != null);
 
+  /// The ticked rows as the entry the workout will be saved with, or null
+  /// when none are ticked.
+  ExerciseEntry? toEntry() {
+    final done = doneSets.toList();
+    if (done.isEmpty) return null;
+    return ExerciseEntry.fromSets(
+      name: name,
+      exerciseId: exerciseId,
+      supersetGroup: supersetGroup,
+      trackingType: trackingType,
+      setLog: done,
+    );
+  }
+
   ActiveExercise copyWith({
+    String? name,
+    String? exerciseId,
+    bool clearExerciseId = false,
     List<ExerciseSet>? sets,
     String? supersetGroup,
     bool clearSupersetGroup = false,
     int? restSeconds,
     bool clearRestSeconds = false,
+    TrackingType? trackingType,
+    String? sessionNotes,
   }) =>
       ActiveExercise(
         key: key,
-        name: name,
-        exerciseId: exerciseId,
-        supersetGroup: clearSupersetGroup
-            ? null
-            : (supersetGroup ?? this.supersetGroup),
+        name: name ?? this.name,
+        exerciseId: clearExerciseId ? null : (exerciseId ?? this.exerciseId),
+        supersetGroup:
+            clearSupersetGroup ? null : (supersetGroup ?? this.supersetGroup),
         restSeconds:
             clearRestSeconds ? null : (restSeconds ?? this.restSeconds),
+        trackingType: trackingType ?? this.trackingType,
+        sessionNotes: sessionNotes ?? this.sessionNotes,
+        routineNotes: routineNotes,
         sets: sets ?? this.sets,
       );
 
@@ -68,7 +119,10 @@ class ActiveExercise {
         if (exerciseId != null) 'exerciseId': exerciseId,
         if (supersetGroup != null) 'supersetGroup': supersetGroup,
         if (restSeconds != null) 'restSeconds': restSeconds,
-        'sets': sets.map((s) => s.toMap()).toList(),
+        'trackingType': trackingType.name,
+        if (sessionNotes.isNotEmpty) 'sessionNotes': sessionNotes,
+        if (routineNotes != null) 'routineNotes': routineNotes,
+        'sets': sets.map((s) => s.toMap(includeTarget: true)).toList(),
       };
 }
 
@@ -122,6 +176,7 @@ class ActiveWorkout {
     required this.exercises,
     this.title = '',
     this.rest,
+    this.bodyweightKg,
   });
 
   /// Null when [json] is not a session this build can read.
@@ -137,6 +192,7 @@ class ActiveWorkout {
       startedAt: startedAt,
       title: (json['title'] as String?) ?? '',
       rest: RestTimer.fromJson(json['rest']),
+      bodyweightKg: (json['bodyweightKg'] as num?)?.toDouble(),
       exercises: (json['exercises'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
               .map(ActiveExercise.fromJson)
@@ -156,6 +212,10 @@ class ActiveWorkout {
   /// once it is over. Null before the first set is ticked off.
   final RestTimer? rest;
 
+  /// The user's bodyweight when the session started, for bodyweight volume.
+  /// Null when they have not given one — that volume then counts as nothing.
+  final double? bodyweightKg;
+
   Duration elapsed(DateTime now) {
     final elapsed = now.difference(startedAt);
     // A clock set backwards must not show a negative timer.
@@ -165,15 +225,21 @@ class ActiveWorkout {
   int get doneSetCount =>
       exercises.fold<int>(0, (sum, e) => sum + e.doneSets.length);
 
-  /// Weight × reps over the working sets that are ticked off.
-  double get volumeKg => exercises.fold<double>(
-        0,
-        (sum, e) =>
-            sum +
-            e.doneSets
-                .where((set) => set.type.isWorking)
-                .fold<double>(0, (v, set) => v + set.volumeKg),
+  /// The ticked-off work, as the entries the workout will be saved with.
+  List<ExerciseEntry> get entries => [
+        for (final exercise in exercises)
+          if (exercise.toEntry() case final entry?) entry,
+      ];
+
+  /// The volume of the sets ticked off, by [workoutVolumeKg] — the same
+  /// figure the save writes and the feed card shows.
+  double volume({bool includeWarmups = false}) => workoutVolumeKg(
+        entries,
+        bodyweightKg: bodyweightKg,
+        includeWarmups: includeWarmups,
       );
+
+  double get volumeKg => volume();
 
   bool get hasLoggedSets => doneSetCount > 0;
 
@@ -190,9 +256,17 @@ class ActiveWorkout {
   /// A superset is done back to back: moving from one of its exercises to the
   /// next is not a rest, so only the last of them starts the timer — and at
   /// the longest rest any of them asks for.
-  int? restAfter(String key, {required int defaultSeconds}) {
+  ///
+  /// A drop set follows its set with no rest — that is the point of it — so
+  /// when the row after [setIndex] is one, there is no timer.
+  int? restAfter(String key, {required int defaultSeconds, int? setIndex}) {
     final exercise = this.exercise(key);
     if (exercise == null) return null;
+    if (setIndex != null &&
+        setIndex + 1 < exercise.sets.length &&
+        exercise.sets[setIndex + 1].type == SetType.dropset) {
+      return null;
+    }
     final group = exercise.supersetGroup;
     var candidates = [exercise];
     if (group != null) {
@@ -213,6 +287,7 @@ class ActiveWorkout {
     List<ActiveExercise>? exercises,
     RestTimer? rest,
     bool clearRest = false,
+    double? bodyweightKg,
   }) =>
       ActiveWorkout(
         id: id,
@@ -220,6 +295,7 @@ class ActiveWorkout {
         title: title ?? this.title,
         exercises: exercises ?? this.exercises,
         rest: clearRest ? null : (rest ?? this.rest),
+        bodyweightKg: bodyweightKg ?? this.bodyweightKg,
       );
 
   /// The workout as the repository saves it.
@@ -243,16 +319,8 @@ class ActiveWorkout {
       notes: notes,
       shareToFeed: shareToFeed,
       loggedAt: startedAt,
-      exercises: [
-        for (final exercise in exercises)
-          if (exercise.doneSets.isNotEmpty)
-            ExerciseEntry.fromSets(
-              name: exercise.name,
-              exerciseId: exercise.exerciseId,
-              supersetGroup: exercise.supersetGroup,
-              setLog: exercise.doneSets.toList(),
-            ),
-      ],
+      exercises: entries,
+      volumeKg: volumeKg,
     );
   }
 
@@ -261,6 +329,25 @@ class ActiveWorkout {
         'startedAt': startedAt.millisecondsSinceEpoch,
         'title': title,
         if (rest != null) 'rest': rest!.toJson(),
+        if (bodyweightKg != null) 'bodyweightKg': bodyweightKg,
         'exercises': exercises.map((e) => e.toJson()).toList(),
       };
+}
+
+/// [set] with each field left blank filled from [hint] — the routine's target
+/// or last time's set, as the empty field showed it. Returns [set] itself
+/// when there was nothing to fill.
+ExerciseSet adoptHint(ExerciseSet set, ExerciseSet hint) {
+  final weight = set.weightKg <= 0 && hint.weightKg > 0;
+  final reps = set.reps <= 0 && hint.reps > 0;
+  final seconds =
+      (set.durationSeconds ?? 0) <= 0 && (hint.durationSeconds ?? 0) > 0;
+  final km = (set.distanceKm ?? 0) <= 0 && (hint.distanceKm ?? 0) > 0;
+  if (!weight && !reps && !seconds && !km) return set;
+  return set.copyWith(
+    weightKg: weight ? hint.weightKg : null,
+    reps: reps ? hint.reps : null,
+    durationSeconds: seconds ? hint.durationSeconds : null,
+    distanceKm: km ? hint.distanceKm : null,
+  );
 }

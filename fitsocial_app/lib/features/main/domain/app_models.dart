@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/reactions/fit_reaction.dart';
 import 'activity_kind.dart';
+import 'exercise_library.dart';
 import 'route_placement.dart';
 import 'workout_models.dart';
 
@@ -763,6 +764,7 @@ class ExerciseEntry {
         supersetGroup: map['supersetGroup'] as String?,
         durationSeconds: (map['durationSeconds'] as num?)?.toInt(),
         distanceKm: (map['distanceKm'] as num?)?.toDouble(),
+        trackingType: TrackingType.tryName(map['trackingType']),
         setLog: (map['setLog'] as List<dynamic>?)
                 ?.whereType<Map<String, dynamic>>()
                 .map(ExerciseSet.fromMap)
@@ -781,6 +783,7 @@ class ExerciseEntry {
     required List<ExerciseSet> setLog,
     String? exerciseId,
     String? supersetGroup,
+    TrackingType? trackingType,
   }) {
     final working = setLog.where((s) => s.type.isWorking).toList();
     // Cardio intervals add up to one stretch on the machine: 2 × 10 minutes on
@@ -800,6 +803,7 @@ class ExerciseEntry {
         supersetGroup: supersetGroup,
         durationSeconds: seconds > 0 ? seconds : null,
         distanceKm: km > 0 ? km : null,
+        trackingType: trackingType,
         setLog: List.unmodifiable(setLog),
       );
     }
@@ -818,6 +822,7 @@ class ExerciseEntry {
       weightKg: weight,
       exerciseId: exerciseId,
       supersetGroup: supersetGroup,
+      trackingType: trackingType,
       setLog: List.unmodifiable(setLog),
     );
   }
@@ -832,11 +837,28 @@ class ExerciseEntry {
     this.setLog = const [],
     this.durationSeconds,
     this.distanceKm,
+    this.trackingType,
   });
 
   final String name;
   final int sets;
   final int reps;
+
+  /// How the entry was logged, as it was at the time. Null on entries written
+  /// before the field existed — read [resolvedTrackingType] instead. Stored so
+  /// history keeps its meaning if the library's mapping changes.
+  final TrackingType? trackingType;
+
+  /// [trackingType], or what the library says, or cardio when the entry
+  /// carries a time or distance, or weight × reps.
+  TrackingType get resolvedTrackingType {
+    final stored = trackingType;
+    if (stored != null) return stored;
+    if (exerciseId != null && ExerciseLibrary.byId(exerciseId!) != null) {
+      return ExerciseLibrary.trackingTypeFor(exerciseId);
+    }
+    return isCardio ? TrackingType.cardio : TrackingType.weightReps;
+  }
 
   /// Time on a cardio machine — the rower, the elliptical, the stairs. Null on
   /// a lift, which is counted in [sets] and [reps] instead, and on every entry
@@ -885,6 +907,7 @@ class ExerciseEntry {
         if (supersetGroup != null) 'supersetGroup': supersetGroup,
         if (durationSeconds != null) 'durationSeconds': durationSeconds,
         if (distanceKm != null) 'distanceKm': distanceKm,
+        if (trackingType != null) 'trackingType': trackingType!.name,
         if (setLog.isNotEmpty) 'setLog': setLog.map((s) => s.toMap()).toList(),
       };
 
@@ -915,9 +938,16 @@ class WorkoutLogDraft {
     this.loggedAt,
     this.taggedUsers = const [],
     this.caloriesEstimated = false,
+    this.volumeKg,
   });
 
   final String title;
+
+  /// The session's volume by `workoutVolumeKg`, worked out where the
+  /// bodyweight is known. Written to the log and the post so the feed card
+  /// shows the figure the session showed, instead of re-deriving one without
+  /// a bodyweight. Null on a draft that has none to give.
+  final double? volumeKg;
 
   /// [calories] came from the estimator (`estimateWorkoutCalories`), not from
   /// the user or a health store. Stored so every later reading can label it
@@ -972,6 +1002,7 @@ class WorkoutLogDraft {
         'title': title.trim().isEmpty ? 'Workout' : title.trim(),
         'duration': durationLabel,
         'calories': caloriesLabel,
+        if (volumeKg case final kg? when kg > 0) 'volumeKg': kg,
         'exercises': exercises.map((e) => e.toSummaryMap()).toList(),
       };
 }

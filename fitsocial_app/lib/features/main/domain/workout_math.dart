@@ -1,6 +1,129 @@
+import '../../workouts/domain/workout_energy.dart';
 import 'active_workout.dart';
 import 'app_models.dart';
 import 'workout_models.dart';
+
+/// Whether a saved set counts towards totals and charts. Saved sets were all
+/// done: the live session drops unticked rows when it is saved, and a set
+/// typed in after the fact never had a tick.
+///
+/// [includeWarmups] is the display preference. Records never use warm-ups,
+/// whatever it says.
+bool countsForStats(ExerciseSet set, {required bool includeWarmups}) =>
+    set.type.isWorking || includeWarmups;
+
+/// [countsForStats] for a session in progress, where an unticked row is still
+/// a placeholder.
+bool countsLive(ExerciseSet set, {required bool includeWarmups}) =>
+    set.completedAt != null &&
+    countsForStats(set, includeWarmups: includeWarmups);
+
+/// The load a set moved, in kilograms, or null when it has no load volume.
+///
+/// Bodyweight is the set's own snapshot, else [fallbackBodyweightKg]: older
+/// sets were saved before snapshots existed. [bodyweightShare] is how much of
+/// the body the movement lifts (`bodyweightShareFor`); null means it lifts
+/// none worth counting, or is not a library bodyweight move.
+///
+/// Unlike Hevy, which adds all of bodyweight, a push-up counts 64 % of it —
+/// the same model the calorie estimate uses, so the two always agree. And a
+/// weight typed on a plain bodyweight move is counted on top, rather than
+/// thrown away.
+double? effectiveLoadKg(
+  TrackingType type,
+  ExerciseSet set, {
+  double? bodyweightShare,
+  double? fallbackBodyweightKg,
+}) {
+  final bw = set.bodyweightKg ?? fallbackBodyweightKg;
+  final added = set.weightKg > 0 ? set.weightKg : 0.0;
+  switch (type) {
+    case TrackingType.weightReps:
+      return set.weightKg > 0 ? set.weightKg : null;
+    case TrackingType.bodyweightReps:
+    case TrackingType.weightedBodyweight:
+      final body =
+          bw == null || bodyweightShare == null ? 0.0 : bw * bodyweightShare;
+      final load = body + added;
+      return load > 0 ? load : null;
+    case TrackingType.assistedBodyweight:
+      // No bodyweight, no volume: assistance on its own says nothing about
+      // the load, and counting it as load is the bug this replaced.
+      if (bw == null) return null;
+      final load = bw * (bodyweightShare ?? 1.0) - added;
+      return load > 0 ? load : null;
+    case TrackingType.duration:
+    case TrackingType.weightDuration:
+    case TrackingType.cardio:
+      // Time and distance work has no tonnage.
+      return null;
+  }
+}
+
+/// Effective load × reps for one set.
+double setVolumeKg(
+  TrackingType type,
+  ExerciseSet set, {
+  double? bodyweightShare,
+  double? fallbackBodyweightKg,
+}) =>
+    (effectiveLoadKg(
+          type,
+          set,
+          bodyweightShare: bodyweightShare,
+          fallbackBodyweightKg: fallbackBodyweightKg,
+        ) ??
+        0) *
+    set.reps;
+
+/// Every set behind [entry]. An entry logged as "3 x 10 at 60 kg" has no
+/// per-set record, so it stands for that many identical sets.
+List<ExerciseSet> loggedSets(ExerciseEntry entry) {
+  if (entry.setLog.isNotEmpty) return entry.setLog;
+  if (entry.sets <= 0 || entry.reps <= 0) return const [];
+  final set = ExerciseSet(weightKg: entry.weightKg ?? 0, reps: entry.reps);
+  return List.filled(entry.sets, set);
+}
+
+/// The volume of one saved entry, in kilograms.
+double entryVolumeKg(
+  ExerciseEntry entry, {
+  double? bodyweightKg,
+  bool includeWarmups = false,
+}) {
+  final type = entry.resolvedTrackingType;
+  final share = bodyweightShareFor(entry.exerciseId);
+  var total = 0.0;
+  for (final set in loggedSets(entry)) {
+    if (!countsForStats(set, includeWarmups: includeWarmups)) continue;
+    total += setVolumeKg(
+      type,
+      set,
+      bodyweightShare: share,
+      fallbackBodyweightKg: bodyweightKg,
+    );
+  }
+  return total;
+}
+
+/// The volume of a workout, in kilograms: the one formula behind every volume
+/// figure in the app — the live strip, the log form, the saved workout, the
+/// feed card and the calorie estimate.
+double workoutVolumeKg(
+  Iterable<ExerciseEntry> entries, {
+  double? bodyweightKg,
+  bool includeWarmups = false,
+}) =>
+    entries.fold<double>(
+      0,
+      (sum, e) =>
+          sum +
+          entryVolumeKg(
+            e,
+            bodyweightKg: bodyweightKg,
+            includeWarmups: includeWarmups,
+          ),
+    );
 
 /// Epley's estimate of the heaviest single rep a set implies.
 ///
@@ -16,7 +139,11 @@ double estimatedOneRepMax(double weightKg, int reps) {
 const oneRepMaxReliableReps = 12;
 
 /// What kind of record a set broke.
-enum PrKind { weight, reps, oneRepMax }
+///
+/// [reps] is "most reps at this load or heavier", for loaded work. [repsSet]
+/// is "most reps in one set", for bodyweight and assisted work, where the
+/// load is not the user's to choose.
+enum PrKind { weight, reps, oneRepMax, repsSet }
 
 /// The key a movement is tracked under: its library id when it has one, its
 /// normalised name otherwise.
@@ -45,23 +172,14 @@ class PersonalBests {
   ///
   /// An entry logged as "3 x 10 at 60 kg" has no per-set record, so it counts
   /// as that many identical sets. Warm-ups never count.
-  factory PersonalBests.fromHistory(Iterable<Iterable<ExerciseEntry>> workouts) {
+  factory PersonalBests.fromHistory(
+      Iterable<Iterable<ExerciseEntry>> workouts) {
     final bests = PersonalBests();
     for (final workout in workouts) {
       for (final entry in workout) {
         final key = exerciseKey(entry);
-        if (entry.setLog.isNotEmpty) {
-          for (final set in entry.setLog) {
-            bests.record(key, set);
-          }
-        } else if (entry.sets > 0 && entry.reps > 0) {
-          final set = ExerciseSet(
-            weightKg: entry.weightKg ?? 0,
-            reps: entry.reps,
-          );
-          for (var i = 0; i < entry.sets; i++) {
-            bests.record(key, set);
-          }
+        for (final set in loggedSets(entry)) {
+          bests.record(key, set);
         }
       }
     }
@@ -94,10 +212,33 @@ class PersonalBests {
   }
 
   /// The records [set] breaks, against the history so far. Does not record it.
-  Set<PrKind> check(String key, ExerciseSet set) {
+  ///
+  /// Which records exist depends on [type]. Bodyweight and assisted work only
+  /// ever set "most reps in a set": on an assisted machine the typed weight is
+  /// help, so a bigger number is an easier set, never a heavier one.
+  Set<PrKind> check(
+    String key,
+    ExerciseSet set, {
+    TrackingType type = TrackingType.weightReps,
+  }) {
     final prior = _history[key];
     if (prior == null || prior.isEmpty) return const {};
     if (!set.type.isWorking || set.reps <= 0) return const {};
+
+    switch (type) {
+      case TrackingType.bodyweightReps:
+      case TrackingType.assistedBodyweight:
+        final most =
+            prior.fold<int>(0, (top, s) => s.reps > top ? s.reps : top);
+        return set.reps > most ? const {PrKind.repsSet} : const {};
+      case TrackingType.duration:
+      case TrackingType.cardio:
+        return const {};
+      case TrackingType.weightReps:
+      case TrackingType.weightedBodyweight:
+      case TrackingType.weightDuration:
+        break;
+    }
 
     final broken = <PrKind>{};
 
@@ -116,16 +257,22 @@ class PersonalBests {
         .fold<int>(0, (best, s) => s.reps > best ? s.reps : best);
     if (set.reps > repsAtLoad) broken.add(PrKind.reps);
 
-    if (set.weightKg > 0 && set.reps <= oneRepMaxReliableReps) {
+    // A drop set is fatigued by design, so it never sets an estimated max —
+    // and the estimate is only for a plain load, not weight added to a body.
+    if (type == TrackingType.weightReps &&
+        set.type != SetType.dropset &&
+        set.weightKg > 0 &&
+        set.reps <= oneRepMaxReliableReps) {
       final best = prior
-          .where((s) => s.reps <= oneRepMaxReliableReps)
+          .where((s) =>
+              s.reps <= oneRepMaxReliableReps && s.type != SetType.dropset)
           .fold<double>(
-            0,
-            (top, s) {
-              final e = estimatedOneRepMax(s.weightKg, s.reps);
-              return e > top ? e : top;
-            },
-          );
+        0,
+        (top, s) {
+          final e = estimatedOneRepMax(s.weightKg, s.reps);
+          return e > top ? e : top;
+        },
+      );
       if (estimatedOneRepMax(set.weightKg, set.reps) > best + _epsilon) {
         broken.add(PrKind.oneRepMax);
       }
@@ -171,7 +318,7 @@ Map<String, Map<int, Set<PrKind>>> sessionRecords(
       exerciseId: exercise.exerciseId,
     );
     final set = exercise.sets[index];
-    final broken = bests.check(key, set);
+    final broken = bests.check(key, set, type: exercise.trackingType);
     if (broken.isNotEmpty) (out[exercise.key] ??= {})[index] = broken;
     bests.record(key, set);
   }
@@ -183,6 +330,7 @@ Map<String, Map<int, Set<PrKind>>> sessionRecords(
 String describeRecord(Set<PrKind> kinds) {
   if (kinds.contains(PrKind.weight)) return 'heaviest weight';
   if (kinds.contains(PrKind.oneRepMax)) return 'best estimated 1RM';
+  if (kinds.contains(PrKind.repsSet)) return 'most reps in a set';
   return 'most reps at this weight';
 }
 
@@ -280,7 +428,8 @@ PlateBreakdown platesPerSide(
     }
   }
 
-  final loadedMilli = milli(bar) + 2 * perSide.fold<int>(0, (s, p) => s + milli(p));
+  final loadedMilli =
+      milli(bar) + 2 * perSide.fold<int>(0, (s, p) => s + milli(p));
   return PlateBreakdown(
     perSide: perSide,
     loaded: loadedMilli / 1000,

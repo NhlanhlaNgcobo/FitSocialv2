@@ -3,9 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fitsocial_app/app/theme/app_theme.dart';
+import 'package:fitsocial_app/core/config/feature_flags.dart';
+import 'package:fitsocial_app/features/main/application/content_providers.dart';
 import 'package:fitsocial_app/features/main/application/workout_library_providers.dart';
 import 'package:fitsocial_app/features/main/data/content_repository.dart';
+import 'package:fitsocial_app/features/main/domain/app_models.dart';
+import 'package:fitsocial_app/features/main/domain/previous_performance.dart';
 import 'package:fitsocial_app/features/main/domain/workout_models.dart';
+import 'package:fitsocial_app/features/main/presentation/custom_exercise_sheet.dart';
 import 'package:fitsocial_app/features/main/presentation/exercise_picker_sheet.dart';
 
 /// Custom exercises held in memory, recording what was written.
@@ -22,12 +27,15 @@ class FakeRepository extends UnconfiguredContentRepository {
   @override
   Future<CustomExercise> saveCustomExercise(CustomExercise exercise) async {
     final saved = CustomExercise(
-      id: 'c${++_ids}',
+      id: exercise.id.isEmpty ? 'c${++_ids}' : exercise.id,
       name: exercise.name,
       muscles: exercise.muscles,
       equipment: exercise.equipment,
+      storedTrackingType: exercise.storedTrackingType,
     );
-    custom.add(saved);
+    custom
+      ..removeWhere((c) => c.id == saved.id)
+      ..add(saved);
     return saved;
   }
 }
@@ -105,8 +113,7 @@ void main() {
     expect(find.text('PICKED Squat (Barbell) squat-barbell'), findsOneWidget);
   });
 
-  testWidgets('a typed name can be saved as a custom exercise',
-      (tester) async {
+  testWidgets('a typed name can be saved as a custom exercise', (tester) async {
     final repo = await pumpHost(tester);
     await search(tester, 'Zottman Thing');
     await tester.tap(find.text('Save "Zottman Thing" as a custom exercise'));
@@ -130,7 +137,8 @@ void main() {
     expect(saved.muscles, ['biceps']);
     expect(saved.equipment, 'dumbbell');
     // Handed back under its custom id.
-    expect(find.text('PICKED Zottman Thing custom-${saved.id}'), findsOneWidget);
+    expect(
+        find.text('PICKED Zottman Thing custom-${saved.id}'), findsOneWidget);
   });
 
   testWidgets('the sheet will not save a blank name', (tester) async {
@@ -171,6 +179,156 @@ void main() {
 
     expect(find.text('Zottman Curl Special'), findsOneWidget);
     expect(find.text('biceps · dumbbell · custom'), findsOneWidget);
+  });
+
+  group('tracking type, with the v2 logger on', () {
+    const zottman = CustomExercise(
+      id: 'abc',
+      name: 'Zottman Curl Special',
+      muscles: ['biceps'],
+      equipment: 'dumbbell',
+      storedTrackingType: TrackingType.weightReps,
+    );
+
+    Future<FakeRepository> pumpSheet(
+      WidgetTester tester, {
+      CustomExercise? existing,
+      List<WorkoutHistoryItem> history = const [],
+    }) async {
+      tester.view.physicalSize = const Size(390, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final repo = FakeRepository(custom: [if (existing != null) existing]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            contentRepositoryProvider.overrideWithValue(repo),
+            featureFlagsProvider.overrideWith(
+              (ref) => Stream.value(
+                const FeatureFlags(flags: {FeatureFlag.workoutLoggerV2: true}),
+              ),
+            ),
+            workoutHistoryItemsProvider.overrideWith((ref) async => history),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showCustomExerciseSheet(
+                    context,
+                    initialName: 'Sled Push',
+                    existing: existing,
+                  ),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      return repo;
+    }
+
+    Future<void> save(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Save exercise'));
+      await tester.tap(find.text('Save exercise'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a new exercise saves the type picked', (tester) async {
+      final repo = await pumpSheet(tester);
+
+      expect(find.text('LOGGED AS'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilterChip, 'core'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Weight & time'));
+      await tester.pump();
+      await save(tester);
+
+      expect(
+        repo.custom.single.storedTrackingType,
+        TrackingType.weightDuration,
+      );
+    });
+
+    testWidgets('left alone, the type follows the equipment', (tester) async {
+      final repo = await pumpSheet(tester);
+
+      await tester.tap(find.widgetWithText(FilterChip, 'core'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'bodyweight'));
+      await tester.pump();
+      final chip = tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'Reps only'),
+      );
+      expect(chip.selected, isTrue);
+      await save(tester);
+
+      expect(
+        repo.custom.single.storedTrackingType,
+        TrackingType.bodyweightReps,
+      );
+    });
+
+    testWidgets('an exercise not yet logged can change type', (tester) async {
+      final repo = await pumpSheet(tester, existing: zottman);
+
+      expect(find.text('Edit exercise'), findsOneWidget);
+      expect(find.textContaining('Locked once logged'), findsNothing);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Time'));
+      await tester.pump();
+      await save(tester);
+
+      final saved = repo.custom.single;
+      expect(saved.id, 'abc');
+      expect(saved.storedTrackingType, TrackingType.duration);
+    });
+
+    testWidgets('an exercise already logged keeps its type', (tester) async {
+      final repo = await pumpSheet(
+        tester,
+        existing: zottman,
+        history: [
+          WorkoutHistoryItem(
+            id: 'w1',
+            loggedAt: DateTime(2026, 10, 1),
+            exercises: [
+              ExerciseEntry.fromSets(
+                name: zottman.name,
+                exerciseId: customExerciseId(zottman.id),
+                setLog: const [ExerciseSet(weightKg: 12, reps: 10)],
+              ),
+            ],
+          ),
+        ],
+      );
+
+      expect(find.textContaining('Locked once logged'), findsOneWidget);
+      final chip = tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'Time'),
+      );
+      expect(chip.onSelected, isNull);
+      // Its name can still change.
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(TextField),
+        ),
+        'Zottman Curl',
+      );
+      await save(tester);
+
+      final saved = repo.custom.single;
+      expect(saved.name, 'Zottman Curl');
+      expect(saved.storedTrackingType, TrackingType.weightReps);
+    });
+  });
+
+  test('history that could not be read counts as logged', () {
+    expect(hasBeenLogged('custom-abc', null), isTrue);
+    expect(hasBeenLogged('custom-abc', const []), isFalse);
   });
 
   test('custom ids can never collide with a library id', () {

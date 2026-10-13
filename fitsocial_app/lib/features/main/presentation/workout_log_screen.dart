@@ -280,16 +280,14 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   int get _totalReps =>
       _exercises.fold<int>(0, (sum, e) => sum + e.sets * e.reps);
 
-  /// Sets × reps × load, over every row that carries all three.
+  /// The session's volume, by [workoutVolumeKg] — the formula the live
+  /// session and the save use, so a push-up counts here as it does there.
   ///
   /// The figure the whole screen is arranged around, and the reason weight is
   /// on the cards at all: it is the one number that says how hard the session
   /// was, and it cannot be typed — only derived.
-  double get _volumeKg => _exercises.fold<double>(
-        0,
-        (sum, e) =>
-            sum + (e.weightKg == null ? 0 : e.sets * e.reps * e.weightKg!),
-      );
+  double get _volumeKg =>
+      workoutVolumeKg(_exercises, bodyweightKg: _bodyweightKg);
 
   /// The form as the post will carry it, for drawing the card before the save.
   ///
@@ -307,6 +305,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
         backgroundImagePath: _backgroundPath,
         loggedAt: _loggedAt,
         taggedUsers: _shareToFeed ? _taggedUsers : const [],
+        volumeKg: _volumeKg,
       );
 
   /// Whether there is a card worth saving yet. A photo or a lift is enough;
@@ -434,7 +433,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     // The moment the "workout in progress" notice makes sense to ask about:
     // it is what keeps this session in sight once the app is left.
     unawaited(ref.read(workoutBackgroundNoticeProvider).requestPermission());
-    await ref.read(activeWorkoutProvider.notifier).ensureStarted();
+    await ref.read(activeWorkoutProvider.notifier).ensureStarted(
+          bodyweightKg: ref.read(bodyMetricsProvider).valueOrNull?.weightKg,
+        );
     if (mounted) context.push('/workout-session');
   }
 

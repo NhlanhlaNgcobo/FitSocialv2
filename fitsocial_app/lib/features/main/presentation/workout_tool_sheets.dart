@@ -9,6 +9,7 @@ import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../domain/active_workout.dart';
 import '../domain/workout_math.dart';
+import '../domain/workout_models.dart';
 
 /// The small sheets the workout screen opens without leaving the session:
 /// plate maths, a warm-up ramp, an RPE rating, an exercise's own rest, and
@@ -27,7 +28,9 @@ String formatRest(int seconds) {
 String formatKgValue(double kg) {
   if (kg == kg.roundToDouble()) return kg.round().toString();
   final fixed = kg.toStringAsFixed(2);
-  return fixed.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  return fixed
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
 }
 
 Future<T?> _showToolSheet<T>(BuildContext context, WidgetBuilder builder) {
@@ -142,7 +145,9 @@ class _KgField extends StatelessWidget {
       child: TextField(
         controller: controller,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))
+        ],
         style: TextStyle(
           color: palette.text,
           fontSize: 20,
@@ -165,20 +170,44 @@ class _KgField extends StatelessWidget {
 // --- Plate calculator --------------------------------------------------------
 
 /// Which plates go on each side of the bar for a target load.
+///
+/// [barKg] and [plates] start the sheet from a saved choice. With
+/// [onBarChanged] and [onPlatesChanged] the choices made here are kept, and
+/// the plates on hand can be switched on and off.
 Future<void> showPlateCalculator(
   BuildContext context, {
   double initialKg = 0,
+  double? barKg,
+  List<double> plates = standardPlatesKg,
+  ValueChanged<double>? onBarChanged,
+  ValueChanged<List<double>>? onPlatesChanged,
 }) {
   return _showToolSheet<void>(
     context,
-    (_) => _PlateCalculatorSheet(initialKg: initialKg),
+    (_) => _PlateCalculatorSheet(
+      initialKg: initialKg,
+      barKg: barKg ?? barOptionsKg.first,
+      plates: plates,
+      onBarChanged: onBarChanged,
+      onPlatesChanged: onPlatesChanged,
+    ),
   );
 }
 
 class _PlateCalculatorSheet extends StatefulWidget {
-  const _PlateCalculatorSheet({required this.initialKg});
+  const _PlateCalculatorSheet({
+    required this.initialKg,
+    required this.barKg,
+    required this.plates,
+    this.onBarChanged,
+    this.onPlatesChanged,
+  });
 
   final double initialKg;
+  final double barKg;
+  final List<double> plates;
+  final ValueChanged<double>? onBarChanged;
+  final ValueChanged<List<double>>? onPlatesChanged;
 
   @override
   State<_PlateCalculatorSheet> createState() => _PlateCalculatorSheetState();
@@ -186,7 +215,8 @@ class _PlateCalculatorSheet extends StatefulWidget {
 
 class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
   late final TextEditingController _target;
-  double _bar = barOptionsKg.first;
+  late double _bar = widget.barKg;
+  late List<double> _plates = [...widget.plates];
 
   @override
   void initState() {
@@ -194,6 +224,24 @@ class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
     _target = TextEditingController(
       text: widget.initialKg > 0 ? formatKgValue(widget.initialKg) : '',
     );
+  }
+
+  void _pickBar(double bar) {
+    setState(() => _bar = bar);
+    widget.onBarChanged?.call(bar);
+  }
+
+  /// The last plate stays: a bar that can take nothing is no use.
+  void _togglePlate(double plate, bool on) {
+    final next = on
+        ? ([..._plates, plate]..sort((a, b) => b.compareTo(a)))
+        : [
+            for (final p in _plates)
+              if (p != plate) p,
+          ];
+    if (next.isEmpty) return;
+    setState(() => _plates = next);
+    widget.onPlatesChanged?.call(next);
   }
 
   @override
@@ -206,9 +254,8 @@ class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final target = parseTypedDouble(_target.text) ?? 0;
-    final breakdown = target > 0
-        ? platesPerSide(target, bar: _bar, plates: standardPlatesKg)
-        : null;
+    final breakdown =
+        target > 0 ? platesPerSide(target, bar: _bar, plates: _plates) : null;
 
     final String summary;
     if (breakdown == null) {
@@ -233,14 +280,29 @@ class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
         Wrap(
           spacing: 8,
           children: [
-            for (final bar in barOptionsKg)
+            for (final bar in {...barOptionsKg, _bar})
               ChoiceChip(
                 label: Text('${formatKgValue(bar)} kg'),
                 selected: _bar == bar,
-                onSelected: (_) => setState(() => _bar = bar),
+                onSelected: (_) => _pickBar(bar),
               ),
           ],
         ),
+        if (widget.onPlatesChanged != null) ...[
+          _label(context, 'Plates on hand'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final plate in {...standardPlatesKg, ..._plates})
+                FilterChip(
+                  label: Text(formatKgValue(plate)),
+                  selected: _plates.contains(plate),
+                  onSelected: (on) => _togglePlate(plate, on),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 18),
         if (breakdown != null && breakdown.perSide.isNotEmpty) ...[
           PlateDiagram(plates: breakdown.perSide),
@@ -307,11 +369,18 @@ class PlateDiagram extends StatelessWidget {
 
 /// A ramp of warm-up sets up to a working weight. Returns the sets to add, or
 /// null when dismissed.
+///
+/// [steps] is the ramp, as shares of the working weight. [barKg] and
+/// [incrementKg], when given, are what a barbell ramp starts from and steps
+/// by, in place of an Olympic bar and 1.25 kg plates.
 Future<List<WarmupSet>?> showWarmupSheet(
   BuildContext context, {
   required String exerciseName,
   required double workingKg,
   String? equipment,
+  List<(double, int)>? steps,
+  double? barKg,
+  double? incrementKg,
 }) {
   return _showToolSheet<List<WarmupSet>>(
     context,
@@ -319,6 +388,9 @@ Future<List<WarmupSet>?> showWarmupSheet(
       exerciseName: exerciseName,
       workingKg: workingKg,
       equipment: equipment,
+      steps: steps,
+      barKg: barKg,
+      incrementKg: incrementKg,
     ),
   );
 }
@@ -328,11 +400,17 @@ class _WarmupSheet extends StatefulWidget {
     required this.exerciseName,
     required this.workingKg,
     required this.equipment,
+    this.steps,
+    this.barKg,
+    this.incrementKg,
   });
 
   final String exerciseName;
   final double workingKg;
   final String? equipment;
+  final List<(double, int)>? steps;
+  final double? barKg;
+  final double? incrementKg;
 
   @override
   State<_WarmupSheet> createState() => _WarmupSheetState();
@@ -358,11 +436,25 @@ class _WarmupSheetState extends State<_WarmupSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final kit = warmupKit(widget.equipment);
+    var kit = warmupKit(widget.equipment);
+    if (widget.equipment == 'barbell') {
+      kit = (
+        bar: widget.barKg ?? kit.bar,
+        increment: widget.incrementKg ?? kit.increment,
+      );
+    }
+    final steps = widget.steps;
     final target = parseTypedDouble(_target.text) ?? 0;
-    final ramp = target > 0
-        ? warmupRamp(target, bar: kit.bar, increment: kit.increment)
-        : const <WarmupSet>[];
+    final ramp = target <= 0
+        ? const <WarmupSet>[]
+        : steps == null
+            ? warmupRamp(target, bar: kit.bar, increment: kit.increment)
+            : warmupRamp(
+                target,
+                bar: kit.bar,
+                increment: kit.increment,
+                steps: steps,
+              );
 
     return _ToolSheet(
       title: 'Warm-up sets',
@@ -435,7 +527,8 @@ class _WarmupSheetState extends State<_WarmupSheet> {
         PrimaryButton(
           icon: Icons.add_rounded,
           label: 'Add warm-up sets',
-          onPressed: ramp.isEmpty ? null : () => Navigator.of(context).pop(ramp),
+          onPressed:
+              ramp.isEmpty ? null : () => Navigator.of(context).pop(ramp),
         ),
       ],
     );
@@ -484,8 +577,7 @@ Future<({double? rpe})?> showRpePicker(
                 ChoiceChip(
                   label: Text(formatRpe(rpe)),
                   selected: current == rpe,
-                  onSelected: (_) =>
-                      Navigator.of(sheetContext).pop((rpe: rpe)),
+                  onSelected: (_) => Navigator.of(sheetContext).pop((rpe: rpe)),
                 ),
             ],
           ),
@@ -601,4 +693,276 @@ Future<String?> showSupersetPicker(
       );
     },
   );
+}
+
+// --- Set type ----------------------------------------------------------------
+
+/// What the set-type sheet resolved to: a new type, or "remove this set".
+sealed class SetTypeChoice {
+  const SetTypeChoice();
+}
+
+class SetTypePicked extends SetTypeChoice {
+  const SetTypePicked(this.type);
+
+  final SetType type;
+}
+
+class SetRemoved extends SetTypeChoice {
+  const SetRemoved();
+}
+
+/// The hues a set's badge is drawn in, so the sheet and the row agree — the
+/// Create screen's poll and post accents.
+const kWarmupHue = Color(0xFFF2B01E);
+const kDropSetHue = Color(0xFFB06BFF);
+
+/// The badge colour for a set of [type].
+Color setTypeColor(BuildContext context, SetType type) {
+  final palette = context.palette;
+  return switch (type) {
+    SetType.normal => palette.text,
+    SetType.warmup => palette.accent(kWarmupHue),
+    SetType.dropset => palette.accent(kDropSetHue),
+    SetType.failure => palette.danger,
+  };
+}
+
+/// Picks a set's type, or removes the set. Null when dismissed.
+Future<SetTypeChoice?> showSetTypeSheet(
+  BuildContext context, {
+  required SetType current,
+}) {
+  return _showToolSheet<SetTypeChoice>(
+    context,
+    (sheetContext) {
+      final palette = sheetContext.palette;
+      Widget option(SetType type, String badge, String title, String detail) {
+        final selected = type == current;
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          leading: SizedBox(
+            width: 32,
+            child: Center(
+              child: Text(
+                badge,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: setTypeColor(sheetContext, type),
+                ),
+              ),
+            ),
+          ),
+          title: Text(
+            title,
+            style: TextStyle(fontWeight: FontWeight.w700, color: palette.text),
+          ),
+          subtitle: Text(detail, style: TextStyle(color: palette.muted)),
+          trailing: selected
+              ? Icon(Icons.check_rounded, color: palette.brandText)
+              : null,
+          onTap: () => Navigator.of(sheetContext).pop(SetTypePicked(type)),
+        );
+      }
+
+      return _ToolSheet(
+        title: 'Set type',
+        children: [
+          option(SetType.warmup, 'W', 'Warm-up',
+              'Logged, but left out of your stats and records.'),
+          option(SetType.normal, '1', 'Normal', 'A working set.'),
+          option(SetType.failure, 'F', 'Failure',
+              'Taken to failure. Log the last rep you completed.'),
+          option(SetType.dropset, 'D', 'Drop set',
+              'Lighter, straight after the set before it, with no rest timer.'),
+          Divider(color: palette.stroke, height: 20),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            leading: SizedBox(
+              width: 32,
+              child: Icon(Icons.delete_outline_rounded, color: palette.danger),
+            ),
+            title: Text(
+              'Remove set',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: palette.danger,
+              ),
+            ),
+            onTap: () => Navigator.of(sheetContext).pop(const SetRemoved()),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+// --- Reorder -----------------------------------------------------------------
+
+/// Drag the session's exercises into a new order. Resolves to their keys in
+/// that order, or null when dismissed.
+Future<List<String>?> showReorderExercisesSheet(
+  BuildContext context, {
+  required List<ActiveExercise> exercises,
+}) {
+  return _showToolSheet<List<String>>(
+    context,
+    (_) => _ReorderSheet(exercises: exercises),
+  );
+}
+
+class _ReorderSheet extends StatefulWidget {
+  const _ReorderSheet({required this.exercises});
+
+  final List<ActiveExercise> exercises;
+
+  @override
+  State<_ReorderSheet> createState() => _ReorderSheetState();
+}
+
+class _ReorderSheetState extends State<_ReorderSheet> {
+  late final List<ActiveExercise> _order = [...widget.exercises];
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return _ToolSheet(
+      title: 'Reorder exercises',
+      subtitle: 'Drag a row by its handle.',
+      children: [
+        GlassWell(
+          padding: EdgeInsets.zero,
+          child: ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            onReorderItem: (from, to) => setState(() {
+              _order.insert(to, _order.removeAt(from));
+            }),
+            children: [
+              for (var i = 0; i < _order.length; i++)
+                ListTile(
+                  key: ValueKey(_order[i].key),
+                  title: Text(
+                    _order[i].name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: palette.text,
+                    ),
+                  ),
+                  trailing: ReorderableDragStartListener(
+                    index: i,
+                    child: Semantics(
+                      label: 'Drag to reorder',
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Icon(
+                          Icons.drag_handle_rounded,
+                          color: palette.muted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        PrimaryButton(
+          label: 'Done',
+          icon: Icons.check_rounded,
+          onPressed: () =>
+              Navigator.of(context).pop([for (final e in _order) e.key]),
+        ),
+      ],
+    );
+  }
+}
+
+// --- Bodyweight --------------------------------------------------------------
+
+/// Asks for the bodyweight bodyweight sets are counted at, in kilograms.
+/// Null when dismissed.
+Future<double?> showBodyweightSheet(
+  BuildContext context, {
+  double? current,
+}) {
+  return _showToolSheet<double>(
+    context,
+    (_) => _BodyweightSheet(current: current),
+  );
+}
+
+class _BodyweightSheet extends StatefulWidget {
+  const _BodyweightSheet({this.current});
+
+  final double? current;
+
+  @override
+  State<_BodyweightSheet> createState() => _BodyweightSheetState();
+}
+
+class _BodyweightSheetState extends State<_BodyweightSheet> {
+  late final _field = TextEditingController(
+    text: widget.current == null ? '' : formatKgValue(widget.current!),
+  );
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  double? get _kg {
+    final kg = parseTypedDouble(_field.text);
+    return kg == null || kg <= 0 ? null : kg;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _ToolSheet(
+      title: 'Bodyweight',
+      subtitle: 'Counted in the volume of bodyweight sets from now on. Sets '
+          'already ticked keep the weight they were done at.',
+      children: [
+        _KgField(controller: _field, onChanged: (_) => setState(() {})),
+        const SizedBox(height: 14),
+        PrimaryButton(
+          label: 'Use this weight',
+          icon: Icons.check_rounded,
+          onPressed: _kg == null ? null : () => Navigator.of(context).pop(_kg),
+        ),
+      ],
+    );
+  }
+}
+
+// --- Implausible values ------------------------------------------------------
+
+/// "That looks high. Keep it?" — true to keep it, false to change it. A
+/// warning, never a block: someone may really pull 520 kg.
+Future<bool> confirmHighValue(BuildContext context, String value) async {
+  final keep = await _showToolSheet<bool>(
+    context,
+    (sheetContext) => _ToolSheet(
+      title: 'That looks high',
+      subtitle: '$value. Keep it?',
+      children: [
+        PrimaryButton(
+          label: 'Keep it',
+          icon: Icons.check_rounded,
+          onPressed: () => Navigator.of(sheetContext).pop(true),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: TextButton(
+            onPressed: () => Navigator.of(sheetContext).pop(false),
+            child: const Text('Change it'),
+          ),
+        ),
+      ],
+    ),
+  );
+  return keep ?? true;
 }
