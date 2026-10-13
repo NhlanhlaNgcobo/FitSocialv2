@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fitsocial_app/app/theme/app_palette.dart';
 import 'package:fitsocial_app/app/theme/app_theme.dart';
+import 'package:fitsocial_app/core/config/feature_flags.dart';
 import 'package:fitsocial_app/shared/services/workout_card_exporter.dart';
 import 'package:fitsocial_app/shared/widgets/liquid_glass.dart';
+import 'package:fitsocial_app/shared/widgets/muscle_heatmap.dart';
 import 'package:fitsocial_app/shared/widgets/network_photo_aspect.dart';
 import 'package:fitsocial_app/shared/widgets/workout_summary_card.dart';
 
@@ -173,6 +176,73 @@ void main() {
         ),
         throwsA(isA<WorkoutCardExportException>()),
       );
+    });
+  });
+
+  group('the muscles row', () {
+    const pushDay = {
+      'title': 'Push',
+      'exercises': [
+        {'name': 'Bench', 'sets': 6, 'reps': 8, 'weightKg': 80},
+      ],
+      'muscleSets': {'chest': 6, 'shoulders': 9, 'triceps': 7.5, 'core': 1},
+    };
+
+    Future<void> pump(
+      WidgetTester tester, {
+      required bool flagOn,
+      Map<String, dynamic> data = pushDay,
+      bool forExport = false,
+    }) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            featureFlagsProvider.overrideWith(
+              (ref) => Stream.value(
+                FeatureFlags(flags: {FeatureFlag.muscleHeatmap: flagOn}),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: WorkoutSummaryCard(
+                  workoutData: data,
+                  activity: 'Workout',
+                  forExport: forExport,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('shows the figure and the top three muscles', (tester) async {
+      await pump(tester, flagOn: true);
+
+      expect(find.byType(MuscleHeatmap), findsOneWidget);
+      expect(find.text('Shoulders 9 · Triceps 7.5 · Chest 6'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('draws the same in the exported file', (tester) async {
+      await pump(tester, flagOn: true, forExport: true);
+
+      expect(find.byType(MuscleHeatmap), findsOneWidget);
+      expect(find.text('Shoulders 9 · Triceps 7.5 · Chest 6'), findsOneWidget);
+    });
+
+    testWidgets('stays hidden while the flag is off', (tester) async {
+      await pump(tester, flagOn: false);
+      expect(find.byType(MuscleHeatmap), findsNothing);
+    });
+
+    testWidgets('a post saved before the heatmap has no row', (tester) async {
+      await pump(tester, flagOn: true, data: _workout);
+      expect(find.byType(MuscleHeatmap), findsNothing);
     });
   });
 }

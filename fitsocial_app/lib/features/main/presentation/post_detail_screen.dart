@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/config/feature_flags.dart';
 import '../../../shared/identity/profile_identity.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/comment_composer.dart';
@@ -26,7 +27,10 @@ import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/comment_threads.dart';
 import '../domain/shared_post.dart';
+import '../domain/workout_math.dart' show parseMuscleSets;
 import 'comments_sheet.dart';
+import 'muscle_heatmap_screen.dart' show muscleHeatmapRoute;
+import 'muscles_worked_card.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/app_photo.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -479,11 +483,40 @@ class _MediaBlock extends StatelessWidget {
       case _MediaKind.photo:
         return _Photo(post: post);
       case _MediaKind.workout:
-        return WorkoutSummaryCard(
+        final card = WorkoutSummaryCard(
           workoutData: post.workoutData,
           activity: post.activity,
           backgroundImageUrl: post.imageUrl,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        );
+        final muscles = parseMuscleSets(post.workoutData?['muscleSets']);
+        if (muscles.isEmpty) return card;
+        return Consumer(
+          builder: (context, ref, _) {
+            if (!ref.watch(featureEnabledProvider(FeatureFlag.muscleHeatmap))) {
+              return card;
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                card,
+                const SizedBox(height: AppSpacing.md),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                  child: MusclesWorkedCard(
+                    sets: muscles,
+                    // Only on your own workout: on anyone else's, "this
+                    // week" would be the viewer's week, not theirs.
+                    onThisWeek:
+                        ref.watch(currentUserIdProvider) == post.authorId
+                            ? () => context.push(muscleHeatmapRoute)
+                            : null,
+                  ),
+                ),
+              ],
+            );
+          },
         );
       case _MediaKind.meal:
         return MealSummaryCard(

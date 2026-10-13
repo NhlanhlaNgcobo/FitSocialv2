@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
+
 import '../../workouts/domain/workout_energy.dart';
 import 'active_workout.dart';
 import 'app_models.dart';
+import 'exercise_library.dart';
 import 'workout_models.dart';
 
 /// Whether a saved set counts towards totals and charts. Saved sets were all
@@ -456,3 +459,68 @@ const barbellIncrementKg = 2.5;
     equipment == 'barbell'
         ? (bar: barOptionsKg.first, increment: barbellIncrementKg)
         : (bar: 0, increment: 2.5);
+
+/// Sets credited to each muscle group: 1 to an exercise's first (primary)
+/// muscle and 0.5 to each other one — a FitSocial choice, following the
+/// common evidence-based convention. Working sets only, unless
+/// [includeWarmups].
+///
+/// Muscles are looked up by `exerciseId` when this runs, not stored on the
+/// entry, so a corrected library row repaints history with no migration.
+///
+/// An entry with no per-set log ("3 x 10 at 60 kg") counts as its `sets`. A
+/// free-text entry, a deleted custom exercise and cardio credit nothing.
+/// "full body" is credited like any group; painting it is the reader's call.
+Map<String, double> muscleSets(
+  Iterable<ExerciseEntry> entries, {
+  Iterable<CustomExercise> custom = const [],
+  bool includeWarmups = false,
+}) {
+  final out = <String, double>{};
+  for (final e in entries) {
+    if (e.isCardio || ExerciseLibrary.isCardio(e.exerciseId, custom: custom)) {
+      continue;
+    }
+    final muscles = [
+      for (final m in ExerciseLibrary.musclesFor(e.exerciseId, custom: custom))
+        if (_creditable(m, e.exerciseId)) m,
+    ];
+    if (muscles.isEmpty) continue;
+    final count = e.setLog.isNotEmpty
+        ? e.setLog
+            .where((s) => countsForStats(s, includeWarmups: includeWarmups))
+            .length
+        : e.sets;
+    if (count <= 0) continue;
+    out.update(muscles.first, (v) => v + count, ifAbsent: () => count * 1.0);
+    for (final m in muscles.skip(1)) {
+      out.update(m, (v) => v + count * 0.5, ifAbsent: () => count * 0.5);
+    }
+  }
+  return out;
+}
+
+bool _creditable(String muscle, String? exerciseId) {
+  if (muscle == 'cardio') return false;
+  if (ExerciseLibrary.muscleGroups.contains(muscle)) return true;
+  if (kDebugMode) {
+    debugPrint('No muscle group "$muscle" on $exerciseId; not credited.');
+  }
+  return false;
+}
+
+/// [sets] as written to a workout: one decimal, zero groups left out.
+Map<String, double> roundedMuscleSets(Map<String, double> sets) => {
+      for (final MapEntry(:key, :value) in sets.entries)
+        if ((value * 10).round() > 0) key: (value * 10).round() / 10,
+    };
+
+/// Reads a stored `muscleSets` map, dropping anything that is not a positive
+/// number. Empty when absent.
+Map<String, double> parseMuscleSets(Object? raw) {
+  if (raw is! Map) return const {};
+  return {
+    for (final MapEntry(:key, :value) in raw.entries)
+      if (key is String && value is num && value > 0) key: value.toDouble(),
+  };
+}

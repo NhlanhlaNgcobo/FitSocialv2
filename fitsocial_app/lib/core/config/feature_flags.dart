@@ -31,7 +31,12 @@ enum FeatureFlag {
 
   /// Workout v2 logger: PREVIOUS values, the set-type sheet, columns by
   /// tracking type, and (Phase C) the save and celebration screens.
-  workoutLoggerV2('f7_workout_logger_v2');
+  workoutLoggerV2('f7_workout_logger_v2'),
+
+  /// The muscle heatmap: the body map on workout cards and workout detail,
+  /// and the Muscles card and screen on Progress. The `muscleSets` field is
+  /// written on save whatever this says.
+  muscleHeatmap('f11_muscle_heatmap');
 
   const FeatureFlag(this.key);
 

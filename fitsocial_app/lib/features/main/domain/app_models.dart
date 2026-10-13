@@ -4,6 +4,7 @@ import '../../../shared/reactions/fit_reaction.dart';
 import 'activity_kind.dart';
 import 'exercise_library.dart';
 import 'route_placement.dart';
+import 'workout_math.dart' as math;
 import 'workout_models.dart';
 
 export 'route_placement.dart';
@@ -939,9 +940,22 @@ class WorkoutLogDraft {
     this.taggedUsers = const [],
     this.caloriesEstimated = false,
     this.volumeKg,
+    this.customExercises = const [],
   });
 
   final String title;
+
+  /// The user's own exercises, so [muscleSets] can credit the ones logged
+  /// here. Not saved: only what they add up to is.
+  final List<CustomExercise> customExercises;
+
+  /// Sets per muscle group this workout, rounded for the document — see
+  /// `muscleSets` in workout_math.dart. Written to the log and the post so
+  /// the feed card can draw the body map from the post alone. Derived from
+  /// exercises the post already lists, so it reveals nothing new.
+  Map<String, double> get muscleSets => math.roundedMuscleSets(
+        math.muscleSets(exercises, custom: customExercises),
+      );
 
   /// The session's volume by `workoutVolumeKg`, worked out where the
   /// bodyweight is known. Written to the log and the post so the feed card
@@ -1003,6 +1017,7 @@ class WorkoutLogDraft {
         'duration': durationLabel,
         'calories': caloriesLabel,
         if (volumeKg case final kg? when kg > 0) 'volumeKg': kg,
+        if (muscleSets case final sets when sets.isNotEmpty) 'muscleSets': sets,
         'exercises': exercises.map((e) => e.toSummaryMap()).toList(),
       };
 }
