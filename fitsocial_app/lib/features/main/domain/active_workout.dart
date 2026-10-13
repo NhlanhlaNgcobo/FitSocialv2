@@ -1,3 +1,4 @@
+import '../../workouts/domain/workout_energy.dart';
 import 'app_models.dart';
 import 'exercise_library.dart';
 import 'workout_math.dart';
@@ -314,15 +315,26 @@ class ActiveWorkout {
   }) {
     final seconds = endedAt.difference(startedAt).inSeconds;
     final minutes = (seconds / 60).round();
+    final duration = minutes < 1 ? 1 : minutes;
     final trimmed = title.trim();
+    final exercises = entries;
+    // The session has no calorie field, so the estimate the typed-in form
+    // offers is what it saves. With no bodyweight there is nothing to base
+    // one on, and it stays at zero rather than guessing.
+    final estimate = estimateWorkoutCalories(
+      exercises: exercises,
+      durationMinutes: duration,
+      bodyweightKg: bodyweightKg,
+    );
     return WorkoutLogDraft(
       title: trimmed.isEmpty ? 'Workout' : trimmed,
-      durationMinutes: minutes < 1 ? 1 : minutes,
-      calories: 0,
+      durationMinutes: duration,
+      calories: estimate ?? 0,
+      caloriesEstimated: estimate != null,
       notes: notes,
       shareToFeed: shareToFeed,
       loggedAt: startedAt,
-      exercises: entries,
+      exercises: exercises,
       volumeKg: volumeKg,
       customExercises: customExercises,
     );

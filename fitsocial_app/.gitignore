@@ -50,6 +50,8 @@ firebase-debug.log
 
 # Dev session screenshots (adb screencap artifacts)
 *.png
+# Golden images are test fixtures, not screenshots.
+!test/goldens/*.png
 !assets/**/*.png
 !assets/**/*.jpg
 

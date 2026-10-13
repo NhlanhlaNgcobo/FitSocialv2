@@ -7,6 +7,7 @@ import 'package:fitsocial_app/features/main/application/active_workout_controlle
 import 'package:fitsocial_app/features/main/data/active_workout_store.dart';
 import 'package:fitsocial_app/features/main/domain/active_workout.dart';
 import 'package:fitsocial_app/features/main/domain/workout_models.dart';
+import 'package:fitsocial_app/features/workouts/domain/workout_energy.dart';
 import 'package:fitsocial_app/features/main/presentation/workout_session_screen.dart'
     show formatElapsed;
 
@@ -98,6 +99,40 @@ void main() {
       expect(draft.durationMinutes, 48); // 47:40 rounds up
       expect(draft.loggedAt, start);
       expect(draft.shareToFeed, isTrue);
+    });
+
+    test('estimates the calories from the bodyweight', () {
+      final workout = sample();
+      final draft = ActiveWorkout(
+        id: workout.id,
+        startedAt: start,
+        title: workout.title,
+        exercises: workout.exercises,
+        bodyweightKg: 80,
+      ).toDraft(
+        endedAt: start.add(const Duration(minutes: 45)),
+        shareToFeed: true,
+      );
+
+      final expected = estimateWorkoutCalories(
+        exercises: draft.exercises,
+        durationMinutes: 45,
+        bodyweightKg: 80,
+      );
+      expect(expected, isNotNull);
+      expect(draft.calories, expected);
+      expect(draft.caloriesEstimated, isTrue);
+      expect(draft.caloriesLabel, startsWith('~'));
+    });
+
+    test('with no bodyweight, calories stay at zero', () {
+      final draft = sample().toDraft(
+        endedAt: start.add(const Duration(minutes: 45)),
+        shareToFeed: true,
+      );
+
+      expect(draft.calories, 0);
+      expect(draft.caloriesEstimated, isFalse);
     });
 
     test('an unnamed, instant workout is still a valid draft', () {
