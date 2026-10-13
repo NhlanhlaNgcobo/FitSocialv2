@@ -61,6 +61,7 @@ void main() {
       'f5_recap_cards',
       'f6_leaderboards',
       'f7_workout_logger_v2',
+      'f11_muscle_heatmap',
     ]);
     expect(Tunable.values.map((t) => t.key), [
       'integrity_max_daily_steps',

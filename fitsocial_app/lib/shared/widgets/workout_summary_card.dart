@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../app/theme/app_typography.dart';
+import '../../core/config/feature_flags.dart';
+import '../../features/main/domain/muscle_heat.dart';
+import '../../features/main/domain/workout_math.dart' show parseMuscleSets;
 import 'app_photo.dart';
 import 'fit_social_logo.dart';
 import 'liquid_glass.dart';
+import 'muscle_heatmap.dart';
 import 'network_photo_aspect.dart';
 import 'picture_ratio.dart';
 import 'run_summary_card.dart' show runCardExportGround;
@@ -194,6 +199,8 @@ class WorkoutSummaryCard extends StatelessWidget {
     final photo = backgroundImage ??
         (backgroundImageUrl == null ? null : appPhoto(backgroundImageUrl!));
     final skin = _CardSkin.resolve(palette, hasPhoto: photo != null);
+    // Posts saved before the heatmap carry no map, and draw no row.
+    final muscles = parseMuscleSets(data['muscleSets']);
 
     // Volume first when it exists — it is the one figure that says how hard the
     // session was. Duration is in the line under the title, so it is not
@@ -269,6 +276,12 @@ class WorkoutSummaryCard extends StatelessWidget {
             const SizedBox(height: 14),
             _StatStrip(stats: stats, skin: skin),
           ],
+          if (muscles.isNotEmpty)
+            _MusclesRow(
+              sets: muscles,
+              skin: skin,
+              overPhoto: photo != null,
+            ),
           if (exercises.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
@@ -371,6 +384,80 @@ class WorkoutSummaryCard extends StatelessWidget {
                 fallbackColor: skin.photoFallback,
                 child: content,
               ),
+      ),
+    );
+  }
+}
+
+/// What the session trained: a small front and back figure and its top three
+/// muscles. Behind f11_muscle_heatmap; read here rather than passed in so the
+/// feed, the detail page and the exported file all follow the one switch.
+class _MusclesRow extends ConsumerWidget {
+  const _MusclesRow({
+    required this.sets,
+    required this.skin,
+    required this.overPhoto,
+  });
+
+  final Map<String, double> sets;
+  final _CardSkin skin;
+  final bool overPhoto;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(featureEnabledProvider(FeatureFlag.muscleHeatmap))) {
+      return const SizedBox.shrink();
+    }
+    final top = [
+      for (final m in paintedMuscles)
+        if ((sets[m] ?? 0) > 0) m,
+    ]..sort((a, b) => sets[b]!.compareTo(sets[a]!));
+    final fullBody = sets['full body'] ?? 0;
+    final line = [
+      for (final m in top.take(3)) '${muscleLabel(m)} ${formatSets(sets[m]!)}',
+      if (top.length < 3 && fullBody > 0) 'Full body ${formatSets(fullBody)}',
+    ].join(' · ');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Row(
+        children: [
+          MuscleHeatmap(
+            sets: sets,
+            scale: HeatScale.session,
+            height: 72,
+            // A photo is the same in both themes, so the figure is too.
+            forceDarkPalette: overPhoto,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'MUSCLES',
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.6,
+                    color: skin.accent,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  line,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                    color: skin.text,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
