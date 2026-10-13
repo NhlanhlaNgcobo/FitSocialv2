@@ -13,6 +13,7 @@ import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/quick_toast.dart';
+import '../../auth/application/body_metrics_providers.dart';
 import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
 import '../application/rest_alerts.dart';
@@ -51,6 +52,19 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // A session resumed from the pill, or started before the profile loaded,
+    // takes the bodyweight once it is known.
+    ref.listenManual(bodyMetricsProvider, (_, next) {
+      final kg = next.valueOrNull?.weightKg;
+      if (kg != null && ref.read(activeWorkoutProvider)?.bodyweightKg == null) {
+        _controller.setBodyweight(kg);
+      }
+    }, fireImmediately: true);
+  }
+
+  @override
   void dispose() {
     _title.dispose();
     super.dispose();
@@ -62,7 +76,12 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
   Future<void> _addExercise() async {
     final picked = await showExercisePicker(context);
     if (picked == null || !mounted) return;
-    _controller.addExercise(name: picked.name, exerciseId: picked.id);
+    final custom = ref.read(customExercisesProvider).valueOrNull ?? const [];
+    _controller.addExercise(
+      name: picked.name,
+      exerciseId: picked.id,
+      trackingType: ExerciseLibrary.trackingTypeFor(picked.id, custom: custom),
+    );
   }
 
   Future<void> _discard() async {

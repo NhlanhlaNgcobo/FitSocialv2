@@ -1076,17 +1076,17 @@ class FirestoreContentRepository implements ContentRepository {
     // Private, whatever the original was: the same meal posted twice is a
     // duplicate in everyone's feed, and the first post is still there.
     await _settleWrite(mealsCollection.doc().set(_copiedMealFields(
-      authorId: user.uid,
-      name: meal.name,
-      calories: meal.calories,
-      protein: meal.protein,
-      carbs: meal.carbs,
-      fat: meal.fat,
-      items: meal.items,
-      notes: meal.notes,
-      imageUrl: meal.imageUrl,
-      loggedAt: DateTime.now(),
-    )));
+          authorId: user.uid,
+          name: meal.name,
+          calories: meal.calories,
+          protein: meal.protein,
+          carbs: meal.carbs,
+          fat: meal.fat,
+          items: meal.items,
+          notes: meal.notes,
+          imageUrl: meal.imageUrl,
+          loggedAt: DateTime.now(),
+        )));
     await _incrementUser(mealsDelta: 1);
   }
 
@@ -1824,6 +1824,7 @@ class FirestoreContentRepository implements ContentRepository {
       'durationMinutes': draft.durationMinutes,
       'calories': draft.calories,
       if (draft.caloriesEstimated) 'caloriesEstimated': true,
+      if (draft.volumeKg case final kg? when kg > 0) 'volumeKg': kg,
       'duration': draft.durationLabel,
       'caloriesLabel': draft.caloriesLabel,
       'exerciseCount': draft.exercises.length,

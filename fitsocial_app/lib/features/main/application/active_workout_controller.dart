@@ -7,6 +7,7 @@ import '../../tracking/application/run_draft_providers.dart';
 import '../data/active_workout_store.dart';
 import 'content_providers.dart';
 import '../domain/active_workout.dart';
+import '../domain/exercise_library.dart';
 import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 
@@ -96,15 +97,33 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
   ///
   /// Starting twice resumes rather than replaces: the one thing worse than a
   /// stray extra tap is wiping a session in progress.
-  Future<void> ensureStarted({String title = ''}) async {
+  ///
+  /// [bodyweightKg] is snapshotted for bodyweight volume. A session already
+  /// running that has none takes it, so a resumed session is not left short.
+  Future<void> ensureStarted({String title = '', double? bodyweightKg}) async {
     await ready;
-    if (state != null) return;
+    final running = state;
+    if (running != null) {
+      if (running.bodyweightKg == null && bodyweightKg != null) {
+        _commit(running.copyWith(bodyweightKg: bodyweightKg));
+      }
+      return;
+    }
     _commit(ActiveWorkout(
       id: _newKey(),
       startedAt: _now(),
       title: title,
       exercises: const [],
+      bodyweightKg: bodyweightKg,
     ));
+  }
+
+  /// Changes the bodyweight bodyweight sets are counted at from now on. Sets
+  /// already ticked keep the one they were ticked at.
+  void setBodyweight(double kg) {
+    final workout = state;
+    if (workout == null || kg <= 0) return;
+    _commit(workout.copyWith(bodyweightKg: kg));
   }
 
   /// Ends the session without saving it.
@@ -120,7 +139,14 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
   }
 
   /// Adds an exercise with one empty row ready to fill in.
-  void addExercise({required String name, String? exerciseId}) {
+  ///
+  /// [trackingType] defaults to what the library says; a custom exercise's
+  /// caller passes its own, since only the caller has the custom list.
+  void addExercise({
+    required String name,
+    String? exerciseId,
+    TrackingType? trackingType,
+  }) {
     final workout = state;
     final trimmed = name.trim();
     if (workout == null || trimmed.isEmpty) return;
@@ -130,6 +156,8 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
         key: _newKey(),
         name: trimmed,
         exerciseId: exerciseId,
+        trackingType:
+            trackingType ?? ExerciseLibrary.trackingTypeFor(exerciseId),
         sets: const [ExerciseSet(weightKg: 0, reps: 0)],
       ),
     ]));
@@ -325,16 +353,24 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     if (set.completedAt == null && !set.hasEffort) return false;
     final ticking = set.completedAt == null;
     final now = _now();
+    // A bodyweight set keeps the bodyweight it was done at, so a later
+    // weigh-in never rewrites its volume.
+    final bodyweight =
+        exercise.trackingType.usesBodyweight ? workout.bodyweightKg : null;
     _mapSet(
       key,
       index,
       (s) => ticking
-          ? s.copyWith(completedAt: now)
+          ? s.copyWith(completedAt: now, bodyweightKg: bodyweight)
           : s.copyWith(clearCompletedAt: true),
     );
     if (ticking) {
       final ticked = state!;
-      final seconds = ticked.restAfter(key, defaultSeconds: defaultRestSeconds);
+      final seconds = ticked.restAfter(
+        key,
+        defaultSeconds: defaultRestSeconds,
+        setIndex: index,
+      );
       if (seconds != null) {
         _commit(ticked.copyWith(
           rest: RestTimer(

@@ -177,7 +177,13 @@ class WorkoutSummaryCard extends StatelessWidget {
 
     final totalSets = exercises.fold<int>(0, (sum, e) => sum + (e.sets ?? 0));
     final totalReps = exercises.fold<int>(0, (sum, e) => sum + e.totalReps);
-    final volume = exercises.fold<double>(0, (sum, e) => sum + e.volumeKg);
+    // The volume the session worked out, with bodyweight and assistance
+    // counted, when the post carries it; older posts re-derive it from the
+    // summary rows.
+    final volume = switch (data['volumeKg']) {
+      final num kg when kg > 0 => kg.toDouble(),
+      _ => exercises.fold<double>(0, (sum, e) => sum + e.volumeKg),
+    };
     final distanceKm =
         exercises.fold<double>(0, (sum, e) => sum + (e.distanceKm ?? 0));
     // The column only earns its width if something is in it. A log of

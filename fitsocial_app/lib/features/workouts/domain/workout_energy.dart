@@ -1,5 +1,6 @@
 import '../../main/domain/app_models.dart';
 import '../../main/domain/exercise_library.dart';
+import '../../main/domain/workout_math.dart';
 
 /// Calories for a logged workout, estimated (build spec §6), or null.
 ///
@@ -129,33 +130,26 @@ const _cardioMets = <(String, double)>[
   ('dancing', 5.5),
 ];
 
-/// Σ sets × reps × load. A bodyweight movement with no weight typed counts
-/// the share of bodyweight it moves — a push-up is not zero load. Timed holds
-/// and anything else with no load are left out.
+/// The session's volume — [workoutVolumeKg], the one formula the live strip,
+/// the log form and the save all use — with [bodyweightKg] standing in for
+/// any set that did not snapshot its own.
 double volumeLoadKg(
   List<ExerciseEntry> exercises, {
   required double bodyweightKg,
-}) {
-  var total = 0.0;
-  for (final exercise in exercises) {
-    final load = exercise.weightKg ??
-        switch (bodyweightShare(exercise)) {
-          final share? => share * bodyweightKg,
-          null => null,
-        };
-    if (load == null || load <= 0) continue;
-    total += exercise.sets * exercise.reps * load;
-  }
-  return total;
-}
+}) =>
+    workoutVolumeKg(exercises, bodyweightKg: bodyweightKg);
 
 /// The share of bodyweight a bodyweight exercise moves, or null when it moves
 /// none worth counting (a plank) or is not a bodyweight exercise at all.
+double? bodyweightShare(ExerciseEntry exercise) =>
+    bodyweightShareFor(exercise.exerciseId);
+
+/// [bodyweightShare] by library id.
 ///
 /// The library carries no such figure, so it is read off the movement's name
 /// (spec §6 values). A bodyweight movement not named here counts as half.
-double? bodyweightShare(ExerciseEntry exercise) {
-  final library = switch (exercise.exerciseId) {
+double? bodyweightShareFor(String? exerciseId) {
+  final library = switch (exerciseId) {
     final id? => ExerciseLibrary.byId(id),
     null => null,
   };
@@ -164,7 +158,7 @@ double? bodyweightShare(ExerciseEntry exercise) {
   if (library == null || library.equipment != 'bodyweight') return null;
 
   final name = library.name.toLowerCase();
-  for (final hold in _holds) {
+  for (final hold in ExerciseLibrary.holdPatterns) {
     if (name.contains(hold)) return null;
   }
   for (final (pattern, share) in _shares) {
@@ -172,9 +166,6 @@ double? bodyweightShare(ExerciseEntry exercise) {
   }
   return 0.5;
 }
-
-/// Static work: time under tension, no reps to multiply.
-const _holds = ['plank', 'hold', 'wall sit', 'hollow', 'l-sit'];
 
 /// Checked in order, so "pull-up" is found before a looser "up" could be.
 const _shares = <(String, double)>[
