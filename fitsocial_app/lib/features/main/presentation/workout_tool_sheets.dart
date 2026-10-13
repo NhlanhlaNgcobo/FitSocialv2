@@ -170,20 +170,44 @@ class _KgField extends StatelessWidget {
 // --- Plate calculator --------------------------------------------------------
 
 /// Which plates go on each side of the bar for a target load.
+///
+/// [barKg] and [plates] start the sheet from a saved choice. With
+/// [onBarChanged] and [onPlatesChanged] the choices made here are kept, and
+/// the plates on hand can be switched on and off.
 Future<void> showPlateCalculator(
   BuildContext context, {
   double initialKg = 0,
+  double? barKg,
+  List<double> plates = standardPlatesKg,
+  ValueChanged<double>? onBarChanged,
+  ValueChanged<List<double>>? onPlatesChanged,
 }) {
   return _showToolSheet<void>(
     context,
-    (_) => _PlateCalculatorSheet(initialKg: initialKg),
+    (_) => _PlateCalculatorSheet(
+      initialKg: initialKg,
+      barKg: barKg ?? barOptionsKg.first,
+      plates: plates,
+      onBarChanged: onBarChanged,
+      onPlatesChanged: onPlatesChanged,
+    ),
   );
 }
 
 class _PlateCalculatorSheet extends StatefulWidget {
-  const _PlateCalculatorSheet({required this.initialKg});
+  const _PlateCalculatorSheet({
+    required this.initialKg,
+    required this.barKg,
+    required this.plates,
+    this.onBarChanged,
+    this.onPlatesChanged,
+  });
 
   final double initialKg;
+  final double barKg;
+  final List<double> plates;
+  final ValueChanged<double>? onBarChanged;
+  final ValueChanged<List<double>>? onPlatesChanged;
 
   @override
   State<_PlateCalculatorSheet> createState() => _PlateCalculatorSheetState();
@@ -191,7 +215,8 @@ class _PlateCalculatorSheet extends StatefulWidget {
 
 class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
   late final TextEditingController _target;
-  double _bar = barOptionsKg.first;
+  late double _bar = widget.barKg;
+  late List<double> _plates = [...widget.plates];
 
   @override
   void initState() {
@@ -199,6 +224,24 @@ class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
     _target = TextEditingController(
       text: widget.initialKg > 0 ? formatKgValue(widget.initialKg) : '',
     );
+  }
+
+  void _pickBar(double bar) {
+    setState(() => _bar = bar);
+    widget.onBarChanged?.call(bar);
+  }
+
+  /// The last plate stays: a bar that can take nothing is no use.
+  void _togglePlate(double plate, bool on) {
+    final next = on
+        ? ([..._plates, plate]..sort((a, b) => b.compareTo(a)))
+        : [
+            for (final p in _plates)
+              if (p != plate) p,
+          ];
+    if (next.isEmpty) return;
+    setState(() => _plates = next);
+    widget.onPlatesChanged?.call(next);
   }
 
   @override
@@ -211,9 +254,8 @@ class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final target = parseTypedDouble(_target.text) ?? 0;
-    final breakdown = target > 0
-        ? platesPerSide(target, bar: _bar, plates: standardPlatesKg)
-        : null;
+    final breakdown =
+        target > 0 ? platesPerSide(target, bar: _bar, plates: _plates) : null;
 
     final String summary;
     if (breakdown == null) {
@@ -238,14 +280,29 @@ class _PlateCalculatorSheetState extends State<_PlateCalculatorSheet> {
         Wrap(
           spacing: 8,
           children: [
-            for (final bar in barOptionsKg)
+            for (final bar in {...barOptionsKg, _bar})
               ChoiceChip(
                 label: Text('${formatKgValue(bar)} kg'),
                 selected: _bar == bar,
-                onSelected: (_) => setState(() => _bar = bar),
+                onSelected: (_) => _pickBar(bar),
               ),
           ],
         ),
+        if (widget.onPlatesChanged != null) ...[
+          _label(context, 'Plates on hand'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final plate in {...standardPlatesKg, ..._plates})
+                FilterChip(
+                  label: Text(formatKgValue(plate)),
+                  selected: _plates.contains(plate),
+                  onSelected: (on) => _togglePlate(plate, on),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 18),
         if (breakdown != null && breakdown.perSide.isNotEmpty) ...[
           PlateDiagram(plates: breakdown.perSide),
@@ -312,11 +369,18 @@ class PlateDiagram extends StatelessWidget {
 
 /// A ramp of warm-up sets up to a working weight. Returns the sets to add, or
 /// null when dismissed.
+///
+/// [steps] is the ramp, as shares of the working weight. [barKg] and
+/// [incrementKg], when given, are what a barbell ramp starts from and steps
+/// by, in place of an Olympic bar and 1.25 kg plates.
 Future<List<WarmupSet>?> showWarmupSheet(
   BuildContext context, {
   required String exerciseName,
   required double workingKg,
   String? equipment,
+  List<(double, int)>? steps,
+  double? barKg,
+  double? incrementKg,
 }) {
   return _showToolSheet<List<WarmupSet>>(
     context,
@@ -324,6 +388,9 @@ Future<List<WarmupSet>?> showWarmupSheet(
       exerciseName: exerciseName,
       workingKg: workingKg,
       equipment: equipment,
+      steps: steps,
+      barKg: barKg,
+      incrementKg: incrementKg,
     ),
   );
 }
@@ -333,11 +400,17 @@ class _WarmupSheet extends StatefulWidget {
     required this.exerciseName,
     required this.workingKg,
     required this.equipment,
+    this.steps,
+    this.barKg,
+    this.incrementKg,
   });
 
   final String exerciseName;
   final double workingKg;
   final String? equipment;
+  final List<(double, int)>? steps;
+  final double? barKg;
+  final double? incrementKg;
 
   @override
   State<_WarmupSheet> createState() => _WarmupSheetState();
@@ -363,11 +436,25 @@ class _WarmupSheetState extends State<_WarmupSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final kit = warmupKit(widget.equipment);
+    var kit = warmupKit(widget.equipment);
+    if (widget.equipment == 'barbell') {
+      kit = (
+        bar: widget.barKg ?? kit.bar,
+        increment: widget.incrementKg ?? kit.increment,
+      );
+    }
+    final steps = widget.steps;
     final target = parseTypedDouble(_target.text) ?? 0;
-    final ramp = target > 0
-        ? warmupRamp(target, bar: kit.bar, increment: kit.increment)
-        : const <WarmupSet>[];
+    final ramp = target <= 0
+        ? const <WarmupSet>[]
+        : steps == null
+            ? warmupRamp(target, bar: kit.bar, increment: kit.increment)
+            : warmupRamp(
+                target,
+                bar: kit.bar,
+                increment: kit.increment,
+                steps: steps,
+              );
 
     return _ToolSheet(
       title: 'Warm-up sets',

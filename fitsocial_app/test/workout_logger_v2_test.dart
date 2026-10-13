@@ -66,6 +66,7 @@ final _squatLastTime = [
 Future<ActiveWorkoutController> _pumpV2(
   WidgetTester tester, {
   List<WorkoutHistoryItem> history = const [],
+  _MemoryPreferencesStore? prefs,
 }) async {
   tester.view.physicalSize = const Size(390, 1400);
   tester.view.devicePixelRatio = 1.0;
@@ -82,7 +83,8 @@ Future<ActiveWorkoutController> _pumpV2(
     workoutHistoryItemsProvider.overrideWith((ref) async => history),
     bodyMetricsProvider.overrideWith((ref) async => const BodyMetrics()),
     workoutPreferencesStoreProvider.overrideWithValue(
-      _MemoryPreferencesStore(const WorkoutPreferences(restSeconds: 0)),
+      prefs ??
+          _MemoryPreferencesStore(const WorkoutPreferences(restSeconds: 0)),
     ),
   ]);
   addTearDown(container.dispose);
@@ -107,6 +109,24 @@ Future<ActiveWorkoutController> _pumpV2(
   );
   await tester.pumpAndSettle();
   return controller;
+}
+
+/// Types [weight] and [reps] into the first row, then opens [action] from the
+/// card's menu.
+Future<void> _openFromMenu(
+  WidgetTester tester,
+  String action, {
+  String weight = '100',
+  String reps = '5',
+}) async {
+  final fields = find.byType(TextField);
+  await tester.enterText(fields.at(1), weight);
+  await tester.enterText(fields.at(2), reps);
+  await tester.pump();
+  await tester.tap(find.byTooltip('Exercise options'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(action));
+  await tester.pumpAndSettle();
 }
 
 /// Ticks the rows for each of [picks] in the multi-select picker, searching
@@ -261,5 +281,96 @@ void main() {
     final exercises = controller.state!.exercises;
     expect(exercises, hasLength(2));
     expect(exercises.every((e) => e.supersetGroup == null), isTrue);
+  });
+
+  group('plates and warm-ups', () {
+    testWidgets('the plate calculator keeps the bar and plates picked',
+        (tester) async {
+      final prefs = _MemoryPreferencesStore(
+        const WorkoutPreferences(restSeconds: 0),
+      );
+      await _pumpV2(tester, prefs: prefs);
+      await _pickExercises(tester, [('squat', 'Squat (Barbell)')]);
+      await _openFromMenu(tester, 'Plate calculator');
+
+      expect(find.text('25  ·  15'), findsOneWidget);
+      await tester.tap(find.text('15 kg'));
+      await tester.pumpAndSettle();
+      expect(prefs.saved.barKg, 15);
+
+      // No 25s in this gym: 85 a side becomes 20 · 20 · 2.5 on the 15 bar.
+      await tester.tap(find.widgetWithText(FilterChip, '25'));
+      await tester.pumpAndSettle();
+      expect(prefs.saved.plateSetKg, [20, 15, 10, 5, 2.5, 1.25]);
+      expect(find.text('20  ·  20  ·  2.5'), findsOneWidget);
+    });
+
+    testWidgets('the plate calculator opens on the saved bar', (tester) async {
+      await _pumpV2(
+        tester,
+        prefs: _MemoryPreferencesStore(
+          const WorkoutPreferences(restSeconds: 0, barKg: 15),
+        ),
+      );
+      await _pickExercises(tester, [('squat', 'Squat (Barbell)')]);
+      await _openFromMenu(tester, 'Plate calculator');
+
+      final chip = tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, '15 kg'),
+      );
+      expect(chip.selected, isTrue);
+      expect(find.text('25  ·  15  ·  2.5'), findsOneWidget);
+    });
+
+    testWidgets('warm-ups follow the saved formula', (tester) async {
+      final controller = await _pumpV2(
+        tester,
+        prefs: _MemoryPreferencesStore(
+          const WorkoutPreferences(
+            restSeconds: 0,
+            warmupSteps: [(0.5, 5), (0.75, 3)],
+          ),
+        ),
+      );
+      await _pickExercises(tester, [('squat', 'Squat (Barbell)')]);
+      await _openFromMenu(tester, 'Warm-up sets');
+
+      expect(find.text('50 kg'), findsOneWidget);
+      expect(find.text('75 kg'), findsOneWidget);
+      expect(find.text('40 kg'), findsNothing);
+      await tester.tap(find.text('Add warm-up sets'));
+      await tester.pumpAndSettle();
+
+      final sets = controller.state!.exercises.single.sets;
+      expect([for (final s in sets) s.weightKg], [50, 75, 100]);
+      expect([for (final s in sets) s.reps], [5, 3, 5]);
+    });
+
+    testWidgets('the formula can be edited and reset in settings',
+        (tester) async {
+      final prefs = _MemoryPreferencesStore(
+        const WorkoutPreferences(restSeconds: 0),
+      );
+      await _pumpV2(tester, prefs: prefs);
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Warm-up formula'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reset to default'), findsNothing);
+
+      await tester.tap(find.byTooltip('More weight').first);
+      await tester.pumpAndSettle();
+      expect(prefs.saved.warmupSteps, [(0.45, 8), (0.6, 5), (0.8, 3)]);
+
+      await tester.tap(find.byTooltip('Remove this step').last);
+      await tester.pumpAndSettle();
+      expect(prefs.saved.warmupSteps, [(0.45, 8), (0.6, 5)]);
+
+      await tester.ensureVisible(find.text('Reset to default'));
+      await tester.tap(find.text('Reset to default'));
+      await tester.pumpAndSettle();
+      expect(prefs.saved.warmupSteps, WorkoutPreferences.defaultWarmupSteps);
+    });
   });
 }

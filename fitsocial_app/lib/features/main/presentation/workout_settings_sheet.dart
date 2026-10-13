@@ -21,6 +21,164 @@ Future<void> showWorkoutSettingsSheet(BuildContext context) {
   );
 }
 
+/// The warm-up ramp, step by step: a share of the working weight and its
+/// reps, each nudged up or down.
+class _WarmupFormula extends ConsumerWidget {
+  const _WarmupFormula({required this.prefs});
+
+  final WorkoutPreferences prefs;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+    final set = ref.read(workoutPreferencesProvider.notifier);
+    final steps = prefs.warmupSteps;
+    final isDefault = _sameSteps(steps, WorkoutPreferences.defaultWarmupSteps);
+
+    void change(int i, {double? fraction, int? reps}) {
+      final (f, r) = steps[i];
+      set.setWarmupSteps([
+        for (var j = 0; j < steps.length; j++)
+          if (j == i)
+            (
+              ((fraction ?? f).clamp(0.05, 0.95) * 100).round() / 100,
+              (reps ?? r).clamp(1, 20),
+            )
+          else
+            steps[j],
+      ]);
+    }
+
+    Widget stepper(
+            String text, String what, VoidCallback? less, VoidCallback? more) =>
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Less $what',
+              icon: const Icon(Icons.remove_rounded, size: 18),
+              onPressed: less,
+            ),
+            SizedBox(
+              width: 44,
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: palette.text,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'More $what',
+              icon: const Icon(Icons.add_rounded, size: 18),
+              onPressed: more,
+            ),
+          ],
+        );
+
+    return GlassWell(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Warm-up formula',
+            style: TextStyle(fontWeight: FontWeight.w700, color: palette.text),
+          ),
+          Text(
+            'Shares of your working weight, lightest first',
+            style: TextStyle(color: palette.muted),
+          ),
+          const SizedBox(height: 6),
+          for (var i = 0; i < steps.length; i++)
+            Row(
+              children: [
+                // Shrinks rather than overflows on a narrow phone.
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        stepper(
+                          '${(steps[i].$1 * 100).round()}%',
+                          'weight',
+                          steps[i].$1 <= 0.05
+                              ? null
+                              : () => change(i, fraction: steps[i].$1 - 0.05),
+                          steps[i].$1 >= 0.95
+                              ? null
+                              : () => change(i, fraction: steps[i].$1 + 0.05),
+                        ),
+                        Text('×', style: TextStyle(color: palette.muted)),
+                        stepper(
+                          '${steps[i].$2}',
+                          'reps',
+                          steps[i].$2 <= 1
+                              ? null
+                              : () => change(i, reps: steps[i].$2 - 1),
+                          steps[i].$2 >= 20
+                              ? null
+                              : () => change(i, reps: steps[i].$2 + 1),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (steps.length > 1)
+                  IconButton(
+                    tooltip: 'Remove this step',
+                    icon: Icon(Icons.close_rounded, color: palette.muted),
+                    onPressed: () => set.setWarmupSteps([
+                      for (var j = 0; j < steps.length; j++)
+                        if (j != i) steps[j],
+                    ]),
+                  ),
+              ],
+            ),
+          Wrap(
+            spacing: 4,
+            children: [
+              if (steps.length < 6)
+                TextButton.icon(
+                  onPressed: () {
+                    final (f, r) = steps.last;
+                    set.setWarmupSteps([
+                      ...steps,
+                      (f + 0.1 > 0.95 ? 0.95 : f + 0.1, r > 2 ? r - 2 : 1),
+                    ]);
+                  },
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add step'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: palette.brandText,
+                  ),
+                ),
+              if (!isDefault)
+                TextButton(
+                  onPressed: set.resetWarmupSteps,
+                  style: TextButton.styleFrom(foregroundColor: palette.muted),
+                  child: const Text('Reset to default'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+bool _sameSteps(List<WarmupStep> a, List<WarmupStep> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 class _WorkoutSettingsSheet extends ConsumerWidget {
   const _WorkoutSettingsSheet();
 
@@ -188,6 +346,8 @@ class _WorkoutSettingsSheet extends ConsumerWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 14),
+                _WarmupFormula(prefs: prefs),
               ],
             ),
           ),

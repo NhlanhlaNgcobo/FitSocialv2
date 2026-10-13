@@ -1014,15 +1014,32 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
         WidgetsBinding.instance
             .addPostFrameCallback((_) => _notesFocus.requestFocus());
       case _ExerciseAction.warmups:
+        final v2 =
+            ref.read(featureEnabledProvider(FeatureFlag.workoutLoggerV2));
+        final prefs = ref.read(workoutPreferencesProvider);
         final ramp = await showWarmupSheet(
           context,
           exerciseName: exercise.name,
           workingKg: _workingKg,
           equipment: _equipmentFor(ref, exercise.exerciseId),
+          steps: v2 ? prefs.warmupSteps : null,
+          barKg: v2 ? prefs.barKg : null,
+          incrementKg: v2 ? prefs.barbellIncrementKg : null,
         );
         if (ramp != null) controller.addWarmups(exercise.key, ramp);
       case _ExerciseAction.plates:
-        await showPlateCalculator(context, initialKg: _workingKg);
+        final v2 =
+            ref.read(featureEnabledProvider(FeatureFlag.workoutLoggerV2));
+        final prefs = ref.read(workoutPreferencesProvider);
+        final setPrefs = ref.read(workoutPreferencesProvider.notifier);
+        await showPlateCalculator(
+          context,
+          initialKg: _workingKg,
+          barKg: v2 ? prefs.barKg : null,
+          plates: v2 ? prefs.plateSetKg : standardPlatesKg,
+          onBarChanged: v2 ? setPrefs.setBarKg : null,
+          onPlatesChanged: v2 ? setPrefs.setPlateSetKg : null,
+        );
       case _ExerciseAction.rest:
         final picked = await showRestOverridePicker(
           context,

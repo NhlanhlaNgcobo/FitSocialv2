@@ -55,6 +55,32 @@ class WorkoutPreferencesController extends StateNotifier<WorkoutPreferences> {
   Future<void> setLivePrAlerts({required bool enabled}) =>
       _set(state.copyWith(livePrAlerts: enabled));
 
+  Future<void> setBarKg(double kg) {
+    if (kg <= 0) return Future.value();
+    return _set(state.copyWith(barKg: kg));
+  }
+
+  /// Keeps at least one plate: a bar that can take nothing is no use.
+  Future<void> setPlateSetKg(List<double> plates) {
+    final kept = plates.where((p) => p > 0).toList()
+      ..sort((a, b) => b.compareTo(a));
+    if (kept.isEmpty) return Future.value();
+    return _set(state.copyWith(plateSetKg: kept));
+  }
+
+  /// Sorted lightest first; steps outside a share of the working weight, or
+  /// with no reps, are dropped. An empty ramp goes back to the default.
+  Future<void> setWarmupSteps(List<WarmupStep> steps) {
+    final kept = steps.where((s) => s.$1 > 0 && s.$1 < 1 && s.$2 > 0).toList()
+      ..sort((a, b) => a.$1.compareTo(b.$1));
+    return _set(state.copyWith(
+      warmupSteps: kept.isEmpty ? WorkoutPreferences.defaultWarmupSteps : kept,
+    ));
+  }
+
+  Future<void> resetWarmupSteps() =>
+      _set(state.copyWith(warmupSteps: WorkoutPreferences.defaultWarmupSteps));
+
   Future<void> _set(WorkoutPreferences next) async {
     _changed = true;
     state = next;
