@@ -811,10 +811,11 @@ enum _Field {
 /// or minutes and kilometres on a cardio machine, as it always was.
 List<_Field> _fieldsFor(TrackingType type,
     {required bool v2, required bool cardio}) {
-  if (!v2)
+  if (!v2) {
     return cardio
         ? const [_Field.minutes, _Field.km]
         : const [_Field.kg, _Field.reps];
+  }
   return switch (type) {
     TrackingType.weightReps ||
     TrackingType.weightedBodyweight ||
@@ -1693,8 +1694,9 @@ class _SetRowState extends ConsumerState<_SetRow> {
         ),
         onChanged: (text) => _write(f, text),
       );
-      if (f != _Field.time || !widget.inlineTimer)
+      if (f != _Field.time || !widget.inlineTimer) {
         return Expanded(child: input);
+      }
       final running = _stopwatchFrom != null;
       return Expanded(
         child: Row(

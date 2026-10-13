@@ -2,35 +2,55 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_palette.dart';
+import '../../../core/config/feature_flags.dart';
 import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../application/content_providers.dart';
 import '../application/workout_library_providers.dart';
 import '../data/content_repository.dart';
 import '../domain/exercise_library.dart';
+import '../domain/previous_performance.dart';
 import '../domain/workout_models.dart';
 
-/// Opens the sheet that turns a name into a saved custom exercise.
+/// Opens the sheet that turns a name into a saved custom exercise, or edits
+/// [existing].
 ///
 /// Returns the saved exercise, with its document id, or null on dismissal.
 Future<CustomExercise?> showCustomExerciseSheet(
   BuildContext context, {
   String initialName = '',
+  CustomExercise? existing,
 }) {
   return showModalBottomSheet<CustomExercise>(
     context: context,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: 0.55),
     isScrollControlled: true,
-    builder: (sheetContext) => _CustomExerciseSheet(initialName: initialName),
+    builder: (sheetContext) => _CustomExerciseSheet(
+      initialName: existing?.name ?? initialName,
+      existing: existing,
+    ),
   );
 }
 
+/// How a tracking type reads on the sheet's chips.
+String trackingTypeLabel(TrackingType type) => switch (type) {
+      TrackingType.weightReps => 'Weight & reps',
+      TrackingType.bodyweightReps => 'Reps only',
+      TrackingType.weightedBodyweight => 'Weighted bodyweight',
+      TrackingType.assistedBodyweight => 'Assisted bodyweight',
+      TrackingType.duration => 'Time',
+      TrackingType.weightDuration => 'Weight & time',
+      TrackingType.cardio => 'Time & distance',
+    };
+
 class _CustomExerciseSheet extends ConsumerStatefulWidget {
-  const _CustomExerciseSheet({required this.initialName});
+  const _CustomExerciseSheet({required this.initialName, this.existing});
 
   final String initialName;
+  final CustomExercise? existing;
 
   @override
   ConsumerState<_CustomExerciseSheet> createState() =>
@@ -39,8 +59,12 @@ class _CustomExerciseSheet extends ConsumerStatefulWidget {
 
 class _CustomExerciseSheetState extends ConsumerState<_CustomExerciseSheet> {
   late final TextEditingController _name;
-  final Set<String> _muscles = {};
-  String _equipment = 'other';
+  late final Set<String> _muscles = {...?widget.existing?.muscles};
+  late String _equipment = widget.existing?.equipment ?? 'other';
+
+  /// The type picked on the sheet. Null follows what the name and equipment
+  /// suggest, until a chip is tapped.
+  late TrackingType? _type = widget.existing?.storedTrackingType;
   bool _saving = false;
   String? _error;
 
@@ -48,6 +72,21 @@ class _CustomExerciseSheetState extends ConsumerState<_CustomExerciseSheet> {
   void initState() {
     super.initState();
     _name = TextEditingController(text: widget.initialName);
+  }
+
+  TrackingType get _shownType =>
+      _type ??
+      ExerciseLibrary.deriveTrackingType(
+        name: _name.text,
+        equipment: _equipment,
+      );
+
+  /// A custom exercise already logged keeps its type, as Hevy does: changing
+  /// it would leave its history counted one way and its future another.
+  bool _typeLocked(List<WorkoutHistoryItem>? history) {
+    final existing = widget.existing;
+    if (existing == null) return false;
+    return hasBeenLogged(customExerciseId(existing.id), history);
   }
 
   @override
@@ -71,20 +110,31 @@ class _CustomExerciseSheetState extends ConsumerState<_CustomExerciseSheet> {
       _saving = true;
       _error = null;
     });
+    final existing = widget.existing;
+    final pickType =
+        ref.read(featureEnabledProvider(FeatureFlag.workoutLoggerV2));
+    final locked =
+        _typeLocked(ref.read(workoutHistoryItemsProvider).valueOrNull);
     try {
-      final saved = await ref.read(contentRepositoryProvider).saveCustomExercise(
-            CustomExercise(
-              id: '',
-              name: name,
-              // Library order, not tap order, so the same choices always
-              // read the same.
-              muscles: [
-                for (final m in ExerciseLibrary.muscleGroups)
-                  if (_muscles.contains(m)) m,
-              ],
-              equipment: _equipment,
-            ),
-          );
+      final saved =
+          await ref.read(contentRepositoryProvider).saveCustomExercise(
+                CustomExercise(
+                  id: existing?.id ?? '',
+                  name: name,
+                  // Library order, not tap order, so the same choices always
+                  // read the same.
+                  muscles: [
+                    for (final m in ExerciseLibrary.muscleGroups)
+                      if (_muscles.contains(m)) m,
+                  ],
+                  equipment: _equipment,
+                  storedTrackingType: locked
+                      ? existing?.storedTrackingType
+                      : pickType
+                          ? _shownType
+                          : existing?.storedTrackingType,
+                ),
+              );
       ref.invalidate(customExercisesProvider);
       if (mounted) Navigator.of(context).pop(saved);
     } catch (error) {
@@ -99,6 +149,10 @@ class _CustomExerciseSheetState extends ConsumerState<_CustomExerciseSheet> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final pickType =
+        ref.watch(featureEnabledProvider(FeatureFlag.workoutLoggerV2));
+    final locked = pickType &&
+        _typeLocked(ref.watch(workoutHistoryItemsProvider).valueOrNull);
 
     Widget label(String text) => Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 7, top: 12),
@@ -146,7 +200,7 @@ class _CustomExerciseSheetState extends ConsumerState<_CustomExerciseSheet> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'New exercise',
+                    widget.existing == null ? 'New exercise' : 'Edit exercise',
                     style: TextStyle(
                       fontSize: 19,
                       fontWeight: FontWeight.w800,
@@ -158,6 +212,9 @@ class _CustomExerciseSheetState extends ConsumerState<_CustomExerciseSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: TextField(
                       controller: _name,
+                      // The suggested type follows the name until one is
+                      // picked: "Side plank hold" is timed.
+                      onChanged: (_) => setState(() {}),
                       textCapitalization: TextCapitalization.words,
                       style: TextStyle(
                         color: palette.text,
@@ -202,6 +259,32 @@ class _CustomExerciseSheetState extends ConsumerState<_CustomExerciseSheet> {
                         ),
                     ],
                   ),
+                  if (pickType) ...[
+                    label('Logged as'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final type in TrackingType.values)
+                          ChoiceChip(
+                            label: Text(trackingTypeLabel(type)),
+                            selected: _shownType == type,
+                            onSelected: locked
+                                ? null
+                                : (_) => setState(() => _type = type),
+                          ),
+                      ],
+                    ),
+                    if (locked)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, top: 8),
+                        child: Text(
+                          'Locked once logged, so your history stays '
+                          'consistent.',
+                          style: TextStyle(color: palette.muted, fontSize: 13),
+                        ),
+                      ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(

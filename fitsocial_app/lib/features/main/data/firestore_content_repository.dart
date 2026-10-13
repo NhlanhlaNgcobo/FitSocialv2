@@ -915,6 +915,7 @@ class FirestoreContentRepository implements ContentRepository {
       name: exercise.name,
       muscles: exercise.muscles,
       equipment: exercise.equipment,
+      storedTrackingType: exercise.storedTrackingType,
     );
   }
 

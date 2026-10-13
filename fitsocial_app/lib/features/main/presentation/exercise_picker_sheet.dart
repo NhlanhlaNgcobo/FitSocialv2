@@ -163,9 +163,20 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
     return out;
   }
 
+  /// Opens a custom exercise to edit: its name, muscles, equipment and, until
+  /// it has been logged, its type.
+  Future<void> _editCustom(String id) async {
+    final custom = ref.read(customExercisesProvider).valueOrNull ?? const [];
+    final existing =
+        custom.where((c) => customExerciseId(c.id) == id).firstOrNull;
+    if (existing == null) return;
+    await showCustomExerciseSheet(context, existing: existing);
+  }
+
   Widget _row(LibraryExercise exercise) {
     final palette = context.palette;
     final selected = widget.multiSelect && _isSelected(exercise);
+    final editable = widget.enhanced && exercise.id.startsWith('custom-');
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(
@@ -177,7 +188,7 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
       ),
       subtitle: Text(
         '${exercise.muscles.join(', ')} · ${exercise.equipment}'
-        '${exercise.id.startsWith('custom-') ? ' · custom' : ''}',
+        '${editable ? ' · custom, hold to edit' : exercise.id.startsWith('custom-') ? ' · custom' : ''}',
         style: TextStyle(color: palette.muted),
       ),
       trailing: widget.multiSelect
@@ -189,6 +200,7 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
             )
           : null,
       selected: selected,
+      onLongPress: editable ? () => _editCustom(exercise.id) : null,
       onTap: () => _pick(
         PickedExercise(
           name: exercise.name,

@@ -18,6 +18,14 @@ class WorkoutHistoryItem {
   final List<ExerciseEntry> exercises;
 }
 
+/// Whether the movement under [key] is in [history]. Unknown history — null,
+/// still loading or failed — counts as logged: a custom exercise's type is
+/// locked once it has been used, and when in doubt it stays locked.
+bool hasBeenLogged(String key, List<WorkoutHistoryItem>? history) {
+  if (history == null) return true;
+  return history.any((w) => w.exercises.any((e) => exerciseKey(e) == key));
+}
+
 /// Where the PREVIOUS column looks for last time.
 enum PreviousSource {
   /// The last workout that had the movement in it, whatever it was.
