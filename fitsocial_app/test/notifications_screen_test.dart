@@ -41,6 +41,8 @@ class _FakeNotificationRepository implements NotificationRepository {
           createdAt: item.createdAt,
           postId: item.postId,
           postType: item.postType,
+          challengeId: item.challengeId,
+          challengeTitle: item.challengeTitle,
         ),
     ]);
   }
@@ -112,6 +114,35 @@ void main() {
         find.textContaining('Thandi liked your run', findRichText: true),
         findsOneWidget,
       );
+    });
+
+    testWidgets('a challenge finish is addressed to you, not from the creator',
+        (tester) async {
+      final repository = _FakeNotificationRepository([
+        FitNotification(
+          id: 'challengeCompleted_c1',
+          type: FitNotificationType.challengeCompleted,
+          actorId: 'u-thabo',
+          actorName: 'Thabo',
+          isRead: false,
+          createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
+          challengeId: 'c1',
+          challengeTitle: 'September 100',
+        ),
+      ]);
+      addTearDown(repository.dispose);
+
+      await tester.pumpWidget(harness(repository));
+      await tester.pumpAndSettle();
+
+      final row =
+          find.textContaining('You finished September 100', findRichText: true);
+      expect(row, findsOneWidget);
+      expect(
+        tester.widget<RichText>(row).text.toPlainText(),
+        startsWith('You finished September 100'),
+      );
+      expect(find.textContaining('Thabo', findRichText: true), findsNothing);
     });
 
     testWidgets('offers to follow back, and only on the follow row',

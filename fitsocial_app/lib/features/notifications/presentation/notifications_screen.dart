@@ -401,15 +401,18 @@ class _NotificationRow extends StatelessWidget {
                     child: Text.rich(
                       TextSpan(
                         children: [
-                          TextSpan(
-                            text: notification.lead,
-                            style: TextStyle(
-                              color: palette.text,
-                              fontWeight: FontWeight.w700,
+                          // No lead on a row addressed to the reader, and so
+                          // no space opening the sentence either.
+                          if (notification.lead.isNotEmpty)
+                            TextSpan(
+                              text: '${notification.lead} ',
+                              style: TextStyle(
+                                color: palette.text,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
                           TextSpan(
-                            text: ' ${notification.message}',
+                            text: notification.message,
                             style: TextStyle(color: palette.text),
                           ),
                           TextSpan(

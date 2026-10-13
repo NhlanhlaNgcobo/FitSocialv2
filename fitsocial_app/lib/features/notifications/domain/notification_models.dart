@@ -286,8 +286,19 @@ class FitNotification {
 
   /// The bold words the row opens with: who did it, or for a milestone — news
   /// about the reader themselves — what it is.
-  String get lead =>
-      type == FitNotificationType.milestone ? 'New milestone' : actorName;
+  ///
+  /// Empty for a challenge finish or result. Those are carried from the
+  /// challenge's creator only because there is no system actor, and their
+  /// sentence is already addressed to the reader: with the creator's name in
+  /// front the row read "Thabo You finished September 100". Without it, the
+  /// row says exactly what the push says.
+  String get lead => switch (type) {
+        FitNotificationType.milestone => 'New milestone',
+        FitNotificationType.challengeCompleted ||
+        FitNotificationType.challengeResult =>
+          '',
+        _ => actorName,
+      };
 
   /// The sentence that follows the actor's name.
   String get message {
