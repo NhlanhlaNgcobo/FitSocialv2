@@ -10,6 +10,7 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
+import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
 import '../domain/workout_models.dart';
@@ -65,6 +66,13 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<List<List<ExerciseEntry>>> getWorkoutHistory({int limit = 200}) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<WorkoutHistoryItem>> getWorkoutHistoryItems({
+    int limit = 200,
+  }) async {
     throw StateError(_firebaseSetupMessage);
   }
 

@@ -8,6 +8,7 @@ import '../data/active_workout_store.dart';
 import 'content_providers.dart';
 import '../domain/active_workout.dart';
 import '../domain/exercise_library.dart';
+import '../domain/previous_performance.dart';
 import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 
@@ -29,6 +30,13 @@ final activeWorkoutStoreProvider = Provider<ActiveWorkoutStore>((ref) {
 final activeWorkoutProvider =
     StateNotifierProvider<ActiveWorkoutController, ActiveWorkout?>((ref) {
   return ActiveWorkoutController(ref.watch(activeWorkoutStoreProvider));
+});
+
+/// What the user did last time, per movement.
+final previousPerformanceProvider =
+    Provider.autoDispose<PreviousPerformance>((ref) {
+  final items = ref.watch(workoutHistoryItemsProvider).valueOrNull;
+  return items == null ? PreviousPerformance.empty : PreviousPerformance(items);
 });
 
 /// The user's bests per movement, from every workout saved before this one.
@@ -142,26 +150,102 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
   ///
   /// [trackingType] defaults to what the library says; a custom exercise's
   /// caller passes its own, since only the caller has the custom list.
+  ///
+  /// With [previous] — last time's sets — it gets as many rows as last time,
+  /// typed as last time, warm-ups included. The rows stay empty: last time's
+  /// numbers show as hints in them, and a row ticked blank takes its hint.
   void addExercise({
     required String name,
     String? exerciseId,
     TrackingType? trackingType,
+    List<ExerciseSet>? previous,
   }) {
+    addExercises([
+      NewExercise(
+        name: name,
+        exerciseId: exerciseId,
+        trackingType: trackingType,
+        previous: previous,
+      ),
+    ]);
+  }
+
+  /// Adds several exercises at once, in order — as one superset when
+  /// [asSuperset] and there are at least two.
+  void addExercises(List<NewExercise> picked, {bool asSuperset = false}) {
     final workout = state;
-    final trimmed = name.trim();
-    if (workout == null || trimmed.isEmpty) return;
+    if (workout == null) return;
+    final valid = picked.where((p) => p.name.trim().isNotEmpty).toList();
+    if (valid.isEmpty) return;
+    final group = asSuperset && valid.length > 1 ? 's${_newKey()}' : null;
     _commit(workout.copyWith(exercises: [
       ...workout.exercises,
-      ActiveExercise(
-        key: _newKey(),
-        name: trimmed,
-        exerciseId: exerciseId,
-        trackingType:
-            trackingType ?? ExerciseLibrary.trackingTypeFor(exerciseId),
-        sets: const [ExerciseSet(weightKg: 0, reps: 0)],
-      ),
+      for (final p in valid)
+        ActiveExercise(
+          key: _newKey(),
+          name: p.name.trim(),
+          exerciseId: p.exerciseId,
+          supersetGroup: group,
+          trackingType:
+              p.trackingType ?? ExerciseLibrary.trackingTypeFor(p.exerciseId),
+          sets: _rowsLike(p.previous),
+        ),
     ]));
   }
+
+  static List<ExerciseSet> _rowsLike(List<ExerciseSet>? previous) {
+    if (previous == null || previous.isEmpty) {
+      return const [ExerciseSet(weightKg: 0, reps: 0)];
+    }
+    return [
+      for (final s in previous) ExerciseSet(weightKg: 0, reps: 0, type: s.type),
+    ];
+  }
+
+  /// Swaps the movement on a card for another, keeping its rows' count and
+  /// types but not their numbers — 100 kg on the bench says nothing about the
+  /// dumbbell press. Rows already ticked are cleared too, so nothing done on
+  /// one movement is saved under another.
+  void replaceExercise(
+    String key, {
+    required String name,
+    String? exerciseId,
+    TrackingType? trackingType,
+  }) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    _mapExercise(
+      key,
+      (e) => e.copyWith(
+        name: trimmed,
+        exerciseId: exerciseId,
+        clearExerciseId: exerciseId == null,
+        trackingType:
+            trackingType ?? ExerciseLibrary.trackingTypeFor(exerciseId),
+        sets: [
+          for (final s in e.sets)
+            ExerciseSet(weightKg: 0, reps: 0, type: s.type),
+        ],
+      ),
+    );
+  }
+
+  /// Puts the cards in the order of [keys]. Keys not in the session are
+  /// ignored and cards missing from [keys] keep their place at the end.
+  void reorderExercises(List<String> keys) {
+    final workout = state;
+    if (workout == null) return;
+    final byKey = {for (final e in workout.exercises) e.key: e};
+    final ordered = [
+      for (final k in keys)
+        if (byKey.remove(k) case final e?) e,
+      ...byKey.values,
+    ];
+    _commit(workout.copyWith(exercises: ordered));
+  }
+
+  void setSessionNotes(String key, String notes) =>
+      _mapExercise(key, (e) => e.copyWith(sessionNotes: notes));
 
   void removeExercise(String key) {
     final workout = state;
@@ -342,16 +426,32 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
   /// Ticking a row off starts the rest timer, at the exercise's own rest or
   /// [defaultRestSeconds] — see [ActiveWorkout.restAfter]. Un-ticking leaves
   /// a running timer alone.
-  bool toggleDone(String key, int index, {int defaultRestSeconds = 0}) {
+  ///
+  /// [hint] is what the row's empty fields show — the routine's target, or
+  /// last time. Ticking takes it for any field left blank, so repeating last
+  /// week is one tap a set.
+  bool toggleDone(
+    String key,
+    int index, {
+    int defaultRestSeconds = 0,
+    ExerciseSet? hint,
+  }) {
     final workout = state;
     if (workout == null) return false;
     final exercise = workout.exercises.where((e) => e.key == key).firstOrNull;
     if (exercise == null || index < 0 || index >= exercise.sets.length) {
       return false;
     }
-    final set = exercise.sets[index];
-    if (set.completedAt == null && !set.hasEffort) return false;
+    var set = exercise.sets[index];
     final ticking = set.completedAt == null;
+    if (ticking) {
+      if (hint != null) set = adoptHint(set, hint);
+      if (!set.hasEffort) return false;
+      if (!identical(set, exercise.sets[index])) {
+        final adopted = set;
+        _mapSet(key, index, (_) => adopted);
+      }
+    }
     final now = _now();
     // A bodyweight set keeps the bodyweight it was done at, so a later
     // weigh-in never rewrites its volume.
@@ -406,4 +506,20 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
       ]);
     });
   }
+}
+
+/// An exercise picked to be added: what it is, how it is logged, and what was
+/// done on it last time, if anything.
+class NewExercise {
+  const NewExercise({
+    required this.name,
+    this.exerciseId,
+    this.trackingType,
+    this.previous,
+  });
+
+  final String name;
+  final String? exerciseId;
+  final TrackingType? trackingType;
+  final List<ExerciseSet>? previous;
 }

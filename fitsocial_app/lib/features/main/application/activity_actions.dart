@@ -98,6 +98,7 @@ class ActivityActions {
       ..invalidate(recentWorkoutsProvider)
       // And the history live PRs are measured against.
       ..invalidate(workoutHistoryProvider)
+      ..invalidate(workoutHistoryItemsProvider)
       // And the meal history, so a meal logged from the tracking page appears
       // in today's totals rather than after a restart.
       ..invalidate(loggedMealsProvider)

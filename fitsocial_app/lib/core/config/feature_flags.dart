@@ -27,7 +27,11 @@ enum FeatureFlag {
   upNext('f3_up_next'),
   compare('f4_compare'),
   recapCards('f5_recap_cards'),
-  leaderboards('f6_leaderboards');
+  leaderboards('f6_leaderboards'),
+
+  /// Workout v2 logger: PREVIOUS values, the set-type sheet, columns by
+  /// tracking type, and (Phase C) the save and celebration screens.
+  workoutLoggerV2('f7_workout_logger_v2');
 
   const FeatureFlag(this.key);
 

@@ -333,3 +333,21 @@ class ActiveWorkout {
         'exercises': exercises.map((e) => e.toJson()).toList(),
       };
 }
+
+/// [set] with each field left blank filled from [hint] — the routine's target
+/// or last time's set, as the empty field showed it. Returns [set] itself
+/// when there was nothing to fill.
+ExerciseSet adoptHint(ExerciseSet set, ExerciseSet hint) {
+  final weight = set.weightKg <= 0 && hint.weightKg > 0;
+  final reps = set.reps <= 0 && hint.reps > 0;
+  final seconds =
+      (set.durationSeconds ?? 0) <= 0 && (hint.durationSeconds ?? 0) > 0;
+  final km = (set.distanceKm ?? 0) <= 0 && (hint.distanceKm ?? 0) > 0;
+  if (!weight && !reps && !seconds && !km) return set;
+  return set.copyWith(
+    weightKg: weight ? hint.weightKg : null,
+    reps: reps ? hint.reps : null,
+    durationSeconds: seconds ? hint.durationSeconds : null,
+    distanceKm: km ? hint.distanceKm : null,
+  );
+}

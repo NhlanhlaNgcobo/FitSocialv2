@@ -19,6 +19,7 @@ import '../domain/explore_models.dart';
 import '../domain/meal_quality.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
+import '../domain/previous_performance.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
@@ -850,11 +851,19 @@ class FirestoreContentRepository implements ContentRepository {
 
   @override
   Future<List<List<ExerciseEntry>>> getWorkoutHistory({int limit = 200}) async {
+    final items = await getWorkoutHistoryItems(limit: limit);
+    return [for (final item in items) item.exercises];
+  }
+
+  @override
+  Future<List<WorkoutHistoryItem>> getWorkoutHistoryItems({
+    int limit = 200,
+  }) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) return const [];
 
     final docs = await _activityLogs(workoutsCollection, user.uid);
-    final dated = <(DateTime, List<ExerciseEntry>)>[];
+    final items = <WorkoutHistoryItem>[];
     for (final doc in docs) {
       final data = doc.data();
       final loggedAt = _firstTimestamp(data, const ['loggedAt', 'createdAt']);
@@ -865,10 +874,16 @@ class FirestoreContentRepository implements ContentRepository {
               .where((entry) => entry.name.isNotEmpty)
               .toList() ??
           const <ExerciseEntry>[];
-      if (exercises.isNotEmpty) dated.add((loggedAt, exercises));
+      if (exercises.isEmpty) continue;
+      items.add(WorkoutHistoryItem(
+        id: doc.id,
+        loggedAt: loggedAt,
+        routineId: data['routineId'] as String?,
+        exercises: exercises,
+      ));
     }
-    dated.sort((a, b) => b.$1.compareTo(a.$1));
-    return dated.take(limit).map((entry) => entry.$2).toList();
+    items.sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+    return items.take(limit).toList();
   }
 
   @override

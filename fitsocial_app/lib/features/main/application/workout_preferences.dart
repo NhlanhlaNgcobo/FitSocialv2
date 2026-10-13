@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/workout_preferences_store.dart';
+import '../domain/previous_performance.dart';
 
 final workoutPreferencesStoreProvider =
     Provider<WorkoutPreferencesStore>((ref) {
@@ -38,6 +39,21 @@ class WorkoutPreferencesController extends StateNotifier<WorkoutPreferences> {
 
   Future<void> setTrackRpe({required bool enabled}) =>
       _set(state.copyWith(trackRpe: enabled));
+
+  Future<void> setPreviousSource(PreviousSource source) =>
+      _set(state.copyWith(previousSource: source));
+
+  Future<void> setIncludeWarmupsInStats({required bool enabled}) =>
+      _set(state.copyWith(includeWarmupsInStats: enabled));
+
+  Future<void> setSmartSupersetScroll({required bool enabled}) =>
+      _set(state.copyWith(smartSupersetScroll: enabled));
+
+  Future<void> setInlineTimer({required bool enabled}) =>
+      _set(state.copyWith(inlineTimer: enabled));
+
+  Future<void> setLivePrAlerts({required bool enabled}) =>
+      _set(state.copyWith(livePrAlerts: enabled));
 
   Future<void> _set(WorkoutPreferences next) async {
     _changed = true;
