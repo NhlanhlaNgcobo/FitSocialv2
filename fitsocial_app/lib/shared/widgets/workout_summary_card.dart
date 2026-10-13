@@ -130,6 +130,8 @@ class WorkoutSummaryCard extends StatelessWidget {
       sets: asInt(raw['sets']),
       reps: asInt(raw['reps']),
       weightKg: asDouble(raw['weightKg']),
+      durationSeconds: asInt(raw['durationSeconds']),
+      distanceKm: asDouble(raw['distanceKm']),
     );
   }
 
@@ -143,6 +145,14 @@ class WorkoutSummaryCard extends StatelessWidget {
       buffer.write(digits[i]);
     }
     return buffer.toString();
+  }
+
+  /// `4.25` → `4.25`, `5.0` → `5`.
+  static String _distance(double km) {
+    final text = km.toStringAsFixed(2);
+    return text
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 
   /// `22.5` → `22.5`, `60.0` → `60`. A trailing `.0` on a plate weight is
@@ -168,9 +178,12 @@ class WorkoutSummaryCard extends StatelessWidget {
     final totalSets = exercises.fold<int>(0, (sum, e) => sum + (e.sets ?? 0));
     final totalReps = exercises.fold<int>(0, (sum, e) => sum + e.totalReps);
     final volume = exercises.fold<double>(0, (sum, e) => sum + e.volumeKg);
+    final distanceKm =
+        exercises.fold<double>(0, (sum, e) => sum + (e.distanceKm ?? 0));
     // The column only earns its width if something is in it. A log of
-    // bodyweight work draws sets and reps and stops there.
-    final hasLoads = exercises.any((e) => e.weightKg != null);
+    // bodyweight work draws sets and reps and stops there. A cardio machine's
+    // distance sits in the same column a lift's load does.
+    final hasLoads = exercises.any((e) => e.loadLabel != null);
 
     final photo = backgroundImage ??
         (backgroundImageUrl == null ? null : appPhoto(backgroundImageUrl!));
@@ -183,15 +196,18 @@ class WorkoutSummaryCard extends StatelessWidget {
       if (volume > 0)
         _Stat(label: 'Volume', value: _grouped(volume.round()), unit: 'kg'),
       if (totalSets > 0) _Stat(label: 'Sets', value: '$totalSets'),
+      if (distanceKm > 0)
+        _Stat(label: 'Distance', value: _distance(distanceKm), unit: 'km'),
       if (calories != null) _Stat(label: 'Calories', value: calories),
       if (totalReps > 0) _Stat(label: 'Reps', value: '$totalReps'),
     ].take(3).toList();
 
-    final heaviest = hasLoads
-        ? exercises
-            .where((e) => e.weightKg != null)
-            .reduce((a, b) => b.weightKg! > a.weightKg! ? b : a)
-        : null;
+    // Lifts only: a cardio session has a distance in that column, not a load,
+    // and a session of nothing but cardio has no heaviest anything.
+    final loaded = exercises.where((e) => !e.isCardio && e.weightKg != null);
+    final heaviest = loaded.isEmpty
+        ? null
+        : loaded.reduce((a, b) => b.weightKg! > a.weightKg! ? b : a);
 
     final content = Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -497,6 +513,8 @@ class _Exercise {
     this.sets,
     this.reps,
     this.weightKg,
+    this.durationSeconds,
+    this.distanceKm,
   });
 
   final String name;
@@ -504,14 +522,43 @@ class _Exercise {
   final int? reps;
   final double? weightKg;
 
+  /// Time and distance on a cardio machine. Null on a lift.
+  final int? durationSeconds;
+  final double? distanceKm;
+
+  bool get isCardio => durationSeconds != null || distanceKm != null;
+
   int get totalReps => (sets ?? 0) * (reps ?? 0);
+
+  /// What the right-hand column says: the load on a lift, the distance on
+  /// cardio. Null when there is neither.
+  String? get loadLabel {
+    if (isCardio) {
+      final km = distanceKm;
+      return km == null || km <= 0
+          ? null
+          : '${WorkoutSummaryCard._distance(km)} km';
+    }
+    final kg = weightKg;
+    return kg == null ? null : '${WorkoutSummaryCard._trimmed(kg)} kg';
+  }
 
   /// Sets × reps × load. Zero unless all three are present, which is what keeps
   /// a half-filled row from quietly dragging the session's volume down.
   double get volumeKg => weightKg == null ? 0 : totalReps * weightKg!;
 
-  /// `4 × 10`, falling back to whichever number is there.
+  /// `4 × 10`, falling back to whichever number is there. On cardio, the time:
+  /// `25 min`, or `25:30` when the seconds matter.
   String? get setsAndReps {
+    if (isCardio) {
+      final seconds = durationSeconds ?? 0;
+      if (seconds <= 0) return null;
+      final minutes = seconds ~/ 60;
+      final rest = seconds % 60;
+      return rest == 0
+          ? '$minutes min'
+          : '$minutes:${rest.toString().padLeft(2, '0')}';
+    }
     if (sets != null && reps != null) return '$sets × $reps';
     if (sets != null) return '$sets sets';
     if (reps != null) return '$reps reps';
@@ -757,10 +804,7 @@ class _ExerciseRow extends StatelessWidget {
                   child: _ShrinkToFit(
                     align: CrossAxisAlignment.end,
                     child: Text(
-                      exercise.weightKg == null
-                          ? '—'
-                          : '${WorkoutSummaryCard._trimmed(exercise.weightKg!)}'
-                              ' kg',
+                      exercise.loadLabel ?? '—',
                       textAlign: TextAlign.right,
                       maxLines: 1,
                       softWrap: false,
@@ -768,7 +812,7 @@ class _ExerciseRow extends StatelessWidget {
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                         color:
-                            exercise.weightKg == null ? skin.muted : skin.text,
+                            exercise.loadLabel == null ? skin.muted : skin.text,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),

@@ -88,8 +88,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     final unticked = workout.exercises.fold<int>(
       0,
       (sum, e) =>
-          sum +
-          e.sets.where((s) => s.completedAt == null && s.reps > 0).length,
+          sum + e.sets.where((s) => s.completedAt == null && s.reps > 0).length,
     );
     if (unticked > 0) {
       final proceed = await confirmDestructiveAction(
@@ -114,8 +113,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         endedAt: DateTime.now(),
         shareToFeed: _shareToFeed,
       );
-      final result =
-          await ref.read(activityActionsProvider).saveWorkout(draft);
+      final result = await ref.read(activityActionsProvider).saveWorkout(draft);
       if (!mounted) return;
       // Cleared only after the save went through: a failure leaves the whole
       // session where it was, to try again.
@@ -211,8 +209,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
               child: _ExerciseCard(
                 key: ValueKey(workout.exercises[i].key),
                 exercise: workout.exercises[i],
-                supersetLabel:
-                    letters[workout.exercises[i].supersetGroup],
+                supersetLabel: letters[workout.exercises[i].supersetGroup],
               ),
             ),
           OutlinedButton.icon(
@@ -488,7 +485,9 @@ class _RestTimerBarState extends State<RestTimerBar> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    over ? 'Rest over' : 'Rest ${formatElapsed(Duration(seconds: seconds))}',
+                    over
+                        ? 'Rest over'
+                        : 'Rest ${formatElapsed(Duration(seconds: seconds))}',
                     key: const ValueKey('rest-countdown'),
                     style: TextStyle(
                       fontSize: 17,
@@ -598,15 +597,24 @@ const Color _kRecordHue = Color(0xFFF2B01E);
 
 /// The equipment behind [exerciseId], from the library or the user's own
 /// exercises. Null for free-text names.
-String? _equipmentFor(WidgetRef ref, String? exerciseId) {
-  if (exerciseId == null) return null;
-  final library = ExerciseLibrary.byId(exerciseId);
-  if (library != null) return library.equipment;
-  final custom = ref.read(customExercisesProvider).valueOrNull ?? const [];
-  for (final c in custom) {
-    if (customExerciseId(c.id) == exerciseId) return c.equipment;
-  }
-  return null;
+String? _equipmentFor(WidgetRef ref, String? exerciseId) =>
+    ExerciseLibrary.equipmentFor(
+      exerciseId,
+      custom: ref.read(customExercisesProvider).valueOrNull ?? const [],
+    );
+
+/// `1500` seconds → `25`, `750` → `12.5`. Blank for nothing typed.
+String _minutesText(int? seconds) {
+  if (seconds == null || seconds <= 0) return '';
+  final minutes = seconds / 60;
+  if (minutes == minutes.roundToDouble()) return '${minutes.round()}';
+  return minutes.toStringAsFixed(1);
+}
+
+String _kmText(double? km) {
+  if (km == null || km <= 0) return '';
+  if (km == km.roundToDouble()) return '${km.round()}';
+  return km.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 }
 
 enum _ExerciseAction {
@@ -691,10 +699,13 @@ class _ExerciseCard extends ConsumerWidget {
     final palette = context.palette;
     final controller = ref.read(activeWorkoutProvider.notifier);
     final prefs = ref.watch(workoutPreferencesProvider);
-    final records =
-        ref.watch(sessionRecordsProvider)[exercise.key] ?? const {};
+    final records = ref.watch(sessionRecordsProvider)[exercise.key] ?? const {};
     final inSuperset = supersetLabel != null;
     final rest = exercise.restSeconds;
+    // A rower or an elliptical is logged as time and distance. Kilograms and
+    // reps mean nothing on one, and offering only those was why cardio could
+    // be logged by name and nothing else.
+    final cardio = _equipmentFor(ref, exercise.exerciseId) == 'cardio';
 
     TextStyle head() => TextStyle(
           fontSize: 10,
@@ -755,14 +766,16 @@ class _ExerciseCard extends ConsumerWidget {
                 icon: Icon(Icons.more_horiz_rounded, color: palette.muted),
                 onSelected: (action) => _onAction(context, ref, action),
                 itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: _ExerciseAction.warmups,
-                    child: Text('Warm-up sets'),
-                  ),
-                  const PopupMenuItem(
-                    value: _ExerciseAction.plates,
-                    child: Text('Plate calculator'),
-                  ),
+                  if (!cardio) ...[
+                    const PopupMenuItem(
+                      value: _ExerciseAction.warmups,
+                      child: Text('Warm-up sets'),
+                    ),
+                    const PopupMenuItem(
+                      value: _ExerciseAction.plates,
+                      child: Text('Plate calculator'),
+                    ),
+                  ],
                   PopupMenuItem(
                     value: _ExerciseAction.rest,
                     child: Text(
@@ -773,7 +786,8 @@ class _ExerciseCard extends ConsumerWidget {
                   ),
                   PopupMenuItem(
                     value: _ExerciseAction.superset,
-                    child: Text(inSuperset ? 'Add to superset' : 'Superset with…'),
+                    child:
+                        Text(inSuperset ? 'Add to superset' : 'Superset with…'),
                   ),
                   if (inSuperset)
                     const PopupMenuItem(
@@ -794,11 +808,15 @@ class _ExerciseCard extends ConsumerWidget {
               children: [
                 SizedBox(width: 44, child: Text('SET', style: head())),
                 Expanded(
-                  child: Center(child: Text('KG', style: head())),
+                  child: Center(
+                    child: Text(cardio ? 'MIN' : 'KG', style: head()),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Center(child: Text('REPS', style: head())),
+                  child: Center(
+                    child: Text(cardio ? 'KM' : 'REPS', style: head()),
+                  ),
                 ),
                 if (prefs.trackRpe)
                   SizedBox(
@@ -817,8 +835,8 @@ class _ExerciseCard extends ConsumerWidget {
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.only(right: 16),
                 color: palette.danger.withValues(alpha: 0.25),
-                child: Icon(Icons.delete_outline_rounded,
-                    color: palette.danger),
+                child:
+                    Icon(Icons.delete_outline_rounded, color: palette.danger),
               ),
               onDismissed: (_) => controller.removeSet(exercise.key, i),
               child: _SetRow(
@@ -828,6 +846,7 @@ class _ExerciseCard extends ConsumerWidget {
                 set: exercise.sets[i],
                 showRpe: prefs.trackRpe,
                 record: records[i],
+                cardio: cardio,
               ),
             ),
           Center(
@@ -872,6 +891,7 @@ class _SetRow extends ConsumerStatefulWidget {
     required this.set,
     required this.showRpe,
     this.record,
+    this.cardio = false,
   });
 
   final String exerciseKey;
@@ -879,6 +899,9 @@ class _SetRow extends ConsumerStatefulWidget {
   final String label;
   final ExerciseSet set;
   final bool showRpe;
+
+  /// Minutes and kilometres in the two fields, rather than load and reps.
+  final bool cardio;
 
   /// The records this set broke, when it is ticked off and broke any.
   final Set<PrKind>? record;
@@ -888,15 +911,30 @@ class _SetRow extends ConsumerStatefulWidget {
 }
 
 class _SetRowState extends ConsumerState<_SetRow> {
+  /// Load on a lift, minutes on cardio.
   late final TextEditingController _weight;
+
+  /// Reps on a lift, kilometres on cardio.
   late final TextEditingController _reps;
 
   @override
   void initState() {
     super.initState();
-    _weight = TextEditingController(text: _weightText(widget.set.weightKg));
-    _reps = TextEditingController(text: _repsText(widget.set.reps));
+    _weight = TextEditingController(
+      text: widget.cardio
+          ? _minutesText(widget.set.durationSeconds)
+          : _weightText(widget.set.weightKg),
+    );
+    _reps = TextEditingController(
+      text: widget.cardio
+          ? _kmText(widget.set.distanceKm)
+          : _repsText(widget.set.reps),
+    );
   }
+
+  /// Typed minutes as whole seconds, the unit the set stores.
+  static int _typedSeconds(String text) =>
+      ((parseTypedDouble(text) ?? 0) * 60).round();
 
   @override
   void didUpdateWidget(_SetRow old) {
@@ -904,6 +942,16 @@ class _SetRowState extends ConsumerState<_SetRow> {
     // A row can be handed different data without being rebuilt — a set above
     // it was removed — and its fields must follow. Only rewritten when they
     // disagree, so typing "6." is not overwritten with "6" mid-keystroke.
+    if (widget.cardio) {
+      if (_typedSeconds(_weight.text) != (widget.set.durationSeconds ?? 0)) {
+        _weight.text = _minutesText(widget.set.durationSeconds);
+      }
+      final km = parseTypedDouble(_reps.text) ?? 0;
+      if ((km - (widget.set.distanceKm ?? 0)).abs() > 0.0001) {
+        _reps.text = _kmText(widget.set.distanceKm);
+      }
+      return;
+    }
     final weight = parseTypedDouble(_weight.text) ?? 0;
     if ((weight - widget.set.weightKg).abs() > 0.0001) {
       _weight.text = _weightText(widget.set.weightKg);
@@ -938,7 +986,12 @@ class _SetRowState extends ConsumerState<_SetRow> {
       defaultRestSeconds: ref.read(workoutPreferencesProvider).restSeconds,
     );
     if (!ok) {
-      showQuickToast(context, 'Enter the reps first.');
+      showQuickToast(
+        context,
+        widget.cardio
+            ? 'Enter the time or distance first.'
+            : 'Enter the reps first.',
+      );
       return;
     }
     if (!ticking) return;
@@ -979,7 +1032,8 @@ class _SetRowState extends ConsumerState<_SetRow> {
     final isRecord = done && (widget.record?.isNotEmpty ?? false);
     final gold = palette.accent(_kRecordHue);
 
-    Widget field(TextEditingController c, {required bool decimal, required ValueChanged<String> onChanged}) {
+    Widget field(TextEditingController c,
+        {required bool decimal, required ValueChanged<String> onChanged}) {
       return Expanded(
         child: TextField(
           controller: c,
@@ -1068,21 +1122,33 @@ class _SetRowState extends ConsumerState<_SetRow> {
           field(
             _weight,
             decimal: true,
-            onChanged: (text) => controller.updateSet(
-              widget.exerciseKey,
-              widget.index,
-              weightKg: parseTypedDouble(text) ?? 0,
-            ),
+            onChanged: (text) => widget.cardio
+                ? controller.updateSet(
+                    widget.exerciseKey,
+                    widget.index,
+                    durationSeconds: _typedSeconds(text),
+                  )
+                : controller.updateSet(
+                    widget.exerciseKey,
+                    widget.index,
+                    weightKg: parseTypedDouble(text) ?? 0,
+                  ),
           ),
           const SizedBox(width: 8),
           field(
             _reps,
-            decimal: false,
-            onChanged: (text) => controller.updateSet(
-              widget.exerciseKey,
-              widget.index,
-              reps: parseTypedInt(text) ?? 0,
-            ),
+            decimal: widget.cardio,
+            onChanged: (text) => widget.cardio
+                ? controller.updateSet(
+                    widget.exerciseKey,
+                    widget.index,
+                    distanceKm: parseTypedDouble(text) ?? 0,
+                  )
+                : controller.updateSet(
+                    widget.exerciseKey,
+                    widget.index,
+                    reps: parseTypedInt(text) ?? 0,
+                  ),
           ),
           if (widget.showRpe)
             SizedBox(

@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/bootstrap/bootstrap_status.dart';
+import '../core/notifications/local_notifications_hub.dart';
 import '../features/main/application/rest_alerts.dart';
+import '../features/main/application/workout_background_notice.dart';
 import '../features/notifications/application/push_tap_router.dart';
 import '../features/safety/application/safety_providers.dart';
 import '../features/safety/application/safety_shortcuts.dart';
@@ -40,11 +44,40 @@ class _FitSocialAppState extends ConsumerState<FitSocialApp>
     // from the moment the engine starts, and asking late means asking after the
     // router has already sent the user to the feed.
     ref.read(pushTapRouterProvider).start();
+    // The same for the app's own notifications — a workout left open in the
+    // background, a rest timer — which can launch it just the same.
+    _listenForLocalNotificationTaps();
+    // A workout notice left in the shade by a process Android has since
+    // killed: the app is open again, so the screen can say it instead.
+    ref.read(workoutNoticeLifecycleProvider).appForegrounded();
+  }
+
+  StreamSubscription<String>? _localTaps;
+
+  void _listenForLocalNotificationTaps() {
+    final hub = ref.read(localNotificationsHubProvider);
+    if (hub == null) return;
+    _localTaps = hub.taps.listen((route) => _openLocal(route, running: true));
+    unawaited(hub.launchRoute().then((route) {
+      if (route != null && mounted) _openLocal(route, running: false);
+    }));
+  }
+
+  void _openLocal(String route, {required bool running}) {
+    // Already there — the notice was tapped from the shade over the very
+    // screen it leads to. Pushing it again would stack a second copy.
+    if (running) {
+      final here =
+          ref.read(appRouterProvider).routerDelegate.currentConfiguration.uri;
+      if (here.path == route) return;
+    }
+    ref.read(pushTapRouterProvider).openTrusted(route, wasRunning: running);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _localTaps?.cancel();
     super.dispose();
   }
 
@@ -54,10 +87,14 @@ class _FitSocialAppState extends ConsumerState<FitSocialApp>
       case AppLifecycleState.resumed:
         _resumeSafety();
         ref.read(restAlertLifecycleProvider).appForegrounded();
+        ref.read(workoutNoticeLifecycleProvider).appForegrounded();
       case AppLifecycleState.paused:
         // A rest between sets still running when the phone goes in a pocket
         // gets a notification to say when it is up.
         ref.read(restAlertLifecycleProvider).appBackgrounded();
+        // And a workout left open — live or still being typed in — stays in
+        // the shade, and on disk, until the app is back.
+        ref.read(workoutNoticeLifecycleProvider).appBackgrounded();
       default:
         break;
     }

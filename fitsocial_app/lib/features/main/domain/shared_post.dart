@@ -247,6 +247,9 @@ class SharedPostRef {
             if (entry['sets'] case final num sets) 'sets': sets,
             if (entry['reps'] case final num reps) 'reps': reps,
             if (entry['weightKg'] case final num weight) 'weightKg': weight,
+            if (entry['durationSeconds'] case final num seconds)
+              'durationSeconds': seconds,
+            if (entry['distanceKm'] case final num km) 'distanceKm': km,
           });
         } else if (text(entry) case final name?) {
           exercises.add({'name': name});

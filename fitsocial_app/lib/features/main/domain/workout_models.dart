@@ -27,6 +27,8 @@ class ExerciseSet {
         reps: (map['reps'] as num?)?.toInt() ?? 0,
         type: SetType.fromName(map['type']),
         rpe: (map['rpe'] as num?)?.toDouble(),
+        durationSeconds: (map['durationSeconds'] as num?)?.toInt(),
+        distanceKm: (map['distanceKm'] as num?)?.toDouble(),
         completedAt: switch (map['completedAt']) {
           final num millis =>
             DateTime.fromMillisecondsSinceEpoch(millis.toInt()),
@@ -40,6 +42,8 @@ class ExerciseSet {
     this.type = SetType.normal,
     this.rpe,
     this.completedAt,
+    this.durationSeconds,
+    this.distanceKm,
   });
 
   /// The load, in kilograms. Storage is metric whatever unit the user reads —
@@ -55,6 +59,19 @@ class ExerciseSet {
   /// When the set was ticked off. Null for a set typed in after the fact.
   final DateTime? completedAt;
 
+  /// How long a cardio interval lasted — a rower, a bike, the stairs. Null on
+  /// a lifting set, which is counted in reps instead.
+  final int? durationSeconds;
+
+  /// How far a cardio interval went, off the machine's display. Null where
+  /// the machine shows none (most stair climbers) or it was not noted.
+  final double? distanceKm;
+
+  /// Whether there is anything on the row to say it was done: reps for a lift,
+  /// a time or a distance for cardio.
+  bool get hasEffort =>
+      reps > 0 || (durationSeconds ?? 0) > 0 || (distanceKm ?? 0) > 0;
+
   double get volumeKg => weightKg * reps;
 
   ExerciseSet copyWith({
@@ -65,6 +82,8 @@ class ExerciseSet {
     bool clearRpe = false,
     DateTime? completedAt,
     bool clearCompletedAt = false,
+    int? durationSeconds,
+    double? distanceKm,
   }) =>
       ExerciseSet(
         weightKg: weightKg ?? this.weightKg,
@@ -73,6 +92,8 @@ class ExerciseSet {
         rpe: clearRpe ? null : (rpe ?? this.rpe),
         completedAt:
             clearCompletedAt ? null : (completedAt ?? this.completedAt),
+        durationSeconds: durationSeconds ?? this.durationSeconds,
+        distanceKm: distanceKm ?? this.distanceKm,
       );
 
   /// Epoch milliseconds rather than a `Timestamp`: the same map is written to
@@ -85,6 +106,8 @@ class ExerciseSet {
         if (rpe != null) 'rpe': rpe,
         if (completedAt != null)
           'completedAt': completedAt!.millisecondsSinceEpoch,
+        if (durationSeconds != null) 'durationSeconds': durationSeconds,
+        if (distanceKm != null) 'distanceKm': distanceKm,
       };
 }
 
@@ -110,10 +133,9 @@ class CustomExercise {
       CustomExercise(
         id: id,
         name: (map['name'] as String?) ?? '',
-        muscles: (map['muscles'] as List<dynamic>?)
-                ?.whereType<String>()
-                .toList() ??
-            const [],
+        muscles:
+            (map['muscles'] as List<dynamic>?)?.whereType<String>().toList() ??
+                const [],
         equipment: (map['equipment'] as String?) ?? 'other',
       );
 

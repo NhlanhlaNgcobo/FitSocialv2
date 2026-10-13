@@ -188,6 +188,7 @@ class PointsEntry {
     this.multiplier = 1.0,
     this.dayKey,
     this.enrollmentId,
+    this.taskKey,
   });
 
   final String id;
@@ -207,5 +208,51 @@ class PointsEntry {
   final String? dayKey;
   final String? enrollmentId;
 
+  /// Which Pulse 75 task paid, on a [PointsEvent.task] row. Null on the rest.
+  final String? taskKey;
+
   bool get isReversal => amount < 0;
+
+  /// Why these points were paid, in the words the Achievements history shows.
+  ///
+  /// The reason the history exists: a total that only ever goes up, with
+  /// nothing to say where it came from, reads as arbitrary.
+  String get reason {
+    switch (event) {
+      case PointsEvent.task:
+        final task =
+            ChallengeTask.values.where((t) => t.key == taskKey).firstOrNull;
+        return task == null ? 'Pulse 75 task' : 'Pulse 75 · ${task.label}';
+      case PointsEvent.dayCompleteBonus:
+        return multiplier > 1
+            ? 'Pulse 75 · Perfect day, streak ×${_multiplierLabel(multiplier)}'
+            : 'Pulse 75 · Perfect day';
+      case PointsEvent.finisher:
+        return 'Finished Pulse 75';
+      case PointsEvent.earlyWorm:
+        return 'Early Worm · Pulse before 6 AM';
+      case PointsEvent.earlyWormStreak:
+        return 'Early Worm · $earlyWormStreakInterval mornings in a row';
+      case PointsEvent.pulsePublished:
+        return 'Posted a Pulse';
+      case PointsEvent.workoutLogged:
+        return 'Logged a workout';
+      case PointsEvent.mealLogged:
+        return 'Logged a meal';
+      case PointsEvent.likeReceived:
+        return 'A reaction on your post';
+      case PointsEvent.commentGiven:
+        return 'Commented on a Pulse';
+      case PointsEvent.challengeCompleted:
+        return 'Finished a challenge';
+      case PointsEvent.reversal:
+        return 'Taken back: the activity no longer counts';
+    }
+  }
+
+  /// `1.5` → `1.5`, `2.0` → `2`.
+  static String _multiplierLabel(double value) {
+    final text = value.toStringAsFixed(1);
+    return text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
+  }
 }

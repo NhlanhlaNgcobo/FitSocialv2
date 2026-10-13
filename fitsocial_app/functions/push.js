@@ -79,6 +79,13 @@ const DEAD_TOKEN_CODES = new Set([
 ]);
 
 /**
+ * Notification kinds whose actor is the recipient on purpose. Only ever
+ * written server-side -- the rules refuse a client writing one -- and only
+ * these may push to the person they name as actor.
+ */
+const SELF_ADDRESSED_TYPES = new Set(["milestone"]);
+
+/**
  * Sends one notification document to every device its recipient has registered.
  *
  * Exported through `_internals` so test/push.test.js can call it directly; the
@@ -88,7 +95,12 @@ async function deliver(userId, notificationId, data, messaging) {
   // Defence in depth. firestore.rules already refuses a notification whose
   // recipient is its own actor, and every writer skips it, but the one thing
   // worse than a missing push is a user being buzzed about themselves.
-  if (!userId || !data || data.actorId === userId) return;
+  //
+  // Except for the kinds that are about the recipient by design, written by
+  // the server through the Admin SDK: a milestone's actor is the person who
+  // earned it, and that person is exactly who should be buzzed.
+  if (!userId || !data) return;
+  if (data.actorId === userId && !SELF_ADDRESSED_TYPES.has(data.type)) return;
 
   const copy = notificationCopy(data);
   // A `type` this deployment does not recognise -- a row written by a newer
@@ -204,4 +216,5 @@ exports._internals = {
   messaging,
   DEAD_TOKEN_CODES,
   MAX_TOKENS,
+  SELF_ADDRESSED_TYPES,
 };

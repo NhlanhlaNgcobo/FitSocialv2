@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -29,7 +30,12 @@ import '../../workouts/domain/workout_energy.dart';
 import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
 import '../application/content_providers.dart';
+import '../application/workout_background_notice.dart';
+import '../application/workout_log_form_controller.dart';
+import '../application/workout_library_providers.dart';
 import '../domain/app_models.dart';
+import '../domain/exercise_library.dart';
+import '../domain/workout_log_form.dart';
 import '../domain/workout_math.dart';
 import 'exercise_picker_sheet.dart';
 import 'tag_people_sheet.dart';
@@ -49,7 +55,11 @@ import 'tag_people_sheet.dart';
 ///  * **Save is always reachable.** It is pinned to the bottom, so the screen
 ///    is never in a state where finishing it means scrolling first.
 class WorkoutLogScreen extends ConsumerStatefulWidget {
-  const WorkoutLogScreen({super.key});
+  const WorkoutLogScreen({this.startWithCardio = false, super.key});
+
+  /// Opens straight onto the exercise picker showing cardio machines — the
+  /// way in from the run screen's "Rower, bike, elliptical or stairs" card.
+  final bool startWithCardio;
 
   @override
   ConsumerState<WorkoutLogScreen> createState() => _WorkoutLogScreenState();
@@ -85,17 +95,137 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// Why the last pull produced nothing, shown under the card.
   String? _healthNote;
 
+  /// Keeps the form on disk while it is filled in, so leaving the app — and
+  /// Android reclaiming it — no longer throws a half-typed workout away.
+  /// Held rather than looked up, because [dispose] flushes it.
+  late final WorkoutLogFormController _form;
+
+  /// True until any saved form has been read and applied. Nothing is written
+  /// before then, or a blank screen would overwrite the form it is about to
+  /// restore.
+  bool _restoring = true;
+
+  /// The workout was saved. Nothing may be written after that, or the form
+  /// just cleared would come back the next time the screen opens.
+  bool _finished = false;
+
+  /// The form on screen was picked back up from an earlier visit, which is
+  /// said at the top with a way to start over instead.
+  bool _restored = false;
+
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController();
     _durationController = TextEditingController();
     _caloriesController = TextEditingController();
-    _notesController = TextEditingController();
+    // The only field that changes the form without going through setState.
+    _notesController = TextEditingController()..addListener(_persist);
+    _form = ref.read(workoutLogFormProvider.notifier);
+    unawaited(_restore());
+  }
+
+  /// Picks up an unsaved form, then — for the run screen's way in — opens the
+  /// cardio picker, so the machine is added to what was there rather than
+  /// replacing it.
+  Future<void> _restore() async {
+    await _form.ready;
+    if (!mounted) return;
+    final saved = ref.read(workoutLogFormProvider);
+    _restoring = false;
+    if (saved != null && !_snapshot().hasContent) {
+      _apply(saved);
+    } else {
+      _persist();
+    }
+    if (widget.startWithCardio && mounted) {
+      await _addExercise(cardioOnly: true);
+    }
+  }
+
+  /// Every change to the form goes through here, so every change is kept.
+  ///
+  /// Hooking setState rather than each of the dozen places that edit the form
+  /// is deliberate: a field added later is saved without anyone remembering
+  /// to wire it up. The write is debounced by the controller.
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    _persist();
+  }
+
+  void _persist() {
+    if (_restoring || _finished || !mounted) return;
+    _form.update(_snapshot());
+  }
+
+  /// The form as it stands, as text.
+  WorkoutLogForm _snapshot() => WorkoutLogForm(
+        savedAt: DateTime.now(),
+        loggedAt: _loggedAt,
+        title: _titleController.text,
+        duration: _durationController.text,
+        calories: _caloriesController.text,
+        notes: _notesController.text,
+        shareToFeed: _shareToFeed,
+        backgroundPath: _backgroundPath,
+        taggedUsers: _taggedUsers,
+        rows: [for (final row in _rows) row.toForm()],
+      );
+
+  void _apply(WorkoutLogForm saved) {
+    // A photo picked last time may have been cleaned out of the cache since.
+    final background = saved.backgroundPath;
+    final photoStillThere =
+        background != null && (kIsWeb || File(background).existsSync());
+    setState(() {
+      _titleController.text = saved.title;
+      _durationController.text = saved.duration;
+      _caloriesController.text = saved.calories;
+      _notesController.text = saved.notes;
+      _shareToFeed = saved.shareToFeed;
+      _backgroundPath = photoStillThere ? background : null;
+      _taggedUsers = saved.taggedUsers;
+      _loggedAt = saved.loggedAt;
+      for (final row in _rows) {
+        row.dispose();
+      }
+      _rows
+        ..clear()
+        ..addAll(saved.rows.map((r) => _LogRow.fromForm(_nextRowId++, r)));
+      _restored = true;
+    });
+  }
+
+  /// Throws away the form picked back up, for a fresh one.
+  void _startOver() {
+    _form.clear();
+    setState(() {
+      _titleController.clear();
+      _durationController.clear();
+      _caloriesController.clear();
+      _notesController.clear();
+      _shareToFeed = true;
+      _backgroundPath = null;
+      _taggedUsers = const [];
+      _loggedAt = DateTime.now();
+      _healthPrefill = null;
+      _healthNote = null;
+      _errorMessage = null;
+      for (final row in _rows) {
+        row.dispose();
+      }
+      _rows.clear();
+      _restored = false;
+    });
   }
 
   @override
   void dispose() {
+    // Backing out of the screen keeps the form: it is offered back next time,
+    // and from the banner on the way out. Written now rather than when the
+    // debounce would have.
+    unawaited(_form.flush());
     _titleController.dispose();
     _durationController.dispose();
     _caloriesController.dispose();
@@ -106,7 +236,24 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     super.dispose();
   }
 
-  int get _durationMinutes => parseTypedInt(_durationController.text) ?? 0;
+  /// The typed duration, or for a session with nothing typed the minutes on
+  /// its cardio cards — 30 minutes on the rower is a 30-minute session, and
+  /// asking for the same number twice is how a log gets abandoned.
+  int get _durationMinutes =>
+      parseTypedInt(_durationController.text) ?? _cardioMinutes;
+
+  /// Every cardio card's minutes, added up.
+  int get _cardioMinutes {
+    final seconds = _exercises.fold<int>(
+      0,
+      (sum, e) => sum + (e.durationSeconds ?? 0),
+    );
+    return (seconds / 60).round();
+  }
+
+  /// Every cardio card's distance, added up.
+  double get _cardioKm =>
+      _exercises.fold<double>(0, (sum, e) => sum + (e.distanceKm ?? 0));
 
   /// What the user typed, or null for a blank field.
   int? get _typedCalories => parseTypedInt(_caloriesController.text);
@@ -125,7 +272,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
 
   int get _calories => _typedCalories ?? _caloriesEstimate ?? 0;
 
-  List<ExerciseEntry> get _exercises => [for (final row in _rows) row.toEntry()];
+  List<ExerciseEntry> get _exercises =>
+      [for (final row in _rows) row.toEntry()];
 
   int get _totalSets => _exercises.fold<int>(0, (sum, e) => sum + e.sets);
 
@@ -165,6 +313,12 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// a title on its own is not a workout anyone would put on their wall.
   bool get _hasCard => _rows.isNotEmpty || _backgroundPath != null;
 
+  /// Whether [exerciseId] is a machine logged as time and distance.
+  bool _isCardio(String? exerciseId) => ExerciseLibrary.isCardio(
+        exerciseId,
+        custom: ref.read(customExercisesProvider).valueOrNull ?? const [],
+      );
+
   _LogRow _rowFrom(ExerciseEntry entry) => _LogRow(
         _nextRowId++,
         name: entry.name,
@@ -172,6 +326,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
         sets: entry.sets,
         reps: entry.reps,
         weightKg: entry.weightKg,
+        cardio: entry.isCardio || _isCardio(entry.exerciseId),
+        durationSeconds: entry.durationSeconds,
+        distanceKm: entry.distanceKm,
       );
 
   void _replaceRows(Iterable<ExerciseEntry> entries) {
@@ -274,6 +431,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// replaced from here — on top of this screen, so backing out of it lands
   /// back on the log.
   Future<void> _startLiveWorkout() async {
+    // The moment the "workout in progress" notice makes sense to ask about:
+    // it is what keeps this session in sight once the app is left.
+    unawaited(ref.read(workoutBackgroundNoticeProvider).requestPermission());
     await ref.read(activeWorkoutProvider.notifier).ensureStarted();
     if (mounted) context.push('/workout-session');
   }
@@ -281,18 +441,35 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
   /// Picks a movement from the library and adds it as a card, filled in with
   /// what was logged for it last time — or 3 × 10 for one never logged, a
   /// starting point to adjust rather than a blank to fill.
-  Future<void> _addExercise() async {
-    final picked = await showExercisePicker(context);
+  Future<void> _addExercise({bool cardioOnly = false}) async {
+    final picked = await showExercisePicker(context, cardioOnly: cardioOnly);
     if (picked == null || !mounted) return;
+    _addPicked(picked);
+  }
+
+  /// Adds [picked] as a card. A cardio machine is a time and a distance,
+  /// filled from last time when there was one and left blank when there was
+  /// not — there is no sensible default length for a session on the rower.
+  void _addPicked(PickedExercise picked) {
+    // The first card is where the form becomes worth coming back to, and so
+    // the moment to ask whether it may say so from the notification shade.
+    if (_rows.isEmpty) {
+      unawaited(ref.read(workoutBackgroundNoticeProvider).requestPermission());
+    }
     final last = _lastLogged(picked.name, picked.id);
+    final cardio =
+        picked.isCardio || _isCardio(picked.id) || (last?.isCardio ?? false);
     setState(() {
       _rows.add(_LogRow(
         _nextRowId++,
         name: picked.name,
         exerciseId: picked.id,
-        sets: last?.sets ?? 3,
-        reps: last?.reps ?? 10,
-        weightKg: last?.weightKg,
+        sets: cardio ? 0 : (last?.sets ?? 3),
+        reps: cardio ? 0 : (last?.reps ?? 10),
+        weightKg: cardio ? null : last?.weightKg,
+        cardio: cardio,
+        durationSeconds: cardio ? last?.durationSeconds : null,
+        distanceKm: cardio ? last?.distanceKm : null,
       ));
       _errorMessage = null;
     });
@@ -306,7 +483,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     final key = exerciseKeyFor(name: name, exerciseId: exerciseId);
     for (final workout in history) {
       for (final entry in workout) {
-        if (exerciseKey(entry) == key && entry.sets > 0 && entry.reps > 0) {
+        if (exerciseKey(entry) == key &&
+            (entry.isCardio || (entry.sets > 0 && entry.reps > 0))) {
           return entry;
         }
       }
@@ -367,6 +545,9 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     try {
       final result =
           await ref.read(activityActionsProvider).saveWorkout(_draft);
+      // Saved: nothing is left to pick back up.
+      _finished = true;
+      _form.clear();
       if (!mounted) return;
       showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
@@ -398,9 +579,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     final estimate = _typedCalories == null ? _caloriesEstimate : null;
     // The ask, only where it would change something: a duration is in, the
     // field is blank, and the one missing input is the user's weight.
-    final askForWeight = _bodyweightKg == null &&
-        _durationMinutes > 0 &&
-        _typedCalories == null;
+    final askForWeight =
+        _bodyweightKg == null && _durationMinutes > 0 && _typedCalories == null;
 
     return Scaffold(
       appBar: AppBar(
@@ -418,6 +598,10 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                 AppSpacing.md,
               ),
               children: [
+                if (_restored) ...[
+                  _RestoredBanner(onStartOver: _isSaving ? null : _startOver),
+                  const SizedBox(height: AppSpacing.md),
+                ],
                 _LiveWorkoutCard(
                   inProgress: ref.watch(activeWorkoutProvider) != null,
                   onTap: _isSaving ? null : _startLiveWorkout,
@@ -461,12 +645,14 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                   totalSets: _totalSets,
                   totalReps: _totalReps,
                   caloriesEstimate: estimate,
+                  cardioMinutes: _cardioMinutes,
+                  cardioKm: _cardioKm,
                 ),
                 if (askForWeight) const _AddWeightPrompt(),
                 const SizedBox(height: AppSpacing.lg),
                 _ExerciseCards(
                   rows: _rows,
-                  onAdd: _isSaving ? null : _addExercise,
+                  onAdd: _isSaving ? null : () => _addExercise(),
                   onRemove: _isSaving ? null : _removeExercise,
                   onReorder: _reorderExercise,
                   onChanged: () => setState(() {}),
@@ -852,10 +1038,20 @@ class _MetricGrid extends StatelessWidget {
     required this.totalSets,
     required this.totalReps,
     this.caloriesEstimate,
+    this.cardioMinutes = 0,
+    this.cardioKm = 0,
   });
 
   /// Shown in the blank Calories cell, marked as an estimate.
   final int? caloriesEstimate;
+
+  /// The cardio cards' minutes, shown in a blank Duration cell — the figure
+  /// the session saves with when nothing is typed there.
+  final int cardioMinutes;
+
+  /// The cardio cards' distance. Takes the Volume cell's place on a session
+  /// with no load to add up, where "Add a weight" would be the wrong advice.
+  final double cardioKm;
 
   final TextEditingController durationController;
   final TextEditingController caloriesController;
@@ -863,6 +1059,14 @@ class _MetricGrid extends StatelessWidget {
   final double volumeKg;
   final int totalSets;
   final int totalReps;
+
+  /// `4.25` → `4.25`, `5.0` → `5`.
+  static String _km(double km) {
+    final text = km.toStringAsFixed(2);
+    return text
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
 
   /// `3885` → `3,885`.
   static String grouped(int value) {
@@ -896,6 +1100,8 @@ class _MetricGrid extends StatelessWidget {
                     unit: 'min',
                     controller: durationController,
                     onChanged: onChanged,
+                    estimate: cardioMinutes > 0 ? cardioMinutes : null,
+                    estimateCaption: 'From your cardio · type to change',
                   ),
                 ),
                 _VerticalRule(color: palette.stroke),
@@ -917,13 +1123,21 @@ class _MetricGrid extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: _DerivedMetric(
-                    icon: Icons.fitness_center_rounded,
-                    label: 'Volume',
-                    value: volumeKg > 0 ? grouped(volumeKg.round()) : '—',
-                    unit: volumeKg > 0 ? 'kg' : null,
-                    hint: volumeKg > 0 ? null : 'Add a weight',
-                  ),
+                  child: volumeKg <= 0 && cardioKm > 0
+                      ? _DerivedMetric(
+                          icon: Icons.straighten_rounded,
+                          label: 'Distance',
+                          value: _km(cardioKm),
+                          unit: 'km',
+                          hint: 'From your cardio',
+                        )
+                      : _DerivedMetric(
+                          icon: Icons.fitness_center_rounded,
+                          label: 'Volume',
+                          value: volumeKg > 0 ? grouped(volumeKg.round()) : '—',
+                          unit: volumeKg > 0 ? 'kg' : null,
+                          hint: volumeKg > 0 ? null : 'Add a weight',
+                        ),
                 ),
                 _VerticalRule(color: palette.stroke),
                 Expanded(
@@ -931,7 +1145,9 @@ class _MetricGrid extends StatelessWidget {
                     icon: Icons.repeat_rounded,
                     label: 'Sets',
                     value: totalSets > 0 ? '$totalSets' : '—',
-                    hint: totalReps > 0 ? '$totalReps reps' : 'From your exercises',
+                    hint: totalReps > 0
+                        ? '$totalReps reps'
+                        : 'From your exercises',
                   ),
                 ),
               ],
@@ -993,6 +1209,7 @@ class _EditableMetric extends StatelessWidget {
     required this.controller,
     required this.onChanged,
     this.estimate,
+    this.estimateCaption = 'Estimate · type to change',
   });
 
   final IconData icon;
@@ -1004,6 +1221,9 @@ class _EditableMetric extends StatelessWidget {
   /// A figure to show while the field is blank, in place of `0`, with an
   /// "estimate" caption. Typing replaces it.
   final int? estimate;
+
+  /// What the caption under [estimate] says it is.
+  final String estimateCaption;
 
   @override
   Widget build(BuildContext context) {
@@ -1062,7 +1282,7 @@ class _EditableMetric extends StatelessWidget {
           ),
           if (estimate != null && controller.text.isEmpty)
             Text(
-              'Estimate · type to change',
+              estimateCaption,
               style: TextStyle(fontSize: 11, color: palette.muted),
             ),
         ],
@@ -1149,6 +1369,48 @@ class _DerivedMetric extends StatelessWidget {
   }
 }
 
+/// Says the form on screen is the one left unsaved earlier, and offers a blank
+/// one instead.
+class _RestoredBanner extends StatelessWidget {
+  const _RestoredBanner({required this.onStartOver});
+
+  final VoidCallback? onStartOver;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: palette.brandSoft,
+        borderRadius: BorderRadius.circular(AppRadius.field),
+        border: Border.all(color: palette.brandSoftStroke),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.history_rounded, size: 18, color: palette.brandText),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Picked up where you left off',
+              style: TextStyle(
+                color: palette.text,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onStartOver,
+            child: const Text('Start over'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// One exercise on the log, being filled in. Holds its own controllers so the
 /// numbers typed into it survive a reorder.
 class _LogRow {
@@ -1159,11 +1421,54 @@ class _LogRow {
     int sets = 0,
     int reps = 0,
     double? weightKg,
+    this.cardio = false,
+    int? durationSeconds,
+    double? distanceKm,
   })  : sets = TextEditingController(text: sets > 0 ? '$sets' : ''),
         reps = TextEditingController(text: reps > 0 ? '$reps' : ''),
         weight = TextEditingController(
           text: weightKg == null || weightKg <= 0 ? '' : _trimmed(weightKg),
+        ),
+        minutes = TextEditingController(
+          text: durationSeconds == null || durationSeconds <= 0
+              ? ''
+              : _trimmed(durationSeconds / 60),
+        ),
+        distance = TextEditingController(
+          text:
+              distanceKm == null || distanceKm <= 0 ? '' : _trimmed(distanceKm),
         );
+
+  /// A card as it was left on an earlier visit, every field as typed.
+  _LogRow.fromForm(this.id, WorkoutLogFormRow saved)
+      : name = saved.name,
+        exerciseId = saved.exerciseId,
+        cardio = saved.cardio,
+        sets = TextEditingController(text: saved.sets),
+        reps = TextEditingController(text: saved.reps),
+        weight = TextEditingController(text: saved.weight),
+        minutes = TextEditingController(text: saved.minutes),
+        distance = TextEditingController(text: saved.distance);
+
+  /// A cardio machine — the rower, the elliptical, the stairs — logged as
+  /// time and distance instead of sets, reps and load.
+  final bool cardio;
+
+  /// The card as text, for the form kept on disk.
+  WorkoutLogFormRow toForm() => WorkoutLogFormRow(
+        name: name,
+        exerciseId: exerciseId,
+        cardio: cardio,
+        sets: sets.text,
+        reps: reps.text,
+        weight: weight.text,
+        minutes: minutes.text,
+        distance: distance.text,
+      );
+
+  /// Cardio only: minutes on the machine, and the distance off its display.
+  final TextEditingController minutes;
+  final TextEditingController distance;
 
   /// Identifies the row for reordering; unrelated to the exercise.
   final int id;
@@ -1185,19 +1490,46 @@ class _LogRow {
     return kg == null || kg <= 0 ? null : kg;
   }
 
+  /// Minutes as whole seconds, or null for a blank field.
+  int? get durationSeconds {
+    final typed = parseTypedDouble(minutes.text);
+    if (typed == null || typed <= 0) return null;
+    return (typed * 60).round().clamp(1, 24 * 3600);
+  }
+
+  double? get distanceKm {
+    final km = parseTypedDouble(distance.text);
+    return km == null || km <= 0 ? null : km;
+  }
+
   /// A blank field is "not filled in", saved as nothing rather than invented.
-  ExerciseEntry toEntry() => ExerciseEntry(
-        name: name,
-        exerciseId: exerciseId,
-        sets: setCount,
-        reps: repCount,
-        weightKg: weightKg,
-      );
+  ///
+  /// A cardio card with neither field filled in still saves as cardio, with a
+  /// zero time: it is the record that the machine was used, and dropping the
+  /// time is not a reason to turn it into "0 × 0" of a lift.
+  ExerciseEntry toEntry() => cardio
+      ? ExerciseEntry(
+          name: name,
+          exerciseId: exerciseId,
+          sets: 0,
+          reps: 0,
+          durationSeconds: durationSeconds ?? (distanceKm == null ? 0 : null),
+          distanceKm: distanceKm,
+        )
+      : ExerciseEntry(
+          name: name,
+          exerciseId: exerciseId,
+          sets: setCount,
+          reps: repCount,
+          weightKg: weightKg,
+        );
 
   void dispose() {
     sets.dispose();
     reps.dispose();
     weight.dispose();
+    minutes.dispose();
+    distance.dispose();
   }
 
   /// `60.0` → `60`, `22.5` → `22.5`.
@@ -1387,13 +1719,19 @@ class _ExerciseCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
-              children: [
-                number('Sets', row.sets),
-                const SizedBox(width: 12),
-                number('Reps', row.reps),
-                const SizedBox(width: 12),
-                number('Weight (kg)', row.weight, decimal: true),
-              ],
+              children: row.cardio
+                  ? [
+                      number('Time (min)', row.minutes, decimal: true),
+                      const SizedBox(width: 12),
+                      number('Distance (km)', row.distance, decimal: true),
+                    ]
+                  : [
+                      number('Sets', row.sets),
+                      const SizedBox(width: 12),
+                      number('Reps', row.reps),
+                      const SizedBox(width: 12),
+                      number('Weight (kg)', row.weight, decimal: true),
+                    ],
             ),
           ),
         ],
@@ -1423,8 +1761,8 @@ class _EmptyTable extends StatelessWidget {
         child: Column(
           children: [
             Text(
-              'Pick the lifts you did from the library, with the load on '
-              'each. Volume adds itself up.',
+              'Pick what you did from the library: lifts with their sets and '
+              'load, cardio machines with their time and distance.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: palette.muted,
@@ -1831,7 +2169,8 @@ class _AddWeightPrompt extends StatelessWidget {
           Expanded(
             child: Text(
               'Add your weight and we can estimate calories burned.',
-              style: TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
+              style:
+                  TextStyle(color: palette.muted, fontSize: 13, height: 1.35),
             ),
           ),
           TextButton(

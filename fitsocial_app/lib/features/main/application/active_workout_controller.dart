@@ -192,7 +192,10 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     if (list.where((e) => e.supersetGroup == group).length > 1) return list;
     return [
       for (final e in list)
-        if (e.supersetGroup == group) e.copyWith(clearSupersetGroup: true) else e,
+        if (e.supersetGroup == group)
+          e.copyWith(clearSupersetGroup: true)
+        else
+          e,
     ];
   }
 
@@ -261,6 +264,9 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
               reps: last.reps,
               // A warm-up is followed by working sets, not more warm-ups.
               type: last.type == SetType.warmup ? SetType.normal : last.type,
+              // A second interval on the rower is usually the first again.
+              durationSeconds: last.durationSeconds,
+              distanceKm: last.distanceKm,
             );
       return exercise.copyWith(sets: [...exercise.sets, next]);
     });
@@ -283,6 +289,8 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     SetType? type,
     double? rpe,
     bool clearRpe = false,
+    int? durationSeconds,
+    double? distanceKm,
   }) {
     _mapSet(
       key,
@@ -293,12 +301,15 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
         type: type,
         rpe: rpe,
         clearRpe: clearRpe,
+        durationSeconds: durationSeconds,
+        distanceKm: distanceKm,
       ),
     );
   }
 
   /// Ticks a row off, or un-ticks it. Returns false when the row cannot be
-  /// ticked because it has no reps — a set of nothing was not done.
+  /// ticked because nothing is on it — no reps, and for cardio no time or
+  /// distance. A set of nothing was not done.
   ///
   /// Ticking a row off starts the rest timer, at the exercise's own rest or
   /// [defaultRestSeconds] — see [ActiveWorkout.restAfter]. Un-ticking leaves
@@ -311,7 +322,7 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
       return false;
     }
     final set = exercise.sets[index];
-    if (set.completedAt == null && set.reps <= 0) return false;
+    if (set.completedAt == null && !set.hasEffort) return false;
     final ticking = set.completedAt == null;
     final now = _now();
     _mapSet(
@@ -323,8 +334,7 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     );
     if (ticking) {
       final ticked = state!;
-      final seconds =
-          ticked.restAfter(key, defaultSeconds: defaultRestSeconds);
+      final seconds = ticked.restAfter(key, defaultSeconds: defaultRestSeconds);
       if (seconds != null) {
         _commit(ticked.copyWith(
           rest: RestTimer(
@@ -350,7 +360,8 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     ));
   }
 
-  void _mapSet(String key, int index, ExerciseSet Function(ExerciseSet) change) {
+  void _mapSet(
+      String key, int index, ExerciseSet Function(ExerciseSet) change) {
     _mapExercise(key, (exercise) {
       if (index < 0 || index >= exercise.sets.length) return exercise;
       return exercise.copyWith(sets: [

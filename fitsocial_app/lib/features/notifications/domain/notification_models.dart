@@ -70,7 +70,13 @@ enum FitNotificationType {
 
   /// One of your safety contacts stopped being one. Always told: a hole in
   /// the safety net the owner does not know about is worse than no net.
-  safetyRevoked;
+  safetyRevoked,
+
+  /// You earned a milestone: a streak, a badge or a personal best.
+  ///
+  /// Written by functions/milestones.js with you as the actor — the person who
+  /// earned it — which is the one kind allowed to name its own recipient.
+  milestone;
 
   /// Stored form. Explicit rather than [name] so renaming the enum can never
   /// silently orphan the documents already written.
@@ -106,6 +112,8 @@ enum FitNotificationType {
         return 'safetyAccepted';
       case FitNotificationType.safetyRevoked:
         return 'safetyRevoked';
+      case FitNotificationType.milestone:
+        return 'milestone';
     }
   }
 
@@ -141,6 +149,8 @@ enum FitNotificationType {
         return FitNotificationType.safetyAccepted;
       case 'safetyRevoked':
         return FitNotificationType.safetyRevoked;
+      case 'milestone':
+        return FitNotificationType.milestone;
       default:
         return null;
     }
@@ -207,6 +217,9 @@ class FitNotification {
     this.challengeTitle,
     this.finalRank,
     this.participantCount,
+    this.milestoneTitle,
+    this.milestoneSubtitle,
+    this.milestoneEmoji,
   });
 
   final String id;
@@ -265,6 +278,28 @@ class FitNotification {
   /// How many were ranked, on a [FitNotificationType.challengeResult].
   final int? participantCount;
 
+  /// What a [FitNotificationType.milestone] celebrates, copied off the
+  /// milestone post: "Century", "Earned 100 points", "💯".
+  final String? milestoneTitle;
+  final String? milestoneSubtitle;
+  final String? milestoneEmoji;
+
+  /// The bold words the row opens with: who did it, or for a milestone — news
+  /// about the reader themselves — what it is.
+  ///
+  /// Empty for a challenge finish or result. Those are carried from the
+  /// challenge's creator only because there is no system actor, and their
+  /// sentence is already addressed to the reader: with the creator's name in
+  /// front the row read "Thabo You finished September 100". Without it, the
+  /// row says exactly what the push says.
+  String get lead => switch (type) {
+        FitNotificationType.milestone => 'New milestone',
+        FitNotificationType.challengeCompleted ||
+        FitNotificationType.challengeResult =>
+          '',
+        _ => actorName,
+      };
+
   /// The sentence that follows the actor's name.
   String get message {
     switch (type) {
@@ -313,7 +348,20 @@ class FitNotification {
         return 'is now one of your safety contacts';
       case FitNotificationType.safetyRevoked:
         return 'is no longer your safety contact';
+      case FitNotificationType.milestone:
+        return _milestoneLine;
     }
+  }
+
+  /// "💯 Century — Earned 100 points". Matches `milestoneLine` in
+  /// functions/notification_copy.js, which writes the push for the same row.
+  String get _milestoneLine {
+    final title = (milestoneTitle ?? '').trim();
+    final subtitle = (milestoneSubtitle ?? '').trim();
+    final emoji = (milestoneEmoji ?? '').trim();
+    final named = title.isEmpty ? 'A new milestone' : title;
+    final head = emoji.isEmpty ? named : '$emoji $named';
+    return subtitle.isEmpty ? head : '$head — $subtitle';
   }
 
   /// The challenge's name where it is known, and a plain noun where it is not.
@@ -368,6 +416,11 @@ class FitNotification {
       case FitNotificationType.safetyAccepted:
       case FitNotificationType.safetyRevoked:
         return '/safety/contacts';
+      // The post when there is one. Somebody with milestone sharing off has
+      // no post, and their achievements are where the same thing shows.
+      case FitNotificationType.milestone:
+        final id = postId;
+        return (id == null || id.isEmpty) ? '/achievements' : '/post/$id';
     }
   }
 }

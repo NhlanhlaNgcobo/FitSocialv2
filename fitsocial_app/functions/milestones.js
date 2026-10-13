@@ -19,9 +19,10 @@
  * (personal bests). The streak is client-written, but deciding "that was a
  * milestone" in one place beats teaching two write paths to agree.
  *
- * Nothing is posted for somebody who has turned `shareMilestones` off, and a
- * personal best is only announced for a run its author shared to the feed --
- * a milestone must never be how a private run becomes public.
+ * Nothing is posted for somebody who has turned `shareMilestones` off -- they
+ * are told privately instead -- and a personal best is only announced for a
+ * run its author shared to the feed: a milestone must never be how a private
+ * run becomes public.
  *
  * Document ids are deterministic, so a retried trigger finds its own post and
  * stops instead of writing a second one.
@@ -227,35 +228,91 @@ function milestonePostId(userId, milestone, occurrence) {
  * [occurrence] separates milestones that can recur -- a second 7-day streak a
  * month after the first is still worth a post -- and is left off for ones that
  * happen once.
+ *
+ * The post is for everybody else; the notification is for the earner. Before
+ * it existed, the only way somebody learned they had earned a milestone was a
+ * follower reacting to it -- and somebody with sharing off never learned at
+ * all. So the notification does not depend on the post: an opted-out user is
+ * still told, privately, and the row opens their achievements instead of a
+ * post nobody else can see.
  */
 async function publishMilestone(userId, milestone, { occurrence, sourceId } = {}) {
   const userSnap = await db().collection("users").doc(userId).get();
   if (!userSnap.exists) return null;
   const user = userSnap.data() || {};
-  if (user.shareMilestones === false) return null;
 
   const postId = milestonePostId(userId, milestone, occurrence);
-  const ref = db().collection("posts").doc(postId);
-  if ((await ref.get()).exists) return null;
+  const sharing = user.shareMilestones !== false;
+
+  let written = null;
+  if (sharing) {
+    const ref = db().collection("posts").doc(postId);
+    if (!(await ref.get()).exists) {
+      await ref.set({
+        authorId: userId,
+        authorName: publicName(user),
+        ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {}),
+        postType: "milestone",
+        activity: "New milestone",
+        caption: fallbackCaption(milestone),
+        metricLabels: [],
+        milestone: {
+          ...milestone,
+          ...(sourceId ? { sourceId } : {}),
+        },
+        likesCount: 0,
+        commentsCount: 0,
+        likedBy: [],
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      written = postId;
+    }
+  }
+
+  // Outside the post's existence check on purpose: a trigger that died between
+  // the two writes is retried, finds the post already there, and must still
+  // deliver the notification it never got to.
+  await notifyMilestone(userId, user, milestone, {
+    notificationId: postId,
+    postId: sharing ? postId : null,
+  });
+  return written;
+}
+
+/**
+ * The earner's own inbox row for [milestone], which is also what pushes it to
+ * their phone: functions/push.js listens to the inbox path.
+ *
+ * The actor is the earner. There is no system actor in the notification model,
+ * and the earner's own face beside "New milestone" is the honest picture of
+ * who did it. push.js lets this one type past its "never notify somebody about
+ * themselves" guard for exactly that reason.
+ *
+ * Keyed by the milestone post's id, so a retried trigger finds the row it
+ * already wrote rather than buzzing the phone twice.
+ */
+async function notifyMilestone(userId, user, milestone, { notificationId, postId }) {
+  const ref = db()
+    .collection("users")
+    .doc(userId)
+    .collection("notifications")
+    .doc(notificationId);
+  if ((await ref.get()).exists) return;
 
   await ref.set({
-    authorId: userId,
-    authorName: publicName(user),
-    ...(user.avatarUrl ? { authorAvatarUrl: user.avatarUrl } : {}),
-    postType: "milestone",
-    activity: "New milestone",
-    caption: fallbackCaption(milestone),
-    metricLabels: [],
-    milestone: {
-      ...milestone,
-      ...(sourceId ? { sourceId } : {}),
-    },
-    likesCount: 0,
-    commentsCount: 0,
-    likedBy: [],
+    type: "milestone",
+    actorId: userId,
+    actorName: publicName(user),
+    ...(user.avatarUrl ? { actorAvatarUrl: user.avatarUrl } : {}),
+    ...(postId ? { postId, postType: "milestone" } : {}),
+    milestoneKey: milestone.key,
+    milestoneKind: milestone.kind,
+    milestoneTitle: milestone.title,
+    milestoneSubtitle: milestone.subtitle,
+    milestoneEmoji: milestone.emoji,
+    read: false,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
-  return postId;
 }
 
 // --- Triggers ---------------------------------------------------------------
@@ -311,6 +368,7 @@ exports._internals = {
   streakMilestone,
   personalBests,
   publishMilestone,
+  notifyMilestone,
   milestonePostId,
   publicName,
   formatPace,

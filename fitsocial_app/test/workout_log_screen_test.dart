@@ -174,8 +174,7 @@ String fieldText(WidgetTester tester, Finder finder) =>
     tester.widget<TextField>(finder).controller!.text;
 
 void main() {
-  testWidgets('starts with no exercises and explains itself',
-      (tester) async {
+  testWidgets('starts with no exercises and explains itself', (tester) async {
     await pumpScreen(tester);
 
     expect(find.text('Add exercise'), findsOneWidget);
@@ -212,8 +211,7 @@ void main() {
     expect(find.text('85 reps'), findsOneWidget);
   });
 
-  testWidgets('a movement logged before starts from last time',
-      (tester) async {
+  testWidgets('a movement logged before starts from last time', (tester) async {
     await pumpScreen(tester, history: [
       const [
         ExerciseEntry(
@@ -308,8 +306,7 @@ void main() {
     expect(draft.caloriesEstimated, isFalse);
   });
 
-  testWidgets('with no weight on file it asks for one instead',
-      (tester) async {
+  testWidgets('with no weight on file it asks for one instead', (tester) async {
     final actions = _RecordingActions();
     await pumpScreen(tester, actions: actions);
 
@@ -424,8 +421,7 @@ void main() {
     expect(find.text('Add how long the session lasted.'), findsOneWidget);
   });
 
-  testWidgets('a live workout starts from the top of the log',
-      (tester) async {
+  testWidgets('a live workout starts from the top of the log', (tester) async {
     final store = await _pumpRouted(tester);
     expect(find.text('Start a workout'), findsOneWidget);
 
@@ -452,5 +448,60 @@ void main() {
 
     expect(find.text('SESSION'), findsOneWidget);
     expect(store.saved!.id, 'w1');
+  });
+
+  testWidgets('a cardio machine is logged as time and distance',
+      (tester) async {
+    final actions = _RecordingActions();
+    await pumpScreen(tester, actions: actions);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Row day');
+    // 'rower' is how people say it; the library calls it the Rowing Machine.
+    await pickExercise(tester, 'rower', 'Rowing Machine');
+
+    expect(find.text('TIME (MIN)'), findsOneWidget);
+    expect(find.text('DISTANCE (KM)'), findsOneWidget);
+    expect(find.text('WEIGHT (KG)'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).at(3), '25');
+    // Focused first: the test input does not move on from the field above
+    // by itself the way a tap does.
+    await tester.showKeyboard(find.byType(TextField).at(4));
+    await tester.enterText(find.byType(TextField).at(4), '5,2');
+    await tester.pump();
+    // Nothing typed in Duration: the cardio time stands in for it.
+    expect(find.text('From your cardio · type to change'), findsOneWidget);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    final draft = actions.saved.single;
+    expect(draft.durationMinutes, 25);
+    final [row] = draft.exercises;
+    expect(row.exerciseId, 'rowing-machine');
+    expect(row.isCardio, isTrue);
+    expect((row.durationSeconds, row.distanceKm), (1500, 5.2));
+    expect((row.sets, row.reps), (0, 0));
+  });
+
+  testWidgets('the cardio filter shows machines only', (tester) async {
+    await pumpScreen(tester);
+
+    await tester.tap(find.text('Add exercise').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cardio machines'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add cardio'), findsOneWidget);
+    expect(find.text('Bench Press (Barbell)'), findsNothing);
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.byType(TextField),
+      ),
+      'stair stepper',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Stair Climber'), findsOneWidget);
   });
 }

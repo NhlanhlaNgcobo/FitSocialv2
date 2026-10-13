@@ -19,6 +19,11 @@ import '../../main/domain/exercise_library.dart';
 /// is no sane default for either. A typed figure always beats this — it only
 /// ever fills a blank field — and it is never netted against food eaten.
 /// Expect ±30% at best; it is labelled an estimate wherever it shows.
+///
+/// Time on a cardio machine is costed at that machine's own MET (see
+/// [cardioMet]) and only the minutes left over are costed as lifting. Twenty
+/// minutes on the stair climber is far harder work than twenty minutes
+/// between sets, and pricing it at the lifting band undercounted it by half.
 int? estimateWorkoutCalories({
   required List<ExerciseEntry> exercises,
   required int durationMinutes,
@@ -29,26 +34,100 @@ int? estimateWorkoutCalories({
     return null;
   }
 
-  final density = volumeLoadKg(exercises, bodyweightKg: bodyweight) /
-      durationMinutes /
-      bodyweight;
-  final met = density < 0.8
-      ? 3.5
-      : density < 1.8
-          ? 5.0
-          : 6.0;
-
   // 1 MET = 3.5 ml O₂/kg/min, ~5 kcal per litre of O₂; 200 folds both.
-  final perMinute = (met * 3.5 * bodyweight / 200).clamp(
-    _minKcalPerMinute,
-    _maxKcalPerMinute,
-  );
-  return (perMinute * durationMinutes).round();
+  double kcalPerMinute(double met) => met * 3.5 * bodyweight / 200;
+
+  // Never more cardio than the session lasted: a typed duration shorter than
+  // the cards add up to is the user's correction, and it wins.
+  var cardioBudget = durationMinutes.toDouble();
+  var cardioKcal = 0.0;
+  for (final exercise in exercises) {
+    final seconds = exercise.durationSeconds ?? 0;
+    if (!exercise.isCardio || seconds <= 0 || cardioBudget <= 0) continue;
+    final minutes = (seconds / 60).clamp(0.0, cardioBudget).toDouble();
+    cardioBudget -= minutes;
+    cardioKcal += kcalPerMinute(cardioMet(exercise))
+            .clamp(
+              _minKcalPerMinute,
+              _maxCardioKcalPerMinute,
+            )
+            .toDouble() *
+        minutes;
+  }
+
+  final liftingMinutes = cardioBudget;
+  var liftingKcal = 0.0;
+  if (liftingMinutes > 0) {
+    final density = volumeLoadKg(exercises, bodyweightKg: bodyweight) /
+        liftingMinutes /
+        bodyweight;
+    final met = density < 0.8
+        ? 3.5
+        : density < 1.8
+            ? 5.0
+            : 6.0;
+    liftingKcal = kcalPerMinute(met)
+            .clamp(
+              _minKcalPerMinute,
+              _maxKcalPerMinute,
+            )
+            .toDouble() *
+        liftingMinutes;
+  }
+
+  return (cardioKcal + liftingKcal).round();
 }
 
 /// A 500 kg typo or a ten-hour session cannot produce a number past these.
 const double _minKcalPerMinute = 1.5;
 const double _maxKcalPerMinute = 12;
+
+/// The ceiling for cardio, which runs hotter than lifting ever does: a heavy
+/// runner on a jump rope genuinely clears 12 a minute.
+const double _maxCardioKcalPerMinute = 18;
+
+/// The MET for one cardio entry, from the 2024 Adult Compendium of Physical
+/// Activities at a moderate effort. Read off the name, checked in order, with
+/// 7.0 — moderate general cardio — for anything not listed.
+double cardioMet(ExerciseEntry exercise) {
+  final name = (switch (exercise.exerciseId) {
+            final id? => ExerciseLibrary.byId(id)?.name,
+            null => null,
+          } ??
+          exercise.name)
+      .toLowerCase();
+  for (final (pattern, met) in _cardioMets) {
+    if (name.contains(pattern)) return met;
+  }
+  return 7.0;
+}
+
+const _cardioMets = <(String, double)>[
+  // Walking before running, so "treadmill walk" is not read as a run.
+  ('treadmill walk', 3.5),
+  ('incline walk', 6.0),
+  ('treadmill run', 9.0),
+  ('curved treadmill', 9.5),
+  ('running', 9.8),
+  ('jump rope', 11.0),
+  ('stair', 9.0),
+  ('versaclimber', 9.0),
+  ("jacob's ladder", 9.0),
+  ('assault bike', 8.0),
+  ('recumbent bike', 5.5),
+  ('stationary bike', 6.8),
+  ('spin class', 8.5),
+  ('cycling', 7.5),
+  ('rowing', 7.0),
+  ('kayaking', 5.0),
+  ('ski erg', 6.8),
+  ('elliptical', 5.0),
+  ('arc trainer', 5.0),
+  ('swimming', 6.0),
+  ('hiking', 6.0),
+  ('aerobics', 6.5),
+  ('dancing', 5.5),
+];
 
 /// Σ sets × reps × load. A bodyweight movement with no weight typed counts
 /// the share of bodyweight it moves — a push-up is not zero load. Timed holds

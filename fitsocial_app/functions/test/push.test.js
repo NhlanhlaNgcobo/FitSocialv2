@@ -95,6 +95,15 @@ const EVERY_TYPE = [
   ["safetyInvite", {}],
   ["safetyAccepted", {}],
   ["safetyRevoked", {}],
+  [
+    "milestone",
+    {
+      postId: "ms_u1_POINTS_CENTURY",
+      milestoneTitle: "Century",
+      milestoneSubtitle: "Earned 100 points",
+      milestoneEmoji: "💯",
+    },
+  ],
 ];
 
 test("every notification type says something", async () => {
@@ -271,6 +280,39 @@ test("nobody is buzzed about themselves", async () => {
   });
 
   assert.equal(sent.length, 0);
+});
+
+test("a milestone is pushed to the person who earned it", async () => {
+  const loaded = loadPush({ ...TWO_DEVICES });
+  const sent = await deliver(loaded, {
+    type: "milestone",
+    actorId: "recipient",
+    actorName: "Bear",
+    postId: "ms_recipient_POINTS_CENTURY",
+    milestoneTitle: "Century",
+    milestoneSubtitle: "Earned 100 points",
+    milestoneEmoji: "💯",
+  });
+
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].notification.title, "New milestone");
+  assert.equal(
+    sent[0].notification.body,
+    "💯 Century — Earned 100 points"
+  );
+  assert.equal(sent[0].data.route, "/post/ms_recipient_POINTS_CENTURY");
+});
+
+test("a milestone with no post opens achievements", async () => {
+  const loaded = loadPush({ ...TWO_DEVICES });
+  const sent = await deliver(loaded, {
+    type: "milestone",
+    actorId: "recipient",
+    milestoneTitle: "7-day streak",
+  });
+
+  assert.equal(sent[0].notification.body, "7-day streak");
+  assert.equal(sent[0].data.route, "/achievements");
 });
 
 test("the tray entry is tagged, so a repeat replaces rather than stacks", async () => {

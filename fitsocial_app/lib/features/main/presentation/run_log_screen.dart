@@ -50,8 +50,10 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   /// picker added one, and the treadmill card now comes and goes with the
   /// selected activity, so it is counted rather than assumed. The health
   /// card is another that comes and goes: there is no platform store on web.
+  ///
+  /// The cardio-machine card is always there, one more than before.
   int get _sectionCount =>
-      (_kind == ActivityKind.run ? 8 : 7) + (kIsWeb ? 0 : 1);
+      (_kind == ActivityKind.run ? 9 : 8) + (kIsWeb ? 0 : 1);
 
   late final AnimationController _entranceController;
   late final TextEditingController _distanceController;
@@ -384,11 +386,30 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
               controller: _entranceController,
               index: sectionIndex++,
               itemCount: _sectionCount,
-              child: _TreadmillCard(
+              child: _IndoorCard(
+                icon: Icons.timer_outlined,
+                title: 'Treadmill run',
+                subtitle: 'Press start and the timer runs — no GPS needed',
                 onTap: () => context.push('/treadmill-run'),
               ),
             ),
           ],
+          // Everything else indoors. A rower, a bike or the stairs is not a
+          // run, so it is not logged as one — it goes into the workout log as
+          // a cardio card with its own time and distance. Testers looked for
+          // it here, next to the treadmill, and found nothing.
+          const SizedBox(height: AppSpacing.sm + 4),
+          StaggeredFadeIn(
+            controller: _entranceController,
+            index: sectionIndex++,
+            itemCount: _sectionCount,
+            child: _IndoorCard(
+              icon: Icons.rowing_rounded,
+              title: 'Rower, bike, elliptical or stairs',
+              subtitle: 'Log the machine with its time and distance',
+              onTap: () => context.push('/log-workout?cardio=1'),
+            ),
+          ),
           const SizedBox(height: AppSpacing.lg),
           StaggeredFadeIn(
             controller: _entranceController,
@@ -799,9 +820,20 @@ class _GpsHeroCard extends StatelessWidget {
 /// Deliberately the quieter of the two: it is the same live tracking, minus the
 /// one signal a treadmill can't give — so it reads as the alternative to the
 /// accent card above rather than a second recommendation competing with it.
-class _TreadmillCard extends StatelessWidget {
-  const _TreadmillCard({required this.onTap});
+///
+/// The same quiet card serves the other machines, which is the same choice —
+/// indoors, no GPS — made for a different piece of kit.
+class _IndoorCard extends StatelessWidget {
+  const _IndoorCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
+  final IconData icon;
+  final String title;
+  final String subtitle;
   final VoidCallback onTap;
 
   @override
@@ -835,7 +867,7 @@ class _TreadmillCard extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    Icons.timer_outlined,
+                    icon,
                     color: palette.brand,
                     size: 22,
                   ),
@@ -846,7 +878,7 @@ class _TreadmillCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Treadmill run',
+                        title,
                         style: TextStyle(
                           color: palette.text,
                           fontSize: 15.5,
@@ -855,7 +887,7 @@ class _TreadmillCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Press start and the timer runs — no GPS needed',
+                        subtitle,
                         style: TextStyle(
                           color: palette.muted,
                           fontSize: 12.5,

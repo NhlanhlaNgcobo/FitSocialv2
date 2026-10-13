@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/bootstrap/bootstrap_status.dart';
 import '../domain/challenge_badges.dart';
 import '../domain/challenge_models.dart';
+import '../domain/challenge_points.dart';
 import '../domain/challenge_task.dart';
 import '../domain/daily_health.dart';
 import 'challenge_repository_contract.dart';
@@ -89,6 +90,10 @@ class UnconfiguredChallengeRepository implements ChallengeRepository {
 
   @override
   Stream<int> watchPoints(String userId) => Stream.value(0);
+
+  @override
+  Stream<List<PointsEntry>> watchPointsHistory(String userId) =>
+      Stream.value(const []);
 
   @override
   Stream<ChallengeStats> watchStats(ChallengeKey challengeKey) =>

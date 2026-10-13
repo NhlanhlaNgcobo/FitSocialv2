@@ -287,6 +287,22 @@ void main() {
     });
   });
 
+  test('a challenge finish or result has no actor in front of it', () {
+    FitNotification row(FitNotificationType type) => FitNotification(
+          id: 'n',
+          type: type,
+          actorId: 'creator',
+          actorName: 'Thabo',
+          isRead: false,
+          challengeTitle: 'September 100',
+        );
+    expect(row(FitNotificationType.challengeCompleted).lead, isEmpty);
+    expect(row(FitNotificationType.challengeResult).lead, isEmpty);
+    // Somebody else doing something keeps their name up front.
+    expect(row(FitNotificationType.challengeAccepted).lead, 'Thabo');
+    expect(row(FitNotificationType.challengeInvite).lead, 'Thabo');
+  });
+
   group('challenge results', () {
     FitNotification result({int? place, int? of}) => FitNotification(
           id: 'challengeResult_c1',
@@ -341,6 +357,44 @@ void main() {
           '111th',
         ],
       );
+    });
+  });
+
+  group('milestone', () {
+    FitNotification milestone({String? postId, String? emoji = '💯'}) {
+      return FitNotification(
+        id: 'ms_u1_POINTS_CENTURY',
+        type: FitNotificationType.milestone,
+        actorId: 'u1',
+        actorName: 'Lerato',
+        isRead: false,
+        postId: postId,
+        milestoneTitle: 'Century',
+        milestoneSubtitle: 'Earned 100 points',
+        milestoneEmoji: emoji,
+      );
+    }
+
+    test('round-trips its stored key', () {
+      expect(FitNotificationType.fromKey('milestone'),
+          FitNotificationType.milestone);
+      expect(FitNotificationType.milestone.key, 'milestone');
+    });
+
+    test('leads with what it is, not with the reader' 's own name', () {
+      final row = milestone(postId: 'p1');
+      expect(row.lead, 'New milestone');
+      expect(row.message, '💯 Century — Earned 100 points');
+      expect(like().lead, 'Neo Mokoena');
+    });
+
+    test('reads without an emoji', () {
+      expect(milestone(emoji: null).message, 'Century — Earned 100 points');
+    });
+
+    test('opens the post, or achievements when there is none', () {
+      expect(milestone(postId: 'p1').route, '/post/p1');
+      expect(milestone().route, '/achievements');
     });
   });
 }

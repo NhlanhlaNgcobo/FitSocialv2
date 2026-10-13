@@ -104,6 +104,8 @@ function messageFor(data) {
         ? `${noun} has ended. You placed ${ordinal(place)} of ${of}.`
         : `${noun} has ended. You placed ${ordinal(place)}.`;
     }
+    case "milestone":
+      return milestoneLine(data);
     case "safetyInvite":
       return "asked you to be their safety contact";
     case "safetyAccepted":
@@ -148,9 +150,29 @@ function routeFor(data) {
     case "safetyAccepted":
     case "safetyRevoked":
       return "/safety/contacts";
+    // The post when there is one. An earner who turned sharing off has no
+    // post, and their achievements are where the same badge or streak shows.
+    case "milestone": {
+      const postId = String(data.postId ?? "");
+      return postId === "" ? "/achievements" : `/post/${postId}`;
+    }
     default:
       return null;
   }
+}
+
+/**
+ * "💯 Century — Earned 100 points". Mirrors `FitNotification._milestoneLine`.
+ *
+ * The emoji, what was reached and how, in the words the milestone card uses,
+ * so the push says why it arrived rather than only that something did.
+ */
+function milestoneLine(data) {
+  const title = String(data.milestoneTitle ?? "").trim() || "A new milestone";
+  const subtitle = String(data.milestoneSubtitle ?? "").trim();
+  const emoji = String(data.milestoneEmoji ?? "").trim();
+  const head = emoji ? `${emoji} ${title}` : title;
+  return subtitle ? `${head} — ${subtitle}` : head;
 }
 
 /**
@@ -186,12 +208,16 @@ function notificationCopy(data) {
   if (!body) return null;
 
   const actorName = String(data.actorName ?? "").trim();
+  // A milestone is news about the recipient, so it is headed by what it is
+  // rather than by their own name.
   const title =
-    data.type === "challengeCompleted" || data.type === "challengeResult"
-      ? "FitSocial"
-      : actorName || "FitSocial Member";
+    data.type === "milestone"
+      ? "New milestone"
+      : data.type === "challengeCompleted" || data.type === "challengeResult"
+        ? "FitSocial"
+        : actorName || "FitSocial Member";
 
   return { title, body, route: routeFor(data) };
 }
 
-module.exports = { notificationCopy, _internals: { messageFor, routeFor, ordinal, likedNoun, challengeNoun, REACTION_EMOJI } };
+module.exports = { notificationCopy, _internals: { messageFor, routeFor, milestoneLine, ordinal, likedNoun, challengeNoun, REACTION_EMOJI } };
