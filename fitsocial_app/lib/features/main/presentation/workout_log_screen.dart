@@ -306,6 +306,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
         loggedAt: _loggedAt,
         taggedUsers: _shareToFeed ? _taggedUsers : const [],
         volumeKg: _volumeKg,
+        customExercises:
+            ref.read(customExercisesProvider).valueOrNull ?? const [],
       );
 
   /// Whether there is a card worth saving yet. A photo or a lift is enough;

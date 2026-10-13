@@ -304,10 +304,13 @@ class ActiveWorkout {
   /// with none is left out. Duration is rounded to whole minutes and never
   /// below one, because the Progress tab adds minutes and a zero-minute
   /// session is not one it knows how to draw.
+  ///
+  /// [customExercises] lets the saved muscle map credit custom exercises.
   WorkoutLogDraft toDraft({
     required DateTime endedAt,
     required bool shareToFeed,
     String notes = '',
+    List<CustomExercise> customExercises = const [],
   }) {
     final seconds = endedAt.difference(startedAt).inSeconds;
     final minutes = (seconds / 60).round();
@@ -321,6 +324,7 @@ class ActiveWorkout {
       loggedAt: startedAt,
       exercises: entries,
       volumeKg: volumeKg,
+      customExercises: customExercises,
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:fitsocial_app/features/main/application/workout_library_providers.dart';
+import 'package:fitsocial_app/features/main/domain/active_workout.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/main/domain/exercise_library.dart';
 import 'package:fitsocial_app/features/main/domain/muscle_heat.dart';
@@ -109,6 +110,89 @@ void main() {
     );
     expect(parseMuscleSets({'chest': 3, 'bad': 'x', 'neg': -1}), {'chest': 3});
     expect(parseMuscleSets(null), isEmpty);
+  });
+
+  group('saved with the workout', () {
+    test('a live session carries its map, custom exercises included', () {
+      final at = DateTime(2026, 10, 14, 18);
+      final workout = ActiveWorkout(
+        id: 'w',
+        startedAt: at,
+        title: 'Push day',
+        exercises: [
+          ActiveExercise(
+            key: 'a',
+            name: 'Bench Press (Barbell)',
+            exerciseId: 'bench-press-barbell',
+            sets: [
+              for (var i = 0; i < 3; i++)
+                ExerciseSet(weightKg: 80, reps: 5, completedAt: at),
+              // Never ticked: not done, not credited.
+              const ExerciseSet(weightKg: 80, reps: 5),
+            ],
+          ),
+          ActiveExercise(
+            key: 'b',
+            name: 'Zottman Curl',
+            exerciseId: customExerciseId('abc'),
+            sets: [ExerciseSet(weightKg: 12, reps: 10, completedAt: at)],
+          ),
+        ],
+      );
+
+      final draft = workout.toDraft(
+        endedAt: at.add(const Duration(minutes: 40)),
+        shareToFeed: true,
+        customExercises: const [
+          CustomExercise(
+            id: 'abc',
+            name: 'Zottman Curl',
+            muscles: ['biceps'],
+            equipment: 'dumbbell',
+          ),
+        ],
+      );
+
+      const expected = {
+        'chest': 3.0,
+        'triceps': 1.5,
+        'shoulders': 1.5,
+        'biceps': 1.0,
+      };
+      expect(draft.muscleSets, expected);
+      expect(draft.workoutData['muscleSets'], expected);
+    });
+
+    test('a workout typed in after the fact carries one too', () {
+      const draft = WorkoutLogDraft(
+        title: 'Legs',
+        durationMinutes: 50,
+        calories: 0,
+        notes: '',
+        shareToFeed: true,
+        exercises: [
+          ExerciseEntry(
+            name: 'Squat (Barbell)',
+            exerciseId: 'squat-barbell',
+            sets: 5,
+            reps: 5,
+          ),
+        ],
+      );
+      expect(draft.workoutData['muscleSets'], {'quads': 5.0, 'glutes': 2.5});
+    });
+
+    test('nothing to credit leaves the key off, as before', () {
+      const draft = WorkoutLogDraft(
+        title: 'Walk',
+        durationMinutes: 30,
+        calories: 0,
+        notes: '',
+        shareToFeed: true,
+        exercises: [ExerciseEntry(name: 'Stretching', sets: 1, reps: 1)],
+      );
+      expect(draft.workoutData.containsKey('muscleSets'), isFalse);
+    });
   });
 
   group('heatLevel', () {

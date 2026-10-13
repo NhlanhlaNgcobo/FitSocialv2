@@ -200,6 +200,8 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
       final draft = workout.toDraft(
         endedAt: DateTime.now(),
         shareToFeed: _shareToFeed,
+        customExercises:
+            ref.read(customExercisesProvider).valueOrNull ?? const [],
       );
       final result = await ref.read(activityActionsProvider).saveWorkout(draft);
       if (!mounted) return;

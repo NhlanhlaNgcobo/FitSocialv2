@@ -1844,6 +1844,8 @@ class FirestoreContentRepository implements ContentRepository {
       'duration': draft.durationLabel,
       'caloriesLabel': draft.caloriesLabel,
       'exerciseCount': draft.exercises.length,
+      if (draft.muscleSets case final sets when sets.isNotEmpty)
+        'muscleSets': sets,
       // The exercises themselves, not just how many. The post already carried
       // them and the log did not, which meant the canonical record held less
       // detail than the copy — and left the log screen with nothing to build a
