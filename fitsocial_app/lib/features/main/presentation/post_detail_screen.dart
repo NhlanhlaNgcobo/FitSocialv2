@@ -29,6 +29,7 @@ import '../domain/comment_threads.dart';
 import '../domain/shared_post.dart';
 import '../domain/workout_math.dart' show parseMuscleSets;
 import 'comments_sheet.dart';
+import 'muscle_heatmap_screen.dart' show muscleHeatmapRoute;
 import 'muscles_worked_card.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/app_photo.dart';
@@ -503,7 +504,15 @@ class _MediaBlock extends StatelessWidget {
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                  child: MusclesWorkedCard(sets: muscles),
+                  child: MusclesWorkedCard(
+                    sets: muscles,
+                    // Only on your own workout: on anyone else's, "this
+                    // week" would be the viewer's week, not theirs.
+                    onThisWeek:
+                        ref.watch(currentUserIdProvider) == post.authorId
+                            ? () => context.push(muscleHeatmapRoute)
+                            : null,
+                  ),
                 ),
               ],
             );

@@ -20,6 +20,7 @@ import '../../features/challenges/presentation/challenge_outcome_screen.dart';
 import '../../features/challenges/presentation/challenge_tracker_screen.dart';
 import '../../features/main/presentation/activity_screen.dart';
 import '../../features/goals/presentation/goals_screen.dart';
+import '../../features/main/presentation/muscle_heatmap_screen.dart';
 import '../../features/insights/presentation/weekly_insight_screen.dart';
 import '../../features/leaderboards/presentation/leaderboard_screen.dart';
 import '../../features/main/presentation/achievements_screen.dart';
@@ -380,6 +381,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Personal goals. Reachable only from the home card, which is hidden
       // while goals are switched off in Remote Config.
       GoRoute(path: '/goals', builder: (context, state) => const GoalsScreen()),
+      // The muscle heatmap. Reachable only from the Progress card and a
+      // workout's detail page, both hidden while it is switched off.
+      GoRoute(
+        path: muscleHeatmapRoute,
+        builder: (context, state) => const MuscleHeatmapScreen(),
+      ),
       // The friends leaderboard. Reachable only from the Progress card, which
       // is hidden while leaderboards are switched off in Remote Config.
       // Last week's Weekly Insight in full. Reached from the home card, which

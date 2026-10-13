@@ -12,6 +12,7 @@ import '../../weather/presentation/weather_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/progress_models.dart';
+import 'muscle_heatmap_screen.dart';
 import 'progress_session_actions.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
@@ -80,6 +81,9 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
         // the period itself. Carries its own spacing, and draws nothing while
         // Compare is off or for the day and year views.
         CompareCard(window: window),
+        // This week on the body. Its own spacing, and nothing while the
+        // heatmap is off.
+        const MusclesProgressCard(),
         _SessionList(window: window),
       ],
     );
