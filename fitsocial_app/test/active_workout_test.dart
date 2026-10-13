@@ -239,8 +239,7 @@ void main() {
       await controller.ensureStarted();
       controller.addExercise(name: 'Squat');
       final key = controller.state!.exercises.single.key;
-      controller.updateSet(key, 0,
-          weightKg: 60, reps: 8, type: SetType.warmup);
+      controller.updateSet(key, 0, weightKg: 60, reps: 8, type: SetType.warmup);
 
       controller.addSet(key);
 
@@ -331,6 +330,82 @@ void main() {
       controller.discard();
       expect(controller.state, isNull);
       expect(store.clears, 2);
+    });
+
+    test('a bodyweight set keeps the bodyweight it was ticked at', () async {
+      await controller.ensureStarted(bodyweightKg: 80);
+      controller.addExercise(
+        name: 'Pull Up',
+        exerciseId: 'pull-up',
+        trackingType: TrackingType.bodyweightReps,
+      );
+      final key = controller.state!.exercises.single.key;
+      controller.updateSet(key, 0, reps: 10);
+      controller.addSet(key);
+
+      controller.toggleDone(key, 0);
+      controller.setBodyweight(84);
+      controller.toggleDone(key, 1);
+
+      final sets = controller.state!.exercises.single.sets;
+      expect(sets[0].bodyweightKg, 80);
+      expect(sets[1].bodyweightKg, 84);
+    });
+
+    test('a loaded set takes no bodyweight snapshot', () async {
+      await controller.ensureStarted(bodyweightKg: 80);
+      controller.addExercise(
+        name: 'Bench Press (Barbell)',
+        exerciseId: 'bench-press-barbell',
+      );
+      final key = controller.state!.exercises.single.key;
+      controller.updateSet(key, 0, weightKg: 60, reps: 8);
+
+      controller.toggleDone(key, 0);
+
+      expect(
+          controller.state!.exercises.single.sets.single.bodyweightKg, isNull);
+    });
+
+    test('no rest timer before a drop set, then one after it', () async {
+      await controller.ensureStarted();
+      controller.addExercise(
+        name: 'Bench Press (Barbell)',
+        exerciseId: 'bench-press-barbell',
+      );
+      final key = controller.state!.exercises.single.key;
+      controller.updateSet(key, 0, weightKg: 80, reps: 8);
+      controller.addSet(key);
+      controller.updateSet(key, 1, weightKg: 60, type: SetType.dropset);
+
+      controller.toggleDone(key, 0, defaultRestSeconds: 90);
+      expect(controller.state!.rest, isNull);
+
+      controller.toggleDone(key, 1, defaultRestSeconds: 90);
+      expect(controller.state!.rest!.totalSeconds, 90);
+    });
+
+    test('a blank tick takes the hint, a typed field keeps its value',
+        () async {
+      await controller.ensureStarted();
+      controller.addExercise(
+        name: 'Squat (Barbell)',
+        exerciseId: 'squat-barbell',
+      );
+      final key = controller.state!.exercises.single.key;
+      controller.updateSet(key, 0, weightKg: 105);
+
+      final ok = controller.toggleDone(
+        key,
+        0,
+        hint: const ExerciseSet(weightKg: 100, reps: 5),
+      );
+
+      expect(ok, isTrue);
+      final set = controller.state!.exercises.single.sets.single;
+      expect(set.weightKg, 105);
+      expect(set.reps, 5);
+      expect(set.completedAt, now);
     });
   });
 

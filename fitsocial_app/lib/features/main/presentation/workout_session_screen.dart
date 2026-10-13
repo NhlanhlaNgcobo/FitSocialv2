@@ -254,6 +254,10 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     }
     final letters = supersetLetters(workout);
     final v2 = ref.watch(featureEnabledProvider(FeatureFlag.workoutLoggerV2));
+    // Held open from the start, so the first exercise added already finds last
+    // time — with no card watching it yet, it would be thrown away between
+    // the picker closing and the add.
+    if (v2) ref.watch(previousPerformanceProvider);
     // Bodyweight work with no bodyweight to count: say so once, without
     // standing in the way of logging.
     final needsBodyweight = v2 &&
