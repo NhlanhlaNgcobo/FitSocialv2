@@ -104,6 +104,11 @@ class LiquidGlass extends StatefulWidget {
   /// may have been taken before they were.
   static final BackdropKey feedBackdrop = BackdropKey();
 
+  /// How solid the outer pane of a bottom sheet is tinted. High enough that
+  /// nothing behind it can be read, low enough that the glass still shows at
+  /// the rim.
+  static const double sheetTintAlpha = 0.92;
+
   /// The bottom nav's material, which every pane takes by default: the lens
   /// sheets bend and reflect exactly as the capsule does, and a painted card
   /// draws the same bevel by hand. One set of numbers, so the app reads as one
@@ -448,13 +453,38 @@ class _LiquidGlassState extends State<LiquidGlass> {
   /// rather than replaced: a bare `InputDecorationTheme(filled: false)` would
   /// reset padding, borders and hint styling to Material's defaults.
   Widget _content(BuildContext context) {
-    return InputDecorationTheme(
-      data: InputDecorationTheme.of(context).copyWith(
-        filled: false,
-        fillColor: Colors.transparent,
+    Widget child = widget.child;
+    // The outer pane of a bottom sheet is tinted nearly solid. A sheet floats
+    // over a whole screen of words -- a list, a feed -- and through clear glass
+    // those words read as part of the sheet. Panes inside the sheet stay
+    // glass: they sit on this tint, not on the screen.
+    if (_isSheetPane(context)) {
+      // A Material rather than a coloured box: list rows and buttons in the
+      // sheet draw their ripples on the nearest Material, and a coloured box
+      // between them and it would paint over every ripple.
+      child = Material(
+        color: context.palette.background
+            .withValues(alpha: LiquidGlass.sheetTintAlpha),
+        child: child,
+      );
+    }
+    return _InsideGlass(
+      child: InputDecorationTheme(
+        data: InputDecorationTheme.of(context).copyWith(
+          filled: false,
+          fillColor: Colors.transparent,
+        ),
+        child: child,
       ),
-      child: widget.child,
     );
+  }
+
+  /// Whether this is the outermost pane of a modal bottom sheet.
+  static bool _isSheetPane(BuildContext context) {
+    if (context.getInheritedWidgetOfExactType<_InsideGlass>() != null) {
+      return false;
+    }
+    return ModalRoute.of(context) is ModalBottomSheetRoute;
   }
 
   @override
@@ -815,4 +845,13 @@ class _RenderLensBackdrop extends RenderProxyBox {
       ..backdropKey = _backdropKey;
     context.pushLayer(layer!, super.paint, offset);
   }
+}
+
+/// Marks everything inside a [LiquidGlass], so a pane can tell whether it is
+/// the outermost one.
+class _InsideGlass extends InheritedWidget {
+  const _InsideGlass({required super.child});
+
+  @override
+  bool updateShouldNotify(_InsideGlass oldWidget) => false;
 }
