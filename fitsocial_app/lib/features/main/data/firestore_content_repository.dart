@@ -19,6 +19,7 @@ import '../domain/explore_models.dart';
 import '../domain/meal_quality.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
+import '../domain/routine.dart';
 import '../domain/previous_performance.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
@@ -919,6 +920,54 @@ class FirestoreContentRepository implements ContentRepository {
     );
   }
 
+  @override
+  Future<List<Routine>> getRoutines() async {
+    final user = _requireCurrentUser();
+    final snapshot =
+        await routinesCollection.where('authorId', isEqualTo: user.uid).get();
+    return [
+      for (final doc in snapshot.docs)
+        Routine.fromMap(
+          doc.id,
+          doc.data(),
+          updatedAt: (doc.data()['updatedAt'] as Timestamp?)?.toDate(),
+          lastUsedAt: (doc.data()['lastUsedAt'] as Timestamp?)?.toDate(),
+        ),
+    ].where((routine) => routine.name.isNotEmpty).toList();
+  }
+
+  @override
+  Future<Routine> saveRoutine(Routine routine) async {
+    final user = _requireCurrentUser();
+    final creating = routine.id.isEmpty;
+    final ref = creating
+        ? routinesCollection.doc()
+        : routinesCollection.doc(routine.id);
+    // Merged, so a routine edited here never loses the `lastUsedAt` stamped
+    // by a session started from it, and `createdAt` is written once.
+    await _settleWrite(ref.set({
+      ...routine.toMap(),
+      'authorId': user.uid,
+      if (creating) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true)));
+    return routine.copyWith(id: ref.id);
+  }
+
+  @override
+  Future<void> deleteRoutine(String id) async {
+    _requireCurrentUser();
+    await _settleWrite(routinesCollection.doc(id).delete());
+  }
+
+  @override
+  Future<void> markRoutineUsed(String id, DateTime at) async {
+    _requireCurrentUser();
+    await _settleWrite(routinesCollection.doc(id).set({
+      'lastUsedAt': Timestamp.fromDate(at),
+    }, SetOptions(merge: true)));
+  }
+
   static RecentWorkout? _toRecentWorkout(
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {
@@ -1570,6 +1619,11 @@ class FirestoreContentRepository implements ContentRepository {
 
   CollectionReference<Map<String, dynamic>> get customExercisesCollection =>
       _firestore.collection('customExercises');
+
+  /// Saved routines. Owner-only under firestore.rules, which have kept the
+  /// match block since routines were first built and removed.
+  CollectionReference<Map<String, dynamic>> get routinesCollection =>
+      _firestore.collection('routines');
 
   /// Hard ceiling on stored route points.
   ///

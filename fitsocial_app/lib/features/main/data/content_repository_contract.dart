@@ -6,6 +6,7 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
+import '../domain/routine.dart';
 import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
@@ -44,6 +45,19 @@ abstract class ContentRepository {
   Future<List<CustomExercise>> getCustomExercises();
 
   Future<CustomExercise> saveCustomExercise(CustomExercise exercise);
+
+  /// The signed-in user's routines, in no particular order — grouping and
+  /// sorting are the screen's, through `groupRoutines`.
+  Future<List<Routine>> getRoutines();
+
+  /// Creates [routine] when its id is empty, otherwise replaces it. Returns it
+  /// with its id.
+  Future<Routine> saveRoutine(Routine routine);
+
+  Future<void> deleteRoutine(String id);
+
+  /// Stamps when the routine was last started, for the "last used" chip.
+  Future<void> markRoutineUsed(String id, DateTime at);
 
   /// Every workout's exercises with their per-set logs, newest first.
   ///

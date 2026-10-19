@@ -81,3 +81,38 @@ for (const name of ["routines", "customExercises"]) {
     await assertSucceeds(deleteDoc(doc(db(ME), name, "mine")));
   });
 }
+
+// The writes the routine builder and a started routine actually send: a full
+// merged save with folder and position, a folder rename, and the lastUsedAt
+// stamp, which carries no authorId of its own and relies on the merge.
+test("routines: the app's own saves, folder moves and last-used stamps pass", async () => {
+  const mine = doc(db(ME), "routines", "mine");
+  await assertSucceeds(
+    setDoc(
+      mine,
+      {
+        authorId: ME,
+        name: "Push Day",
+        folder: "Push · Pull · Legs",
+        position: 2,
+        notes: "Deload every 5th week",
+        exercises: [
+          {
+            name: "Bench Press (Barbell)",
+            exerciseId: "bench-press-barbell",
+            supersetGroup: null,
+            restSeconds: 120,
+            notes: "Pause 1s on chest",
+            sets: [{ type: "normal", weightKg: 82.5, repsMin: 6, repsMax: 8 }],
+          },
+        ],
+      },
+      { merge: true },
+    ),
+  );
+  await assertSucceeds(updateDoc(mine, { folder: "Upper", position: 0 }));
+  await assertSucceeds(setDoc(mine, { lastUsedAt: new Date() }, { merge: true }));
+  await assertFails(
+    setDoc(doc(db(ME), "routines", "theirs"), { lastUsedAt: new Date() }, { merge: true }),
+  );
+});

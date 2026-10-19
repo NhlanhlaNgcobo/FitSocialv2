@@ -33,6 +33,10 @@ enum FeatureFlag {
   /// tracking type, and (Phase C) the save and celebration screens.
   workoutLoggerV2('f7_workout_logger_v2'),
 
+  /// Routines: the Routines section on Log Workout, the routine builder, and
+  /// starting a live session from a routine (Phase B).
+  routines('f8_routines'),
+
   /// The muscle heatmap: the body map on workout cards and workout detail,
   /// and the Muscles card and screen on Progress. The `muscleSets` field is
   /// written on save whatever this says.
