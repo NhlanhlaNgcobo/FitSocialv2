@@ -1,3 +1,5 @@
+import 'active_workout.dart';
+import 'app_models.dart';
 import 'workout_models.dart';
 
 /// One planned set in a routine: its type and what it aims for.
@@ -235,4 +237,138 @@ List<({String folder, List<Routine> routines})> groupRoutines(
           }),
       ),
   ];
+}
+
+/// What a routine's structure is: which exercises, in what order, with how
+/// many sets of which types, linked into which supersets.
+///
+/// Compared at the end of a session started from a routine, to decide whether
+/// to ask "update the routine?". Values never count — doing 85 kg where the
+/// routine said 82.5 is a workout, not a change of plan, and the routine's
+/// numbers move only when the user says so.
+///
+/// Superset ids are renumbered by first appearance, because a session mints
+/// its own ids for links made during it and two equal pairings must compare
+/// equal however they were made.
+List<String> routineStructure(
+  Iterable<({String exercise, String? group, List<SetType> types})> items,
+) {
+  final groups = <String, int>{};
+  return [
+    for (final item in items)
+      [
+        item.exercise,
+        if (item.group case final group?)
+          's${groups.putIfAbsent(group, () => groups.length)}'
+        else
+          '-',
+        item.types.map((t) => t.name).join(','),
+      ].join('|'),
+  ];
+}
+
+/// How an exercise is told apart in a structure: its library or custom id,
+/// or its name for a free-text one.
+String routineExerciseKey(String? exerciseId, String name) =>
+    exerciseId ?? 'name:${name.trim().toLowerCase()}';
+
+extension RoutineStructure on Routine {
+  List<String> get structure => routineStructure([
+        for (final e in exercises)
+          (
+            exercise: routineExerciseKey(e.exerciseId, e.name),
+            group: e.supersetGroup,
+            types: [for (final s in e.sets) s.type],
+          ),
+      ]);
+}
+
+/// A target to plan from, read off a set that was actually done: the load
+/// and reps on a lift, the time and distance on cardio.
+SetTarget targetFromSet(ExerciseSet set) => SetTarget(
+      weightKg: set.weightKg > 0 ? set.weightKg : null,
+      reps: set.reps > 0 ? set.reps : null,
+      durationSeconds:
+          (set.durationSeconds ?? 0) > 0 ? set.durationSeconds : null,
+      distanceKm: (set.distanceKm ?? 0) > 0 ? set.distanceKm : null,
+    );
+
+/// A routine built from a past workout's entries — "Save as routine".
+///
+/// Every logged set becomes a planned one with what was done as its target.
+/// An entry from before sets were logged one by one becomes `sets` rows of
+/// its summary figures.
+Routine routineFromEntries(String name, Iterable<ExerciseEntry> entries) {
+  return Routine(
+    id: '',
+    name: name.trim(),
+    exercises: [
+      for (final entry in entries)
+        RoutineExercise(
+          name: entry.name,
+          exerciseId: entry.exerciseId,
+          trackingType: entry.resolvedTrackingType,
+          supersetGroup: entry.supersetGroup,
+          sets: entry.setLog.isNotEmpty
+              ? [
+                  for (final s in entry.setLog)
+                    RoutineSet(type: s.type, target: targetFromSet(s)),
+                ]
+              : entry.isCardio
+                  ? [
+                      RoutineSet(
+                        target: SetTarget(
+                          durationSeconds: entry.durationSeconds,
+                          distanceKm: entry.distanceKm,
+                        ),
+                      ),
+                    ]
+                  : [
+                      for (var i = 0;
+                          i < (entry.sets < 1 ? 1 : entry.sets);
+                          i++)
+                        RoutineSet(
+                          target: SetTarget(
+                            weightKg: entry.weightKg,
+                            reps: entry.reps > 0 ? entry.reps : null,
+                          ),
+                        ),
+                    ],
+        ),
+    ],
+  );
+}
+
+/// [base] with the structure of [session]: its exercises, order, set types
+/// and supersets — "Update routine" at the end of a session.
+///
+/// A row that came from the routine keeps the routine's target; the user was
+/// asked about structure, and that answer must not quietly rewrite the
+/// numbers. A row added in the session takes what was done in it as its
+/// target, since a planned set with no target at all helps nobody. Standing
+/// notes stay; a session's own notes were for that session.
+Routine routineUpdatedFromSession(Routine base, ActiveWorkout session) {
+  final standing = {
+    for (final e in base.exercises)
+      routineExerciseKey(e.exerciseId, e.name): e.notes,
+  };
+  return base.copyWith(
+    exercises: [
+      for (final e in session.exercises)
+        RoutineExercise(
+          name: e.name,
+          exerciseId: e.exerciseId,
+          trackingType: e.trackingType,
+          supersetGroup: e.supersetGroup,
+          restSeconds: e.restSeconds,
+          notes: e.routineNotes ??
+              standing[routineExerciseKey(e.exerciseId, e.name)] ??
+              '',
+          sets: [
+            for (final s in e.sets)
+              RoutineSet(type: s.type, target: s.target ?? targetFromSet(s)),
+          ],
+        ),
+    ],
+  );
 }

@@ -1,6 +1,7 @@
 import '../../workouts/domain/workout_energy.dart';
 import 'app_models.dart';
 import 'exercise_library.dart';
+import 'routine.dart' as routine_lib;
 import 'workout_math.dart';
 import 'workout_models.dart';
 
@@ -178,6 +179,9 @@ class ActiveWorkout {
     this.title = '',
     this.rest,
     this.bodyweightKg,
+    this.routineId,
+    this.routineName,
+    this.routineStructure,
   });
 
   /// Null when [json] is not a session this build can read.
@@ -194,6 +198,11 @@ class ActiveWorkout {
       title: (json['title'] as String?) ?? '',
       rest: RestTimer.fromJson(json['rest']),
       bodyweightKg: (json['bodyweightKg'] as num?)?.toDouble(),
+      routineId: json['routineId'] as String?,
+      routineName: json['routineName'] as String?,
+      routineStructure: (json['routineStructure'] as List<dynamic>?)
+          ?.whereType<String>()
+          .toList(growable: false),
       exercises: (json['exercises'] as List<dynamic>?)
               ?.whereType<Map<String, dynamic>>()
               .map(ActiveExercise.fromJson)
@@ -216,6 +225,42 @@ class ActiveWorkout {
   /// The user's bodyweight when the session started, for bodyweight volume.
   /// Null when they have not given one — that volume then counts as nothing.
   final double? bodyweightKg;
+
+  /// The routine this session was started from, and its name then. Null for
+  /// a workout started empty.
+  final String? routineId;
+  final String? routineName;
+
+  /// The routine's structure when the session started — see
+  /// [routineStructure]. Kept rather than re-read at the end, so the question
+  /// "did you change it?" is about this session and not about an edit made
+  /// on another phone in the meantime.
+  final List<String>? routineStructure;
+
+  /// This session's structure, by the same rule as a routine's. Every row
+  /// counts, ticked or not: skipping a set is a workout, adding or removing
+  /// one is a change of plan.
+  List<String> get structure => routine_lib.routineStructure([
+        for (final e in exercises)
+          (
+            exercise: routine_lib.routineExerciseKey(e.exerciseId, e.name),
+            group: e.supersetGroup,
+            types: [for (final s in e.sets) s.type],
+          ),
+      ]);
+
+  /// Whether a session started from a routine has moved away from its
+  /// structure. Always false for one that was not.
+  bool get changedFromRoutine {
+    final original = routineStructure;
+    if (routineId == null || original == null) return false;
+    final now = structure;
+    if (now.length != original.length) return true;
+    for (var i = 0; i < now.length; i++) {
+      if (now[i] != original[i]) return true;
+    }
+    return false;
+  }
 
   Duration elapsed(DateTime now) {
     final elapsed = now.difference(startedAt);
@@ -289,6 +334,7 @@ class ActiveWorkout {
     RestTimer? rest,
     bool clearRest = false,
     double? bodyweightKg,
+    List<String>? routineStructure,
   }) =>
       ActiveWorkout(
         id: id,
@@ -297,6 +343,9 @@ class ActiveWorkout {
         exercises: exercises ?? this.exercises,
         rest: clearRest ? null : (rest ?? this.rest),
         bodyweightKg: bodyweightKg ?? this.bodyweightKg,
+        routineId: routineId,
+        routineName: routineName,
+        routineStructure: routineStructure ?? this.routineStructure,
       );
 
   /// The workout as the repository saves it.
@@ -337,6 +386,7 @@ class ActiveWorkout {
       exercises: exercises,
       volumeKg: volumeKg,
       customExercises: customExercises,
+      routineId: routineId,
     );
   }
 
@@ -346,6 +396,9 @@ class ActiveWorkout {
         'title': title,
         if (rest != null) 'rest': rest!.toJson(),
         if (bodyweightKg != null) 'bodyweightKg': bodyweightKg,
+        if (routineId != null) 'routineId': routineId,
+        if (routineName != null) 'routineName': routineName,
+        if (routineStructure != null) 'routineStructure': routineStructure,
         'exercises': exercises.map((e) => e.toJson()).toList(),
       };
 }

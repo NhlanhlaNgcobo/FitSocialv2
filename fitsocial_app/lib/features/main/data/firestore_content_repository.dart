@@ -1906,6 +1906,7 @@ class FirestoreContentRepository implements ContentRepository {
       // "repeat this session" from.
       'exercises': draft.exercises.map((e) => e.toMap()).toList(),
       'sharedToFeed': draft.shareToFeed,
+      if (draft.routineId != null) 'routineId': draft.routineId,
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
       'loggedAt': Timestamp.fromDate(draft.loggedAt ?? DateTime.now()),
       'createdAt': FieldValue.serverTimestamp(),

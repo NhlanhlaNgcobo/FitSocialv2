@@ -941,9 +941,15 @@ class WorkoutLogDraft {
     this.caloriesEstimated = false,
     this.volumeKg,
     this.customExercises = const [],
+    this.routineId,
   });
 
   final String title;
+
+  /// The routine the session was started from. Saved on the private workout
+  /// log, where PREVIOUS reads it to offer "last time on this routine"; never
+  /// on the post.
+  final String? routineId;
 
   /// The user's own exercises, so [muscleSets] can credit the ones logged
   /// here. Not saved: only what they add up to is.
