@@ -21,7 +21,6 @@ import '../../insights/presentation/weekly_insight_card.dart';
 import '../../up_next/presentation/up_next_carousel.dart';
 import '../../pulse/presentation/pulse_tray.dart';
 import 'comments_sheet.dart';
-import 'daily_prompt_card.dart';
 import '../../../shared/layout/tab_reselect.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -148,11 +147,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ..invalidate(activitySessionsProvider)
       // The comment lines under each card are their own reads, and a refresh
       // that left them as they were would show new counts over old comments.
-      ..invalidate(commentPreviewProvider)
-      // Today's question rolls over at midnight, and its answer count is a
-      // one-shot read like the feed's.
-      ..invalidate(todaysPromptProvider)
-      ..invalidate(promptAnswersProvider);
+      ..invalidate(commentPreviewProvider);
     await ref.read(feedPostsProvider.notifier).refresh();
   }
 
@@ -185,10 +180,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Last week's insight. Likewise carries its own spacing, and draws
       // nothing while Weekly Insights are off, hidden, or have nothing to say.
       const WeeklyInsightCard(),
-      // Something to say, not only something to look at: above the posts,
-      // where it is seen before the scroll starts.
-      const DailyPromptCard(),
-      const SizedBox(height: AppSpacing.sm),
       ...posts.when(
         data: (feed) => _buildFeed(feed, ref),
         loading: () => const [_SectionPlaceholder(label: 'Loading feed...')],

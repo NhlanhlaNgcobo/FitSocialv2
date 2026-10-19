@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
@@ -499,7 +498,9 @@ class _DetailRow extends StatelessWidget {
 }
 
 /// "Answering: What's your go-to post-run meal?" — above a post written as
-/// an answer to the day's question, and the way through to everyone else's.
+/// an answer to the day's question, back when the question was a feed card.
+/// Answers are Notes now, so the line still says what the post was about but
+/// no longer leads anywhere.
 class PromptAnswerLine extends StatelessWidget {
   const PromptAnswerLine({required this.prompt, super.key});
 
@@ -508,44 +509,35 @@ class PromptAnswerLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    return GestureDetector(
-      onTap: () => openPromptAnswers(context, prompt),
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Icon(Icons.forum_outlined, size: 14, color: palette.brand),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Answering: ',
-                    style: TextStyle(
-                      color: palette.muted,
-                      fontWeight: FontWeight.w700,
-                    ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(Icons.forum_outlined, size: 14, color: palette.brand),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Answering: ',
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontWeight: FontWeight.w700,
                   ),
-                  TextSpan(
-                    text: prompt.text,
-                    style: TextStyle(color: palette.muted),
-                  ),
-                ],
-              ),
-              style: const TextStyle(fontSize: 12.5, height: 1.3),
+                ),
+                TextSpan(
+                  text: prompt.text,
+                  style: TextStyle(color: palette.muted),
+                ),
+              ],
             ),
+            style: const TextStyle(fontSize: 12.5, height: 1.3),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-}
-
-/// Opens everyone's answers to [prompt].
-void openPromptAnswers(BuildContext context, PostPrompt prompt) {
-  context.push('/prompt/${prompt.id}', extra: prompt);
 }

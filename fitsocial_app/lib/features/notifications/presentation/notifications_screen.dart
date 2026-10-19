@@ -262,6 +262,12 @@ Color _accentFor(FitNotification notification, AppPalette palette) {
     // wear, so all three read as the same thing.
     case FitNotificationType.milestone:
       return palette.accent(const Color(0xFFF2B01E));
+    // A heart on a Note is the same red as a heart anywhere else; a reply is
+    // words, and words are green.
+    case FitNotificationType.noteHeart:
+      return palette.accent(const Color(0xFFE23D5A));
+    case FitNotificationType.noteReply:
+      return palette.accent(const Color(0xFF37A66B));
   }
 }
 
@@ -540,6 +546,10 @@ class _ActorAvatar extends StatelessWidget {
         return Icons.remove_moderator_outlined;
       case FitNotificationType.milestone:
         return Icons.workspace_premium_rounded;
+      case FitNotificationType.noteHeart:
+        return Icons.favorite_rounded;
+      case FitNotificationType.noteReply:
+        return Icons.reply_rounded;
     }
   }
 }

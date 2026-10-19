@@ -76,7 +76,13 @@ enum FitNotificationType {
   ///
   /// Written by functions/milestones.js with you as the actor — the person who
   /// earned it — which is the one kind allowed to name its own recipient.
-  milestone;
+  milestone,
+
+  /// Someone hearted your Note.
+  noteHeart,
+
+  /// Someone replied to your Note. Private: it reaches you and nobody else.
+  noteReply;
 
   /// Stored form. Explicit rather than [name] so renaming the enum can never
   /// silently orphan the documents already written.
@@ -114,6 +120,10 @@ enum FitNotificationType {
         return 'safetyRevoked';
       case FitNotificationType.milestone:
         return 'milestone';
+      case FitNotificationType.noteHeart:
+        return 'noteHeart';
+      case FitNotificationType.noteReply:
+        return 'noteReply';
     }
   }
 
@@ -151,6 +161,10 @@ enum FitNotificationType {
         return FitNotificationType.safetyRevoked;
       case 'milestone':
         return FitNotificationType.milestone;
+      case 'noteHeart':
+        return FitNotificationType.noteHeart;
+      case 'noteReply':
+        return FitNotificationType.noteReply;
       default:
         return null;
     }
@@ -196,6 +210,10 @@ abstract final class NotificationIds {
   /// it without a search.
   static String commentLike(String commentId, String actorId) =>
       'commentLike_${commentId}_$actorId';
+
+  /// Keyed by Note and hearter, so un-hearting can delete the row it made.
+  static String noteHeart(String noteId, String actorId) =>
+      'noteHeart_${noteId}_$actorId';
 }
 
 /// One line in the notifications list.
@@ -220,6 +238,8 @@ class FitNotification {
     this.milestoneTitle,
     this.milestoneSubtitle,
     this.milestoneEmoji,
+    this.noteText,
+    this.replyText,
   });
 
   final String id;
@@ -283,6 +303,13 @@ class FitNotification {
   final String? milestoneTitle;
   final String? milestoneSubtitle;
   final String? milestoneEmoji;
+
+  /// The Note a [FitNotificationType.noteHeart] or
+  /// [FitNotificationType.noteReply] is about, as it read when they acted.
+  final String? noteText;
+
+  /// What was said, on a [FitNotificationType.noteReply].
+  final String? replyText;
 
   /// The bold words the row opens with: who did it, or for a milestone — news
   /// about the reader themselves — what it is.
@@ -350,6 +377,13 @@ class FitNotification {
         return 'is no longer your safety contact';
       case FitNotificationType.milestone:
         return _milestoneLine;
+      case FitNotificationType.noteHeart:
+        return 'liked your note';
+      case FitNotificationType.noteReply:
+        final said = (replyText ?? '').trim();
+        return said.isEmpty
+            ? 'replied to your note'
+            : 'replied to your note: $said';
     }
   }
 
@@ -421,6 +455,11 @@ class FitNotification {
       case FitNotificationType.milestone:
         final id = postId;
         return (id == null || id.isEmpty) ? '/achievements' : '/post/$id';
+      // A Note is gone in a day and has no page of its own; the person who
+      // answered it is who there is to go and see.
+      case FitNotificationType.noteHeart:
+      case FitNotificationType.noteReply:
+        return '/user/$actorId';
     }
   }
 }

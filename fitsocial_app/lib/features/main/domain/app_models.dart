@@ -1620,7 +1620,6 @@ class PostDraft {
     this.imageUrl,
     this.imageAspectRatio,
     this.taggedUsers = const [],
-    this.prompt,
   });
 
   final String caption;
@@ -1640,9 +1639,6 @@ class PostDraft {
   /// mentions inside [caption]: a tag is a deliberate attachment, a mention is
   /// something written in a sentence, and the two are notified differently.
   final List<TaggedUser> taggedUsers;
-
-  /// The day's question this post answers, when it was written as an answer.
-  final PostPrompt? prompt;
 }
 
 /// A poll as written in its composer.

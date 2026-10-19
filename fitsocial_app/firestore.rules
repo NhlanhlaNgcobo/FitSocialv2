@@ -1084,6 +1084,64 @@ service cloud.firestore {
       }
     }
 
+    // Notes — one short answer per person to the day's question, shown over
+    // their avatar in the Pulse tray for 24 hours.
+    //
+    // Keyed by the author, so a person holds exactly one and answering again
+    // is an overwrite. The audience is the Pulse audience: the author and
+    // their followers. The read is written against resource.data.authorId
+    // rather than the path, because the tray lists Notes with a whereIn on
+    // that field and a list rule can only be checked against what the query
+    // constrains.
+    //
+    // The question itself is never written here. Until somebody answers there
+    // is no document, which is what keeps an ignored question invisible.
+    match /notes/{authorId} {
+      function isValidNote() {
+        let note = request.resource.data;
+        return note.keys().hasOnly([
+                 'authorId', 'authorName', 'authorAvatarUrl', 'noteId',
+                 'text', 'promptId', 'promptText', 'createdAt', 'expiresAt'])
+               && note.authorId == authorId
+               && note.text is string
+               && note.text.size() >= 1
+               && note.text.size() <= 60
+               && note.noteId is string
+               && note.promptId is string
+               && note.createdAt == request.time
+               && note.expiresAt is timestamp
+               // A day, with an hour of slack for the client's clock.
+               && note.expiresAt <= request.time + duration.value(25, 'h');
+      }
+
+      allow read: if request.auth != null
+                  && (resource.data.authorId == request.auth.uid
+                      || isFollowerOf(resource.data.authorId));
+      allow create, update: if request.auth != null
+                            && request.auth.uid == authorId
+                            && isValidNote();
+      allow delete: if request.auth != null && request.auth.uid == authorId;
+
+      // Who hearted the Note. The author lists them; a hearter may read back
+      // their own, which is how the heart knows to draw filled. Only somebody
+      // the Note was shown to can leave one, and never on their own Note.
+      // The author clears them when answering again or deleting.
+      match /hearts/{userId} {
+        allow get: if request.auth != null
+                   && (request.auth.uid == userId
+                       || request.auth.uid == authorId);
+        allow list: if request.auth != null && request.auth.uid == authorId;
+        allow create, update: if request.auth != null
+                              && request.auth.uid == userId
+                              && userId != authorId
+                              && request.resource.data.userId == userId
+                              && isFollowerOf(authorId);
+        allow delete: if request.auth != null
+                      && (request.auth.uid == userId
+                          || request.auth.uid == authorId);
+      }
+    }
+
     // Run logs — the canonical record of a tracked run, including its GPS
     // route. A route is location history, so unlike /posts these are readable
     // only by the runner who recorded them; the feed gets its own denormalised

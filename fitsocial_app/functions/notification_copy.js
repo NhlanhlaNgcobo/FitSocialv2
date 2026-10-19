@@ -112,6 +112,12 @@ function messageFor(data) {
       return "is now one of your safety contacts";
     case "safetyRevoked":
       return "is no longer your safety contact";
+    case "noteHeart":
+      return "liked your note";
+    case "noteReply": {
+      const said = String(data.replyText ?? "").trim();
+      return said === "" ? "replied to your note" : `replied to your note: ${said}`;
+    }
     default:
       return null;
   }
@@ -155,6 +161,12 @@ function routeFor(data) {
     case "milestone": {
       const postId = String(data.postId ?? "");
       return postId === "" ? "/achievements" : `/post/${postId}`;
+    }
+    // A Note has no page of its own; the person who answered is who to see.
+    case "noteHeart":
+    case "noteReply": {
+      const actorId = String(data.actorId ?? "");
+      return actorId === "" ? null : `/user/${actorId}`;
     }
     default:
       return null;

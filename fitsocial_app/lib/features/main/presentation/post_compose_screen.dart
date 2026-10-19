@@ -26,11 +26,7 @@ import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/picture_ratio.dart';
 
 class PostComposeScreen extends ConsumerStatefulWidget {
-  const PostComposeScreen({this.prompt, super.key});
-
-  /// The day's question this post answers, when it was opened from the
-  /// question card. Null for an ordinary post.
-  final PostPrompt? prompt;
+  const PostComposeScreen({super.key});
 
   @override
   ConsumerState<PostComposeScreen> createState() => _PostComposeScreenState();
@@ -64,17 +60,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   bool _isSaving = false;
   String? _errorMessage;
 
-  /// An answer is its own short-lived thing: it neither picks up an unfinished
-  /// post draft nor leaves one behind, since resuming it later without the
-  /// question would turn it into a post about nothing in particular.
-  bool get _isAnswer => widget.prompt != null;
-
   @override
   void initState() {
     super.initState();
-    final draft = _isAnswer
-        ? const PostComposerDraftState()
-        : ref.read(createFlowControllerProvider).postDraft;
+    final draft = ref.read(createFlowControllerProvider).postDraft;
     _captionController = TextEditingController(text: draft.caption);
     _activityController = TextEditingController(text: draft.activity);
   }
@@ -147,7 +136,6 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   }
 
   void _syncDraft() {
-    if (_isAnswer) return;
     ref.read(createFlowControllerProvider.notifier).updatePost(
           PostComposerDraftState(
             caption: _captionController.text,
@@ -160,9 +148,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     final caption = _captionController.text.trim();
     if (caption.isEmpty) {
       setState(() {
-        _errorMessage = _isAnswer
-            ? 'Write your answer before sharing.'
-            : 'Write a caption before sharing.';
+        _errorMessage = 'Write a caption before sharing.';
       });
       return;
     }
@@ -189,15 +175,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               imageUrl: imageUrl,
               imageAspectRatio: _imageAspectRatio,
               taggedUsers: _taggedUsers,
-              prompt: widget.prompt,
             ),
           );
       if (!mounted) return;
-      if (!_isAnswer) {
-        ref.read(createFlowControllerProvider.notifier).completePost(
-              result.message,
-            );
-      }
+      ref.read(createFlowControllerProvider.notifier).completePost(
+            result.message,
+          );
       showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
     } catch (error) {
@@ -224,7 +207,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       // same ground every other screen looks through.
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(_isAnswer ? 'Your answer' : 'Share Post'),
+        title: const Text('Share Post'),
         actions: const [MusicIslandAction()],
       ),
       body: ListView(
@@ -235,10 +218,6 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
           AppSpacing.md,
         ),
         children: [
-          if (widget.prompt case final prompt?) ...[
-            _PromptBanner(prompt: prompt),
-            const SizedBox(height: AppSpacing.md),
-          ],
           _ComposerCard(
             displayName: displayName,
             handle: formatHandle(profile?.handle),
@@ -248,7 +227,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             activityController: _activityController,
             activityLimit: _activityLimit,
             taggedUsers: _taggedUsers,
-            captionHint: _isAnswer ? 'Your answer…' : 'How did the session go?',
+            captionHint: 'How did the session go?',
             onTagPeople: _isSaving ? null : _pickTaggedPeople,
             photo: _imageBytes == null
                 ? null
@@ -282,53 +261,6 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
           showProgress: _isSaving && _imageBytes != null,
           onPressed: _isSaving ? null : _sharePost,
         ),
-      ),
-    );
-  }
-}
-
-/// The question being answered, above the composer — so the answer is written
-/// looking at what it answers.
-class _PromptBanner extends StatelessWidget {
-  const _PromptBanner({required this.prompt});
-
-  final PostPrompt prompt;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: palette.brandSoft,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.brandSoftStroke),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "TODAY'S QUESTION",
-            style: TextStyle(
-              color: palette.brandText,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            prompt.text,
-            style: TextStyle(
-              color: palette.text,
-              fontSize: 16,
-              height: 1.3,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
       ),
     );
   }

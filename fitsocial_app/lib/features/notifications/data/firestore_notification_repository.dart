@@ -95,6 +95,8 @@ class FirestoreNotificationRepository implements NotificationRepository {
       milestoneTitle: data['milestoneTitle'] as String?,
       milestoneSubtitle: data['milestoneSubtitle'] as String?,
       milestoneEmoji: data['milestoneEmoji'] as String?,
+      noteText: data['noteText'] as String?,
+      replyText: data['replyText'] as String?,
     );
   }
 }
@@ -290,6 +292,40 @@ class NotificationWrites {
           'postImageUrl': postImageUrl,
         if (postType != null && postType.isNotEmpty) 'postType': postType,
       },
+    );
+  }
+
+  /// Someone hearted the recipient's Note.
+  Map<String, dynamic> noteHeartPayload({
+    required String actorId,
+    required String actorName,
+    required String noteText,
+    String? actorAvatarUrl,
+  }) {
+    return _payload(
+      type: FitNotificationType.noteHeart,
+      actorId: actorId,
+      actorName: actorName,
+      actorAvatarUrl: actorAvatarUrl,
+      extra: {'noteText': noteText},
+    );
+  }
+
+  /// Someone replied to the recipient's Note. The reply lives here and only
+  /// here — a Note has no thread for it to sit in.
+  Map<String, dynamic> noteReplyPayload({
+    required String actorId,
+    required String actorName,
+    required String noteText,
+    required String replyText,
+    String? actorAvatarUrl,
+  }) {
+    return _payload(
+      type: FitNotificationType.noteReply,
+      actorId: actorId,
+      actorName: actorName,
+      actorAvatarUrl: actorAvatarUrl,
+      extra: {'noteText': noteText, 'replyText': replyText},
     );
   }
 

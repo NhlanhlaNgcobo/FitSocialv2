@@ -73,6 +73,7 @@ const OWNED_COLLECTIONS = [
   ["runs", "authorId"],
   ["posts", "authorId"],
   ["pulses", "authorId"],
+  ["notes", "authorId"],
   ["challengeEnrollments", "userId"],
   ["dailySteps", "userId"],
   ["dailyStats", "userId"],
