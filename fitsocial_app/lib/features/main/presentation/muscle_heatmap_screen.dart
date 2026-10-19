@@ -17,6 +17,7 @@ import '../application/active_workout_controller.dart';
 import '../application/muscle_heat_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/muscle_heat.dart';
+import 'muscle_stats_widgets.dart';
 
 /// Where the full heatmap lives.
 const muscleHeatmapRoute = '/muscles';
@@ -129,6 +130,9 @@ class _MuscleHeatmapScreenState extends ConsumerState<MuscleHeatmapScreen> {
             : null);
     final empty = stats != null && stats.workoutCount == 0;
     final unit = perWeek ? 'avg sets / week' : 'sets this week';
+    // The Phase E figures: tiles, bars against the target band, the report.
+    final insights =
+        ref.watch(featureEnabledProvider(FeatureFlag.exerciseInsights));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Muscles trained')),
@@ -147,6 +151,14 @@ class _MuscleHeatmapScreenState extends ConsumerState<MuscleHeatmapScreen> {
               _picked = null;
             }),
           ),
+          if (insights && stats != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            MuscleSummaryTiles(
+              workouts: stats.workoutCount,
+              hardSets: stats.hardSets,
+              muscles: stats.musclesTrained,
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           GlassWell(
             padding: const EdgeInsets.fromLTRB(12, 16, 12, 14),
@@ -194,6 +206,38 @@ class _MuscleHeatmapScreenState extends ConsumerState<MuscleHeatmapScreen> {
                 : stats.fullBodySets / (perWeek ? _range.weeks : 1),
             onSelected: (m) => setState(() => _picked = m),
           ),
+          if (insights && stats != null && !empty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              perWeek ? 'SETS PER MUSCLE · AVERAGE A WEEK' : 'SETS PER MUSCLE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: palette.muted,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            GlassWell(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: SetsPerMuscleBars(
+                sets: sets,
+                order: ranked,
+                onTap: (m) => setState(() => _picked = m),
+              ),
+            ),
+          ],
+          if (insights) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => context.push('/muscles/report'),
+                icon: const Icon(Icons.calendar_month_rounded, size: 18),
+                label: const Text('Monthly report'),
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           Text(
             'Primary muscle = 1 set, each secondary muscle = 0.5. '

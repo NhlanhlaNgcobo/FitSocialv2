@@ -31,6 +31,7 @@ import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/milestones_guide_screen.dart';
 import '../../features/main/presentation/routine_builder_screen.dart';
 import '../../features/main/presentation/exercise_detail_screen.dart';
+import '../../features/main/presentation/monthly_report_screen.dart';
 import '../../features/main/presentation/workout_celebration_screen.dart';
 import '../../features/main/presentation/workout_save_screen.dart';
 import '../../features/main/domain/workout_celebration.dart';
@@ -428,6 +429,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: muscleHeatmapRoute,
         builder: (context, state) => const MuscleHeatmapScreen(),
+      ),
+      // A month against the one before it, from the Muscles screen.
+      GoRoute(
+        path: '/muscles/report',
+        builder: (context, state) => const MonthlyReportScreen(),
       ),
       // The friends leaderboard. Reachable only from the Progress card, which
       // is hidden while leaderboards are switched off in Remote Config.

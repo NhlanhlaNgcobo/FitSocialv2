@@ -115,6 +115,7 @@ class MuscleWindowStats {
     required this.lastTrained,
     required this.topExercises,
     required this.workoutCount,
+    this.hardSets = 0,
   });
 
   /// Adds up the workouts in [history] that fall inside [range] of [today].
@@ -131,12 +132,16 @@ class MuscleWindowStats {
     final lastTrained = <String, DateTime>{};
     final byExercise = <String, Map<(String, bool), double>>{};
     var workouts = 0;
+    var hardSets = 0;
 
     for (final workout in history) {
       final at = workout.loggedAt;
       if (at.isBefore(start) || !at.isBefore(after)) continue;
       var counted = false;
       for (final entry in workout.exercises) {
+        // Every working set, credited to a muscle or not: a hard set is a
+        // set that was worked, whatever it was worked on.
+        hardSets += loggedSets(entry).where((s) => s.type.isWorking).length;
         final credit = muscleSets(
           [entry],
           custom: custom,
@@ -170,6 +175,7 @@ class MuscleWindowStats {
           muscle: _top(rows),
       },
       workoutCount: workouts,
+      hardSets: hardSets,
     );
   }
 
@@ -194,6 +200,13 @@ class MuscleWindowStats {
 
   /// Workouts in the span that credited any muscle.
   final int workoutCount;
+
+  /// Working sets in the span — warm-ups never count as hard sets.
+  final int hardSets;
+
+  /// Muscles credited with anything in the span.
+  int get musclesTrained =>
+      sets.entries.where((e) => e.key != 'full body' && e.value > 0).length;
 
   /// [sets] as sets a week: the same for a week, averaged over 30 days.
   Map<String, double> get perWeek => {
