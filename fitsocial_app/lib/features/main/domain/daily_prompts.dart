@@ -1,12 +1,14 @@
 import 'app_models.dart';
 
-/// The question at the top of the feed, one a day.
+/// Today's question, one a day, asked over the user's own avatar in the Pulse
+/// tray. Their answer becomes a Note — see features/notes.
 ///
 /// A feed of logs gives people something to look at; a question gives them
-/// something to say. These are written to be answered in a line or a photo by
-/// somebody who trained today or didn't — never a quiz, never a lecture — and
-/// every one of them is something another member would actually want to read
-/// the answers to.
+/// something to say. These are written to be answered in one short line (a
+/// Note is 60 characters) by somebody who trained today or didn't — never a
+/// quiz, never a lecture — and every one of them is something another member
+/// would actually want to read the answers to. Nothing asks for a photo: a
+/// Note cannot carry one.
 ///
 /// The list is walked in order, one per local day, so everybody in the same
 /// timezone sees the same question and their answers land together. Add to the
@@ -16,7 +18,7 @@ class DailyPrompts {
 
   static const List<String> all = [
     "What's your go-to post-run meal?",
-    'Show us where you train today.',
+    'Where are you training today?',
     "What's one lift you're chasing a PR on?",
     'Morning or evening training — and why?',
     "What's on your training playlist right now?",
@@ -26,7 +28,7 @@ class DailyPrompts {
     'Your cheapest high-protein meal — go.',
     'What got you back after your last time off?',
     "What's the hardest session you've done this month?",
-    'Show us your pre-workout fuel.',
+    "What's your pre-workout fuel?",
     'Who do you train with, and why them?',
     "What's one habit that changed your fitness the most?",
     'Parkrun, gym or somewhere else this weekend?',
@@ -37,11 +39,11 @@ class DailyPrompts {
     'Favourite route in your city — where is it?',
     "What's a workout you hate but do anyway?",
     'What does a good training week look like for you?',
-    'Share a meal prep win from this week.',
+    "What's your best meal prep win this week?",
     "What's one thing you'd tell someone on day one?",
     'Hydration check: how much water so far today?',
     "What's your warm-up, start to finish?",
-    'Which FitSocial member keeps you going? Tag them.',
+    'Which FitSocial member keeps you going?',
     "What's something you can do now that you couldn't a year ago?",
     'Solo sessions or group sessions?',
     "What's the next event you're training for?",

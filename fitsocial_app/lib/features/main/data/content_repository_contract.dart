@@ -295,10 +295,6 @@ abstract class ContentRepository {
   /// is on screen: a poll's votes, a meetup's who's-in. Null once deleted.
   Stream<FeedPost?> watchPost(String postId);
 
-  /// Every post written in answer to the day's question [promptId], newest
-  /// first.
-  Future<List<FeedPost>> fetchPromptAnswers(String promptId);
-
   /// Permanently removes a post the caller authored, along with its comments
   /// and its uploaded image. Throws if the caller is not the author.
   Future<void> deletePost(String postId);

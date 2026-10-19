@@ -2339,7 +2339,6 @@ class FirestoreContentRepository implements ContentRepository {
       postType: draft.imageUrl != null ? 'image' : 'text',
       imageAspectRatio: draft.imageAspectRatio,
       taggedUsers: draft.taggedUsers,
-      prompt: draft.prompt,
     );
     return ActivitySaveResult(
       message: result.synced
@@ -2457,28 +2456,6 @@ class FirestoreContentRepository implements ContentRepository {
     });
   }
 
-  @override
-  Future<List<FeedPost>> fetchPromptAnswers(String promptId) async {
-    // No orderBy: equality alone rides the single-field index Firestore keeps
-    // for every field, where adding an order would need a composite one. A
-    // day's answers are few enough to sort here.
-    final snapshot = await postsCollection
-        .where('promptId', isEqualTo: promptId)
-        .limit(_promptAnswerLimit)
-        .get();
-    final records = snapshot.docs
-        .map((doc) => FirestorePostRecord.fromMap(doc.id, doc.data()))
-        .toList();
-    return _withLiveAuthors(
-      newestFirst(records, limit: _promptAnswerLimit)
-          .map(FirestoreMapper.toFeedPost)
-          .toList(growable: false),
-    );
-  }
-
-  /// A busy day's worth of answers to one question.
-  static const int _promptAnswerLimit = 100;
-
   Future<FirestoreUserRecord> _loadUserRecord() async {
     final user = _requireCurrentUser();
     final userId = user.uid;
@@ -2568,7 +2545,6 @@ class FirestoreContentRepository implements ContentRepository {
     List<TaggedUser> taggedUsers = const [],
     PostPoll? poll,
     PostMeetup? meetup,
-    PostPrompt? prompt,
   }) async {
     final user = _requireCurrentUser();
     final userId = user.uid;
@@ -2605,7 +2581,6 @@ class FirestoreContentRepository implements ContentRepository {
       taggedUsers: _dedupeTags(taggedUsers, userId),
       poll: poll,
       meetup: meetup,
-      prompt: prompt,
       // Local clock, only for the copy handed straight back to the feed — the
       // stored value is the server timestamp written below.
       createdAt: DateTime.now(),
@@ -2667,12 +2642,6 @@ class FirestoreContentRepository implements ContentRepository {
           'startsAt': Timestamp.fromDate(meetup.startsAt),
           if (meetup.note.isNotEmpty) 'note': meetup.note,
         },
-      // Flat rather than a map, so "every answer to today's question" is a
-      // single equality query on an index Firestore builds by itself.
-      if (prompt != null) ...{
-        'promptId': prompt.id,
-        'promptText': prompt.text,
-      },
       'createdAt': FieldValue.serverTimestamp(),
     }));
     await _incrementUser(postsDelta: 1);

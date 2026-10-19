@@ -394,6 +394,8 @@ async function purgeAccount(uid) {
   // Content the user authored, each deleted with everything beneath it.
   const posts = await deleteOwnPosts(uid);
   const pulses = await deleteOwnedTrees("pulses", "authorId", uid);
+  // The one live Note, with the hearts under it.
+  const notes = await deleteOwnedTrees("notes", "authorId", uid);
   const enrollments = await deleteOwnedTrees(
     "challengeEnrollments",
     "userId",
@@ -411,6 +413,10 @@ async function purgeAccount(uid) {
   // is why these are swept rather than left to the Pulse's own expiry.
   const pulseViews = await deleteMatching(
     firestore.collectionGroup("views").where("viewerId", "==", uid)
+  );
+  // Hearts left on other people's Notes carry the hearter's name.
+  const noteHearts = await deleteMatching(
+    firestore.collectionGroup("hearts").where("userId", "==", uid)
   );
   // Notifications this user caused in other people's inboxes — "so-and-so
   // followed you" from an account that no longer exists.
@@ -481,6 +487,8 @@ async function purgeAccount(uid) {
   return {
     posts,
     pulses,
+    notes,
+    noteHearts,
     enrollments,
     reactions,
     comments,

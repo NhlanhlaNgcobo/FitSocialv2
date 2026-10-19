@@ -97,6 +97,10 @@ function seedDatabase() {
 
     // My own Pulse.
     "pulses/pulse_mine": { authorId: ME },
+    "notes/uid_me": { authorId: ME, text: "Pap" },
+    "notes/uid_me/hearts/uid_other": { userId: OTHER, userName: "Other" },
+    "notes/uid_other": { authorId: OTHER, text: "Parkrun" },
+    "notes/uid_other/hearts/uid_me": { userId: ME, userName: "Me" },
     "pulses/pulse_mine/views/uid_other": { viewerId: OTHER, viewerName: "Other" },
 
     // Private logs.
@@ -199,6 +203,10 @@ test("clears Pulse views and reactions, including the viewer's stored name", asy
   assert.equal(store.has("pulses/pulse_other"), true, "their Pulse survives");
 
   assert.equal(store.has("pulses/pulse_mine"), false);
+  assert.equal(store.has("notes/uid_me"), false);
+  assert.equal(store.has("notes/uid_me/hearts/uid_other"), false);
+  assert.equal(store.has("notes/uid_other"), true, "their Note survives");
+  assert.equal(store.has("notes/uid_other/hearts/uid_me"), false);
   assert.equal(store.has("pulses/pulse_mine/views/uid_other"), false);
 });
 

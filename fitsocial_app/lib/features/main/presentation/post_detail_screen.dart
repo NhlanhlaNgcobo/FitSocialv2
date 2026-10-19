@@ -487,6 +487,8 @@ class _MediaBlock extends StatelessWidget {
           workoutData: post.workoutData,
           activity: post.activity,
           backgroundImageUrl: post.imageUrl,
+          // Sized to the log: at this width a 9:16 sheet is mostly empty.
+          portrait: false,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
         );
         final muscles = parseMuscleSets(post.workoutData?['muscleSets']);

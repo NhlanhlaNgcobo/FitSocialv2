@@ -126,10 +126,7 @@ class ActivityActions {
       ..invalidate(workoutHistoryItemsProvider)
       // And the meal history, so a meal logged from the tracking page appears
       // in today's totals rather than after a restart.
-      ..invalidate(loggedMealsProvider)
-      // And the day's question, whose card counts the answers and says
-      // whether this user has given one.
-      ..invalidate(promptAnswersProvider);
+      ..invalidate(loggedMealsProvider);
     return result;
   }
 }

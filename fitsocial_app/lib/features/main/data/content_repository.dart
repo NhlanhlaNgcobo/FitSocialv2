@@ -436,9 +436,6 @@ class UnconfiguredContentRepository implements ContentRepository {
   Stream<FeedPost?> watchPost(String postId) => const Stream.empty();
 
   @override
-  Future<List<FeedPost>> fetchPromptAnswers(String promptId) async => const [];
-
-  @override
   Future<List<Comment>> fetchCommentPreview(String postId, {int limit = 2}) {
     throw StateError(_firebaseSetupMessage);
   }

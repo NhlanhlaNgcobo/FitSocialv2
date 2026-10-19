@@ -9,7 +9,6 @@ import 'package:fitsocial_app/features/main/data/firestore_mappers.dart';
 import 'package:fitsocial_app/features/main/data/firestore_models.dart';
 import 'package:fitsocial_app/features/main/domain/app_models.dart';
 import 'package:fitsocial_app/features/main/domain/daily_prompts.dart';
-import 'package:fitsocial_app/features/main/presentation/daily_prompt_card.dart';
 import 'package:fitsocial_app/shared/widgets/post_card.dart';
 import 'package:fitsocial_app/shared/widgets/social_post_cards.dart';
 
@@ -201,19 +200,6 @@ void main() {
         }),
       );
       expect(post.prompt!.id, '2026-09-26');
-    });
-
-    test("counts answers from the viewer's side", () {
-      expect(
-        DailyPromptCard.answersLabel(0, answered: false),
-        'Be the first to answer',
-      );
-      expect(DailyPromptCard.answersLabel(1, answered: true), 'You answered');
-      expect(
-        DailyPromptCard.answersLabel(5, answered: true),
-        'You and 4 others answered',
-      );
-      expect(DailyPromptCard.answersLabel(12, answered: false), '12 answers');
     });
   });
 
