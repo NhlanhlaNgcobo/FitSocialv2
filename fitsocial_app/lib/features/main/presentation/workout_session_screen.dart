@@ -99,6 +99,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     if (picked == null || !mounted) return;
     final previous = ref.read(previousPerformanceProvider);
     final source = ref.read(workoutPreferencesProvider).previousSource;
+    final routineId = ref.read(activeWorkoutProvider)?.routineId;
     _controller.addExercises(
       [
         for (final p in picked.exercises)
@@ -110,6 +111,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
             previous: previous.lastSets(
               exerciseKeyFor(name: p.name, exerciseId: p.id),
               source: source,
+              routineId: routineId,
             ),
           ),
       ],
@@ -1130,6 +1132,10 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
               exerciseKeyFor(
                   name: exercise.name, exerciseId: exercise.exerciseId),
               source: prefs.previousSource,
+              // "Last time on this routine" needs to know the routine.
+              routineId: ref.watch(
+                activeWorkoutProvider.select((w) => w?.routineId),
+              ),
             )
         : null;
 

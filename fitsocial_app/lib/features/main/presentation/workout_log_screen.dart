@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/config/feature_flags.dart';
 import '../../../shared/input/typed_number.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/services/workout_card_exporter.dart';
@@ -38,6 +39,7 @@ import '../domain/exercise_library.dart';
 import '../domain/workout_log_form.dart';
 import '../domain/workout_math.dart';
 import 'exercise_picker_sheet.dart';
+import 'routines_section.dart';
 import 'tag_people_sheet.dart';
 
 /// The training log.
@@ -609,6 +611,13 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                   inProgress: ref.watch(activeWorkoutProvider) != null,
                   onTap: _isSaving ? null : _startLiveWorkout,
                 ),
+                // Saved plans, between starting an empty workout and typing
+                // one in after the fact.
+                if (ref
+                    .watch(featureEnabledProvider(FeatureFlag.routines))) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const RoutinesSection(),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 _DateChip(loggedAt: _loggedAt),
                 if (!kIsWeb) ...[

@@ -29,6 +29,8 @@ import '../../features/main/presentation/connections_screen.dart';
 import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/milestones_guide_screen.dart';
+import '../../features/main/presentation/routine_builder_screen.dart';
+import '../../features/main/domain/routine.dart';
 import '../../features/main/presentation/home_screen.dart';
 import '../../features/main/presentation/manual_run_entry_screen.dart';
 import '../../features/main/presentation/meal_review_screen.dart';
@@ -213,6 +215,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/log-workout',
         builder: (context, state) => WorkoutLogScreen(
           startWithCardio: state.uri.queryParameters['cardio'] == '1',
+        ),
+      ),
+      // A new routine, or an unsaved one handed over as `extra` — "Save as
+      // routine" from a past workout or a finished session.
+      GoRoute(
+        path: '/routine/edit',
+        builder: (context, state) => RoutineBuilderScreen(
+          draft: state.extra is Routine ? state.extra! as Routine : null,
+        ),
+      ),
+      GoRoute(
+        path: '/routine/edit/:routineId',
+        builder: (context, state) => RoutineBuilderScreen(
+          routineId: state.pathParameters['routineId'],
         ),
       ),
       GoRoute(
