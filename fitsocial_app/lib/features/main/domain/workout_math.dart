@@ -150,11 +150,17 @@ const oneRepMaxReliableReps = 12;
 /// The last three are session records, judged once the workout is finished
 /// by [finishRecords] rather than set by set: the most volume or reps one
 /// movement ever got in a session, and the fastest pace on cardio.
+///
+/// [setVolume], [duration] and [distance] are the typed set records: the most
+/// load × reps in one set, the longest timed set, the farthest cardio set.
 enum PrKind {
   weight,
   reps,
   oneRepMax,
   repsSet,
+  setVolume,
+  duration,
+  distance,
   sessionVolume,
   repsSession,
   pace;
@@ -227,9 +233,10 @@ class PersonalBests {
   }
 
   /// Adds [set] to the history, as the next set of the session is measured
-  /// against it. Warm-ups and empty sets are ignored.
+  /// against it. Warm-ups and empty sets are ignored. A timed or cardio set
+  /// has no reps but is not empty.
   void record(String key, ExerciseSet set) {
-    if (!set.type.isWorking || set.reps <= 0) return;
+    if (!set.type.isWorking || !set.hasEffort) return;
     (_history[key] ??= []).add(set);
   }
 
@@ -245,24 +252,74 @@ class PersonalBests {
   }) {
     final prior = _history[key];
     if (prior == null || prior.isEmpty) return const {};
-    if (!set.type.isWorking || set.reps <= 0) return const {};
+    if (!set.type.isWorking || !set.hasEffort) return const {};
+
+    int longest() => prior.fold<int>(
+          0,
+          (top, s) => (s.durationSeconds ?? 0) > top ? s.durationSeconds! : top,
+        );
 
     switch (type) {
       case TrackingType.bodyweightReps:
       case TrackingType.assistedBodyweight:
+        if (set.reps <= 0) return const {};
         final most =
             prior.fold<int>(0, (top, s) => s.reps > top ? s.reps : top);
         return set.reps > most ? const {PrKind.repsSet} : const {};
       case TrackingType.duration:
+        final seconds = set.durationSeconds ?? 0;
+        final best = longest();
+        return seconds > 0 && best > 0 && seconds > best
+            ? const {PrKind.duration}
+            : const {};
       case TrackingType.cardio:
-        return const {};
+        final broken = <PrKind>{};
+        final km = set.distanceKm ?? 0;
+        final farthest = prior.fold<double>(
+          0,
+          (top, s) => (s.distanceKm ?? 0) > top ? s.distanceKm! : top,
+        );
+        if (km > 0 && farthest > 0 && km > farthest + _epsilon) {
+          broken.add(PrKind.distance);
+        }
+        final seconds = set.durationSeconds ?? 0;
+        final best = longest();
+        if (seconds > 0 && best > 0 && seconds > best) {
+          broken.add(PrKind.duration);
+        }
+        return broken;
+      case TrackingType.weightDuration:
+        final broken = <PrKind>{};
+        if (set.weightKg > 0) {
+          final heaviest = prior.fold<double>(
+            0,
+            (top, s) => s.weightKg > top ? s.weightKg : top,
+          );
+          if (set.weightKg > heaviest + _epsilon) broken.add(PrKind.weight);
+        }
+        final seconds = set.durationSeconds ?? 0;
+        final best = longest();
+        if (seconds > 0 && best > 0 && seconds > best) {
+          broken.add(PrKind.duration);
+        }
+        return broken;
       case TrackingType.weightReps:
       case TrackingType.weightedBodyweight:
-      case TrackingType.weightDuration:
+        if (set.reps <= 0) return const {};
         break;
     }
 
     final broken = <PrKind>{};
+
+    // The most work in one set: load × reps.
+    if (set.weightKg > 0) {
+      final volume = set.weightKg * set.reps;
+      final best = prior.fold<double>(
+        0,
+        (top, s) => s.weightKg * s.reps > top ? s.weightKg * s.reps : top,
+      );
+      if (best > 0 && volume > best + _epsilon) broken.add(PrKind.setVolume);
+    }
 
     if (set.weightKg > 0) {
       final heaviest = prior.fold<double>(
@@ -353,6 +410,9 @@ String describeRecord(Set<PrKind> kinds) {
   if (kinds.contains(PrKind.weight)) return 'heaviest weight';
   if (kinds.contains(PrKind.oneRepMax)) return 'best estimated 1RM';
   if (kinds.contains(PrKind.repsSet)) return 'most reps in a set';
+  if (kinds.contains(PrKind.distance)) return 'longest distance';
+  if (kinds.contains(PrKind.duration)) return 'longest set';
+  if (kinds.contains(PrKind.setVolume)) return 'best set volume';
   if (kinds.contains(PrKind.sessionVolume)) return 'best session volume';
   if (kinds.contains(PrKind.repsSession)) return 'most reps in a session';
   if (kinds.contains(PrKind.pace)) return 'fastest pace';
@@ -644,6 +704,9 @@ List<WorkoutPr> finishRecords(
           PrKind.weight => set.weightKg,
           PrKind.oneRepMax => estimatedOneRepMax(set.weightKg, set.reps),
           PrKind.reps || PrKind.repsSet => set.reps.toDouble(),
+          PrKind.setVolume => set.weightKg * set.reps,
+          PrKind.duration => (set.durationSeconds ?? 0).toDouble(),
+          PrKind.distance => set.distanceKm ?? 0,
           _ => null,
         };
         if (value != null && value > 0) keep(key, exercise.name, kind, value);
@@ -724,4 +787,40 @@ List<WorkoutPr> finishRecords(
   }
 
   return out.values.toList(growable: false);
+}
+
+/// A record's value as it reads: "100 kg", "12 reps", "1:30", "5.2 km",
+/// "4:05 /km". In [WorkoutPr.value]'s units for [kind]; loads in pounds when
+/// [imperial], stored kilograms either way.
+String describeRecordValue(PrKind kind, double value, {bool imperial = false}) {
+  String kg(double v) {
+    final shown = imperial ? v / 0.45359237 : v;
+    final text = shown == shown.roundToDouble()
+        ? shown.round().toString()
+        : shown.toStringAsFixed(1);
+    return '$text ${imperial ? 'lb' : 'kg'}';
+  }
+
+  String clock(int seconds) {
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$s' : '$m:$s';
+  }
+
+  return switch (kind) {
+    PrKind.weight ||
+    PrKind.oneRepMax ||
+    PrKind.setVolume ||
+    PrKind.sessionVolume =>
+      kg(value),
+    PrKind.reps ||
+    PrKind.repsSet ||
+    PrKind.repsSession =>
+      '${value.round()} reps',
+    PrKind.duration => clock(value.round()),
+    PrKind.distance =>
+      '${value.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '').replaceFirst(RegExp(r'\.0$'), '')} km',
+    PrKind.pace => '${clock(value.round())} /km',
+  };
 }

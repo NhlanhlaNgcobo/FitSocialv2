@@ -29,6 +29,7 @@ const DEFAULTS = Object.freeze({
   f6_leaderboards: false,
   f7_workout_logger_v2: false,
   f8_routines: false,
+  f9_exercise_insights: false,
   f11_muscle_heatmap: false,
   integrity_max_daily_steps: 100000,
   integrity_max_daily_active_minutes: 1440,

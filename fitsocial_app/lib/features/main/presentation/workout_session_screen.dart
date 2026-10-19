@@ -25,6 +25,7 @@ import '../application/workout_library_providers.dart';
 import '../application/workout_preferences.dart';
 import '../data/workout_preferences_store.dart';
 import '../domain/active_workout.dart';
+import '../domain/exercise_insights.dart';
 import '../domain/exercise_library.dart';
 import '../domain/routine.dart';
 import '../domain/previous_performance.dart';
@@ -928,6 +929,7 @@ enum _ExerciseAction {
   replace,
   reorder,
   bodyweight,
+  history,
   remove,
 }
 
@@ -1094,7 +1096,14 @@ String describeRecordFor(
           ? 'best est. 1RM ${kg(estimatedOneRepMax(set.weightKg, set.reps))}'
           : kinds.contains(PrKind.repsSet)
               ? 'most reps in a set, ${set.reps}'
-              : 'most reps at this weight, ${set.reps}';
+              : kinds.contains(PrKind.distance)
+                  ? 'longest distance, ${_kmText(set.distanceKm)} km'
+                  : kinds.contains(PrKind.duration)
+                      ? 'longest set, '
+                          '${formatElapsed(Duration(seconds: set.durationSeconds ?? 0))}'
+                      : kinds.contains(PrKind.setVolume)
+                          ? 'best set volume ${kg(set.weightKg * set.reps)}'
+                          : 'most reps at this weight, ${set.reps}';
   return 'New PR · $exerciseName, $what';
 }
 
@@ -1235,6 +1244,11 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
           current: ref.read(activeWorkoutProvider)?.bodyweightKg,
         );
         if (kg != null) controller.setBodyweight(kg);
+      case _ExerciseAction.history:
+        context.push(exerciseDetailPath(
+          exerciseKeyFor(name: exercise.name, exerciseId: exercise.exerciseId),
+          name: exercise.name,
+        ));
       case _ExerciseAction.remove:
         controller.removeExercise(exercise.key);
     }
@@ -1404,6 +1418,12 @@ class _ExerciseCardState extends ConsumerState<_ExerciseCard> {
                         child: Text('Update bodyweight'),
                       ),
                   ],
+                  if (ref.watch(
+                      featureEnabledProvider(FeatureFlag.exerciseInsights)))
+                    const PopupMenuItem(
+                      value: _ExerciseAction.history,
+                      child: Text('Progress and history'),
+                    ),
                   const PopupMenuItem(
                     value: _ExerciseAction.remove,
                     child: Text('Remove exercise'),

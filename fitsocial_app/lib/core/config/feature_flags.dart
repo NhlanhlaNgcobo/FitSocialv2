@@ -37,6 +37,10 @@ enum FeatureFlag {
   /// starting a live session from a routine (Phase B).
   routines('f8_routines'),
 
+  /// Exercise insights: the exercise detail page with its charts, history
+  /// and records (Phase D), and the Muscles card on Progress (Phase E).
+  exerciseInsights('f9_exercise_insights'),
+
   /// The muscle heatmap: the body map on workout cards and workout detail,
   /// and the Muscles card and screen on Progress. The `muscleSets` field is
   /// written on save whatever this says.

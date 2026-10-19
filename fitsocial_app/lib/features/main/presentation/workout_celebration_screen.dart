@@ -14,6 +14,8 @@ import '../../../shared/widgets/save_workout_card_row.dart';
 import '../../../shared/widgets/workout_summary_card.dart';
 import '../../auth/application/body_metrics_providers.dart';
 import '../../auth/domain/body_metrics.dart';
+import '../../../core/config/feature_flags.dart';
+import '../domain/exercise_insights.dart';
 import '../domain/workout_celebration.dart';
 import '../domain/workout_math.dart';
 
@@ -158,7 +160,17 @@ class _WorkoutCelebrationScreenState
             ),
             if (c.prs.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
-              _RecordList(prs: c.prs, imperial: imperial),
+              _RecordList(
+                prs: c.prs,
+                imperial: imperial,
+                onOpen: ref.watch(
+                        featureEnabledProvider(FeatureFlag.exerciseInsights))
+                    ? (pr) => context.push(
+                          exerciseDetailPath(pr.exerciseKey,
+                              name: pr.exerciseName),
+                        )
+                    : null,
+              ),
             ],
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -275,27 +287,20 @@ class _Tile extends StatelessWidget {
 }
 
 class _RecordList extends StatelessWidget {
-  const _RecordList({required this.prs, required this.imperial});
+  const _RecordList({
+    required this.prs,
+    required this.imperial,
+    this.onOpen,
+  });
 
   final List<WorkoutPr> prs;
   final bool imperial;
 
-  String _value(WorkoutPr pr) {
-    String kg(double v) => imperial
-        ? '${(v / 0.45359237).toStringAsFixed(0)} lb'
-        : '${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 1)} kg';
-    return switch (pr.kind) {
-      PrKind.weight || PrKind.oneRepMax || PrKind.sessionVolume => kg(pr.value),
-      PrKind.reps ||
-      PrKind.repsSet ||
-      PrKind.repsSession =>
-        '${pr.value.round()} reps',
-      PrKind.pace => () {
-          final s = pr.value.round();
-          return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')} /km';
-        }(),
-    };
-  }
+  /// Opens the movement's detail page. Null where exercise insights are off.
+  final ValueChanged<WorkoutPr>? onOpen;
+
+  String _value(WorkoutPr pr) =>
+      describeRecordValue(pr.kind, pr.value, imperial: imperial);
 
   @override
   Widget build(BuildContext context) {
@@ -313,52 +318,55 @@ class _RecordList extends StatelessWidget {
           children: [
             for (var i = 0; i < prs.length; i++) ...[
               if (i > 0) Divider(height: 1, color: palette.stroke),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: palette.brandSoft,
-                        shape: BoxShape.circle,
+              InkWell(
+                onTap: onOpen == null ? null : () => onOpen!(prs[i]),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: palette.brandSoft,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.emoji_events_rounded,
+                            size: 17, color: palette.brand),
                       ),
-                      child: Icon(Icons.emoji_events_rounded,
-                          size: 17, color: palette.brand),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            prs[i].exerciseName,
-                            style: TextStyle(
-                              color: palette.text,
-                              fontWeight: FontWeight.w700,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              prs[i].exerciseName,
+                              style: TextStyle(
+                                color: palette.text,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                          Text(
-                            describeRecord({prs[i].kind}),
-                            style: TextStyle(
-                              color: palette.muted,
-                              fontSize: 12.5,
+                            Text(
+                              describeRecord({prs[i].kind}),
+                              style: TextStyle(
+                                color: palette.muted,
+                                fontSize: 12.5,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    Text(
-                      _value(prs[i]),
-                      style: TextStyle(
-                        color: palette.text,
-                        fontWeight: FontWeight.w800,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                      Text(
+                        _value(prs[i]),
+                        style: TextStyle(
+                          color: palette.text,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
