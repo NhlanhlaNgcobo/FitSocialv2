@@ -9,6 +9,7 @@ import 'content_providers.dart';
 import '../domain/active_workout.dart';
 import '../domain/exercise_library.dart';
 import '../domain/previous_performance.dart';
+import '../domain/routine.dart';
 import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 
@@ -123,6 +124,64 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
       title: title,
       exercises: const [],
       bodyweightKg: bodyweightKg,
+    ));
+  }
+
+  /// Starts a session laid out from [routine], replacing any running one —
+  /// the caller asks "resume or discard?" first, because this does not.
+  ///
+  /// Every planned set becomes an empty row carrying its target. The targets
+  /// are what the rows show and what a row ticked blank takes, so following
+  /// the plan is one tap per set; the routine's own values are never copied
+  /// into the rows, which would make "did you change it?" meaningless.
+  ///
+  /// [trackingTypeFor] resolves an exercise the routine saved without a type
+  /// — a custom one, whose type only the caller's custom list knows.
+  Future<void> startFromRoutine(
+    Routine routine, {
+    double? bodyweightKg,
+    TrackingType Function(RoutineExercise exercise)? trackingTypeFor,
+  }) async {
+    await ready;
+    // The routine's superset ids, renamed for this session so a link made
+    // during it can never collide with one that came from the plan.
+    final groups = <String, String>{};
+    _commit(ActiveWorkout(
+      id: _newKey(),
+      startedAt: _now(),
+      title: routine.name,
+      bodyweightKg: bodyweightKg,
+      routineId: routine.id.isEmpty ? null : routine.id,
+      routineName: routine.name,
+      routineStructure: routine.structure,
+      exercises: [
+        for (final e in routine.exercises)
+          ActiveExercise(
+            key: _newKey(),
+            name: e.name,
+            exerciseId: e.exerciseId,
+            supersetGroup: switch (e.supersetGroup) {
+              final group? => groups.putIfAbsent(group, () => 's${_newKey()}'),
+              null => null,
+            },
+            restSeconds: e.restSeconds,
+            trackingType: e.trackingType ??
+                trackingTypeFor?.call(e) ??
+                ExerciseLibrary.trackingTypeFor(e.exerciseId),
+            routineNotes: e.notes.trim().isEmpty ? null : e.notes.trim(),
+            sets: e.sets.isEmpty
+                ? const [ExerciseSet(weightKg: 0, reps: 0)]
+                : [
+                    for (final s in e.sets)
+                      ExerciseSet(
+                        weightKg: 0,
+                        reps: 0,
+                        type: s.type,
+                        target: s.target.toMap().isEmpty ? null : s.target,
+                      ),
+                  ],
+          ),
+      ],
     ));
   }
 

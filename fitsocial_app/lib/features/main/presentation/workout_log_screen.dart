@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/config/feature_flags.dart';
 import '../../../shared/input/typed_number.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
 import '../../../shared/services/workout_card_exporter.dart';
@@ -35,9 +36,11 @@ import '../application/workout_log_form_controller.dart';
 import '../application/workout_library_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/exercise_library.dart';
+import '../domain/routine.dart';
 import '../domain/workout_log_form.dart';
 import '../domain/workout_math.dart';
 import 'exercise_picker_sheet.dart';
+import 'routines_section.dart';
 import 'tag_people_sheet.dart';
 
 /// The training log.
@@ -573,6 +576,7 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
     // Errors and the loading state both mean "no chips": the row is an
     // accelerator, and a screen that cannot be used because a convenience
     // failed to load is worse than one without the convenience.
+    final routinesOn = ref.watch(featureEnabledProvider(FeatureFlag.routines));
     final recents = ref.watch(recentWorkoutsProvider).valueOrNull ??
         const <RecentWorkout>[];
     // Watched so it is loaded by the time an exercise is picked: a new card is
@@ -609,6 +613,12 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                   inProgress: ref.watch(activeWorkoutProvider) != null,
                   onTap: _isSaving ? null : _startLiveWorkout,
                 ),
+                // Saved plans, between starting an empty workout and typing
+                // one in after the fact.
+                if (routinesOn) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  const RoutinesSection(),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 _DateChip(loggedAt: _loggedAt),
                 if (!kIsWeb) ...[
@@ -632,6 +642,16 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                   _RepeatRow(
                     workouts: recents,
                     onPick: _isSaving ? null : _repeat,
+                    // Hold a past session to plan from it: "Save as routine".
+                    onSaveAsRoutine: routinesOn && !_isSaving
+                        ? (workout) => context.push(
+                              '/routine/edit',
+                              extra: routineFromEntries(
+                                workout.title,
+                                workout.exercises,
+                              ),
+                            )
+                        : null,
                   ),
                 ],
                 const SizedBox(height: AppSpacing.md),
@@ -854,10 +874,18 @@ class _DateChip extends StatelessWidget {
 
 /// Sessions already logged, offered as a starting point.
 class _RepeatRow extends StatelessWidget {
-  const _RepeatRow({required this.workouts, required this.onPick});
+  const _RepeatRow({
+    required this.workouts,
+    required this.onPick,
+    this.onSaveAsRoutine,
+  });
 
   final List<RecentWorkout> workouts;
   final ValueChanged<RecentWorkout>? onPick;
+
+  /// Long-press: open the routine builder on this session. Null where
+  /// routines are off.
+  final ValueChanged<RecentWorkout>? onSaveAsRoutine;
 
   @override
   Widget build(BuildContext context) {
@@ -869,7 +897,9 @@ class _RepeatRow extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 2, bottom: 8),
           child: Text(
-            'REPEAT A SESSION',
+            onSaveAsRoutine == null
+                ? 'REPEAT A SESSION'
+                : 'REPEAT A SESSION · HOLD TO SAVE AS A ROUTINE',
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -889,6 +919,9 @@ class _RepeatRow extends StatelessWidget {
               return _RepeatChip(
                 workout: workout,
                 onTap: onPick == null ? null : () => onPick!(workout),
+                onLongPress: onSaveAsRoutine == null
+                    ? null
+                    : () => onSaveAsRoutine!(workout),
               );
             },
           ),
@@ -899,10 +932,15 @@ class _RepeatRow extends StatelessWidget {
 }
 
 class _RepeatChip extends StatelessWidget {
-  const _RepeatChip({required this.workout, required this.onTap});
+  const _RepeatChip({
+    required this.workout,
+    required this.onTap,
+    this.onLongPress,
+  });
 
   final RecentWorkout workout;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -925,6 +963,7 @@ class _RepeatChip extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
+            onLongPress: onLongPress,
             customBorder: const StadiumBorder(),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 15),

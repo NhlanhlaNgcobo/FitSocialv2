@@ -10,6 +10,7 @@ import '../../auth/domain/auth_models.dart';
 import '../domain/app_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
+import '../domain/routine.dart';
 import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
@@ -61,6 +62,26 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<CustomExercise> saveCustomExercise(CustomExercise exercise) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<List<Routine>> getRoutines() async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<Routine> saveRoutine(Routine routine) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> deleteRoutine(String id) async {
+    throw StateError(_firebaseSetupMessage);
+  }
+
+  @override
+  Future<void> markRoutineUsed(String id, DateTime at) async {
     throw StateError(_firebaseSetupMessage);
   }
 
