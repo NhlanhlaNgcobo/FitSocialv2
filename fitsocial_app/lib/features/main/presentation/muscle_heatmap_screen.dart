@@ -8,6 +8,7 @@ import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../core/config/feature_flags.dart';
+import '../../../core/premium/premium.dart';
 import '../../../shared/widgets/dark_card.dart';
 import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/muscle_heatmap.dart';
@@ -146,10 +147,17 @@ class _MuscleHeatmapScreenState extends ConsumerState<MuscleHeatmapScreen> {
         children: [
           _RangePicker(
             selected: _range,
-            onSelected: (r) => setState(() {
-              _range = r;
-              _picked = null;
-            }),
+            onSelected: (r) {
+              // This week is free; further back is Premium.
+              if (r != MuscleRange.thisWeek &&
+                  requiresPremium(context, ref, PremiumFeature.muscleHistory)) {
+                return;
+              }
+              setState(() {
+                _range = r;
+                _picked = null;
+              });
+            },
           ),
           if (insights && stats != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -232,7 +240,13 @@ class _MuscleHeatmapScreenState extends ConsumerState<MuscleHeatmapScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: () => context.push('/muscles/report'),
+                onPressed: () {
+                  if (requiresPremium(
+                      context, ref, PremiumFeature.monthlyReport)) {
+                    return;
+                  }
+                  context.push('/muscles/report');
+                },
                 icon: const Icon(Icons.calendar_month_rounded, size: 18),
                 label: const Text('Monthly report'),
               ),
@@ -282,14 +296,26 @@ class _RangePicker extends StatelessWidget {
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: Text(
-                      range.label,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: range == selected
-                            ? AppColors.onBrandInk
-                            : palette.text,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            range.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: range == selected
+                                  ? AppColors.onBrandInk
+                                  : palette.text,
+                            ),
+                          ),
+                        ),
+                        if (range != MuscleRange.thisWeek)
+                          const PremiumLock(
+                            feature: PremiumFeature.muscleHistory,
+                          ),
+                      ],
                     ),
                   ),
                 ),

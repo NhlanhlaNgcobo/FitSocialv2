@@ -41,6 +41,11 @@ enum FeatureFlag {
   /// and records (Phase D), and the Muscles card on Progress (Phase E).
   exerciseInsights('f9_exercise_insights'),
 
+  /// Premium gates on the workout features: more than five routines, charts
+  /// past three months, the set records table, muscle ranges past this week
+  /// and the monthly report. Off, everything is open to everyone.
+  workoutPremiumGates('f10_workout_premium_gates'),
+
   /// The muscle heatmap: the body map on workout cards and workout detail,
   /// and the Muscles card and screen on Progress. The `muscleSets` field is
   /// written on save whatever this says.

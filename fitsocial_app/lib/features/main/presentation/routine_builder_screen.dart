@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/premium/premium.dart';
 import '../../../shared/input/typed_number.dart';
 import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/glass_well.dart';
@@ -299,6 +300,15 @@ class _RoutineBuilderScreenState extends ConsumerState<RoutineBuilderScreen> {
     if (_exercises.isEmpty) {
       setState(() => _error = 'Add at least one exercise.');
       return;
+    }
+    // A new routine past the free allowance — from New, or "Save as
+    // routine" — asks for Premium. Editing one already saved never does.
+    if (_original == null) {
+      final count = (ref.read(routinesProvider).valueOrNull ?? const []).length;
+      if (count >= freeRoutineLimit &&
+          requiresPremium(context, ref, PremiumFeature.unlimitedRoutines)) {
+        return;
+      }
     }
     setState(() {
       _saving = true;
