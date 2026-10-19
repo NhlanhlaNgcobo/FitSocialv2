@@ -10,6 +10,10 @@ import 'route_sparkline.dart';
 import 'run_summary_card.dart';
 import 'workout_summary_card.dart';
 
+/// The narrowest a workout sheet is laid out at. Narrower than this it is
+/// drawn at this width and scaled down, rather than squeezed.
+const double _workoutDesignWidth = 340;
+
 /// A post as it appears once it has been put on somebody's Pulse.
 ///
 /// This is the shape Instagram's "add post to story" sticker takes, and the
@@ -244,11 +248,30 @@ class _Body extends StatelessWidget {
             data: Theme.of(context).copyWith(
               extensions: const [AppPalette.dark],
             ),
-            child: WorkoutSummaryCard(
-              workoutData: post.workoutData,
-              activity: post.activity,
-              backgroundImageUrl: post.imageUrl,
-              margin: EdgeInsets.zero,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final card = WorkoutSummaryCard(
+                  workoutData: post.workoutData,
+                  activity: post.activity,
+                  backgroundImageUrl: post.imageUrl,
+                  // Sized to the log: this card already has a frame of its
+                  // own, and a 9:16 sheet inside it was mostly empty.
+                  portrait: false,
+                  margin: EdgeInsets.zero,
+                );
+                if (constraints.maxWidth >= _workoutDesignWidth) return card;
+                // Too narrow to lay out — the Pulse frame shrinks this card to
+                // a fraction of the phone, and the sheet's number columns are a
+                // fixed width, which left the names a few pixels and broke
+                // them a letter a line. Laid out at a phone's width instead
+                // and scaled down whole, it reads as a smaller picture of the
+                // same card.
+                return FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(width: _workoutDesignWidth, child: card),
+                );
+              },
             ),
           ),
         );

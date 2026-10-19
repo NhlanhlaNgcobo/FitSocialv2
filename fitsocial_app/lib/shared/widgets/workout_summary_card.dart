@@ -42,6 +42,7 @@ class WorkoutSummaryCard extends StatelessWidget {
     this.aspectRatio,
     this.forExport = false,
     this.transparentGround = false,
+    this.portrait = true,
     this.margin = const EdgeInsets.symmetric(horizontal: 14),
     super.key,
   }) : assert(
@@ -81,6 +82,13 @@ class WorkoutSummaryCard extends StatelessWidget {
   /// Exported with nothing behind the sheet — the "clear" sticker look.
   /// Only read when [forExport] and there is no photo.
   final bool transparentGround;
+
+  /// Whether a card with no photo is held to at least 9:16, the app's picture
+  /// shape. On in the feed and in exports, where cards sit in a column of
+  /// pictures. Off on the post detail page: that page is the whole width of
+  /// the phone, and 9:16 at that width left most of the sheet empty under a
+  /// short log.
+  final bool portrait;
 
   final EdgeInsetsGeometry margin;
 
@@ -382,7 +390,7 @@ class WorkoutSummaryCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(19),
                     // The ClipRRect above already holds this shape.
                     clip: false,
-                    child: _Portrait(child: content),
+                    child: portrait ? _Portrait(child: content) : content,
                   )
             : _PhotoBacked(
                 image: photo,
