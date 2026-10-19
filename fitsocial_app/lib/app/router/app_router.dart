@@ -29,6 +29,8 @@ import '../../features/main/presentation/connections_screen.dart';
 import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/milestones_guide_screen.dart';
+import '../../features/main/presentation/not_shared_workouts_screen.dart';
+import '../../features/main/domain/unshared_workout.dart';
 import '../../features/main/presentation/routine_builder_screen.dart';
 import '../../features/main/presentation/exercise_detail_screen.dart';
 import '../../features/main/presentation/monthly_report_screen.dart';
@@ -363,6 +365,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => UnsharedRunEditorScreen(
           runId: state.pathParameters['runId']!,
           initialRun: state.extra as UnsharedRun?,
+        ),
+      ),
+      // The same for workouts saved "Only me", from the Workouts tab.
+      GoRoute(
+        path: '/not-shared-workouts',
+        builder: (context, state) => const NotSharedWorkoutsScreen(),
+      ),
+      GoRoute(
+        path: '/not-shared-workouts/:workoutId',
+        builder: (context, state) => UnsharedWorkoutEditorScreen(
+          workoutId: state.pathParameters['workoutId']!,
+          initialWorkout: state.extra as UnsharedWorkout?,
         ),
       ),
       GoRoute(

@@ -20,6 +20,7 @@ import '../domain/meal_tracking.dart';
 import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
+import '../domain/unshared_workout.dart';
 
 // ---------------------------------------------------------------------------
 // Feed posts — StateNotifier for optimistic like toggling
@@ -225,6 +226,13 @@ final weeklyGoalDaysProvider = FutureProvider.autoDispose<int>((ref) {
 final unsharedRunsProvider =
     FutureProvider.autoDispose<List<UnsharedRun>>((ref) {
   return ref.watch(contentRepositoryProvider).getUnsharedRuns();
+});
+
+/// The signed-in user's workouts saved with "Only me" and never posted —
+/// the "Not shared" list on their profile's Workouts tab.
+final unsharedWorkoutsProvider =
+    FutureProvider.autoDispose<List<UnsharedWorkout>>((ref) {
+  return ref.watch(contentRepositoryProvider).getUnsharedWorkouts();
 });
 
 final activitySessionsProvider =

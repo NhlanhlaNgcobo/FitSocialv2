@@ -20,6 +20,7 @@ import '../domain/meal_quality.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/routine.dart';
+import '../domain/unshared_workout.dart';
 import '../domain/previous_performance.dart';
 import '../domain/mentions.dart';
 import '../domain/progress_models.dart';
@@ -1921,6 +1922,9 @@ class FirestoreContentRepository implements ContentRepository {
       // "repeat this session" from.
       'exercises': draft.exercises.map((e) => e.toMap()).toList(),
       'sharedToFeed': draft.shareToFeed,
+      // Kept on the private log too, so a workout saved "Only me" still has
+      // its description when it is posted later from Not shared.
+      if (draft.notes.trim().isNotEmpty) 'notes': draft.notes.trim(),
       if (draft.routineId != null) 'routineId': draft.routineId,
       // A live session's extras. Additive: every reader that predates them
       // ignores them, and durationMinutes above is still written.
@@ -2092,6 +2096,117 @@ class FirestoreContentRepository implements ContentRepository {
         run.kind.descriptor.singular,
         synced: result.synced,
       ),
+      createdPost: result.post,
+    );
+  }
+
+  @override
+  Future<List<UnsharedWorkout>> getUnsharedWorkouts() async {
+    final user = _requireCurrentUser();
+    // As [getUnsharedRuns]: the authorId-only query filtered in Dart, and
+    // errors left to surface — an empty list would say the workouts are gone.
+    final snapshot =
+        await workoutsCollection.where('authorId', isEqualTo: user.uid).get();
+    final workouts = <UnsharedWorkout>[];
+    for (final doc in snapshot.docs) {
+      try {
+        final workout = _toUnsharedWorkout(doc);
+        if (workout != null) workouts.add(workout);
+      } catch (error) {
+        debugPrint('Not shared: skipping ${doc.reference.path} — $error');
+      }
+    }
+    workouts.sort((a, b) => b.loggedAt.compareTo(a.loggedAt));
+    return workouts;
+  }
+
+  /// A workout log as an unshared workout, or null when it went out or has
+  /// no usable date.
+  static UnsharedWorkout? _toUnsharedWorkout(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    if (boolFromStoredValue(data['sharedToFeed'])) return null;
+    if (_text(data['postId']) != null) return null;
+
+    final loggedAt = _firstTimestamp(data, const ['loggedAt', 'createdAt']);
+    if (loggedAt == null) return null;
+
+    return UnsharedWorkout(
+      id: doc.id,
+      loggedAt: loggedAt,
+      title: _text(data['title']) ?? 'Workout',
+      durationMinutes: intFromStoredValue(data['durationMinutes']),
+      calories: intFromStoredValue(data['calories']),
+      caloriesEstimated: boolFromStoredValue(data['caloriesEstimated']),
+      volumeKg: doubleFromStoredValue(data['volumeKg']),
+      notes: _text(data['notes']) ?? '',
+      imageUrl: _text(data['imageUrl']),
+      exercises: (data['exercises'] as List<dynamic>?)
+              ?.whereType<Map<String, dynamic>>()
+              .map(ExerciseEntry.fromMap)
+              .where((e) => e.name.trim().isNotEmpty)
+              .toList(growable: false) ??
+          const [],
+    );
+  }
+
+  @override
+  Future<ActivitySaveResult> shareUnsharedWorkout(
+    UserProfileDraft? profile,
+    UnsharedWorkoutShare share,
+  ) async {
+    _requireCurrentUser();
+    final workout = share.workout;
+    final newImageUrl = await _tryUploadBackground(share.backgroundImagePath);
+    final imageUrl = share.backgroundImagePath != null
+        ? newImageUrl
+        : share.keepExistingImage
+            ? workout.imageUrl
+            : null;
+    final draft = workout.toDraft(
+      notes: share.caption.trim(),
+      taggedUsers: share.taggedUsers,
+      customExercises: share.customExercises,
+    );
+
+    // The same post a workout shared on save makes — see [saveWorkout].
+    final result = await _createPost(
+      profile: profile,
+      activity: draft.title.trim().isEmpty ? 'Workout' : draft.title.trim(),
+      caption: draft.notes.trim().isEmpty
+          ? 'Logged ${draft.exercises.length} exercises.'
+          : draft.notes.trim(),
+      metricLabels: [
+        draft.durationLabel,
+        draft.caloriesLabel,
+        '${draft.exercises.length} moves'
+      ],
+      themeKey: 'burn',
+      postType: 'workout',
+      imageUrl: imageUrl,
+      workoutData: draft.workoutData,
+      taggedUsers: draft.taggedUsers,
+    );
+
+    // The log follows the post: shared, linked, and carrying what went out. A
+    // failure here leaves a posted workout still listed as not shared — the
+    // same risk [shareUnsharedRun] takes; the post is what mattered.
+    try {
+      await _settleWrite(workoutsCollection.doc(workout.id).update({
+        'sharedToFeed': true,
+        'postId': result.post.id,
+        'imageUrl': imageUrl ?? FieldValue.delete(),
+        'notes': draft.notes.trim().isEmpty
+            ? FieldValue.delete()
+            : draft.notes.trim(),
+      }));
+    } on FirebaseException catch (error) {
+      debugPrint('Could not mark workouts/${workout.id} shared: ${error.code}');
+    }
+
+    return ActivitySaveResult(
+      message: _sharedMessage('Workout', synced: result.synced),
       createdPost: result.post,
     );
   }
