@@ -146,7 +146,26 @@ const oneRepMaxReliableReps = 12;
 /// [reps] is "most reps at this load or heavier", for loaded work. [repsSet]
 /// is "most reps in one set", for bodyweight and assisted work, where the
 /// load is not the user's to choose.
-enum PrKind { weight, reps, oneRepMax, repsSet }
+///
+/// The last three are session records, judged once the workout is finished
+/// by [finishRecords] rather than set by set: the most volume or reps one
+/// movement ever got in a session, and the fastest pace on cardio.
+enum PrKind {
+  weight,
+  reps,
+  oneRepMax,
+  repsSet,
+  sessionVolume,
+  repsSession,
+  pace;
+
+  static PrKind? tryName(Object? name) {
+    for (final kind in values) {
+      if (kind.name == name) return kind;
+    }
+    return null;
+  }
+}
 
 /// The key a movement is tracked under: its library id when it has one, its
 /// normalised name otherwise.
@@ -334,6 +353,9 @@ String describeRecord(Set<PrKind> kinds) {
   if (kinds.contains(PrKind.weight)) return 'heaviest weight';
   if (kinds.contains(PrKind.oneRepMax)) return 'best estimated 1RM';
   if (kinds.contains(PrKind.repsSet)) return 'most reps in a set';
+  if (kinds.contains(PrKind.sessionVolume)) return 'best session volume';
+  if (kinds.contains(PrKind.repsSession)) return 'most reps in a session';
+  if (kinds.contains(PrKind.pace)) return 'fastest pace';
   return 'most reps at this weight';
 }
 
@@ -523,4 +545,183 @@ Map<String, double> parseMuscleSets(Object? raw) {
     for (final MapEntry(:key, :value) in raw.entries)
       if (key is String && value is num && value > 0) key: value.toDouble(),
   };
+}
+
+/// One record a finished workout set, as it is saved on the workout log and
+/// listed on the celebration screen.
+///
+/// [value] is in the kind's own unit: kilograms for [PrKind.weight],
+/// [PrKind.oneRepMax] and [PrKind.sessionVolume], reps for the rep kinds,
+/// seconds per kilometre for [PrKind.pace].
+@immutable
+class WorkoutPr {
+  const WorkoutPr({
+    required this.exerciseKey,
+    required this.exerciseName,
+    required this.kind,
+    required this.value,
+  });
+
+  static WorkoutPr? fromMap(Object? map) {
+    if (map is! Map) return null;
+    final kind = PrKind.tryName(map['kind']);
+    final key = map['exerciseKey'];
+    final value = map['value'];
+    if (kind == null || key is! String || value is! num) return null;
+    return WorkoutPr(
+      exerciseKey: key,
+      exerciseName: (map['exerciseName'] as String?) ?? '',
+      kind: kind,
+      value: value.toDouble(),
+    );
+  }
+
+  final String exerciseKey;
+  final String exerciseName;
+  final PrKind kind;
+  final double value;
+
+  Map<String, dynamic> toMap() => {
+        'exerciseKey': exerciseKey,
+        'exerciseName': exerciseName,
+        'kind': kind.name,
+        // Rounded for the document: a record is read, not recomputed from.
+        'value': double.parse(value.toStringAsFixed(2)),
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is WorkoutPr &&
+      other.exerciseKey == exerciseKey &&
+      other.kind == kind &&
+      other.value == value;
+
+  @override
+  int get hashCode => Object.hash(exerciseKey, kind, value);
+}
+
+/// Every record [workout] set: the ones its sets broke as they were ticked
+/// ([live], from [sessionRecords]), one per movement and kind at its best
+/// value, then the session records only a finished workout can be judged on.
+///
+/// [history] is every earlier workout's entries, newest first. As with live
+/// records, a movement never done before sets nothing: the first time is not
+/// a record, it is a start.
+List<WorkoutPr> finishRecords(
+  List<List<ExerciseEntry>> history,
+  ActiveWorkout workout, {
+  Map<String, Map<int, Set<PrKind>>> live = const {},
+}) {
+  final out = <(String, PrKind), WorkoutPr>{};
+  void keep(String key, String name, PrKind kind, double value,
+      {bool lowerIsBetter = false}) {
+    final existing = out[(key, kind)];
+    final better = existing == null ||
+        (lowerIsBetter ? value < existing.value : value > existing.value);
+    if (better) {
+      out[(key, kind)] = WorkoutPr(
+        exerciseKey: key,
+        exerciseName: name,
+        kind: kind,
+        value: value,
+      );
+    }
+  }
+
+  // Set records, at the best set that broke each.
+  for (final exercise in workout.exercises) {
+    final broken = live[exercise.key];
+    if (broken == null) continue;
+    final key = exerciseKeyFor(
+      name: exercise.name,
+      exerciseId: exercise.exerciseId,
+    );
+    for (final MapEntry(key: index, value: kinds) in broken.entries) {
+      if (index >= exercise.sets.length) continue;
+      final set = exercise.sets[index];
+      for (final kind in kinds) {
+        final value = switch (kind) {
+          PrKind.weight => set.weightKg,
+          PrKind.oneRepMax => estimatedOneRepMax(set.weightKg, set.reps),
+          PrKind.reps || PrKind.repsSet => set.reps.toDouble(),
+          _ => null,
+        };
+        if (value != null && value > 0) keep(key, exercise.name, kind, value);
+      }
+    }
+  }
+
+  // Session records: this workout's total per movement against the best any
+  // earlier session reached.
+  final now = <String,
+      ({String name, TrackingType type, List<ExerciseEntry> entries})>{};
+  for (final entry in workout.entries) {
+    final key = exerciseKey(entry);
+    final slot = now[key];
+    now[key] = (
+      name: slot?.name ?? entry.name,
+      type: slot?.type ?? entry.resolvedTrackingType,
+      entries: [...?slot?.entries, entry],
+    );
+  }
+  final before = <String, List<ExerciseEntry>>{};
+  for (final session in history) {
+    for (final entry in session) {
+      (before[exerciseKey(entry)] ??= []).add(entry);
+    }
+  }
+
+  for (final MapEntry(:key, value: (:name, :type, :entries)) in now.entries) {
+    final earlier = before[key];
+    if (earlier == null || earlier.isEmpty) continue;
+    switch (type) {
+      case TrackingType.weightReps:
+        final volume = entries.fold<double>(
+            0,
+            (sum, e) =>
+                sum + entryVolumeKg(e, bodyweightKg: workout.bodyweightKg));
+        final best = earlier
+            .map((e) => entryVolumeKg(e))
+            .fold<double>(0, (top, v) => v > top ? v : top);
+        if (volume > 0 && best > 0 && volume > best + 0.001) {
+          keep(key, name, PrKind.sessionVolume, volume);
+        }
+      case TrackingType.bodyweightReps:
+      case TrackingType.assistedBodyweight:
+        int reps(Iterable<ExerciseEntry> es) => es.fold(
+            0,
+            (sum, e) =>
+                sum +
+                loggedSets(e)
+                    .where((s) => s.type.isWorking)
+                    .fold<int>(0, (n, s) => n + s.reps));
+        final total = reps(entries);
+        final best = earlier
+            .map((e) => reps([e]))
+            .fold<int>(0, (top, v) => v > top ? v : top);
+        if (total > 0 && best > 0 && total > best) {
+          keep(key, name, PrKind.repsSession, total.toDouble());
+        }
+      case TrackingType.cardio:
+        double? pace(ExerciseEntry e) {
+          final km = e.distanceKm ?? 0;
+          final seconds = e.durationSeconds ?? 0;
+          return km > 0 && seconds > 0 ? seconds / km : null;
+        }
+        final paces = entries.map(pace).whereType<double>();
+        if (paces.isEmpty) break;
+        final fastest = paces.reduce((a, b) => a < b ? a : b);
+        final bestBefore = earlier.map(pace).whereType<double>();
+        if (bestBefore.isEmpty) break;
+        if (fastest < bestBefore.reduce((a, b) => a < b ? a : b) - 0.001) {
+          keep(key, name, PrKind.pace, fastest, lowerIsBetter: true);
+        }
+      case TrackingType.weightedBodyweight:
+      case TrackingType.duration:
+      case TrackingType.weightDuration:
+        break;
+    }
+  }
+
+  return out.values.toList(growable: false);
 }

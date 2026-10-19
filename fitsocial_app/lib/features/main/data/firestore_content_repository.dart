@@ -1907,6 +1907,15 @@ class FirestoreContentRepository implements ContentRepository {
       'exercises': draft.exercises.map((e) => e.toMap()).toList(),
       'sharedToFeed': draft.shareToFeed,
       if (draft.routineId != null) 'routineId': draft.routineId,
+      // A live session's extras. Additive: every reader that predates them
+      // ignores them, and durationMinutes above is still written.
+      if (draft.durationSeconds != null)
+        'durationSeconds': draft.durationSeconds,
+      if (draft.durationSeconds != null)
+        'startedAt': Timestamp.fromDate(draft.loggedAt ?? DateTime.now()),
+      if (draft.setCount != null) 'setCount': draft.setCount,
+      if (draft.bodyweightKg != null) 'bodyweightKg': draft.bodyweightKg,
+      if (draft.prs.isNotEmpty) 'prs': draft.prs.map((p) => p.toMap()).toList(),
       if (backgroundUrl != null) 'imageUrl': backgroundUrl,
       'loggedAt': Timestamp.fromDate(draft.loggedAt ?? DateTime.now()),
       'createdAt': FieldValue.serverTimestamp(),

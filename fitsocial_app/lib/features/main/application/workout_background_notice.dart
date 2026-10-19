@@ -124,13 +124,22 @@ class LocalWorkoutBackgroundNotice implements WorkoutBackgroundNotice {
     try {
       await _hub.plugin.show(
         id: _id,
-        title: title.isEmpty ? 'Workout in progress' : '$title in progress',
+        title: workout.isPaused
+            ? (title.isEmpty ? 'Workout paused' : '$title paused')
+            : (title.isEmpty ? 'Workout in progress' : '$title in progress'),
         body: sets == 0
             ? 'Still timing. Tap to go back to it.'
             : '${sets == 1 ? '1 set' : '$sets sets'} done. Tap to go back '
                 'to it.',
         notificationDetails: NotificationDetails(
-          android: _android(ongoing: true, clockFrom: workout.startedAt),
+          // The chronometer counts from "now less the time trained", so
+          // pauses stay out of it; while paused there is no clock to run.
+          android: _android(
+            ongoing: true,
+            clockFrom: workout.isPaused
+                ? null
+                : DateTime.now().subtract(workout.elapsed(DateTime.now())),
+          ),
           iOS: const DarwinNotificationDetails(presentSound: false),
         ),
         payload: '/workout-session',

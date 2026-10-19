@@ -31,6 +31,7 @@ import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 import 'exercise_picker_sheet.dart';
 import 'routine_sheets.dart';
+import 'session_time_sheet.dart';
 import 'workout_settings_sheet.dart';
 import 'workout_tool_sheets.dart';
 
@@ -545,9 +546,38 @@ class _StatsStrip extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         children: [
-          stat(
-            'Duration',
-            ElapsedClock(startedAt: workout.startedAt, style: valueStyle),
+          Expanded(
+            child: Semantics(
+              button: v2,
+              label: v2 ? 'Duration. Pause, or edit the time' : null,
+              child: InkWell(
+                // The time sheet: pause, resume, edit the start or the length.
+                onTap: v2 ? () => showSessionTimeSheet(context, ref) : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  children: [
+                    ElapsedClock.forWorkout(
+                      workout,
+                      style: workout.isPaused
+                          ? valueStyle.copyWith(color: palette.muted)
+                          : valueStyle,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      workout.isPaused ? 'PAUSED' : 'DURATION',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                        color: workout.isPaused
+                            ? palette.brandText
+                            : palette.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           stat('Sets', Text('${workout.doneSetCount}', style: valueStyle)),
           stat(
@@ -753,11 +783,31 @@ class ElapsedClock extends StatefulWidget {
     required this.startedAt,
     this.style,
     this.now = DateTime.now,
+    this.pausedSeconds = 0,
+    this.pausedAt,
     super.key,
   });
 
+  /// The clock for [workout], pauses taken out and frozen while paused.
+  factory ElapsedClock.forWorkout(
+    ActiveWorkout workout, {
+    TextStyle? style,
+    Key? key,
+  }) =>
+      ElapsedClock(
+        startedAt: workout.startedAt,
+        pausedSeconds: workout.pausedSeconds,
+        pausedAt: workout.pausedAt,
+        style: style,
+        key: key,
+      );
+
   final DateTime startedAt;
   final TextStyle? style;
+
+  /// Finished pauses, and the start of the one running now.
+  final int pausedSeconds;
+  final DateTime? pausedAt;
 
   /// Injected so a test can drive the clock.
   final DateTime Function() now;
@@ -786,7 +836,13 @@ class _ElapsedClockState extends State<ElapsedClock> {
 
   @override
   Widget build(BuildContext context) {
-    final elapsed = widget.now().difference(widget.startedAt);
+    final now = widget.now();
+    final paused = widget.pausedSeconds +
+        (widget.pausedAt == null
+            ? 0
+            : now.difference(widget.pausedAt!).inSeconds);
+    final elapsed =
+        now.difference(widget.startedAt) - Duration(seconds: paused);
     return Text(
       formatElapsed(elapsed.isNegative ? Duration.zero : elapsed),
       style: widget.style?.copyWith(

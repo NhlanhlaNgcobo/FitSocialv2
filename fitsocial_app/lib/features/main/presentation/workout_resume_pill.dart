@@ -28,9 +28,9 @@ class WorkoutResumePill extends ConsumerWidget {
         ? _Pill(
             key: const ValueKey('session'),
             icon: Icons.timer_rounded,
-            label: 'Workout in progress',
-            trailing: ElapsedClock(
-              startedAt: session.startedAt,
+            label: session.isPaused ? 'Workout paused' : 'Workout in progress',
+            trailing: ElapsedClock.forWorkout(
+              session,
               style: _clockStyle(context),
             ),
             action: 'Resume',
