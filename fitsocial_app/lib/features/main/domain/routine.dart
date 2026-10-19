@@ -1,5 +1,6 @@
 import 'active_workout.dart';
 import 'app_models.dart';
+import 'exercise_library.dart';
 import 'workout_models.dart';
 
 /// One planned set in a routine: its type and what it aims for.
@@ -371,4 +372,36 @@ Routine routineUpdatedFromSession(Routine base, ActiveWorkout session) {
         ),
     ],
   );
+}
+
+/// A routine from a workout post's `workoutData` — "Save as routine" on a
+/// post of your own.
+///
+/// The post carries only each exercise's summary: name, sets, reps, load or
+/// time and distance, and no library id. A name the library knows is matched
+/// back to its id by the slug the library builds its ids from, so the routine
+/// tracks it the way the library does; any other name stays free text.
+Routine routineFromWorkoutData(Map<String, dynamic>? data) {
+  final title = (data?['title'] as String?)?.trim() ?? '';
+  final entries = <ExerciseEntry>[
+    for (final raw in (data?['exercises'] as List<dynamic>?) ?? const [])
+      if (raw is Map<String, dynamic>)
+        if (ExerciseEntry.fromMap(raw) case final entry
+            when entry.name.trim().isNotEmpty)
+          entry.exerciseId != null
+              ? entry
+              : ExerciseEntry(
+                  name: entry.name,
+                  sets: entry.sets,
+                  reps: entry.reps,
+                  weightKg: entry.weightKg,
+                  durationSeconds: entry.durationSeconds,
+                  distanceKm: entry.distanceKm,
+                  exerciseId: switch (ExerciseLibrary.slug(entry.name)) {
+                    final id when ExerciseLibrary.byId(id) != null => id,
+                    _ => null,
+                  },
+                ),
+  ];
+  return routineFromEntries(title.isEmpty ? 'Workout' : title, entries);
 }

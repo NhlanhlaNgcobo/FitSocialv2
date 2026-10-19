@@ -306,3 +306,55 @@ class _StartConflictSheet extends StatelessWidget {
     );
   }
 }
+
+/// What to do with a routine whose plan changed during a session.
+enum RoutineChangeChoice { update, keep }
+
+/// "You changed Push Day": update the routine to what was done, or keep it.
+/// Null when dismissed, which the caller treats as "not finishing yet".
+Future<RoutineChangeChoice?> showRoutineChangedSheet(
+  BuildContext context, {
+  required String routineName,
+}) {
+  return _showSheet<RoutineChangeChoice>(
+    context,
+    _RoutineChangedSheet(routineName: routineName),
+  );
+}
+
+class _RoutineChangedSheet extends StatelessWidget {
+  const _RoutineChangedSheet({required this.routineName});
+
+  final String routineName;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return _SheetFrame(
+      title: 'You changed $routineName',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'This workout added, removed or reordered exercises or sets. '
+            'Update the routine to match, or keep it as it was. The weights '
+            'and reps it plans stay either way.',
+            style: TextStyle(color: palette.muted, fontSize: 14, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          PrimaryButton(
+            label: 'Update routine',
+            onPressed: () =>
+                Navigator.of(context).pop(RoutineChangeChoice.update),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(RoutineChangeChoice.keep),
+            child: const Text('Keep original'),
+          ),
+        ],
+      ),
+    );
+  }
+}

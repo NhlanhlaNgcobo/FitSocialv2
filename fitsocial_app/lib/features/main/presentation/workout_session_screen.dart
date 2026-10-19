@@ -19,15 +19,18 @@ import '../../auth/domain/body_metrics.dart';
 import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
 import '../application/rest_alerts.dart';
+import '../application/routine_actions.dart';
 import '../application/workout_library_providers.dart';
 import '../application/workout_preferences.dart';
 import '../data/workout_preferences_store.dart';
 import '../domain/active_workout.dart';
 import '../domain/exercise_library.dart';
+import '../domain/routine.dart';
 import '../domain/previous_performance.dart';
 import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 import 'exercise_picker_sheet.dart';
+import 'routine_sheets.dart';
 import 'workout_settings_sheet.dart';
 import 'workout_tool_sheets.dart';
 
@@ -194,6 +197,39 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
       if (!proceed || !mounted) return;
     }
 
+    // A session started from a routine whose plan changed in it: added or
+    // removed exercises or sets, new types, a superset made or broken. Asked
+    // before saving, because the answer is part of finishing. Values never
+    // ask — lifting more than the routine said is the point of having one.
+    Routine? updatedRoutine;
+    if (ref.read(featureEnabledProvider(FeatureFlag.routines)) &&
+        workout.changedFromRoutine) {
+      // Read rather than taken from memory: a session restored after Android
+      // killed the app has never loaded the list. Bounded, so no signal
+      // means no question rather than a Finish that hangs.
+      List<Routine> routines;
+      try {
+        routines = await ref
+            .read(routinesProvider.future)
+            .timeout(const Duration(seconds: 4));
+      } catch (_) {
+        routines = const [];
+      }
+      if (!mounted) return;
+      final base = routines.where((r) => r.id == workout.routineId).firstOrNull;
+      // A routine deleted mid-session has nothing to update.
+      if (base != null) {
+        final choice = await showRoutineChangedSheet(
+          context,
+          routineName: base.name,
+        );
+        if (choice == null || !mounted) return;
+        if (choice == RoutineChangeChoice.update) {
+          updatedRoutine = routineUpdatedFromSession(base, workout);
+        }
+      }
+    }
+
     setState(() {
       _isSaving = true;
       _error = null;
@@ -210,6 +246,23 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
       // Cleared only after the save went through: a failure leaves the whole
       // session where it was, to try again.
       _controller.complete();
+      if (updatedRoutine != null) {
+        // After the workout, never instead of it: a routine that fails to
+        // update costs the routine change, not the session just logged.
+        try {
+          await ref.read(routineActionsProvider).save(updatedRoutine);
+        } catch (error) {
+          debugPrint('Could not update the routine: $error');
+          if (mounted) {
+            showQuickToast(
+              context,
+              'Workout saved, but ${updatedRoutine.name} could not be updated.',
+              tone: ToastTone.danger,
+            );
+          }
+        }
+      }
+      if (!mounted) return;
       showQuickToast(context, result.message, tone: ToastTone.success);
       context.go('/home');
     } catch (error) {
@@ -262,6 +315,9 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
     // time — with no card watching it yet, it would be thrown away between
     // the picker closing and the add.
     if (v2) ref.watch(previousPerformanceProvider);
+    // Held open for a session from a routine, so Finish can compare it with
+    // the routine without a fetch that an auto-disposing provider would drop.
+    if (workout.routineId != null) ref.watch(routinesProvider);
     // Bodyweight work with no bodyweight to count: say so once, without
     // standing in the way of logging.
     final needsBodyweight = v2 &&

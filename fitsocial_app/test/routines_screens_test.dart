@@ -20,7 +20,10 @@ import 'package:fitsocial_app/features/main/presentation/workout_log_screen.dart
 
 /// Routines kept in memory, with every write recorded.
 class _RoutineRepository extends UnconfiguredContentRepository {
-  _RoutineRepository(List<Routine> routines) : _routines = [...routines];
+  _RoutineRepository(List<Routine> routines, {this.recents = const []})
+      : _routines = [...routines];
+
+  final List<RecentWorkout> recents;
 
   final List<Routine> _routines;
   final List<String> used = [];
@@ -50,7 +53,7 @@ class _RoutineRepository extends UnconfiguredContentRepository {
 
   @override
   Future<List<RecentWorkout>> getRecentWorkouts({int limit = 6}) async =>
-      const [];
+      recents;
 
   @override
   Future<List<List<ExerciseEntry>>> getWorkoutHistory(
@@ -105,12 +108,13 @@ Future<({_RoutineRepository repo, _MemoryStore store})> _pump(
   List<Routine> routines = const [_push, _legs],
   bool routinesOn = true,
   ActiveWorkout? running,
+  List<RecentWorkout> recents = const [],
 }) async {
   tester.view.physicalSize = const Size(390, 1800);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 
-  final repo = _RoutineRepository(routines);
+  final repo = _RoutineRepository(routines, recents: recents);
   final store = _MemoryStore(running);
   final router = GoRouter(routes: [
     GoRoute(path: '/', builder: (_, __) => home),
@@ -161,6 +165,32 @@ void main() {
       await _pump(tester, home: const WorkoutLogScreen());
       expect(find.text('ROUTINES'), findsOneWidget);
       expect(find.text('Push Day'), findsOneWidget);
+    });
+
+    testWidgets('holding a past session opens it in the builder',
+        (tester) async {
+      await _pump(
+        tester,
+        home: const WorkoutLogScreen(),
+        recents: [
+          RecentWorkout(
+            title: 'Leg session',
+            durationMinutes: 50,
+            calories: 400,
+            exercises: const [
+              ExerciseEntry(name: 'Squat (Barbell)', sets: 3, reps: 5),
+            ],
+            loggedAt: DateTime(2026, 10, 17),
+          ),
+        ],
+      );
+      expect(
+        find.text('REPEAT A SESSION · HOLD TO SAVE AS A ROUTINE'),
+        findsOneWidget,
+      );
+      await tester.longPress(find.text('Leg session'));
+      await tester.pumpAndSettle();
+      expect(find.text('NEW ROUTINE'), findsOneWidget);
     });
 
     testWidgets('shows folders, exercises and when last used', (tester) async {

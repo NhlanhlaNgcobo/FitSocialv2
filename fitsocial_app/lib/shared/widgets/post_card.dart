@@ -1,14 +1,17 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
+import '../../core/config/feature_flags.dart';
 import '../../features/auth/application/app_session.dart';
 import '../../features/main/application/content_providers.dart';
 import '../../features/main/data/content_repository.dart';
 import '../../features/main/domain/app_models.dart';
+import '../../features/main/domain/routine.dart';
 import '../../features/main/domain/shared_post.dart';
 import '../identity/profile_identity.dart';
 import '../reactions/fit_reaction.dart';
@@ -923,7 +926,7 @@ class PostInteractionRow extends ConsumerWidget {
 }
 
 /// What the `⋯` sheet offers, which depends on whose post it is.
-enum _PostMenuAction { delete, share }
+enum _PostMenuAction { delete, share, saveAsRoutine }
 
 /// The `⋯` overflow on a post.
 ///
@@ -976,6 +979,10 @@ class PostMenuButton extends ConsumerWidget {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final isAuthor = uid != null && uid == post.authorId;
     final palette = context.palette;
+    // Your own workout, planned from: what was done becomes the targets.
+    final canSaveAsRoutine = isAuthor &&
+        workoutCard?.workoutData != null &&
+        ref.read(featureEnabledProvider(FeatureFlag.routines));
 
     final action = await showModalBottomSheet<_PostMenuAction>(
         context: context,
@@ -1018,6 +1025,20 @@ class PostMenuButton extends ConsumerWidget {
                       onTap: () =>
                           Navigator.of(sheetContext).pop(_PostMenuAction.share),
                     ),
+                    if (canSaveAsRoutine)
+                      ListTile(
+                        leading: Icon(Icons.playlist_add_rounded,
+                            color: palette.text),
+                        title: Text(
+                          'Save as routine',
+                          style: TextStyle(
+                            color: palette.text,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () => Navigator.of(sheetContext)
+                            .pop(_PostMenuAction.saveAsRoutine),
+                      ),
                     if (isAuthor)
                       ListTile(
                         leading: Icon(Icons.delete_outline_rounded,
@@ -1039,6 +1060,15 @@ class PostMenuButton extends ConsumerWidget {
             ));
 
     if (action == null || !context.mounted) return;
+    if (action == _PostMenuAction.saveAsRoutine) {
+      // Opened in the builder rather than saved outright, so the targets can
+      // be checked and a name given before it becomes a routine.
+      context.push(
+        '/routine/edit',
+        extra: routineFromWorkoutData(workoutCard?.workoutData),
+      );
+      return;
+    }
     if (action == _PostMenuAction.share) {
       await showPostShareSheet(
         context,
