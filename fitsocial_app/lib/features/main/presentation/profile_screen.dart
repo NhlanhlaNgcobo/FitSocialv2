@@ -84,13 +84,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // which get their own tab; the rest filter the user's
                     // posts by what kind of activity they are.
                     _MediaGrid(mediaOnly: true),
-                    _MediaGrid(filter: ExploreFilter.workouts),
-                    // The runs tab leads with the ones that never went out,
-                    // so they sit beside the runs that did.
+                    // The workouts and runs tabs each lead with the ones that
+                    // never went out, so they sit beside the ones that did.
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _NotSharedEntry(),
+                        _NotSharedEntry.workouts(),
+                        Expanded(
+                          child: _MediaGrid(filter: ExploreFilter.workouts),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _NotSharedEntry.runs(),
                         Expanded(
                           child: _MediaGrid(filter: ExploreFilter.runs),
                         ),
@@ -363,18 +371,25 @@ class _SectionIndicator extends StatelessWidget {
   }
 }
 
-/// "Not shared · 3", leading to the runs saved without posting.
+/// "Not shared · 3", leading to what was saved without posting: runs on the
+/// Runs tab, workouts on the Workouts tab.
 ///
 /// Only there when there is something behind it: an empty list is not worth a
 /// row on everybody's profile, and a failed read is not worth an error here —
 /// the page itself says so.
 class _NotSharedEntry extends ConsumerWidget {
-  const _NotSharedEntry();
+  const _NotSharedEntry.runs() : _workouts = false;
+
+  const _NotSharedEntry.workouts() : _workouts = true;
+
+  final bool _workouts;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.palette;
-    final count = ref.watch(unsharedRunsProvider).valueOrNull?.length ?? 0;
+    final count = _workouts
+        ? ref.watch(unsharedWorkoutsProvider).valueOrNull?.length ?? 0
+        : ref.watch(unsharedRunsProvider).valueOrNull?.length ?? 0;
     if (count == 0) return const SizedBox.shrink();
 
     return Padding(
@@ -389,7 +404,9 @@ class _NotSharedEntry extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => context.push('/not-shared'),
+          onTap: () => context.push(
+            _workouts ? '/not-shared-workouts' : '/not-shared',
+          ),
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,

@@ -7,6 +7,7 @@ import '../domain/app_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/routine.dart';
+import '../domain/unshared_workout.dart';
 import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
@@ -246,6 +247,18 @@ abstract class ContentRepository {
   Future<ActivitySaveResult> shareUnsharedRun(
     UserProfileDraft? profile,
     UnsharedRunShare share,
+  );
+
+  /// The signed-in user's workouts saved with "Only me" and never posted,
+  /// newest first — the "Not shared" list on their profile's Workouts tab.
+  Future<List<UnsharedWorkout>> getUnsharedWorkouts();
+
+  /// Posts a workout that was saved without sharing, and links the post back
+  /// to its log. It was counted when it was saved, so nothing is counted
+  /// again.
+  Future<ActivitySaveResult> shareUnsharedWorkout(
+    UserProfileDraft? profile,
+    UnsharedWorkoutShare share,
   );
   Future<ActivitySaveResult> saveMeal(
     UserProfileDraft? profile,

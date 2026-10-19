@@ -11,6 +11,7 @@ import '../domain/app_models.dart';
 import '../domain/meal_repeat.dart';
 import '../domain/meal_tracking.dart';
 import '../domain/routine.dart';
+import '../domain/unshared_workout.dart';
 import '../domain/previous_performance.dart';
 import '../domain/progress_models.dart';
 import '../domain/unshared_run.dart';
@@ -274,6 +275,17 @@ class UnconfiguredContentRepository implements ContentRepository {
 
   @override
   Future<List<UnsharedRun>> getUnsharedRuns() async => const [];
+
+  @override
+  Future<List<UnsharedWorkout>> getUnsharedWorkouts() async => const [];
+
+  @override
+  Future<ActivitySaveResult> shareUnsharedWorkout(
+    UserProfileDraft? profile,
+    UnsharedWorkoutShare share,
+  ) async {
+    throw StateError(_firebaseSetupMessage);
+  }
 
   @override
   Future<ActivitySaveResult> shareUnsharedRun(
