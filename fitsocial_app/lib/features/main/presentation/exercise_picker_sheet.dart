@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
+import '../../../core/config/feature_flags.dart';
 import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 import '../application/content_providers.dart';
 import '../application/workout_library_providers.dart';
 import '../domain/workout_math.dart';
 import '../../../shared/widgets/primary_button.dart';
+import '../domain/exercise_insights.dart';
 import '../domain/exercise_library.dart';
 import '../domain/workout_models.dart';
 import 'custom_exercise_sheet.dart';
@@ -191,14 +194,27 @@ class _ExercisePickerSheetState extends ConsumerState<_ExercisePickerSheet> {
         '${editable ? ' · custom, hold to edit' : exercise.id.startsWith('custom-') ? ' · custom' : ''}',
         style: TextStyle(color: palette.muted),
       ),
-      trailing: widget.multiSelect
-          ? Icon(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The movement's progress, history and records, without adding it.
+          if (ref.watch(featureEnabledProvider(FeatureFlag.exerciseInsights)))
+            IconButton(
+              tooltip: 'About ${exercise.name}',
+              icon: Icon(Icons.info_outline_rounded, color: palette.muted),
+              onPressed: () => context.push(
+                exerciseDetailPath(exercise.id, name: exercise.name),
+              ),
+            ),
+          if (widget.multiSelect)
+            Icon(
               selected
                   ? Icons.check_circle_rounded
                   : Icons.radio_button_unchecked_rounded,
               color: selected ? palette.brand : palette.muted,
-            )
-          : null,
+            ),
+        ],
+      ),
       selected: selected,
       onLongPress: editable ? () => _editCustom(exercise.id) : null,
       onTap: () => _pick(

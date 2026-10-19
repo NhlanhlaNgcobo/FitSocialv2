@@ -30,6 +30,7 @@ import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/milestones_guide_screen.dart';
 import '../../features/main/presentation/routine_builder_screen.dart';
+import '../../features/main/presentation/exercise_detail_screen.dart';
 import '../../features/main/presentation/workout_celebration_screen.dart';
 import '../../features/main/presentation/workout_save_screen.dart';
 import '../../features/main/domain/workout_celebration.dart';
@@ -237,6 +238,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Finish → save → celebrate. The save screen reads the session still
       // open; the celebration is handed everything it shows, so it works on
       // a save that is still queued offline.
+      GoRoute(
+        path: '/exercise/:exerciseKey',
+        builder: (context, state) => ExerciseDetailScreen(
+          exerciseKey: state.pathParameters['exerciseKey']!,
+          name: state.uri.queryParameters['name'],
+        ),
+      ),
       GoRoute(
         path: '/workout-save',
         builder: (context, state) => const WorkoutSaveScreen(),
