@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_colors.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/premium/premium.dart';
 import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/quick_toast.dart';
@@ -32,6 +33,10 @@ class _RoutinesSectionState extends ConsumerState<RoutinesSection> {
   final Set<String> _collapsed = {};
 
   RoutineActions get _actions => ref.read(routineActionsProvider);
+
+  /// Whether a new routine would go past the free allowance. Routines already
+  /// over it stay — nothing free is taken away — but no more are added.
+  bool get _atFreeLimit => _all.length >= freeRoutineLimit;
 
   List<Routine> get _all => ref.read(routinesProvider).valueOrNull ?? const [];
 
@@ -67,6 +72,10 @@ class _RoutinesSectionState extends ConsumerState<RoutinesSection> {
       case _RoutineAction.edit:
         context.push('/routine/edit/${routine.id}');
       case _RoutineAction.duplicate:
+        if (_atFreeLimit &&
+            requiresPremium(context, ref, PremiumFeature.unlimitedRoutines)) {
+          return;
+        }
         await _run(
           () => _actions.duplicate(routine, _all),
           'Could not duplicate ${routine.name}.',
@@ -134,12 +143,29 @@ class _RoutinesSectionState extends ConsumerState<RoutinesSection> {
             ),
             const Spacer(),
             TextButton.icon(
-              onPressed: () => context.push('/routine/edit'),
+              onPressed: () {
+                if (_atFreeLimit &&
+                    requiresPremium(
+                        context, ref, PremiumFeature.unlimitedRoutines)) {
+                  return;
+                }
+                context.push('/routine/edit');
+              },
               icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('New'),
             ),
           ],
         ),
+        // Where the free allowance stands, only while the gates are on.
+        if (ref.watch(premiumLockedProvider(PremiumFeature.unlimitedRoutines)))
+          Padding(
+            padding: const EdgeInsets.only(left: 2, bottom: 6),
+            child: Text(
+              '${_all.length.clamp(0, freeRoutineLimit)} of $freeRoutineLimit '
+              'free routines · Go Premium for unlimited',
+              style: TextStyle(color: palette.muted, fontSize: 12),
+            ),
+          ),
         switch (folders) {
           AsyncData(:final value) when value.isEmpty => const _EmptyRoutines(),
           AsyncData(:final value) => Column(

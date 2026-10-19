@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../core/premium/premium.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 import '../../auth/application/body_metrics_providers.dart';
 import '../../auth/domain/body_metrics.dart';
@@ -231,12 +232,29 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
           children: [
             for (final w in InsightWindow.values)
               ChoiceChip(
-                label: Text(w.label),
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(w.label),
+                    // Three months is free; further back is Premium.
+                    if (w != InsightWindow.threeMonths)
+                      const PremiumLock(
+                        feature: PremiumFeature.longRangeCharts,
+                      ),
+                  ],
+                ),
                 selected: w == _window,
-                onSelected: (_) => setState(() {
-                  _window = w;
-                  _selected = null;
-                }),
+                onSelected: (_) {
+                  if (w != InsightWindow.threeMonths &&
+                      requiresPremium(
+                          context, ref, PremiumFeature.longRangeCharts)) {
+                    return;
+                  }
+                  setState(() {
+                    _window = w;
+                    _selected = null;
+                  });
+                },
               ),
           ],
         ),
@@ -404,7 +422,35 @@ class _ExerciseDetailScreenState extends ConsumerState<ExerciseDetailScreen> {
             ],
           ),
         ),
-        if (table.isNotEmpty) ...[
+        if (table.isNotEmpty &&
+            ref.watch(premiumLockedProvider(PremiumFeature.setRecords))) ...[
+          const SizedBox(height: AppSpacing.md),
+          InkWell(
+            onTap: () => showPremiumSheet(context, PremiumFeature.setRecords),
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            child: _Panel(
+              child: Row(
+                children: [
+                  Icon(Icons.lock_rounded, color: palette.muted, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Set records: your heaviest at every rep count',
+                      style: TextStyle(color: palette.text),
+                    ),
+                  ),
+                  Text(
+                    'Premium',
+                    style: TextStyle(
+                      color: palette.brandText,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ] else if (table.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
           Text(
             'SET RECORDS',
