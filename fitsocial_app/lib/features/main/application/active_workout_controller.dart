@@ -193,6 +193,47 @@ class ActiveWorkoutController extends StateNotifier<ActiveWorkout?> {
     _commit(workout.copyWith(bodyweightKg: kg));
   }
 
+  /// Stops the clock. A rest already running is dropped: a pause is a break
+  /// from the workout, and the rest after it starts with the next set.
+  void pause() {
+    final workout = state;
+    if (workout == null || workout.isPaused) return;
+    _commit(workout.copyWith(pausedAt: _now(), clearRest: true));
+  }
+
+  /// Starts the clock again, the pause added to the paused total.
+  void resume() {
+    final workout = state;
+    final pausedAt = workout?.pausedAt;
+    if (workout == null || pausedAt == null) return;
+    final pause = _now().difference(pausedAt).inSeconds;
+    _commit(workout.copyWith(
+      clearPausedAt: true,
+      pausedSeconds: workout.pausedSeconds + (pause < 0 ? 0 : pause),
+    ));
+  }
+
+  /// Moves the start — "I began 20 minutes before I opened the app". Never
+  /// into the future, which would make the clock run backwards.
+  void setStartedAt(DateTime at) {
+    final workout = state;
+    if (workout == null) return;
+    final now = _now();
+    _commit(workout.copyWith(startedAt: at.isAfter(now) ? now : at));
+  }
+
+  /// Sets how long the session has lasted so far, by moving its start.
+  /// Pauses taken stay taken.
+  void setDuration(Duration duration) {
+    final workout = state;
+    if (workout == null || duration.isNegative) return;
+    final now = _now();
+    final current = workout.elapsed(now);
+    _commit(workout.copyWith(
+      startedAt: workout.startedAt.subtract(duration - current),
+    ));
+  }
+
   /// Ends the session without saving it.
   void discard() => _commit(null);
 

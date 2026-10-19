@@ -942,9 +942,28 @@ class WorkoutLogDraft {
     this.volumeKg,
     this.customExercises = const [],
     this.routineId,
+    this.durationSeconds,
+    this.setCount,
+    this.bodyweightKg,
+    this.prs = const [],
   });
 
   final String title;
+
+  /// The exact length of a live session, less its pauses. Null for a workout
+  /// typed in, which only ever had minutes. `durationMinutes` is still what
+  /// Progress adds up.
+  final int? durationSeconds;
+
+  /// Working sets ticked in a live session. Null for a typed-in workout.
+  final int? setCount;
+
+  /// The bodyweight a live session was counted at, when known.
+  final double? bodyweightKg;
+
+  /// The records the session set — see `finishRecords`. Saved so the
+  /// celebration screen and later readers show them without recomputing.
+  final List<math.WorkoutPr> prs;
 
   /// The routine the session was started from. Saved on the private workout
   /// log, where PREVIOUS reads it to offer "last time on this routine"; never

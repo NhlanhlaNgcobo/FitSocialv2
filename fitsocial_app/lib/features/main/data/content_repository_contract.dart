@@ -59,6 +59,11 @@ abstract class ContentRepository {
   /// Stamps when the routine was last started, for the "last used" chip.
   Future<void> markRoutineUsed(String id, DateTime at);
 
+  /// How many workouts the signed-in user has logged, from the counter on
+  /// their profile — "Workout #N" on the celebration screen. Null when it
+  /// cannot be read.
+  Future<int?> getMyWorkoutsCount();
+
   /// Every workout's exercises with their per-set logs, newest first.
   ///
   /// What live PR detection compares against. Separate from

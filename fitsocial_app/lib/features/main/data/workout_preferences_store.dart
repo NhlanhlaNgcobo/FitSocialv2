@@ -16,6 +16,7 @@ class WorkoutPreferences {
     this.smartSupersetScroll = true,
     this.inlineTimer = true,
     this.livePrAlerts = true,
+    this.keepAwake = true,
     this.barKg = defaultBarKg,
     this.plateSetKg = standardPlatesKg,
     this.warmupSteps = defaultWarmupSteps,
@@ -57,6 +58,10 @@ class WorkoutPreferences {
   /// A toast and a buzz when a ticked set is a personal record.
   final bool livePrAlerts;
 
+  /// The screen stays on while the live session is open, so the next set is
+  /// not behind a lock screen between every one.
+  final bool keepAwake;
+
   /// The bar the plate calculator and barbell warm-ups load, in kilograms.
   final double barKg;
 
@@ -79,6 +84,7 @@ class WorkoutPreferences {
     bool? smartSupersetScroll,
     bool? inlineTimer,
     bool? livePrAlerts,
+    bool? keepAwake,
     double? barKg,
     List<double>? plateSetKg,
     List<WarmupStep>? warmupSteps,
@@ -92,6 +98,7 @@ class WorkoutPreferences {
         smartSupersetScroll: smartSupersetScroll ?? this.smartSupersetScroll,
         inlineTimer: inlineTimer ?? this.inlineTimer,
         livePrAlerts: livePrAlerts ?? this.livePrAlerts,
+        keepAwake: keepAwake ?? this.keepAwake,
         barKg: barKg ?? this.barKg,
         plateSetKg: plateSetKg ?? this.plateSetKg,
         warmupSteps: warmupSteps ?? this.warmupSteps,
@@ -114,6 +121,7 @@ class WorkoutPreferencesStore {
   static const String _supersetScrollKey = 'workout_superset_scroll';
   static const String _inlineTimerKey = 'workout_inline_timer';
   static const String _prAlertsKey = 'workout_pr_alerts';
+  static const String _keepAwakeKey = 'workout_keep_awake';
   static const String _barKey = 'workout_bar_kg';
   static const String _platesKey = 'workout_plates_kg';
   static const String _warmupStepsKey = 'workout_warmup_steps';
@@ -178,6 +186,7 @@ class WorkoutPreferencesStore {
         smartSupersetScroll: await flag(_supersetScrollKey, fallback: true),
         inlineTimer: await flag(_inlineTimerKey, fallback: true),
         livePrAlerts: await flag(_prAlertsKey, fallback: true),
+        keepAwake: await flag(_keepAwakeKey, fallback: true),
         barKg: bar == null || bar <= 0 ? WorkoutPreferences.defaultBarKg : bar,
         plateSetKg: parsePlates(await _storage.read(key: _platesKey)) ??
             standardPlatesKg,
@@ -211,6 +220,7 @@ class WorkoutPreferencesStore {
       );
       await _storage.write(key: _inlineTimerKey, value: '${prefs.inlineTimer}');
       await _storage.write(key: _prAlertsKey, value: '${prefs.livePrAlerts}');
+      await _storage.write(key: _keepAwakeKey, value: '${prefs.keepAwake}');
       await _storage.write(key: _barKey, value: '${prefs.barKg}');
       await _storage.write(
         key: _platesKey,

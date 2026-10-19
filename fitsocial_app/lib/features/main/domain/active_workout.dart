@@ -182,6 +182,8 @@ class ActiveWorkout {
     this.routineId,
     this.routineName,
     this.routineStructure,
+    this.pausedAt,
+    this.pausedSeconds = 0,
   });
 
   /// Null when [json] is not a session this build can read.
@@ -200,6 +202,11 @@ class ActiveWorkout {
       bodyweightKg: (json['bodyweightKg'] as num?)?.toDouble(),
       routineId: json['routineId'] as String?,
       routineName: json['routineName'] as String?,
+      pausedAt: switch (json['pausedAt']) {
+        final num millis => DateTime.fromMillisecondsSinceEpoch(millis.toInt()),
+        _ => null,
+      },
+      pausedSeconds: (json['pausedSeconds'] as num?)?.toInt() ?? 0,
       routineStructure: (json['routineStructure'] as List<dynamic>?)
           ?.whereType<String>()
           .toList(growable: false),
@@ -262,8 +269,21 @@ class ActiveWorkout {
     return false;
   }
 
+  /// When the session was paused, while it is. Null while it is running.
+  final DateTime? pausedAt;
+
+  /// Every finished pause, added up. The one running now is [pausedAt].
+  final int pausedSeconds;
+
+  bool get isPaused => pausedAt != null;
+
+  /// Time spent training: since the start, less every pause, the one running
+  /// now included. Still derived, never ticked, so it is right after a
+  /// locked phone or a killed app — and frozen while paused.
   Duration elapsed(DateTime now) {
-    final elapsed = now.difference(startedAt);
+    final paused = pausedSeconds +
+        (pausedAt == null ? 0 : now.difference(pausedAt!).inSeconds);
+    final elapsed = now.difference(startedAt) - Duration(seconds: paused);
     // A clock set backwards must not show a negative timer.
     return elapsed.isNegative ? Duration.zero : elapsed;
   }
@@ -335,10 +355,16 @@ class ActiveWorkout {
     bool clearRest = false,
     double? bodyweightKg,
     List<String>? routineStructure,
+    DateTime? startedAt,
+    DateTime? pausedAt,
+    bool clearPausedAt = false,
+    int? pausedSeconds,
   }) =>
       ActiveWorkout(
         id: id,
-        startedAt: startedAt,
+        startedAt: startedAt ?? this.startedAt,
+        pausedAt: clearPausedAt ? null : (pausedAt ?? this.pausedAt),
+        pausedSeconds: pausedSeconds ?? this.pausedSeconds,
         title: title ?? this.title,
         exercises: exercises ?? this.exercises,
         rest: clearRest ? null : (rest ?? this.rest),
@@ -361,32 +387,54 @@ class ActiveWorkout {
     required bool shareToFeed,
     String notes = '',
     List<CustomExercise> customExercises = const [],
+    DateTime? startedAt,
+    Duration? duration,
+    int? calories,
+    bool? caloriesEstimated,
+    String? backgroundImagePath,
+    List<TaggedUser> taggedUsers = const [],
+    List<WorkoutPr> prs = const [],
   }) {
-    final seconds = endedAt.difference(startedAt).inSeconds;
+    // The save screen can move the start and correct the length; otherwise
+    // it is the session as timed, pauses taken out.
+    final start = startedAt ?? this.startedAt;
+    final length = duration ?? elapsed(endedAt);
+    final seconds = length.inSeconds < 1 ? 1 : length.inSeconds;
     final minutes = (seconds / 60).round();
-    final duration = minutes < 1 ? 1 : minutes;
+    final durationMinutes = minutes < 1 ? 1 : minutes;
     final trimmed = title.trim();
     final exercises = entries;
-    // The session has no calorie field, so the estimate the typed-in form
-    // offers is what it saves. With no bodyweight there is nothing to base
-    // one on, and it stays at zero rather than guessing.
+    // With no bodyweight there is nothing to base an estimate on, and it
+    // stays at zero rather than guessing. A figure typed on the save screen
+    // always wins.
     final estimate = estimateWorkoutCalories(
       exercises: exercises,
-      durationMinutes: duration,
+      durationMinutes: durationMinutes,
       bodyweightKg: bodyweightKg,
     );
+    final kcal = calories ?? estimate ?? 0;
     return WorkoutLogDraft(
       title: trimmed.isEmpty ? 'Workout' : trimmed,
-      durationMinutes: duration,
-      calories: estimate ?? 0,
-      caloriesEstimated: estimate != null,
+      durationMinutes: durationMinutes,
+      calories: kcal,
+      caloriesEstimated:
+          caloriesEstimated ?? (calories == null && estimate != null),
       notes: notes,
       shareToFeed: shareToFeed,
-      loggedAt: startedAt,
+      loggedAt: start,
       exercises: exercises,
       volumeKg: volumeKg,
       customExercises: customExercises,
       routineId: routineId,
+      backgroundImagePath: backgroundImagePath,
+      taggedUsers: shareToFeed ? taggedUsers : const [],
+      durationSeconds: seconds,
+      setCount: exercises.fold<int>(
+        0,
+        (sum, e) => sum + e.setLog.where((s) => s.type.isWorking).length,
+      ),
+      bodyweightKg: bodyweightKg,
+      prs: prs,
     );
   }
 
@@ -399,6 +447,8 @@ class ActiveWorkout {
         if (routineId != null) 'routineId': routineId,
         if (routineName != null) 'routineName': routineName,
         if (routineStructure != null) 'routineStructure': routineStructure,
+        if (pausedAt != null) 'pausedAt': pausedAt!.millisecondsSinceEpoch,
+        if (pausedSeconds > 0) 'pausedSeconds': pausedSeconds,
         'exercises': exercises.map((e) => e.toJson()).toList(),
       };
 }

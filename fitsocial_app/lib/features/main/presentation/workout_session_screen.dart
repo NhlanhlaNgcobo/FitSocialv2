@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -31,6 +32,7 @@ import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
 import 'exercise_picker_sheet.dart';
 import 'routine_sheets.dart';
+import 'session_time_sheet.dart';
 import 'workout_settings_sheet.dart';
 import 'workout_tool_sheets.dart';
 
@@ -69,10 +71,26 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         _controller.setBodyweight(kg);
       }
     }, fireImmediately: true);
+    // The screen stays on while the session is on screen, unless the user
+    // switched it off — the next set is not behind a lock screen each time.
+    // Android lets go of it by itself when the app leaves the screen.
+    ref.listenManual(
+      workoutPreferencesProvider.select((p) => p.keepAwake),
+      (_, on) => _setAwake(on),
+      fireImmediately: true,
+    );
+  }
+
+  static void _setAwake(bool on) {
+    unawaited(WakelockPlus.toggle(enable: on).catchError((Object error) {
+      // No plugin on this platform (tests, the web): the screen just sleeps.
+      debugPrint('Keep-awake unavailable: $error');
+    }));
   }
 
   @override
   void dispose() {
+    _setAwake(false);
     _title.dispose();
     super.dispose();
   }
@@ -195,6 +213,14 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         icon: Icons.check_rounded,
       );
       if (!proceed || !mounted) return;
+    }
+
+    // The v2 finish: a save screen to name it, fix the time, add a photo and
+    // a description and choose who sees it, then a celebration. The routine
+    // question is a card on that screen rather than a sheet in the way.
+    if (_v2) {
+      context.push('/workout-save');
+      return;
     }
 
     // A session started from a routine whose plan changed in it: added or
@@ -545,9 +571,38 @@ class _StatsStrip extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
         children: [
-          stat(
-            'Duration',
-            ElapsedClock(startedAt: workout.startedAt, style: valueStyle),
+          Expanded(
+            child: Semantics(
+              button: v2,
+              label: v2 ? 'Duration. Pause, or edit the time' : null,
+              child: InkWell(
+                // The time sheet: pause, resume, edit the start or the length.
+                onTap: v2 ? () => showSessionTimeSheet(context, ref) : null,
+                borderRadius: BorderRadius.circular(12),
+                child: Column(
+                  children: [
+                    ElapsedClock.forWorkout(
+                      workout,
+                      style: workout.isPaused
+                          ? valueStyle.copyWith(color: palette.muted)
+                          : valueStyle,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      workout.isPaused ? 'PAUSED' : 'DURATION',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                        color: workout.isPaused
+                            ? palette.brandText
+                            : palette.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           stat('Sets', Text('${workout.doneSetCount}', style: valueStyle)),
           stat(
@@ -753,11 +808,31 @@ class ElapsedClock extends StatefulWidget {
     required this.startedAt,
     this.style,
     this.now = DateTime.now,
+    this.pausedSeconds = 0,
+    this.pausedAt,
     super.key,
   });
 
+  /// The clock for [workout], pauses taken out and frozen while paused.
+  factory ElapsedClock.forWorkout(
+    ActiveWorkout workout, {
+    TextStyle? style,
+    Key? key,
+  }) =>
+      ElapsedClock(
+        startedAt: workout.startedAt,
+        pausedSeconds: workout.pausedSeconds,
+        pausedAt: workout.pausedAt,
+        style: style,
+        key: key,
+      );
+
   final DateTime startedAt;
   final TextStyle? style;
+
+  /// Finished pauses, and the start of the one running now.
+  final int pausedSeconds;
+  final DateTime? pausedAt;
 
   /// Injected so a test can drive the clock.
   final DateTime Function() now;
@@ -786,7 +861,13 @@ class _ElapsedClockState extends State<ElapsedClock> {
 
   @override
   Widget build(BuildContext context) {
-    final elapsed = widget.now().difference(widget.startedAt);
+    final now = widget.now();
+    final paused = widget.pausedSeconds +
+        (widget.pausedAt == null
+            ? 0
+            : now.difference(widget.pausedAt!).inSeconds);
+    final elapsed =
+        now.difference(widget.startedAt) - Duration(seconds: paused);
     return Text(
       formatElapsed(elapsed.isNegative ? Duration.zero : elapsed),
       style: widget.style?.copyWith(

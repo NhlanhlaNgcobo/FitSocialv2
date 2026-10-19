@@ -211,6 +211,50 @@ void main() {
       throwsA(isA<WorkoutCardExportException>()),
     );
   });
+
+  testWidgets('the light look is light whatever the phone is set to',
+      (tester) async {
+    final (image, raw) = await capture(
+      tester,
+      spec: _spec.withLook(WorkoutCardLook.light),
+    );
+    expect(lumaOf(pixelAt(raw, image.width, 540, 12)), greaterThan(200));
+  });
+
+  testWidgets('the dark look is dark on a light phone', (tester) async {
+    final (image, raw) = await capture(
+      tester,
+      dark: false,
+      spec: _spec.withLook(WorkoutCardLook.dark),
+    );
+    expect(lumaOf(pixelAt(raw, image.width, 540, 12)), lessThan(40));
+  });
+
+  testWidgets('the clear look is a sticker with nothing behind it',
+      (tester) async {
+    final (image, raw) = await capture(
+      tester,
+      spec: _spec.withLook(WorkoutCardLook.clear),
+    );
+    // Outside the rounded corner, and inside the sheet's top padding.
+    expect(pixelAt(raw, image.width, 2, 2).a, 0);
+    expect(pixelAt(raw, image.width, 540, 12).a, 0);
+  });
+
+  testWidgets('a look other than photo leaves the photo off', (tester) async {
+    final photo = MemoryImage(await solidPng(const Color(0xFF00AA44)));
+    final (image, raw) = await capture(
+      tester,
+      spec: WorkoutCardExport(
+        activity: 'Workout',
+        workoutData: _spec.workoutData,
+        background: photo,
+        look: WorkoutCardLook.dark,
+      ),
+    );
+    final pixel = pixelAt(raw, image.width, 540, 30);
+    expect(pixel.g > pixel.r + 30, isFalse, reason: 'no green photo');
+  });
 }
 
 extension on WorkoutCardExport {
@@ -219,5 +263,14 @@ extension on WorkoutCardExport {
         activity: activity,
         workoutData: workoutData,
         background: background,
+      );
+}
+
+extension on WorkoutCardExport {
+  WorkoutCardExport withLook(WorkoutCardLook look) => WorkoutCardExport(
+        activity: activity,
+        workoutData: workoutData,
+        background: background,
+        look: look,
       );
 }

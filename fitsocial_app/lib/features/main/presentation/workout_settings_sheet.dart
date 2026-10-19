@@ -343,6 +343,12 @@ class _WorkoutSettingsSheet extends ConsumerWidget {
                         prefs.livePrAlerts,
                         (v) => set.setLivePrAlerts(enabled: v),
                       ),
+                      toggle(
+                        'Keep the screen on',
+                        'While a live workout is on screen',
+                        prefs.keepAwake,
+                        (v) => set.setKeepAwake(enabled: v),
+                      ),
                     ],
                   ),
                 ),

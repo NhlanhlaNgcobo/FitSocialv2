@@ -86,6 +86,9 @@ class UnconfiguredContentRepository implements ContentRepository {
   }
 
   @override
+  Future<int?> getMyWorkoutsCount() async => null;
+
+  @override
   Future<List<List<ExerciseEntry>>> getWorkoutHistory({int limit = 200}) async {
     throw StateError(_firebaseSetupMessage);
   }
