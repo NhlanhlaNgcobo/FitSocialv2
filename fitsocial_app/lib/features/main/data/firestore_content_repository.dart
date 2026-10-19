@@ -968,6 +968,21 @@ class FirestoreContentRepository implements ContentRepository {
     }, SetOptions(merge: true)));
   }
 
+  @override
+  Future<int?> getMyWorkoutsCount() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return null;
+    try {
+      // The save's increment is already in the local cache, so this answers
+      // offline too, and includes the workout just logged.
+      final snapshot = await usersCollection.doc(user.uid).get();
+      return (snapshot.data()?['workoutsCount'] as num?)?.toInt();
+    } catch (error) {
+      debugPrint('Could not read the workout count: $error');
+      return null;
+    }
+  }
+
   static RecentWorkout? _toRecentWorkout(
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {

@@ -41,6 +41,7 @@ class WorkoutSummaryCard extends StatelessWidget {
     this.backgroundImage,
     this.aspectRatio,
     this.forExport = false,
+    this.transparentGround = false,
     this.margin = const EdgeInsets.symmetric(horizontal: 14),
     super.key,
   }) : assert(
@@ -76,6 +77,10 @@ class WorkoutSummaryCard extends StatelessWidget {
   /// backdrop; a file has no backdrop, so the export paints the ground the
   /// lens would have shown — the same one the run card exports on.
   final bool forExport;
+
+  /// Exported with nothing behind the sheet — the "clear" sticker look.
+  /// Only read when [forExport] and there is no photo.
+  final bool transparentGround;
 
   final EdgeInsetsGeometry margin;
 
@@ -363,7 +368,9 @@ class WorkoutSummaryCard extends StatelessWidget {
                 // Being captured to a file: no backdrop to look through to,
                 // so paint the ground the lens would have shown.
                 ? ColoredBox(
-                    color: runCardExportGround(palette),
+                    color: transparentGround
+                        ? const Color(0x00000000)
+                        : runCardExportGround(palette),
                     child: _Portrait(child: content),
                   )
                 : LiquidGlass(

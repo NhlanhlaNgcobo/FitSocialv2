@@ -30,6 +30,9 @@ import '../../features/main/presentation/create_screen.dart';
 import '../../features/main/presentation/explore_screen.dart';
 import '../../features/main/presentation/milestones_guide_screen.dart';
 import '../../features/main/presentation/routine_builder_screen.dart';
+import '../../features/main/presentation/workout_celebration_screen.dart';
+import '../../features/main/presentation/workout_save_screen.dart';
+import '../../features/main/domain/workout_celebration.dart';
 import '../../features/main/domain/routine.dart';
 import '../../features/main/presentation/home_screen.dart';
 import '../../features/main/presentation/manual_run_entry_screen.dart';
@@ -229,6 +232,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/routine/edit/:routineId',
         builder: (context, state) => RoutineBuilderScreen(
           routineId: state.pathParameters['routineId'],
+        ),
+      ),
+      // Finish → save → celebrate. The save screen reads the session still
+      // open; the celebration is handed everything it shows, so it works on
+      // a save that is still queued offline.
+      GoRoute(
+        path: '/workout-save',
+        builder: (context, state) => const WorkoutSaveScreen(),
+      ),
+      GoRoute(
+        path: '/workout-saved',
+        redirect: (context, state) =>
+            state.extra is WorkoutCelebration ? null : '/home',
+        builder: (context, state) => WorkoutCelebrationScreen(
+          celebration: state.extra! as WorkoutCelebration,
         ),
       ),
       GoRoute(

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../app/theme/app_palette.dart';
+import '../../app/theme/app_theme.dart';
 import '../widgets/fit_social_logo.dart';
 import '../widgets/picture_ratio.dart';
 import '../widgets/run_summary_card.dart' show runCardExportGround;
@@ -17,13 +18,26 @@ import 'held_image.dart';
 /// [background] is an [ImageProvider] for the same reason `RunCardExport`'s
 /// is: the log screen holds a picked file and the feed holds a URL, and the
 /// card is about to be rasterised off-screen from whichever one it is given.
+/// What a shared workout card is drawn on.
+///
+/// [photo] is the user's picture behind the sheet. [dark] and [light] are the
+/// sheet in that theme whatever the phone is set to, and [clear] is the sheet
+/// with nothing behind it at all — a sticker, with a transparent ground, to
+/// lay over a story. One renderer for all four, as the run card is one.
+enum WorkoutCardLook { photo, dark, light, clear }
+
 @immutable
 class WorkoutCardExport {
   const WorkoutCardExport({
     required this.activity,
     this.workoutData,
     this.background,
+    this.look,
   });
+
+  /// Null draws it as it always was: on the photo when there is one, on the
+  /// app's own theme when not.
+  final WorkoutCardLook? look;
 
   /// Fallback title when the log never carried one.
   final String activity;
@@ -105,8 +119,19 @@ Future<Uint8List> renderWorkoutCardPng(
   if (overlay == null) {
     throw const WorkoutCardExportException("Couldn't draw the card.");
   }
-  final theme = Theme.of(context);
-  final ground = runCardExportGround(context.palette);
+  final look = spec.look;
+  final theme = switch (look) {
+    WorkoutCardLook.dark => AppTheme.darkTheme,
+    WorkoutCardLook.light => AppTheme.lightTheme,
+    _ => Theme.of(context),
+  };
+  final clear = look == WorkoutCardLook.clear;
+  final ground = clear
+      ? const Color(0x00000000)
+      : runCardExportGround(theme.extension<AppPalette>() ?? context.palette);
+  // Only the photo look, or no look at all, draws the photo.
+  final background =
+      look == null || look == WorkoutCardLook.photo ? spec.background : null;
   final media = MediaQuery.of(context);
   final configuration = createLocalImageConfiguration(context);
 
@@ -121,7 +146,6 @@ Future<Uint8List> renderWorkoutCardPng(
     // background here also measures it, and the ratio is pinned onto the card
     // so it does not have to resolve the same photo a second time inside the
     // overlay — which it could not do in the two frames it gets anyway.
-    final background = spec.background;
     double? ratio;
     if (background != null) {
       try {
@@ -193,9 +217,10 @@ Future<Uint8List> renderWorkoutCardPng(
                         child: WorkoutSummaryCard(
                           workoutData: spec.workoutData,
                           activity: spec.activity,
-                          backgroundImage: spec.background,
+                          backgroundImage: background,
                           aspectRatio: ratio,
                           forExport: true,
+                          transparentGround: clear,
                           // Edge to edge: the file is the card, with no page
                           // around it to be inset from.
                           margin: EdgeInsets.zero,

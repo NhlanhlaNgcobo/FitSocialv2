@@ -55,6 +55,9 @@ class WorkoutPreferencesController extends StateNotifier<WorkoutPreferences> {
   Future<void> setLivePrAlerts({required bool enabled}) =>
       _set(state.copyWith(livePrAlerts: enabled));
 
+  Future<void> setKeepAwake({required bool enabled}) =>
+      _set(state.copyWith(keepAwake: enabled));
+
   Future<void> setBarKg(double kg) {
     if (kg <= 0) return Future.value();
     return _set(state.copyWith(barKg: kg));

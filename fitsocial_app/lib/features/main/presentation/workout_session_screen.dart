@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
@@ -70,10 +71,26 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         _controller.setBodyweight(kg);
       }
     }, fireImmediately: true);
+    // The screen stays on while the session is on screen, unless the user
+    // switched it off — the next set is not behind a lock screen each time.
+    // Android lets go of it by itself when the app leaves the screen.
+    ref.listenManual(
+      workoutPreferencesProvider.select((p) => p.keepAwake),
+      (_, on) => _setAwake(on),
+      fireImmediately: true,
+    );
+  }
+
+  static void _setAwake(bool on) {
+    unawaited(WakelockPlus.toggle(enable: on).catchError((Object error) {
+      // No plugin on this platform (tests, the web): the screen just sleeps.
+      debugPrint('Keep-awake unavailable: $error');
+    }));
   }
 
   @override
   void dispose() {
+    _setAwake(false);
     _title.dispose();
     super.dispose();
   }
@@ -196,6 +213,14 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
         icon: Icons.check_rounded,
       );
       if (!proceed || !mounted) return;
+    }
+
+    // The v2 finish: a save screen to name it, fix the time, add a photo and
+    // a description and choose who sees it, then a celebration. The routine
+    // question is a card on that screen rather than a sheet in the way.
+    if (_v2) {
+      context.push('/workout-save');
+      return;
     }
 
     // A session started from a routine whose plan changed in it: added or
