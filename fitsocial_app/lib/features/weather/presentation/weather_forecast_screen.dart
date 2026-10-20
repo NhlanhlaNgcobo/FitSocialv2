@@ -410,7 +410,6 @@ class _DayRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final color = outlookColor(day.outlook, palette);
     final rain = day.precipitationChance ?? 0;
 
     return Semantics(
@@ -495,16 +494,6 @@ class _DayRow extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
                 ),
-              ),
-            ),
-            // A dot rather than the full pill: seven labelled badges down a
-            // list stop being read, and the colour alone carries the verdict.
-            Tooltip(
-              message: day.outlook.label,
-              child: Container(
-                width: 9,
-                height: 9,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
             ),
           ],
