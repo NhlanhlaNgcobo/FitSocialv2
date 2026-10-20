@@ -114,7 +114,7 @@ class _WeatherContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              OutlookPill(outlook: snapshot.outlook),
+              OutlookLabel(outlook: snapshot.outlook),
             ],
           ),
           const SizedBox(height: 10),

@@ -223,7 +223,7 @@ class _NowCard extends StatelessWidget {
                     size: 64,
                   ),
                   const SizedBox(height: 12),
-                  OutlookPill(outlook: snapshot.outlook),
+                  OutlookLabel(outlook: snapshot.outlook),
                 ],
               ),
             ],

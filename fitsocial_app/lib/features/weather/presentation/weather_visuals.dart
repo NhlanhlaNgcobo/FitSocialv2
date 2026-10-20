@@ -100,38 +100,21 @@ class WeatherIconTile extends StatelessWidget {
   }
 }
 
-class OutlookPill extends StatelessWidget {
-  const OutlookPill({required this.outlook, super.key});
+/// The verdict as coloured words alone — no pill, no dot. The colour already
+/// says good, fair or poor; a shape around it only added weight to the header.
+class OutlookLabel extends StatelessWidget {
+  const OutlookLabel({required this.outlook, super.key});
 
   final TrainingOutlook outlook;
 
   @override
   Widget build(BuildContext context) {
-    final color = outlookColor(outlook, context.palette);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            outlook.label,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 12.5,
-            ),
-          ),
-        ],
+    return Text(
+      outlook.label,
+      style: TextStyle(
+        color: outlookColor(outlook, context.palette),
+        fontWeight: FontWeight.w800,
+        fontSize: 13.5,
       ),
     );
   }
