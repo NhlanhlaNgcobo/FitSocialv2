@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme/app_colors.dart';
@@ -235,127 +238,181 @@ class WorkoutSummaryCard extends StatelessWidget {
         ? null
         : loaded.reduce((a, b) => b.weightKg! > a.weightKg! ? b : a);
 
+    final header = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                  color: skin.text,
+                ),
+              ),
+              if (duration != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  duration.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.9,
+                    color: skin.muted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        // The app signing its own card, at the size and weight the run
+        // and meal cards already sign theirs — a workout screenshotted
+        // into someone else's feed should say where it came from too.
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: FitSocialLogo(
+            size: 13,
+            animated: false,
+            color: skin.text,
+          ),
+        ),
+      ],
+    );
+
+    // The totals and what the session trained, at their everyday size.
+    final summary = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (stats.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _StatStrip(stats: stats, skin: skin),
+        ],
+        if (muscles.isNotEmpty)
+          _MusclesRow(
+            sets: muscles,
+            skin: skin,
+            overPhoto: photo != null,
+          ),
+      ],
+    );
+
+    final log = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (exercises.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            exercises.length == 1
+                ? '1 EXERCISE'
+                : '${exercises.length} EXERCISES',
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.6,
+              color: skin.accent,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final exercise in exercises.take(_maxRows))
+            _ExerciseRow(
+              exercise: exercise,
+              showLoad: hasLoads,
+              skin: skin,
+            ),
+          if (exercises.length > _maxRows)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                '+${exercises.length - _maxRows} more',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: skin.accent,
+                ),
+              ),
+            ),
+        ],
+        if (totalReps > 0) ...[
+          const SizedBox(height: 12),
+          Container(height: 1, color: skin.stroke),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                '$totalReps reps total',
+                style: TextStyle(fontSize: 11.5, color: skin.muted),
+              ),
+              if (heaviest != null) ...[
+                const Spacer(),
+                const SizedBox(width: 12),
+                Flexible(
+                  // One line, shrunk rather than wrapped: a load broken onto
+                  // a second line reads as "60" over "kg".
+                  child: _ShrinkToFit(
+                    align: CrossAxisAlignment.end,
+                    child: Text(
+                      // Lift then load, the same order the rows above read
+                      // in, and short enough to survive beside the rep
+                      // count — the longer "Heaviest 60 kg · Bench press"
+                      // ellipsised the name off the end, which is the half
+                      // worth keeping.
+                      '${heaviest.name} · ${_trimmed(heaviest.weightKg!)} kg',
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(fontSize: 11.5, color: skin.muted),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ],
+    );
+
     final content = Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                        color: skin.text,
-                      ),
-                    ),
-                    if (duration != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        duration.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.9,
-                          color: skin.muted,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              // The app signing its own card, at the size and weight the run
-              // and meal cards already sign theirs — a workout screenshotted
-              // into someone else's feed should say where it came from too.
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: FitSocialLogo(
-                  size: 13,
-                  animated: false,
-                  color: skin.text,
-                ),
-              ),
-            ],
-          ),
-          if (stats.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _StatStrip(stats: stats, skin: skin),
-          ],
-          if (muscles.isNotEmpty)
-            _MusclesRow(
-              sets: muscles,
-              skin: skin,
-              overPhoto: photo != null,
-            ),
-          if (exercises.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Text(
-              exercises.length == 1
-                  ? '1 EXERCISE'
-                  : '${exercises.length} EXERCISES',
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.6,
-                color: skin.accent,
-              ),
-            ),
-            const SizedBox(height: 6),
-            for (final exercise in exercises.take(_maxRows))
-              _ExerciseRow(
-                exercise: exercise,
-                showLoad: hasLoads,
-                skin: skin,
-              ),
-            if (exercises.length > _maxRows)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '+${exercises.length - _maxRows} more',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: skin.accent,
-                  ),
-                ),
-              ),
-          ],
-          if (totalReps > 0) ...[
-            const SizedBox(height: 12),
-            Container(height: 1, color: skin.stroke),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Text(
-                  '$totalReps reps total',
-                  style: TextStyle(fontSize: 11.5, color: skin.muted),
-                ),
-                if (heaviest != null) ...[
-                  const Spacer(),
-                  Flexible(
-                    child: Text(
-                      // Lift then load, the same order the rows above read in,
-                      // and short enough to survive beside the rep count — the
-                      // longer "Heaviest 60 kg · Bench press" ellipsised the
-                      // name off the end, which is the half worth keeping.
-                      '${heaviest.name} · ${_trimmed(heaviest.weightKg!)} kg',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(fontSize: 11.5, color: skin.muted),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ],
+        children: [header, summary, log],
+      ),
+    );
+
+    // The same sheet set as a 9:16 poster: header at the top, the log along
+    // the bottom, and the height between given to the session's headline
+    // rather than left blank.
+    final poster = _Poster(
+      top: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          0,
+        ),
+        child: header,
+      ),
+      middle: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: _PosterHero(
+          stats: stats,
+          muscles: muscles,
+          skin: skin,
+          compact: summary,
+        ),
+      ),
+      bottom: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
+        child: log,
       ),
     );
 
@@ -379,7 +436,7 @@ class WorkoutSummaryCard extends StatelessWidget {
                     color: transparentGround
                         ? const Color(0x00000000)
                         : runCardExportGround(palette),
-                    child: _Portrait(child: content),
+                    child: poster,
                   )
                 : LiquidGlass(
                     // With no photo there is nothing for the card to sit on,
@@ -390,7 +447,7 @@ class WorkoutSummaryCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(19),
                     // The ClipRRect above already holds this shape.
                     clip: false,
-                    child: portrait ? _Portrait(child: content) : content,
+                    child: portrait ? poster : content,
                   )
             : _PhotoBacked(
                 image: photo,
@@ -423,15 +480,7 @@ class _MusclesRow extends ConsumerWidget {
     if (!ref.watch(featureEnabledProvider(FeatureFlag.muscleHeatmap))) {
       return const SizedBox.shrink();
     }
-    final top = [
-      for (final m in paintedMuscles)
-        if ((sets[m] ?? 0) > 0) m,
-    ]..sort((a, b) => sets[b]!.compareTo(sets[a]!));
-    final fullBody = sets['full body'] ?? 0;
-    final line = [
-      for (final m in top.take(3)) '${muscleLabel(m)} ${formatSets(sets[m]!)}',
-      if (top.length < 3 && fullBody > 0) 'Full body ${formatSets(fullBody)}',
-    ].join(' · ');
+    final line = _muscleLine(sets);
 
     return Padding(
       padding: const EdgeInsets.only(top: 14),
@@ -585,33 +634,243 @@ class _PhotoBacked extends StatelessWidget {
   }
 }
 
-/// The sheet with no photo behind it, at least 9:16 tall.
+/// The sheet with no photo behind it, as a 9:16 poster.
 ///
-/// A minimum, as on a photo: a long session still grows the card rather than
-/// losing rows, and a short one has the room to stay unhurried.
-class _Portrait extends StatelessWidget {
-  const _Portrait({required this.child});
-
-  final Widget child;
+/// Holding the card to 9:16 with the log at the top left a short session as a
+/// header over a blank lower half. Here the [top] sits at the top, the [bottom]
+/// along the bottom edge — where the photo card puts its sheet — and [middle]
+/// is laid out with whatever height the two leave of the 9:16 minimum, so it
+/// can grow into a headline. A long session still grows the card past 9:16
+/// rather than losing rows, and then [middle] is given no more than it needs.
+///
+/// A render object rather than a Column with an Expanded: the card's height is
+/// unbounded above the minimum, and a flex child cannot size itself there.
+class _Poster extends MultiChildRenderObjectWidget {
+  _Poster({
+    required Widget top,
+    required Widget middle,
+    required Widget bottom,
+  }) : super(children: [top, middle, bottom]);
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: constraints.maxWidth / kPictureAspectRatio,
-        ),
-        // A Column for the same reason the photo-backed sheet uses one: the
-        // height above the minimum is unbounded, and a Column sizes itself to
-        // its child, is clamped up to the minimum, and keeps the log at the
-        // top of the space.
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [child],
-        ),
+  RenderObject createRenderObject(BuildContext context) => _RenderPoster();
+}
+
+class _PosterParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderPoster extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _PosterParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _PosterParentData> {
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _PosterParentData) {
+      child.parentData = _PosterParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final width = constraints.maxWidth;
+    final top = firstChild!;
+    final middle = childAfter(top)!;
+    final bottom = childAfter(middle)!;
+
+    final loose = BoxConstraints.tightFor(width: width);
+    top.layout(loose, parentUsesSize: true);
+    bottom.layout(loose, parentUsesSize: true);
+    // The middle is handed the leftover as a minimum, never a cap: it may
+    // always take its natural height, which is what keeps a long log whole.
+    final room = math.max(
+      0.0,
+      width / kPictureAspectRatio - top.size.height - bottom.size.height,
+    );
+    middle.layout(loose.copyWith(minHeight: room), parentUsesSize: true);
+
+    (middle.parentData! as _PosterParentData).offset =
+        Offset(0, top.size.height);
+    (bottom.parentData! as _PosterParentData).offset =
+        Offset(0, top.size.height + middle.size.height);
+    size = constraints.constrain(
+      Size(
+        width,
+        top.size.height + middle.size.height + bottom.size.height,
       ),
     );
   }
+
+  @override
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
+}
+
+/// What fills the poster between its header and its log.
+///
+/// With the room for it, the session's headline: the body figure drawn large
+/// when the post carries a muscle map, otherwise the lead total set as a big
+/// numeral with the rest of the strip under it. Without the room — a long log
+/// already filling the 9:16 — the [compact] strip and muscles row, exactly as
+/// the feed draws them.
+class _PosterHero extends ConsumerWidget {
+  const _PosterHero({
+    required this.stats,
+    required this.muscles,
+    required this.skin,
+    required this.compact,
+  });
+
+  final List<_Stat> stats;
+  final Map<String, double> muscles;
+  final _CardSkin skin;
+  final Widget compact;
+
+  /// The figure's height bounds: below the smaller it reads no better than
+  /// the compact row, past the larger it crowds the header off the card.
+  static const double _minFigure = 100;
+  static const double _maxFigure = 300;
+
+  /// Height the muscles headline spends on everything but the figure: the
+  /// line under it, the strip and the gaps between.
+  static const double _figureReserve = 140;
+
+  /// Height the big numeral and the strip under it need to be worth drawing.
+  static const double _minStatHero = 170;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showMuscles = muscles.isNotEmpty &&
+        ref.watch(featureEnabledProvider(FeatureFlag.muscleHeatmap));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final room = constraints.minHeight;
+        if (showMuscles) {
+          final figure = room - _figureReserve;
+          if (figure >= _minFigure) {
+            return _centred([
+              Center(
+                child: MuscleHeatmap(
+                  sets: muscles,
+                  scale: HeatScale.session,
+                  height: math.min(figure, _maxFigure),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'MUSCLES',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.6,
+                  color: skin.accent,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _muscleLine(muscles),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                  color: skin.text,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              if (stats.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                _StatStrip(stats: stats, skin: skin),
+              ],
+            ]);
+          }
+        } else if (stats.isNotEmpty && room >= _minStatHero) {
+          final lead = stats.first;
+          final rest = stats.skip(1).toList();
+          return _centred([
+            Text(
+              lead.label.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.8,
+                color: skin.accent,
+              ),
+            ),
+            const SizedBox(height: 6),
+            _ShrinkToFit(
+              align: CrossAxisAlignment.center,
+              child: Text.rich(
+                TextSpan(
+                  text: lead.value,
+                  children: [
+                    if (lead.unit != null)
+                      TextSpan(
+                        text: ' ${lead.unit}',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                          color: skin.muted,
+                        ),
+                      ),
+                  ],
+                ),
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 64,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                  letterSpacing: -2,
+                  color: skin.text,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            if (rest.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              _StatStrip(stats: rest, skin: skin),
+            ],
+          ]);
+        }
+        // Centred, so what height is left over splits evenly above and
+        // below instead of pooling over the log.
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [compact],
+        );
+      },
+    );
+  }
+
+  /// Centred in the height the poster gave it. A Column rather than a Center:
+  /// the height is a minimum with no cap, which a Column is clamped up to and
+  /// a Center cannot size itself in.
+  static Widget _centred(List<Widget> children) => Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [const SizedBox(height: 14), ...children],
+      );
+}
+
+/// The session's top three muscles with their sets: "Chest 4 · Triceps 3".
+String _muscleLine(Map<String, double> sets) {
+  final top = [
+    for (final m in paintedMuscles)
+      if ((sets[m] ?? 0) > 0) m,
+  ]..sort((a, b) => sets[b]!.compareTo(sets[a]!));
+  final fullBody = sets['full body'] ?? 0;
+  return [
+    for (final m in top.take(3)) '${muscleLabel(m)} ${formatSets(sets[m]!)}',
+    if (top.length < 3 && fullBody > 0) 'Full body ${formatSets(fullBody)}',
+  ].join(' · ');
 }
 
 /// One exercise off the log, with whatever numbers survived the document.
