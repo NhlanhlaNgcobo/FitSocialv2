@@ -8,7 +8,6 @@ import '../../../shared/widgets/dark_card.dart';
 import '../../compare/presentation/compare_card.dart';
 import '../../leaderboards/presentation/leaderboard_card.dart';
 import '../../recap/presentation/week_recap_card.dart';
-import '../../weather/presentation/weather_card.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/progress_models.dart';
@@ -48,11 +47,6 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
 
     return Column(
       children: [
-        // Conditions lead the tab: what the weather is doing decides whether
-        // today's session happens outside, and that decision comes before
-        // looking back at the week.
-        const WeatherCard(),
-        const SizedBox(height: AppSpacing.md),
         _PeriodPicker(selected: _period, onSelected: _selectPeriod),
         const SizedBox(height: AppSpacing.md),
         _DateNavigator(
@@ -72,10 +66,7 @@ class _ProgressSectionState extends ConsumerState<ProgressSection> {
         const WeekRecapEntry(),
         // Always the full year, whatever period is being reported on: this is
         // the streak at a glance, not a chart of the selected window.
-        const ActivityGridCard(
-          fixedRange: ActivityRange.year,
-          expanded: true,
-        ),
+        const ActivityGridCard(fixedRange: ActivityRange.year, expanded: true),
         const SizedBox(height: AppSpacing.md),
         // Last before the session list: a look back at the period, read after
         // the period itself. Carries its own spacing, and draws nothing while
@@ -248,7 +239,8 @@ class _OverviewCard extends ConsumerWidget {
 
     // An empty overview rather than a spinner while loading: the card keeps
     // its shape, so the page does not jump as the numbers arrive.
-    final data = overview.valueOrNull ??
+    final data =
+        overview.valueOrNull ??
         const ProgressOverview(
           sessionCount: 0,
           duration: Duration.zero,
@@ -381,10 +373,7 @@ class _MetricTile extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(color: palette.muted, fontSize: 10),
-        ),
+        Text(label, style: TextStyle(color: palette.muted, fontSize: 10)),
         const SizedBox(height: 4),
         Text(
           deltaText,
@@ -472,10 +461,7 @@ class _EmptySessions extends StatelessWidget {
             window.isCurrent
                 ? 'Nothing logged this $period yet'
                 : 'Nothing was logged then',
-            style: TextStyle(
-              color: palette.text,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: palette.text, fontWeight: FontWeight.w600),
           ),
           if (window.isCurrent) ...[
             const SizedBox(height: 4),
@@ -499,10 +485,7 @@ class _SessionsNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DarkCard(
-      child: Text(
-        label,
-        style: TextStyle(color: context.palette.muted),
-      ),
+      child: Text(label, style: TextStyle(color: context.palette.muted)),
     );
   }
 }
@@ -607,7 +590,8 @@ class _SessionRow extends ConsumerWidget {
   static String _whenLabel(DateTime when) {
     final day = ActivityCalendar.dateOnly(when);
     final today = ActivityCalendar.dateOnly(DateTime.now());
-    final time = '${when.hour.toString().padLeft(2, '0')}:'
+    final time =
+        '${when.hour.toString().padLeft(2, '0')}:'
         '${when.minute.toString().padLeft(2, '0')}';
 
     final difference = ActivityCalendar.daysBetween(day, today);
@@ -651,11 +635,7 @@ class _SessionIcon extends StatelessWidget {
         color: palette.brandSoft,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(
-        kind.descriptor.icon,
-        color: palette.brand,
-        size: 22,
-      ),
+      child: Icon(kind.descriptor.icon, color: palette.brand, size: 22),
     );
   }
 }
@@ -682,10 +662,7 @@ class _SessionStat extends StatelessWidget {
       children: [
         Icon(icon, size: 13, color: iconColor ?? palette.muted),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(color: palette.muted, fontSize: 12),
-        ),
+        Text(label, style: TextStyle(color: palette.muted, fontSize: 12)),
         if (tooltip != null) ...[
           const SizedBox(width: 3),
           Icon(Icons.info_outline_rounded, size: 11, color: palette.muted),

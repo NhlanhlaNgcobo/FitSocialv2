@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,13 +29,29 @@ import '../../tracking/application/tracking_providers.dart';
 import '../../tracking/data/run_import_service.dart';
 import '../../tracking/domain/run_draft.dart';
 import '../../tracking/domain/run_pace.dart';
+import '../../auth/application/body_metrics_providers.dart';
+import '../../weather/presentation/weather_card.dart';
+import '../application/active_workout_controller.dart';
 import '../application/activity_actions.dart';
+import '../application/workout_background_notice.dart';
+import '../application/workout_library_providers.dart';
+import '../application/workout_preferences.dart';
+import '../domain/exercise_library.dart';
+import '../domain/workout_models.dart' show LibraryExercise;
+import '../domain/workout_math.dart' show exerciseKeyFor;
 import '../domain/activity_kind.dart';
 import '../domain/app_models.dart';
 import 'tag_people_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 
+/// Where a walk, run, hike or ride is started: pick the activity, then go.
+///
+/// Only the ways of *recording* live here — GPS, the treadmill timer, an
+/// indoor bike — with the conditions outside under them, because the weather
+/// is what decides between them. Typing an outing in after the fact is a
+/// different job, so it sits behind Manual in the app bar rather than filling
+/// the bottom half of the page with a form most visits never touch.
 class RunLogScreen extends ConsumerStatefulWidget {
   const RunLogScreen({super.key});
 
@@ -44,25 +62,310 @@ class RunLogScreen extends ConsumerStatefulWidget {
 class _RunLogScreenState extends ConsumerState<RunLogScreen>
     with SingleTickerProviderStateMixin {
   /// The stagger's denominator: how many sections this build actually emits.
-  ///
   /// Has to match, or a section that isn't counted never finishes its fade.
-  /// It was a const 7 when the screen always drew the same rows; the activity
-  /// picker added one, and the treadmill card now comes and goes with the
-  /// selected activity, so it is counted rather than assumed. The health
-  /// card is another that comes and goes: there is no platform store on web.
-  ///
-  /// The cardio-machine card is always there, one more than before.
+  /// The treadmill card is the run tab's and the indoor bike the ride tab's,
+  /// so one of them comes and goes with the activity.
   int get _sectionCount =>
-      (_kind == ActivityKind.run ? 9 : 8) + (kIsWeb ? 0 : 1);
+      3 + (_kind == ActivityKind.run || _kind == ActivityKind.ride ? 1 : 0);
 
   late final AnimationController _entranceController;
+
+  /// Which activity the page is about: the GPS card it opens, the indoor
+  /// option under it, and what the manual sheet starts on.
+  ActivityKind _kind = ActivityKind.run;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _entranceController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openManual() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.55),
+      isScrollControlled: true,
+      builder: (_) => _ManualRunSheet(initialKind: _kind),
+    );
+  }
+
+  /// A bike ridden indoors is a cardio machine, not a ride with a route, so it
+  /// is logged in a live workout: pick the bike, and the session opens with it
+  /// already on the card — or the one already running gains it.
+  Future<void> _startIndoorBike() async {
+    // Both are auto-disposing and nothing else on this page watches them, so a
+    // plain read would always find them empty. Held open while the bike is
+    // picked, which is time enough for last session's numbers to arrive.
+    final keepCustom = ref.listenManual(customExercisesProvider, (_, __) {});
+    final keepPrevious =
+        ref.listenManual(previousPerformanceProvider, (_, __) {});
+    try {
+      final bike = await _pickIndoorBike(context);
+      if (bike == null || !mounted) return;
+
+      unawaited(ref.read(workoutBackgroundNoticeProvider).requestPermission());
+      final controller = ref.read(activeWorkoutProvider.notifier);
+      await controller.ensureStarted(
+        title: bike.name,
+        bodyweightKg: ref.read(bodyMetricsProvider).valueOrNull?.weightKg,
+      );
+      final custom = keepCustom.read().valueOrNull ?? const [];
+      controller.addExercises([
+        NewExercise(
+          name: bike.name,
+          exerciseId: bike.id,
+          trackingType:
+              ExerciseLibrary.trackingTypeFor(bike.id, custom: custom),
+          // Last time's time and distance on this bike, as hints in the row.
+          previous: keepPrevious.read().lastSets(
+                exerciseKeyFor(name: bike.name, exerciseId: bike.id),
+                source: ref.read(workoutPreferencesProvider).previousSource,
+              ),
+        ),
+      ]);
+      if (mounted) unawaited(context.push('/workout-session'));
+    } finally {
+      keepCustom.close();
+      keepPrevious.close();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var sectionIndex = 0;
+
+    Widget section(Widget child) => StaggeredFadeIn(
+          controller: _entranceController,
+          index: sectionIndex++,
+          itemCount: _sectionCount,
+          child: child,
+        );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Log ${_kind.descriptor.singular}'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: TextButton.icon(
+              onPressed: _openManual,
+              icon: const Icon(Icons.edit_note_rounded, size: 20),
+              label: const Text(
+                'Manual',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const MusicIslandAction(),
+        ],
+      ),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.xl + MediaQuery.of(context).viewPadding.bottom,
+        ),
+        children: [
+          section(
+            _ActivityPicker(
+              selected: _kind,
+              onChanged: (kind) => setState(() => _kind = kind),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          section(
+            _GpsHeroCard(
+              kind: _kind,
+              onTap: () => context.push('/live-run', extra: _kind),
+            ),
+          ),
+          // A treadmill is a way of running indoors and nothing else: there is
+          // no indoor hike, and a stationary bike is a different machine with
+          // different numbers. Shown for runs only rather than offered and
+          // then behaving oddly.
+          if (_kind == ActivityKind.run) ...[
+            const SizedBox(height: AppSpacing.sm + 4),
+            section(
+              _IndoorCard(
+                icon: Icons.timer_outlined,
+                title: 'Treadmill run',
+                subtitle: 'Press start and the timer runs — no GPS needed',
+                onTap: () => context.push('/treadmill-run'),
+              ),
+            ),
+          ],
+          // The ride tab's indoor option, and only bikes: a rower or the
+          // stairs is not a ride, and offering them here sent people to the
+          // workout log looking for a bike.
+          if (_kind == ActivityKind.ride) ...[
+            const SizedBox(height: AppSpacing.sm + 4),
+            section(
+              _IndoorCard(
+                icon: Icons.pedal_bike_rounded,
+                title: 'Indoor bike',
+                subtitle: 'Stationary, spin, air or recumbent — '
+                    'starts a workout with it',
+                onTap: _startIndoorBike,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          // Conditions sit with the choice they decide: out on GPS, or in.
+          section(const WeatherCard()),
+        ],
+      ),
+    );
+  }
+}
+
+/// The bikes a ride can be done on indoors, from the exercise library — the
+/// outdoor one is the GPS card's job.
+List<LibraryExercise> get _indoorBikes => [
+      for (final name in const [
+        'Stationary Bike',
+        'Spin Class',
+        'Assault Bike',
+        'Recumbent Bike',
+      ])
+        if (ExerciseLibrary.byId(ExerciseLibrary.slug(name)) case final bike?)
+          bike,
+    ];
+
+Future<LibraryExercise?> _pickIndoorBike(BuildContext context) {
+  return showModalBottomSheet<LibraryExercise>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.55),
+    builder: (sheetContext) {
+      final palette = sheetContext.palette;
+      return _SheetFrame(
+        title: 'Which bike?',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final bike in _indoorBikes)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.pedal_bike_rounded, color: palette.brand),
+                title: Text(
+                  bike.name,
+                  style: TextStyle(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                trailing: Icon(
+                  Icons.chevron_right_rounded,
+                  color: palette.muted,
+                ),
+                onTap: () => Navigator.of(sheetContext).pop(bike),
+              ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+/// A bottom sheet's pane: handle, title, content.
+class _SheetFrame extends StatelessWidget {
+  const _SheetFrame({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        12,
+        0,
+        12,
+        12 + MediaQuery.viewPaddingOf(context).bottom,
+      ),
+      child: LiquidGlass(
+        lens: true,
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: palette.stroke),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SheetHandle(),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: palette.text,
+                ),
+              ),
+              const SizedBox(height: 4),
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: context.palette.stroke,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+}
+
+/// An outing typed in after the fact, and everything that goes with posting
+/// it: a pull from the health store, the distance and time, a photo for the
+/// card, sharing and tags.
+class _ManualRunSheet extends ConsumerStatefulWidget {
+  const _ManualRunSheet({required this.initialKind});
+
+  final ActivityKind initialKind;
+
+  @override
+  ConsumerState<_ManualRunSheet> createState() => _ManualRunSheetState();
+}
+
+class _ManualRunSheetState extends ConsumerState<_ManualRunSheet> {
   late final TextEditingController _distanceController;
   late final TextEditingController _durationController;
 
-  /// Which activity every control on this screen is currently about: the GPS
-  /// card it opens, the wording, and whether the manual form's third figure is
-  /// a pace or a speed.
-  ActivityKind _kind = ActivityKind.run;
+  /// Which activity the form is about: the wording, and whether its third
+  /// figure is a pace or a speed.
+  late ActivityKind _kind = widget.initialKind;
 
   double _distanceKm = 0;
 
@@ -94,17 +397,12 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   @override
   void initState() {
     super.initState();
-    _entranceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    )..forward();
     _distanceController = TextEditingController();
     _durationController = TextEditingController();
   }
 
   @override
   void dispose() {
-    _entranceController.dispose();
     _distanceController.dispose();
     _durationController.dispose();
     super.dispose();
@@ -340,185 +638,141 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    var sectionIndex = 0;
+    final media = MediaQuery.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Log ${_kind.descriptor.singular}'),
-        actions: const [MusicIslandAction()],
-      ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.md,
-          AppSpacing.md,
-          // Clears the gesture pill / three-button nav so the Save button
-          // isn't sitting under it at the end of the scroll.
-          AppSpacing.xl + MediaQuery.of(context).viewPadding.bottom,
-        ),
-        children: [
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            child: _ActivityPicker(
-              selected: _kind,
-              onChanged: (kind) => setState(() => _kind = kind),
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.92,
+      minChildSize: 0.5,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) => Padding(
+        padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + media.viewPadding.bottom),
+        child: LiquidGlass(
+          lens: true,
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: palette.stroke),
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            child: _GpsHeroCard(
-              kind: _kind,
-              onTap: () => context.push('/live-run', extra: _kind),
-            ),
-          ),
-          // A treadmill is a way of running indoors and nothing else: there is
-          // no indoor hike, and a stationary bike is a different machine with
-          // different numbers. Shown for runs only rather than offered and
-          // then behaving oddly.
-          if (_kind == ActivityKind.run) ...[
-            const SizedBox(height: AppSpacing.sm + 4),
-            StaggeredFadeIn(
-              controller: _entranceController,
-              index: sectionIndex++,
-              itemCount: _sectionCount,
-              child: _IndoorCard(
-                icon: Icons.timer_outlined,
-                title: 'Treadmill run',
-                subtitle: 'Press start and the timer runs — no GPS needed',
-                onTap: () => context.push('/treadmill-run'),
+            child: ListView(
+              controller: scrollController,
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                10,
+                AppSpacing.md,
+                // Lifts the last field and the button above the keyboard.
+                AppSpacing.md + media.viewInsets.bottom,
               ),
-            ),
-          ],
-          // Everything else indoors. A rower, a bike or the stairs is not a
-          // run, so it is not logged as one — it goes into the workout log as
-          // a cardio card with its own time and distance. Testers looked for
-          // it here, next to the treadmill, and found nothing.
-          const SizedBox(height: AppSpacing.sm + 4),
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            child: _IndoorCard(
-              icon: Icons.rowing_rounded,
-              title: 'Rower, bike, elliptical or stairs',
-              subtitle: 'Log the machine with its time and distance',
-              onTap: () => context.push('/log-workout?cardio=1'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            child: const _LabelledDivider(label: 'or log it manually'),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          if (!kIsWeb) ...[
-            StaggeredFadeIn(
-              controller: _entranceController,
-              index: sectionIndex++,
-              itemCount: _sectionCount,
-              child: HealthPullCard(
-                busy: _isPullingHealth,
-                filled: _healthPrefill != null,
-                title: _healthPrefill == null
-                    ? HealthPullCard.idleTitle
-                    : 'Filled from ${_healthPrefill!.record.sourceName}',
-                subtitle: _healthPrefill == null
-                    ? 'Pull your latest session from Samsung Health or '
-                        'your watch'
-                    : _describePrefill(_healthPrefill!),
-                note: _healthNote,
-                onTap: _isSaving ? null : _pullFromHealth,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            child: LiquidGlass(
-              // Painted by the lens rather than by a fill of its own: a pane
-              // over the app backdrop, like every other card.
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  border: Border.all(color: palette.stroke),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SheetHandle(),
+                const SizedBox(height: 14),
+                Row(
                   children: [
-                    _MetricField(
-                      icon: Icons.straighten_rounded,
-                      label: 'Distance',
-                      controller: _distanceController,
-                      suffix: 'km',
-                      hint: '0.00',
-                      decimal: true,
-                      invalid: _showFieldErrors && !_hasDistance,
-                      onChanged: (value) {
-                        setState(() {
-                          _distanceKm = parseTypedDouble(value) ?? 0;
-                        });
-                      },
+                    Expanded(
+                      child: Text(
+                        'Log ${_kind.descriptor.singular.toLowerCase()} '
+                        'manually',
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: palette.text,
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _MetricField(
-                      icon: Icons.timer_outlined,
-                      label: 'Duration',
-                      controller: _durationController,
-                      suffix: 'min',
-                      hint: '0',
-                      // Minutes, but not whole ones: "50,5" is a real time.
-                      decimal: true,
-                      invalid: _showFieldErrors && !_hasDuration,
-                      onChanged: (value) {
-                        setState(() {
-                          _elapsed = parseTypedMinutes(value);
-                        });
-                      },
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(Icons.close_rounded, color: palette.muted),
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOut,
-            alignment: Alignment.topCenter,
-            // Height alone, no fade over it: a pane of glass inside an
-            // opacity buffer has no backdrop left to bend, so it would hollow
-            // out for the whole reveal and then snap.
-            child: _isComplete
-                ? Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.md),
-                    child: _RunSummary(
-                      distance: '${_formatDistance(_distanceKm)} km',
-                      duration: _durationLabel,
-                      pace: _paceLabel,
-                      paceLabel: _paceStatLabel,
-                    ),
-                  )
-                : const SizedBox(width: double.infinity),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            // Inside the same stagger step as the section it belongs to, so
-            // the entrance sequence keeps its count.
-            child: Column(
-              children: [
+                const SizedBox(height: AppSpacing.sm),
+                // Its own picker: the session pulled from the health store
+                // decides the activity, and the user can still correct it.
+                _ActivityPicker(
+                  selected: _kind,
+                  onChanged: (kind) => setState(() => _kind = kind),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (!kIsWeb) ...[
+                  HealthPullCard(
+                    busy: _isPullingHealth,
+                    filled: _healthPrefill != null,
+                    title: _healthPrefill == null
+                        ? HealthPullCard.idleTitle
+                        : 'Filled from ${_healthPrefill!.record.sourceName}',
+                    subtitle: _healthPrefill == null
+                        ? 'Pull your latest session from Samsung Health or '
+                            'your watch'
+                        : _describePrefill(_healthPrefill!),
+                    note: _healthNote,
+                    onTap: _isSaving ? null : _pullFromHealth,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    border: Border.all(color: palette.stroke),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _MetricField(
+                        icon: Icons.straighten_rounded,
+                        label: 'Distance',
+                        controller: _distanceController,
+                        suffix: 'km',
+                        hint: '0.00',
+                        decimal: true,
+                        invalid: _showFieldErrors && !_hasDistance,
+                        onChanged: (value) {
+                          setState(() {
+                            _distanceKm = parseTypedDouble(value) ?? 0;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      _MetricField(
+                        icon: Icons.timer_outlined,
+                        label: 'Duration',
+                        controller: _durationController,
+                        suffix: 'min',
+                        hint: '0',
+                        // Minutes, but not whole ones: "50,5" is a real time.
+                        decimal: true,
+                        invalid: _showFieldErrors && !_hasDuration,
+                        onChanged: (value) {
+                          setState(() {
+                            _elapsed = parseTypedMinutes(value);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOut,
+                  alignment: Alignment.topCenter,
+                  // Height alone, no fade over it: a pane of glass inside an
+                  // opacity buffer has no backdrop left to bend, so it would
+                  // hollow out for the whole reveal and then snap.
+                  child: _isComplete
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.md),
+                          child: _RunSummary(
+                            distance: '${_formatDistance(_distanceKm)} km',
+                            duration: _durationLabel,
+                            pace: _paceLabel,
+                            paceLabel: _paceStatLabel,
+                          ),
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
+                const SizedBox(height: AppSpacing.lg),
                 RunBackgroundSection(
                   imagePath: _backgroundPath,
                   // A logged run has no trace, so a blank card is just numbers
@@ -551,49 +805,39 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                     ),
                   ),
                 ],
+                const SizedBox(height: AppSpacing.lg),
+                ShareToFeedToggle(
+                  value: _shareToFeed,
+                  subtitle: 'Post this run to your profile activity',
+                  onChanged: (value) {
+                    setState(() {
+                      _shareToFeed = value;
+                    });
+                  },
+                ),
+                if (_shareToFeed) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  TagPeopleRow(
+                    tagged: _taggedUsers,
+                    onTap: _isSaving ? null : _pickTaggedPeople,
+                  ),
+                ],
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _ErrorBanner(message: _errorMessage!),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                PrimaryButton(
+                  icon: _isSaving ? null : Icons.check_rounded,
+                  label: _isSaving
+                      ? 'Saving...'
+                      : (_shareToFeed ? 'Save Run & Share' : 'Save Run'),
+                  onPressed: _isSaving ? null : _saveRun,
+                ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            child: ShareToFeedToggle(
-              value: _shareToFeed,
-              subtitle: 'Post this run to your profile activity',
-              onChanged: (value) {
-                setState(() {
-                  _shareToFeed = value;
-                });
-              },
-            ),
-          ),
-          if (_shareToFeed) ...[
-            const SizedBox(height: AppSpacing.md),
-            TagPeopleRow(
-              tagged: _taggedUsers,
-              onTap: _isSaving ? null : _pickTaggedPeople,
-            ),
-          ],
-          if (_errorMessage != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            _ErrorBanner(message: _errorMessage!),
-          ],
-          const SizedBox(height: AppSpacing.lg),
-          StaggeredFadeIn(
-            controller: _entranceController,
-            index: sectionIndex++,
-            itemCount: _sectionCount,
-            child: PrimaryButton(
-              icon: _isSaving ? null : Icons.check_rounded,
-              label: _isSaving
-                  ? 'Saving...'
-                  : (_shareToFeed ? 'Save Run & Share' : 'Save Run'),
-              onPressed: _isSaving ? null : _saveRun,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -866,11 +1110,7 @@ class _IndoorCard extends StatelessWidget {
                     color: palette.brandSoft,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    icon,
-                    color: palette.brand,
-                    size: 22,
-                  ),
+                  child: Icon(icon, color: palette.brand, size: 22),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -912,38 +1152,6 @@ class _IndoorCard extends StatelessWidget {
   }
 }
 
-class _LabelledDivider extends StatelessWidget {
-  const _LabelledDivider({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final rule = Expanded(child: Container(height: 1, color: palette.stroke));
-
-    return Row(
-      children: [
-        rule,
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              color: palette.muted,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ),
-        rule,
-      ],
-    );
-  }
-}
-
-/// A big centred numeric well with its unit pinned to the right.
 class _MetricField extends StatelessWidget {
   const _MetricField({
     required this.icon,
@@ -1012,13 +1220,20 @@ class _MetricField extends StatelessWidget {
               ),
               SizedBox(
                 width: _suffixWidth(suffix),
-                child: Text(
-                  suffix,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    color: palette.muted,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                // One line whatever the font's widths: "km" broke into "k"
+                // over "m" in the narrower sheet.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    suffix,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -1029,7 +1244,7 @@ class _MetricField extends StatelessWidget {
     );
   }
 
-  static double _suffixWidth(String suffix) => suffix.length * 9.0 + 6;
+  static double _suffixWidth(String suffix) => suffix.length * 10.0 + 8;
 }
 
 /// The read-out that slides in once both fields are filled: what the run will
@@ -1062,11 +1277,17 @@ class _RunSummary extends StatelessWidget {
       backdrop: GlassBloom(colors: [palette.brand]),
       child: Row(
         children: [
-          Expanded(child: _SummaryStat(label: 'Distance', value: distance)),
+          Expanded(
+            child: _SummaryStat(label: 'Distance', value: distance),
+          ),
           _SummaryRule(color: palette.stroke),
-          Expanded(child: _SummaryStat(label: 'Time', value: duration)),
+          Expanded(
+            child: _SummaryStat(label: 'Time', value: duration),
+          ),
           _SummaryRule(color: palette.stroke),
-          Expanded(child: _SummaryStat(label: paceLabel, value: pace)),
+          Expanded(
+            child: _SummaryStat(label: paceLabel, value: pace),
+          ),
         ],
       ),
     );

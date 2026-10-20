@@ -10,6 +10,7 @@ import 'package:fitsocial_app/features/tracking/application/tracking_providers.d
 import 'package:fitsocial_app/features/tracking/data/health_service.dart';
 import 'package:fitsocial_app/features/tracking/data/run_import_service.dart';
 import 'package:fitsocial_app/features/tracking/domain/imported_run.dart';
+import 'package:fitsocial_app/features/weather/application/weather_providers.dart';
 
 /// The "Fill from your health app" card on Log Run.
 ///
@@ -39,10 +40,20 @@ void main() {
           runImportServiceProvider.overrideWithValue(
             RunImportService(health: _FakeSource(sessions)),
           ),
+          // Weather sits on this page now; with no location channel under
+          // test it would only ever land on its error row anyway.
+          weatherProvider.overrideWith(
+            (ref) async => throw const WeatherLocationException(
+              WeatherBlocker.permissionDenied,
+            ),
+          ),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
     );
+    await tester.pumpAndSettle();
+    // The form lives in the Manual sheet.
+    await tester.tap(find.text('Manual'));
     await tester.pumpAndSettle();
   }
 
@@ -105,11 +116,11 @@ void main() {
   testWidgets('the session decides the activity', (tester) async {
     await pump(tester,
         granted: true, sessions: [session(kind: ActivityKind.hike)]);
-    expect(find.text('Log Run'), findsOneWidget);
+    expect(find.text('Log run manually'), findsOneWidget);
 
     await pull(tester);
 
-    expect(find.text('Log Hike'), findsOneWidget);
+    expect(find.text('Log hike manually'), findsOneWidget);
   });
 
   testWidgets('says so when access is refused', (tester) async {
