@@ -124,7 +124,7 @@ void main() {
       await tester.pumpWidget(_host(const Scaffold(body: WeatherCard())));
       await tester.pumpAndSettle();
 
-      expect(find.text('7 days'), findsOneWidget);
+      expect(find.text('7-day forecast'), findsOneWidget);
       expect(find.byIcon(Icons.chevron_right_rounded), findsOneWidget);
     });
 
@@ -141,7 +141,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('7 days'), findsNothing);
+      expect(find.text('7-day forecast'), findsNothing);
       expect(find.text('Allow'), findsOneWidget);
     });
   });
