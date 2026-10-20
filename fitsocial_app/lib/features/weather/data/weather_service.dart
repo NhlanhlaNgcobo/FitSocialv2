@@ -35,10 +35,13 @@ class WeatherService {
       'latitude': '$latitude',
       'longitude': '$longitude',
       'current': 'temperature_2m,apparent_temperature,weather_code,'
-          'wind_speed_10m,is_day',
+          'wind_speed_10m,is_day,relative_humidity_2m,uv_index',
+      'hourly': 'temperature_2m,apparent_temperature,weather_code,'
+          'wind_speed_10m,precipitation_probability,is_day',
       'daily': 'weather_code,temperature_2m_max,temperature_2m_min,'
           'apparent_temperature_max,apparent_temperature_min,'
-          'wind_speed_10m_max,precipitation_probability_max',
+          'wind_speed_10m_max,precipitation_probability_max,'
+          'sunrise,sunset',
       // Resolved from the coordinates, so "today" means the user's today
       // rather than UTC's.
       'timezone': 'auto',
@@ -59,7 +62,11 @@ class WeatherService {
       throw const WeatherUnavailableException('Unexpected weather response.');
     }
 
-    return parseForecast(json, locationLabel: locationLabel);
+    return parseForecast(
+      json,
+      locationLabel: locationLabel,
+      fetchedAt: DateTime.now(),
+    );
   }
 
   void dispose() => _client.close();
@@ -73,6 +80,7 @@ class WeatherService {
 WeatherSnapshot parseForecast(
   Map<String, dynamic> json, {
   String? locationLabel,
+  DateTime? fetchedAt,
 }) {
   final current = json['current'];
   if (current is! Map<String, dynamic>) {
@@ -91,25 +99,88 @@ WeatherSnapshot parseForecast(
   // None of those are worth failing the whole card over.
   final daily = json['daily'];
   final dailyMap = daily is Map<String, dynamic> ? daily : null;
+  final hourly = json['hourly'];
+  final observedAt =
+      DateTime.tryParse(current['time'] as String? ?? '') ?? DateTime.now();
 
   return WeatherSnapshot(
     temperatureC: temperature,
     feelsLikeC:
         (current['apparent_temperature'] as num?)?.toDouble() ?? temperature,
     condition: WeatherCondition.fromWmoCode(
-        (current['weather_code'] as num?)?.toInt()),
+      (current['weather_code'] as num?)?.toInt(),
+    ),
     windKph: (current['wind_speed_10m'] as num?)?.toDouble() ?? 0,
     // Open-Meteo sends is_day as 1/0 rather than a bool.
     isDay: ((current['is_day'] as num?)?.toInt() ?? 1) == 1,
-    observedAt:
-        DateTime.tryParse(current['time'] as String? ?? '') ?? DateTime.now(),
+    observedAt: observedAt,
     highC: _firstNumber(dailyMap?['temperature_2m_max']),
     lowC: _firstNumber(dailyMap?['temperature_2m_min']),
-    precipitationChance:
-        _firstNumber(dailyMap?['precipitation_probability_max'])?.round(),
+    precipitationChance: _firstNumber(
+      dailyMap?['precipitation_probability_max'],
+    )?.round(),
     locationLabel: locationLabel,
     days: _parseDays(dailyMap),
+    hours: _parseHours(
+      hourly is Map<String, dynamic> ? hourly : null,
+      from: observedAt,
+    ),
+    humidity: (current['relative_humidity_2m'] as num?)?.round(),
+    uvIndex: (current['uv_index'] as num?)?.toDouble(),
+    sunrise: _firstTime(dailyMap?['sunrise']),
+    sunset: _firstTime(dailyMap?['sunset']),
+    fetchedAt: fetchedAt,
   );
+}
+
+/// How many hours ahead the snapshot keeps: a day, from the current one.
+const int _hoursAhead = 24;
+
+/// Reads the hourly block from the hour [from] falls in, for a day.
+///
+/// Parallel arrays keyed off `time`, like the daily block. An hour with no
+/// temperature is dropped; the rest of its numbers fall back the way the
+/// current reading's do.
+List<HourlyForecast> _parseHours(
+  Map<String, dynamic>? hourly, {
+  required DateTime from,
+}) {
+  final times = hourly?['time'];
+  if (times is! List) return const [];
+  final startOfHour = DateTime(from.year, from.month, from.day, from.hour);
+
+  final hours = <HourlyForecast>[];
+  for (var i = 0; i < times.length && hours.length < _hoursAhead; i++) {
+    final time = DateTime.tryParse(times[i] as String? ?? '');
+    if (time == null || time.isBefore(startOfHour)) continue;
+    final temperature = _numberAt(hourly?['temperature_2m'], i);
+    if (temperature == null) continue;
+
+    hours.add(
+      HourlyForecast(
+        time: time,
+        condition: WeatherCondition.fromWmoCode(
+          _numberAt(hourly?['weather_code'], i)?.toInt(),
+        ),
+        temperatureC: temperature,
+        feelsLikeC:
+            _numberAt(hourly?['apparent_temperature'], i) ?? temperature,
+        windKph: _numberAt(hourly?['wind_speed_10m'], i) ?? 0,
+        precipitationChance: _numberAt(
+          hourly?['precipitation_probability'],
+          i,
+        )?.round(),
+        isDay: (_numberAt(hourly?['is_day'], i)?.toInt() ?? 1) == 1,
+      ),
+    );
+  }
+  return hours;
+}
+
+/// The first entry of a daily array of local times — today's.
+DateTime? _firstTime(Object? value) {
+  if (value is! List || value.isEmpty) return null;
+  return DateTime.tryParse(value.first as String? ?? '');
 }
 
 /// Reads the daily block into one entry per day.
@@ -143,8 +214,10 @@ List<DailyForecast> _parseDays(Map<String, dynamic>? daily) {
         feelsHighC: _numberAt(daily?['apparent_temperature_max'], i),
         feelsLowC: _numberAt(daily?['apparent_temperature_min'], i),
         windKph: _numberAt(daily?['wind_speed_10m_max'], i) ?? 0,
-        precipitationChance:
-            _numberAt(daily?['precipitation_probability_max'], i)?.round(),
+        precipitationChance: _numberAt(
+          daily?['precipitation_probability_max'],
+          i,
+        )?.round(),
       ),
     );
   }

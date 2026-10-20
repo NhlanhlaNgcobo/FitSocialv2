@@ -113,18 +113,13 @@ class DailyForecast {
   /// Same thresholds as [WeatherSnapshot.outlook], applied to the two ends of
   /// the day: heat is judged on the peak, cold on the trough. Anything else
   /// would call a day that swings from 2° to 31° a mild one.
-  TrainingOutlook get outlook {
-    if (condition == WeatherCondition.thunderstorm) return TrainingOutlook.poor;
-    if (_feelsHigh >= 35 || _feelsLow <= 0) return TrainingOutlook.poor;
-    if (windKph >= 45) return TrainingOutlook.poor;
-
-    if (condition.isWet) return TrainingOutlook.fair;
-    if (_feelsHigh >= 30 || _feelsLow <= 6) return TrainingOutlook.fair;
-    if (windKph >= 25) return TrainingOutlook.fair;
-    if ((precipitationChance ?? 0) >= 60) return TrainingOutlook.fair;
-
-    return TrainingOutlook.good;
-  }
+  TrainingOutlook get outlook => _judge(
+        condition: condition,
+        feelsHigh: _feelsHigh,
+        feelsLow: _feelsLow,
+        windKph: windKph,
+        precipitationChance: precipitationChance,
+      );
 
   /// Whether [date] is the same calendar day as [reference].
   bool isSameDayAs(DateTime reference) =>
@@ -147,6 +142,12 @@ class WeatherSnapshot {
     this.lowC,
     this.locationLabel,
     this.days = const [],
+    this.hours = const [],
+    this.humidity,
+    this.uvIndex,
+    this.sunrise,
+    this.sunset,
+    this.fetchedAt,
   });
 
   final double temperatureC;
@@ -174,6 +175,27 @@ class WeatherSnapshot {
   /// back — the card still works, the forecast page says it has nothing.
   final List<DailyForecast> days;
 
+  /// The next day's hours, from the current one. Empty when the response
+  /// carried no hourly block — the strip and the window then drop out.
+  final List<HourlyForecast> hours;
+
+  /// Relative humidity now, 0–100.
+  final int? humidity;
+
+  /// UV index now. Null when the reading did not carry it.
+  final double? uvIndex;
+
+  /// Today's sunrise and sunset, local time.
+  final DateTime? sunrise;
+  final DateTime? sunset;
+
+  /// When this device fetched the reading. Not [observedAt]: that is the
+  /// model's own timestep, which runs up to fifteen minutes behind, and the
+  /// staleness check is about how long ago the app last asked.
+  final DateTime? fetchedAt;
+
+  DateTime get updatedAt => fetchedAt ?? observedAt;
+
   int get temperatureRounded => temperatureC.round();
   int get feelsLikeRounded => feelsLikeC.round();
 
@@ -187,18 +209,17 @@ class WeatherSnapshot {
   /// actually change whether a session is pleasant or miserable. Thresholds are
   /// deliberately generous at the warm end: this app's users are in South
   /// Africa, where a 28°C morning run is ordinary rather than a warning.
-  TrainingOutlook get outlook {
-    if (condition == WeatherCondition.thunderstorm) return TrainingOutlook.poor;
-    if (feelsLikeC >= 35 || feelsLikeC <= 0) return TrainingOutlook.poor;
-    if (windKph >= 45) return TrainingOutlook.poor;
+  TrainingOutlook get outlook => _judge(
+        condition: condition,
+        feelsHigh: feelsLikeC,
+        feelsLow: feelsLikeC,
+        windKph: windKph,
+        precipitationChance: precipitationChance,
+      );
 
-    if (condition.isWet) return TrainingOutlook.fair;
-    if (feelsLikeC >= 30 || feelsLikeC <= 6) return TrainingOutlook.fair;
-    if (windKph >= 25) return TrainingOutlook.fair;
-    if ((precipitationChance ?? 0) >= 60) return TrainingOutlook.fair;
-
-    return TrainingOutlook.good;
-  }
+  /// The best stretch to train outside in the next [TrainingWindow.horizon],
+  /// or null when no daylight hour in it is better than poor.
+  TrainingWindow? get bestWindow => findTrainingWindow(hours, from: observedAt);
 
   /// One line saying why the outlook is what it is. Written so the reason is
   /// always the thing that actually decided it.
@@ -219,4 +240,190 @@ class WeatherSnapshot {
     if ((precipitationChance ?? 0) >= 60) return 'Rain likely later today.';
     return 'Good conditions for getting outside.';
   }
+}
+
+/// The one rule behind every verdict: the reading's own, a day's, an hour's.
+///
+/// Heat is judged on [feelsHigh] and cold on [feelsLow], which for a single
+/// reading are the same number.
+TrainingOutlook _judge({
+  required WeatherCondition condition,
+  required double feelsHigh,
+  required double feelsLow,
+  required double windKph,
+  required int? precipitationChance,
+}) {
+  if (condition == WeatherCondition.thunderstorm) return TrainingOutlook.poor;
+  if (feelsHigh >= 35 || feelsLow <= 0) return TrainingOutlook.poor;
+  if (windKph >= 45) return TrainingOutlook.poor;
+
+  if (condition.isWet) return TrainingOutlook.fair;
+  if (feelsHigh >= 30 || feelsLow <= 6) return TrainingOutlook.fair;
+  if (windKph >= 25) return TrainingOutlook.fair;
+  if ((precipitationChance ?? 0) >= 60) return TrainingOutlook.fair;
+
+  return TrainingOutlook.good;
+}
+
+/// One hour of the forecast.
+class HourlyForecast {
+  const HourlyForecast({
+    required this.time,
+    required this.condition,
+    required this.temperatureC,
+    required this.feelsLikeC,
+    required this.windKph,
+    required this.precipitationChance,
+    required this.isDay,
+  });
+
+  /// The start of the hour, local time.
+  final DateTime time;
+  final WeatherCondition condition;
+  final double temperatureC;
+  final double feelsLikeC;
+  final double windKph;
+
+  /// Chance of precipitation in this hour, 0–100.
+  final int? precipitationChance;
+  final bool isDay;
+
+  int get temperatureRounded => temperatureC.round();
+
+  TrainingOutlook get outlook => _judge(
+        condition: condition,
+        feelsHigh: feelsLikeC,
+        feelsLow: feelsLikeC,
+        windKph: windKph,
+        precipitationChance: precipitationChance,
+      );
+
+  /// Lower is nicer to run in, among hours with the same [outlook]: felt
+  /// temperature outside 10–18°, then rain odds, then wind past a breeze.
+  double get discomfort {
+    final feels = feelsLikeC;
+    final heat = feels > 18 ? feels - 18 : (feels < 10 ? 10 - feels : 0.0);
+    final wind = windKph > 15 ? (windKph - 15) / 5 : 0.0;
+    return heat + (precipitationChance ?? 0) / 10 + wind;
+  }
+}
+
+/// A stretch of hours worth training outside in.
+class TrainingWindow {
+  const TrainingWindow({
+    required this.start,
+    required this.end,
+    required this.outlook,
+  });
+
+  /// How far ahead the window is looked for. Far enough to reach tomorrow
+  /// morning from an evening check, not so far that it is a forecast guess.
+  static const Duration horizon = Duration(hours: 18);
+
+  /// The longest a window runs. A suggestion of "06:00–14:00" says nothing.
+  static const int maxHours = 2;
+
+  /// First hour in, at its start.
+  final DateTime start;
+
+  /// When the last hour in it ends.
+  final DateTime end;
+
+  final TrainingOutlook outlook;
+
+  /// Whether the window has already opened at [now].
+  bool isOpenAt(DateTime now) => !now.isBefore(start) && now.isBefore(end);
+
+  /// Whether [hour] falls inside the window.
+  bool contains(DateTime hour) => !hour.isBefore(start) && hour.isBefore(end);
+}
+
+/// The best stretch of up to [TrainingWindow.maxHours] in the next
+/// [TrainingWindow.horizon] from [from].
+///
+/// Only hours from 05:00 to 20:59 count — a 02:00 run is not advice anyone
+/// wants. The window is drawn from the best outlook any of those hours has,
+/// and among those, the run of consecutive hours least uncomfortable on
+/// average; ties go to the earliest. Null when every hour is poor, or there
+/// are no hours to judge.
+///
+/// The rest of today comes first. A cooler 05:00 tomorrow is not the answer
+/// to "when should I run" asked at 14:00 on a good afternoon, so tomorrow is
+/// only offered when today has nothing left, or nothing as good.
+TrainingWindow? findTrainingWindow(
+  List<HourlyForecast> hours, {
+  required DateTime from,
+}) {
+  final startOfHour = DateTime(from.year, from.month, from.day, from.hour);
+  final until = startOfHour.add(TrainingWindow.horizon);
+  final candidates = [
+    for (final h in hours)
+      if (!h.time.isBefore(startOfHour) &&
+          h.time.isBefore(until) &&
+          h.time.hour >= 5 &&
+          h.time.hour <= 20)
+        h,
+  ];
+  bool isToday(HourlyForecast h) =>
+      h.time.year == from.year &&
+      h.time.month == from.month &&
+      h.time.day == from.day;
+
+  final today = _bestWithin(candidates.where(isToday).toList());
+  final later = _bestWithin(candidates.where((h) => !isToday(h)).toList());
+  if (today == null) return later;
+  if (later != null && later.outlook.index < today.outlook.index) {
+    return later;
+  }
+  return today;
+}
+
+/// The best window among [candidates], which are in time order.
+TrainingWindow? _bestWithin(List<HourlyForecast> candidates) {
+  if (candidates.isEmpty) return null;
+
+  final best = candidates
+      .map((h) => h.outlook)
+      .reduce((a, b) => a.index <= b.index ? a : b);
+  if (best == TrainingOutlook.poor) return null;
+
+  ({int start, int length, double score})? pick;
+  for (var i = 0; i < candidates.length; i++) {
+    if (candidates[i].outlook != best) continue;
+    var length = 1;
+    var total = candidates[i].discomfort;
+    while (length < TrainingWindow.maxHours &&
+        i + length < candidates.length &&
+        candidates[i + length].outlook == best &&
+        candidates[i + length].time.difference(
+                  candidates[i + length - 1].time,
+                ) ==
+            const Duration(hours: 1)) {
+      total += candidates[i + length].discomfort;
+      length++;
+    }
+    // Longer beats shorter at the same comfort: a two-hour window is the
+    // more useful suggestion.
+    final score = total / length - length * 0.5;
+    if (pick == null || score < pick.score) {
+      pick = (start: i, length: length, score: score);
+    }
+  }
+
+  final first = candidates[pick!.start];
+  final last = candidates[pick.start + pick.length - 1];
+  return TrainingWindow(
+    start: first.time,
+    end: last.time.add(const Duration(hours: 1)),
+    outlook: best,
+  );
+}
+
+/// How strong the sun is, in the words the UV index scale uses.
+String uvLevel(double index) {
+  if (index < 3) return 'Low';
+  if (index < 6) return 'Moderate';
+  if (index < 8) return 'High';
+  if (index < 11) return 'Very high';
+  return 'Extreme';
 }

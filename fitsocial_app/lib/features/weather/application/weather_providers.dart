@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -48,7 +51,62 @@ class WeatherLocationException implements Exception {
 /// not ask for is the fastest way to get a permanent denial — which would then
 /// block run tracking too, where location is not optional. The card shows a
 /// button instead, and [requestWeatherLocation] is what asks.
+///
+/// Kept fresh on its own. The provider lives as long as the app, so a reading
+/// taken at launch used to be what the card showed all day: open at 07:00,
+/// look again at 14:00, and it was still the morning's temperature. Now a
+/// reading older than [weatherStaleAfter] is replaced when the app comes back
+/// to the foreground, and on a timer while it stays there. A failed reading
+/// is retried on every return — that is also how coming back from turning
+/// location on in Settings shows the weather without a tap.
+///
+/// The timer never fetches in the background: a location fix there needs a
+/// permission this feature does not ask for, and would fail into the error
+/// state. A tick that lands while the app is away is left to the resume.
+///
+/// While a refresh is in flight, and after one fails, the provider keeps the
+/// last reading as its value — the screens show it with a note rather than
+/// dropping back to a skeleton or an error.
 final weatherProvider = FutureProvider<WeatherSnapshot>((ref) async {
+  DateTime? fetchedAt;
+  var failed = false;
+  Timer? timer;
+
+  bool isStale() =>
+      fetchedAt != null &&
+      DateTime.now().difference(fetchedAt) >= weatherStaleAfter;
+
+  final lifecycle = AppLifecycleListener(
+    onResume: () {
+      if (failed || isStale()) ref.invalidateSelf();
+    },
+  );
+  ref.onDispose(() {
+    lifecycle.dispose();
+    timer?.cancel();
+  });
+
+  try {
+    final snapshot = await _readWeather(ref);
+    fetchedAt = snapshot.updatedAt;
+    timer = Timer(weatherStaleAfter, () {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        ref.invalidateSelf();
+      }
+    });
+    return snapshot;
+  } catch (_) {
+    failed = true;
+    rethrow;
+  }
+});
+
+/// How old a reading may get before it is fetched again. Open-Meteo's current
+/// conditions move in fifteen-minute steps; half an hour keeps the card honest
+/// without a request every time the app is opened.
+const Duration weatherStaleAfter = Duration(minutes: 30);
+
+Future<WeatherSnapshot> _readWeather(Ref ref) async {
   final serviceEnabled = await Geolocator.isLocationServiceEnabled();
   if (!serviceEnabled) {
     throw const WeatherLocationException(WeatherBlocker.serviceDisabled);
@@ -73,11 +131,10 @@ final weatherProvider = FutureProvider<WeatherSnapshot>((ref) async {
     ),
   );
 
-  return ref.watch(weatherServiceProvider).fetch(
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
-});
+  return ref
+      .read(weatherServiceProvider)
+      .fetch(latitude: position.latitude, longitude: position.longitude);
+}
 
 /// Asks for location, then re-runs [weatherProvider].
 ///
