@@ -2,6 +2,7 @@ package com.fitsocial.fitsocial_app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Intent
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -28,9 +29,31 @@ class MainActivity : FlutterFragmentActivity() {
     private var videoLoop: VideoLoopBridge? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        forgetReplayedLaunch()
         super.onCreate(savedInstanceState)
         createSocialNotificationChannel()
         createPanicNotificationChannel()
+    }
+
+    /**
+     * A launch from Recents is not a fresh tap.
+     *
+     * Android restarts a task from Recents with the intent it was first
+     * opened by, flagged LAUNCHED_FROM_HISTORY. If that was a notification or
+     * a shared link, its extras and data come back too — and both the FCM
+     * plugin's getInitialMessage and Flutter's deep-link route read them as if
+     * the user had just tapped. A tester opened the app from a meal-reaction
+     * push one morning and every later launch dropped her on that meal post.
+     *
+     * Cleared before super.onCreate, which is when Flutter and its plugins
+     * first read the intent. The Dart side also refuses a repeated push id
+     * (LaunchTapLedger), for any path this does not cover.
+     */
+    private fun forgetReplayedLaunch() {
+        val launch = intent ?: return
+        if (launch.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) return
+        launch.data = null
+        launch.replaceExtras(Bundle())
     }
 
     /**

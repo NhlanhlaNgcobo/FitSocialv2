@@ -9,6 +9,7 @@ import '../../../app/router/app_router.dart';
 import '../../../core/bootstrap/bootstrap_status.dart';
 import '../../../shared/links/share_links.dart';
 import '../../auth/application/app_session.dart';
+import '../data/launch_tap_ledger.dart';
 
 /// Where tapping a push notification takes you.
 ///
@@ -27,9 +28,13 @@ import '../../auth/application/app_session.dart';
 ///
 /// So: push, always, onto a `/home` that is known to be underneath.
 class PushTapRouter {
-  PushTapRouter(this._ref);
+  PushTapRouter(this._ref, {LaunchTapLedger? ledger})
+      : _ledger = ledger ?? LaunchTapLedger();
 
   final Ref _ref;
+
+  /// Which launching tap has already been followed. See [LaunchTapLedger].
+  final LaunchTapLedger _ledger;
 
   StreamSubscription<RemoteMessage>? _taps;
   StreamSubscription<RemoteMessage>? _foreground;
@@ -76,9 +81,18 @@ class PushTapRouter {
       });
 
       // Answers null on a launch that was not a notification tap, which is
-      // almost every launch.
+      // almost every launch. And answers with an OLD tap on a launch from
+      // Recents — Android replays the intent the app was first opened with —
+      // so a tap is only followed the first time it is seen.
       final launchedBy = await FirebaseMessaging.instance.getInitialMessage();
-      if (launchedBy != null) _open(launchedBy, wasRunning: false);
+      if (launchedBy != null &&
+          await _ledger.firstTime(LaunchTapLedger.keyFor(
+            messageId: launchedBy.messageId,
+            sentTime: launchedBy.sentTime,
+            route: launchedBy.data['route'] as String?,
+          ))) {
+        _open(launchedBy, wasRunning: false);
+      }
     } catch (error) {
       // A phone that cannot tell us why it launched still has an app to run,
       // and the notification is in the inbox either way.
