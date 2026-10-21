@@ -384,8 +384,8 @@ class CommentTile extends StatelessWidget {
 
   final Comment comment;
 
-  /// Likes or unlikes the comment as the viewer. Null hides the heart â€” Pulse
-  /// comments, which have no likes, pass nothing.
+  /// Likes or unlikes the comment as the viewer. Null hides the heart, as for a
+  /// signed-out viewer.
   final VoidCallback? onLike;
 
   /// Who is looking, to fill the heart for a comment they have liked.

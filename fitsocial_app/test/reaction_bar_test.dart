@@ -97,9 +97,31 @@ void main() {
       // The host has to know, or the Pulse advances out from under the tray.
       expect(visibility, [true]);
 
+      // Let go without aiming: the tray stays up to be tapped.
       await gesture.up();
       await tester.pumpAndSettle();
+      expect(visibility, [true]);
+
+      // A tap anywhere off the tray takes it down.
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
       expect(visibility, [true, false]);
+    });
+
+    testWidgets('once let go, the tray stays up and a tap picks a reaction',
+        (tester) async {
+      final changes = <FitReaction?>[];
+      await _pumpBar(tester, changes: changes, trayVisibility: []);
+
+      final gesture = await _openTray(tester);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.text(FitReaction.champion.emoji), findsWidgets);
+
+      await tester.tap(_trayReaction(FitReaction.champion));
+      await tester.pumpAndSettle();
+
+      expect(changes, [FitReaction.champion]);
     });
 
     testWidgets('sliding onto a reaction and lifting picks it', (tester) async {

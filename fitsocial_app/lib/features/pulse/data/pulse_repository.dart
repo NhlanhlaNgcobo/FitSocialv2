@@ -85,6 +85,16 @@ class UnconfiguredPulseRepository implements PulseRepository {
   Future<void> deleteComment(String pulseId, String commentId) {
     throw StateError(_firebaseSetupMessage);
   }
+
+  @override
+  Future<void> setCommentLike(
+    String pulseId,
+    String commentId,
+    String userId, {
+    required bool liked,
+  }) {
+    throw StateError(_firebaseSetupMessage);
+  }
 }
 
 const _firebaseSetupMessage =

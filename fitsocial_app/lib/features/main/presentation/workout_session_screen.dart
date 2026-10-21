@@ -31,6 +31,7 @@ import '../domain/routine.dart';
 import '../domain/previous_performance.dart';
 import '../domain/workout_math.dart';
 import '../domain/workout_models.dart';
+import '../../workouts/domain/workout_energy.dart';
 import 'exercise_picker_sheet.dart';
 import 'routine_sheets.dart';
 import 'session_time_sheet.dart';
@@ -523,7 +524,7 @@ class _WorkoutSessionScreenState extends ConsumerState<WorkoutSessionScreen> {
   }
 }
 
-/// The running clock with the sets and volume beside it.
+/// The running clock with the sets, volume and calories beside it.
 class _StatsStrip extends ConsumerWidget {
   const _StatsStrip({required this.workout});
 
@@ -614,9 +615,57 @@ class _StatsStrip extends ConsumerWidget {
               style: valueStyle,
             ),
           ),
+          stat('Est. kcal', _LiveCalories(workout: workout, style: valueStyle)),
         ],
       ),
     );
+  }
+}
+
+/// The session's calories so far — the same estimate the save fills in —
+/// counted forward as the clock runs. Shows a dash without a bodyweight, which
+/// is the one thing the estimate cannot do without.
+class _LiveCalories extends StatefulWidget {
+  const _LiveCalories({required this.workout, required this.style});
+
+  final ActiveWorkout workout;
+  final TextStyle style;
+
+  @override
+  State<_LiveCalories> createState() => _LiveCaloriesState();
+}
+
+class _LiveCaloriesState extends State<_LiveCalories> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // The estimate moves by the minute; twice a minute keeps it current
+    // without repainting the strip every second.
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final workout = widget.workout;
+    final minutes = (workout.elapsed(DateTime.now()).inSeconds / 60).round();
+    final kcal = minutes < 1
+        ? 0
+        : estimateWorkoutCalories(
+            exercises: workout.entries,
+            durationMinutes: minutes,
+            bodyweightKg: workout.bodyweightKg,
+          );
+    return Text(kcal == null ? '–' : '$kcal', style: widget.style);
   }
 }
 

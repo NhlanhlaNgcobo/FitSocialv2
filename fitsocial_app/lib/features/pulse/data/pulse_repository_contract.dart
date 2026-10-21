@@ -90,4 +90,13 @@ abstract class PulseRepository {
   /// Removes a comment. Allowed to the person who wrote it and to the author
   /// of the Pulse it sits under, who is the one moderating their own thread.
   Future<void> deleteComment(String pulseId, String commentId);
+
+  /// Likes a comment as [userId], or takes the like back. Only the caller's
+  /// own id ever enters or leaves the comment's `likedBy`.
+  Future<void> setCommentLike(
+    String pulseId,
+    String commentId,
+    String userId, {
+    required bool liked,
+  });
 }

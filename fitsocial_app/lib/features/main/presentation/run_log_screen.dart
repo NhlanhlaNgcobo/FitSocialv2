@@ -41,6 +41,7 @@ import '../domain/workout_models.dart' show LibraryExercise;
 import '../domain/workout_math.dart' show exerciseKeyFor;
 import '../domain/activity_kind.dart';
 import '../domain/app_models.dart';
+import '../domain/progress_models.dart' show estimatedActivityCalories;
 import 'tag_people_sheet.dart';
 import '../../music/presentation/music_island_action.dart';
 import '../../../shared/widgets/liquid_glass.dart';
@@ -66,7 +67,9 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
   /// The treadmill card is the run tab's and the indoor bike the ride tab's,
   /// so one of them comes and goes with the activity.
   int get _sectionCount =>
-      3 + (_kind == ActivityKind.run || _kind == ActivityKind.ride ? 1 : 0);
+      3 +
+      (_kind == ActivityKind.run || _kind == ActivityKind.ride ? 1 : 0) +
+      (kIsWeb ? 0 : 1);
 
   late final AnimationController _entranceController;
 
@@ -89,13 +92,16 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
     super.dispose();
   }
 
-  Future<void> _openManual() async {
+  Future<void> _openManual({bool pullFromHealth = false}) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.55),
       isScrollControlled: true,
-      builder: (_) => _ManualRunSheet(initialKind: _kind),
+      builder: (_) => _ManualRunSheet(
+        initialKind: _kind,
+        pullOnOpen: pullFromHealth,
+      ),
     );
   }
 
@@ -217,6 +223,23 @@ class _RunLogScreenState extends ConsumerState<RunLogScreen>
                 subtitle: 'Stationary, spin, air or recumbent — '
                     'starts a workout with it',
                 onTap: _startIndoorBike,
+              ),
+            ),
+          ],
+          // Already recorded on a watch or in Samsung Health: bring it in
+          // from here, where outings are tracked, rather than from behind
+          // Manual. Opens the manual sheet already filling itself.
+          if (!kIsWeb) ...[
+            const SizedBox(height: AppSpacing.sm + 4),
+            section(
+              HealthPullCard(
+                busy: false,
+                filled: false,
+                title: 'Import from your health app',
+                subtitle: 'Bring in a run, walk, hike or ride from Samsung '
+                    'Health or your watch',
+                note: null,
+                onTap: () => _openManual(pullFromHealth: true),
               ),
             ),
           ],
@@ -351,9 +374,13 @@ class _SheetHandle extends StatelessWidget {
 /// it: a pull from the health store, the distance and time, a photo for the
 /// card, sharing and tags.
 class _ManualRunSheet extends ConsumerStatefulWidget {
-  const _ManualRunSheet({required this.initialKind});
+  const _ManualRunSheet({required this.initialKind, this.pullOnOpen = false});
 
   final ActivityKind initialKind;
+
+  /// Opened from the import card on the page: reads the latest session from
+  /// the health store straight away instead of waiting for a second tap.
+  final bool pullOnOpen;
 
   @override
   ConsumerState<_ManualRunSheet> createState() => _ManualRunSheetState();
@@ -399,6 +426,11 @@ class _ManualRunSheetState extends ConsumerState<_ManualRunSheet> {
     super.initState();
     _distanceController = TextEditingController();
     _durationController = TextEditingController();
+    if (widget.pullOnOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _pullFromHealth();
+      });
+    }
   }
 
   @override
@@ -768,6 +800,11 @@ class _ManualRunSheetState extends ConsumerState<_ManualRunSheet> {
                             duration: _durationLabel,
                             pace: _paceLabel,
                             paceLabel: _paceStatLabel,
+                            calories: '${estimatedActivityCalories(
+                              kind: _kind,
+                              distanceKm: _distanceKm,
+                              duration: _elapsed,
+                            )}',
                           ),
                         )
                       : const SizedBox(width: double.infinity),
@@ -1255,11 +1292,16 @@ class _RunSummary extends StatelessWidget {
     required this.duration,
     required this.pace,
     required this.paceLabel,
+    required this.calories,
   });
 
   final String distance;
   final String duration;
   final String pace;
+
+  /// The estimate the save will store, so the number seen here is the one
+  /// the post and the Progress tab carry.
+  final String calories;
 
   /// "Avg pace" or "Avg speed" — a ride's headline figure is neither measured
   /// nor named the way a run's is.
@@ -1287,6 +1329,10 @@ class _RunSummary extends StatelessWidget {
           _SummaryRule(color: palette.stroke),
           Expanded(
             child: _SummaryStat(label: paceLabel, value: pace),
+          ),
+          _SummaryRule(color: palette.stroke),
+          Expanded(
+            child: _SummaryStat(label: 'Est. kcal', value: calories),
           ),
         ],
       ),

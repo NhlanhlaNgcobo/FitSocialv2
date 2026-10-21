@@ -485,6 +485,9 @@ class FirestorePulseRepository implements PulseRepository {
                     PublicAuthorName.sanitize(data['authorName'] as String?),
                 authorAvatarUrl: data['authorAvatarUrl'] as String?,
                 text: (data['text'] as String?) ?? '',
+                likedBy: (data['likedBy'] as List<dynamic>? ?? const [])
+                    .whereType<String>()
+                    .toList(growable: false),
                 // A comment reaches its own writer from the local cache before
                 // the server has stamped createdAt; treating that window as
                 // "now" keeps it at the bottom of the thread, which is where
@@ -541,6 +544,22 @@ class FirestorePulseRepository implements PulseRepository {
     // may both remove a comment, and only the server can tell whether the
     // caller is either.
     await _comments(pulseId).doc(commentId).delete();
+  }
+
+  @override
+  Future<void> setCommentLike(
+    String pulseId,
+    String commentId,
+    String userId, {
+    required bool liked,
+  }) async {
+    // arrayUnion/arrayRemove, so two people liking at once never overwrite
+    // each other; the rules check that only the caller's own id moved.
+    await _comments(pulseId).doc(commentId).update({
+      'likedBy': liked
+          ? FieldValue.arrayUnion([userId])
+          : FieldValue.arrayRemove([userId]),
+    });
   }
 
   /// Expiry stamp for a reaction or a comment.

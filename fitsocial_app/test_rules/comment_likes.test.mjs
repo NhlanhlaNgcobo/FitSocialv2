@@ -111,6 +111,44 @@ test("the liker can tell the comment's author, and take it back", async () => {
   await assertSucceeds(deleteDoc(notification(LIKER, id)));
 });
 
+// Pulse comments: the same like, but only for the Pulse's audience — its
+// author and the people who follow them.
+async function seedPulse() {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "pulses", "u1"), { authorId: POST_AUTHOR });
+    await setDoc(doc(db, "pulses", "u1", "comments", "c1"), {
+      authorId: COMMENTER,
+      text: "Looking strong",
+    });
+    await setDoc(doc(db, "users", POST_AUTHOR, "followers", LIKER), { createdAt: 1 });
+  });
+}
+
+const pulseComment = (uid) =>
+  doc(env.authenticatedContext(uid).firestore(), "pulses", "u1", "comments", "c1");
+
+test("a follower can like and unlike a Pulse comment", async () => {
+  await seedPulse();
+  await assertSucceeds(updateDoc(pulseComment(LIKER), { likedBy: arrayUnion(LIKER) }));
+  await assertSucceeds(updateDoc(pulseComment(LIKER), { likedBy: arrayRemove(LIKER) }));
+  await assertSucceeds(updateDoc(pulseComment(POST_AUTHOR), { likedBy: arrayUnion(POST_AUTHOR) }));
+});
+
+test("someone outside the Pulse's audience can't like its comments", async () => {
+  await seedPulse();
+  await assertFails(updateDoc(pulseComment(OTHER), { likedBy: arrayUnion(OTHER) }));
+});
+
+test("a Pulse comment like can't edit the comment or add anyone else", async () => {
+  await seedPulse();
+  await assertFails(
+    updateDoc(pulseComment(LIKER), { likedBy: arrayUnion(LIKER), text: "edited" }),
+  );
+  await assertFails(updateDoc(pulseComment(LIKER), { likedBy: arrayUnion("ghost") }));
+  await assertFails(updateDoc(pulseComment(LIKER), { text: "edited" }));
+});
+
 test("nobody can send a comment-like notification in someone else's name", async () => {
   await assertFails(
     setDoc(notification(LIKER, `commentLike_fresh_${OTHER}`), {

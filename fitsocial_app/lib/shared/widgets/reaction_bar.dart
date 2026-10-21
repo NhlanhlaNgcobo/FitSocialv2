@@ -19,8 +19,9 @@ import '../reactions/fit_reaction.dart';
 ///     gesture continues — slide along the row to aim, lift to pick. Never two
 ///     gestures, which is what makes the whole thing take under a second.
 ///
-/// Lifting away from the row picks nothing, so opening the tray by accident
-/// costs a release and no reaction.
+/// Lifting away from the row picks nothing and leaves the tray up, so a
+/// reaction can also be tapped once the finger is off the screen; a tap
+/// anywhere else closes it.
 ///
 /// Separate from what it wraps because the two places this is used look
 /// nothing alike: a Pulse wants a labelled pill over its photo, a post wants
@@ -102,6 +103,11 @@ class _ReactionTriggerState extends State<ReactionTrigger>
   AppPalette? _palette;
 
   FitReaction? _hovered;
+
+  /// Whether the tray stayed open after the press that opened it ended away
+  /// from the row. It then takes taps of its own — pick one, or tap anywhere
+  /// else to close it — for anyone who lets go before sliding to a reaction.
+  bool _sticky = false;
 
   /// Whether the tray that is about to open (or the one already open) should
   /// keep its overshoot and full timing. Snapshotted in [_openTray], the same
@@ -204,6 +210,7 @@ class _ReactionTriggerState extends State<ReactionTrigger>
     if (tray == null) return;
     _tray = null;
     _closing = tray;
+    _sticky = false;
 
     widget.onTrayVisibilityChanged?.call(false);
     if (picked != null && picked != widget.selected) {
@@ -253,38 +260,81 @@ class _ReactionTriggerState extends State<ReactionTrigger>
       onTap: _handleTap,
       onLongPressStart: (_) => _openTray(),
       onLongPressMoveUpdate: (details) => _updateHover(details.globalPosition),
-      onLongPressEnd: (_) => _closeTray(picked: _hovered),
+      onLongPressEnd: (_) => _endPress(),
       onLongPressCancel: () => _closeTray(),
       child: widget.child,
     );
+  }
+
+  /// Lifting on a reaction picks it, as before. Lifting anywhere else leaves
+  /// the tray up to be tapped, rather than closing it with nothing picked.
+  void _endPress() {
+    if (_hovered != null) {
+      _closeTray(picked: _hovered);
+      return;
+    }
+    _sticky = true;
+    _tray?.markNeedsBuild();
   }
 
   Widget _buildTray() {
     final palette = _palette;
     if (palette == null) return const SizedBox.shrink();
 
-    return Positioned.fromRect(
-      rect: _trayRect,
-      // The row must not swallow the long-press that opened it — the gesture
-      // is still live on the button underneath, and it is the one steering.
-      child: IgnorePointer(
-        // Overlay entries sit above the route's Material, so text inside one
-        // inherits WidgetsApp's fallback style — the yellow double underline
-        // meant to flag unstyled text. A transparent Material restores a real
-        // DefaultTextStyle without painting anything of its own.
-        child: Material(
-          type: MaterialType.transparency,
-          child: AnimatedBuilder(
-            animation: _reveal,
-            builder: (context, _) => _ReactionTray(
-              reveal: _reveal.value,
-              hovered: _hovered,
-              selected: widget.selected,
-              itemExtent: _itemExtent,
-              padding: _trayPadding,
-              palette: palette,
-              reduceMotion: _reduceMotion,
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          // Behind the tray once it stays up: any touch outside it closes it,
+          // the way a menu does, instead of reaching the page underneath.
+          if (_sticky)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (_) => _closeTray(),
+              ),
             ),
+          Positioned.fromRect(
+            rect: _trayRect,
+            // While the press that opened it is still down, the row must not
+            // swallow it — the gesture is live on the button underneath, and
+            // it is the one steering. Once the tray stays up it takes taps,
+            // answered by the same arithmetic as the slide.
+            child: IgnorePointer(
+              ignoring: !_sticky,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) {
+                  final face = _faceAt(details.globalPosition);
+                  // A tap on the capsule's padding, between faces, keeps it up.
+                  if (face != null) _closeTray(picked: face);
+                },
+                child: _trayBody(palette),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _trayBody(AppPalette palette) {
+    return IgnorePointer(
+      // Overlay entries sit above the route's Material, so text inside one
+      // inherits WidgetsApp's fallback style — the yellow double underline
+      // meant to flag unstyled text. A transparent Material restores a real
+      // DefaultTextStyle without painting anything of its own.
+      child: Material(
+        type: MaterialType.transparency,
+        child: AnimatedBuilder(
+          animation: _reveal,
+          builder: (context, _) => _ReactionTray(
+            reveal: _reveal.value,
+            hovered: _hovered,
+            selected: widget.selected,
+            itemExtent: _itemExtent,
+            padding: _trayPadding,
+            palette: palette,
+            reduceMotion: _reduceMotion,
           ),
         ),
       ),

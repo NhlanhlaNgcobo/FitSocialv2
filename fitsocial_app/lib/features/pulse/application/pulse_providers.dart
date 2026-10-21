@@ -169,6 +169,17 @@ class PulseActions {
   Future<void> deleteComment(String pulseId, String commentId) {
     return _ref.read(pulseRepositoryProvider).deleteComment(pulseId, commentId);
   }
+
+  Future<void> setCommentLike(
+    String pulseId,
+    String commentId,
+    String userId, {
+    required bool liked,
+  }) {
+    return _ref
+        .read(pulseRepositoryProvider)
+        .setCommentLike(pulseId, commentId, userId, liked: liked);
+  }
 }
 
 final pulseActionsProvider = Provider<PulseActions>((ref) {

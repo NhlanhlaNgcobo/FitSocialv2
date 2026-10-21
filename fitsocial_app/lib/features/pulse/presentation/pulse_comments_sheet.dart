@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_colors.dart';
@@ -160,13 +161,44 @@ class _PulseCommentRow extends ConsumerWidget {
     final canDelete = currentUserId != null &&
         (currentUserId == comment.authorId || currentUserId == pulseAuthorId);
 
-    if (!canDelete) return CommentTile(comment: comment);
+    final tile = CommentTile(
+      comment: comment,
+      viewerId: currentUserId,
+      onLike: currentUserId == null
+          ? null
+          : () => _toggleLike(context, ref, currentUserId),
+    );
+    if (!canDelete) return tile;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onLongPress: () => _confirmDelete(context, ref),
-      child: CommentTile(comment: comment),
+      child: tile,
     );
+  }
+
+  Future<void> _toggleLike(
+    BuildContext context,
+    WidgetRef ref,
+    String viewerId,
+  ) async {
+    HapticFeedback.lightImpact();
+    final overlay = Overlay.of(context, rootOverlay: true);
+    try {
+      await ref.read(pulseActionsProvider).setCommentLike(
+            pulseId,
+            comment.id,
+            viewerId,
+            liked: !comment.isLikedBy(viewerId),
+          );
+    } catch (_) {
+      showQuickToastOn(
+        overlay,
+        "Couldn't update that like.",
+        icon: Icons.error_outline_rounded,
+        tone: ToastTone.danger,
+      );
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {

@@ -1075,9 +1075,13 @@ service cloud.firestore {
         allow read: if request.auth != null && isPulseAudience(pulseId);
         allow create: if request.auth != null
                       && request.resource.data.authorId == request.auth.uid;
+        // Anyone who can see the Pulse may like or unlike a comment as
+        // themselves, the same as on a post; every other edit stays with its
+        // author.
         allow update: if request.auth != null
-                      && resource.data.authorId == request.auth.uid
-                      && request.resource.data.authorId == request.auth.uid;
+                      && ((resource.data.authorId == request.auth.uid
+                           && request.resource.data.authorId == request.auth.uid)
+                          || (isPulseAudience(pulseId) && isOwnCommentLike()));
         allow delete: if request.auth != null
                       && (resource.data.authorId == request.auth.uid
                           || isPulseAuthor(pulseId));
