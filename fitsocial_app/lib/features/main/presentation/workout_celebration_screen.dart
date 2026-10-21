@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../app/theme/app_theme.dart';
+import '../../../shared/services/video_loop_maker.dart' show videoLoopBeside;
 import '../../../shared/services/workout_card_exporter.dart';
 import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -74,6 +75,11 @@ class _WorkoutCelebrationScreenState
         workoutData: c.workoutData,
         activity: 'Workout',
         backgroundImage: _look == WorkoutCardLook.photo ? photo : null,
+        // The loop plays here as it will in the feed; the saved file is
+        // still a picture of its first frame.
+        backgroundVideo: _look == WorkoutCardLook.photo
+            ? videoLoopBeside(c.backgroundPath)
+            : null,
         forExport: _look != WorkoutCardLook.photo,
         transparentGround: _look == WorkoutCardLook.clear,
         margin: EdgeInsets.zero,

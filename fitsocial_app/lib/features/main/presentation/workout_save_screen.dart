@@ -583,31 +583,33 @@ class _Tap extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final radius = BorderRadius.circular(AppRadius.field);
-    return Material(
-      color: palette.surfaceHigh,
-      borderRadius: radius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: radius,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: palette.muted),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w700,
+    // A glass well like the fields above and below it, not a solid slab.
+    return GlassWell(
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: palette.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              Icon(Icons.edit_rounded, size: 16, color: palette.muted),
-            ],
+                Icon(Icons.edit_rounded, size: 16, color: palette.muted),
+              ],
+            ),
           ),
         ),
       ),
@@ -717,43 +719,54 @@ class _PhotoPicker extends StatelessWidget {
         ],
       );
     }
-    return Row(
-      children: [
+    // Three to a row on a narrow phone, so each is padded tight and its
+    // word kept to one line — the default padding broke "Camera" in two.
+    Widget button(IconData icon, String label, VoidCallback? onPressed) =>
         Expanded(
           child: OutlinedButton.icon(
-            onPressed:
-                onPick == null ? null : () => onPick!(ImageSource.gallery),
-            icon: const Icon(Icons.photo_library_outlined),
-            label: const Text('Gallery'),
+            onPressed: onPressed,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            icon: Icon(icon, size: 18),
+            label: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+            ),
           ),
+        );
+
+    return Row(
+      children: [
+        button(
+          Icons.photo_library_outlined,
+          'Gallery',
+          onPick == null ? null : () => onPick!(ImageSource.gallery),
         ),
         if (!kIsWeb) ...[
           const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed:
-                  onPick == null ? null : () => onPick!(ImageSource.camera),
-              icon: const Icon(Icons.photo_camera_outlined),
-              label: const Text('Camera'),
-            ),
+          button(
+            Icons.photo_camera_outlined,
+            'Camera',
+            onPick == null ? null : () => onPick!(ImageSource.camera),
           ),
         ],
         if (onVideoPicked != null && VideoLoopMaker.isSupported) ...[
           const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: onPick == null
-                  ? null
-                  : () async {
-                      final poster = await pickVideoLoop(
-                        context,
-                        source: ImageSource.gallery,
-                      );
-                      if (poster != null) onVideoPicked?.call(poster);
-                    },
-              icon: const Icon(Icons.movie_outlined),
-              label: const Text('Video'),
-            ),
+          button(
+            Icons.movie_outlined,
+            'Video',
+            onPick == null
+                ? null
+                : () async {
+                    final poster = await pickVideoLoop(
+                      context,
+                      source: ImageSource.gallery,
+                    );
+                    if (poster != null) onVideoPicked?.call(poster);
+                  },
           ),
         ],
       ],

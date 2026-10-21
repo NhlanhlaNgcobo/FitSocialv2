@@ -29,7 +29,7 @@ import java.io.FileOutputStream
  *
  * One pass through Media3's Transformer: cut to the chosen few seconds, drop
  * the sound (a card plays muted, so audio is only weight), and bring the short
- * side down to 720px at a bitrate that keeps five seconds near a megabyte.
+ * side down to 540px at a bitrate that keeps five seconds under a megabyte.
  * The first frame is saved beside it as a JPEG — the card's still, which is
  * what older builds, the share export and the moment before playback show.
  *
@@ -44,8 +44,11 @@ class VideoLoopBridge(
     companion object {
         const val CHANNEL = "fitsocial/video_loop"
         private const val TAG = "VideoLoopBridge"
-        private const val SHORT_SIDE = 720
-        private const val BITRATE = 2_000_000
+        // 540 x 960 at 1.2 Mbps: sharp at the size a card is drawn, and five
+        // seconds lands near 750 KB. At 720p / 2 Mbps the first device test
+        // took over thirty seconds to upload on mobile data.
+        private const val SHORT_SIDE = 540
+        private const val BITRATE = 1_200_000
     }
 
     private val channel = MethodChannel(messenger, CHANNEL)

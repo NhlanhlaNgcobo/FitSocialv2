@@ -97,6 +97,35 @@ void main() {
       expect(find.text('80 kg'), findsOneWidget);
     });
 
+    testWidgets('prints every exercise, since a file cannot be tapped open',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 3000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: WorkoutSummaryCard(
+              workoutData: {
+                'title': 'Gym',
+                'exercises': [
+                  for (var i = 1; i <= 11; i++)
+                    {'name': 'Lift $i', 'sets': 3, 'reps': 10},
+                ],
+              },
+              activity: 'Workout',
+              forExport: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Lift 11'), findsOneWidget);
+      expect(find.textContaining('more'), findsNothing);
+    });
+
     testWidgets('takes the light theme ground on the light theme',
         (tester) async {
       await pumpCard(tester, forExport: true, dark: false);

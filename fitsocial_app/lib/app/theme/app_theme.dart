@@ -114,6 +114,25 @@ abstract final class AppTheme {
         backgroundColor: palette.brand,
         foregroundColor: AppColors.onBrand,
       ),
+      // Chips are glass like everything else on the page: no fill of their
+      // own, a hairline, and the soft orange only when picked. Material's
+      // default filled them with surfaceContainer — a near-black slab on the
+      // dark theme that read as a hole in the glass.
+      chipTheme: ChipThemeData(
+        backgroundColor: Colors.transparent,
+        selectedColor: palette.brandSoft,
+        disabledColor: Colors.transparent,
+        side: BorderSide(color: palette.stroke),
+        shape: const StadiumBorder(),
+        labelStyle: TextStyle(color: palette.text, fontWeight: FontWeight.w600),
+        secondaryLabelStyle:
+            TextStyle(color: palette.brandText, fontWeight: FontWeight.w700),
+        checkmarkColor: palette.brandText,
+        iconTheme: IconThemeData(color: palette.muted, size: 18),
+        elevation: 0,
+        pressElevation: 0,
+        surfaceTintColor: Colors.transparent,
+      ),
       textTheme: base.textTheme.apply(
         bodyColor: palette.text,
         displayColor: palette.text,

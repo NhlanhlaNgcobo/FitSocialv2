@@ -116,6 +116,9 @@ class WorkoutSummaryCard extends StatelessWidget {
   /// as another name — the detail page has room for all of them.
   static const int _maxRows = 5;
 
+  /// How many a saved or shared file prints — every exercise, in practice.
+  static const int _maxExportRows = 20;
+
   /// One value from the log, as text, whatever Firestore is holding it as.
   ///
   /// A cast would be wrong here for the same reason [_exercise] handles two
@@ -325,24 +328,17 @@ class WorkoutSummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          for (final exercise in exercises.take(_maxRows))
-            _ExerciseRow(
-              exercise: exercise,
-              showLoad: hasLoads,
-              skin: skin,
-            ),
-          if (exercises.length > _maxRows)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '+${exercises.length - _maxRows} more',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: skin.accent,
-                ),
-              ),
-            ),
+          _ExerciseList(
+            exercises: exercises,
+            showLoad: hasLoads,
+            skin: skin,
+            // A file is one picture: nothing in it can be tapped open, so it
+            // prints the whole session instead of a "+N more" nobody can
+            // follow. Capped well above a real session, so a runaway log
+            // cannot make a file taller than any app will show.
+            maxRows: forExport ? _maxExportRows : _maxRows,
+            expandable: !forExport,
+          ),
         ],
         if (totalReps > 0) ...[
           const SizedBox(height: 12),
@@ -410,6 +406,7 @@ class WorkoutSummaryCard extends StatelessWidget {
           muscles: muscles,
           skin: skin,
           compact: summary,
+          overPhoto: photo != null,
         ),
       ),
       bottom: Padding(
@@ -462,7 +459,11 @@ class WorkoutSummaryCard extends StatelessWidget {
                 video: forExport ? null : backgroundVideo,
                 pinnedRatio: aspectRatio,
                 fallbackColor: skin.photoFallback,
-                child: content,
+                // The same poster as the plain card — header, the big
+                // figure, the log — so adding a photo changes what is behind
+                // the card and nothing about the card itself.
+                posterLayout: portrait,
+                child: portrait ? poster : content,
               ),
       ),
     );
@@ -556,12 +557,17 @@ class _PhotoBacked extends StatelessWidget {
     required this.pinnedRatio,
     required this.fallbackColor,
     required this.child,
+    this.posterLayout = false,
   });
 
   final ImageProvider image;
 
   /// The loop [image] is the first frame of, played over it under the scrim.
   final String? video;
+
+  /// [child] is the 9:16 poster, which sets the card's height itself; the
+  /// photo then only fills it.
+  final bool posterLayout;
 
   /// Where [image] came from, when it came from the network — what
   /// [NetworkPhotoAspect] measures by. Null for a local or pre-decoded photo,
@@ -575,6 +581,17 @@ class _PhotoBacked extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The poster sizes itself to 9:16 exactly as the plain card does, so the
+    // photo simply covers whatever shape the card already is — the card is
+    // the same with a photo behind it as without one.
+    if (posterLayout) {
+      return Stack(
+        children: [
+          ..._layers(),
+          child,
+        ],
+      );
+    }
     final pinned = pinnedRatio;
     final url = imageUrl;
     if (pinned != null || url == null) {
@@ -588,41 +605,7 @@ class _PhotoBacked extends StatelessWidget {
       builder: (context, constraints) {
         return Stack(
           children: [
-            Positioned.fill(
-              child: Image(
-                key: WorkoutSummaryCard.backdropKey,
-                image: image,
-                fit: BoxFit.cover,
-                // A backdrop that fails to load must not take the workout's
-                // numbers down with it — fall back to the flat tint and
-                // carry on.
-                errorBuilder: (context, error, stackTrace) =>
-                    ColoredBox(color: fallbackColor),
-              ),
-            ),
-            if (video case final source?)
-              Positioned.fill(child: LoopingVideoLayer(source: source)),
-            // Without this the metrics sit on whatever the photo happens to
-            // be, and a bright gym window erases them. Lightest at the top,
-            // heaviest under the sheet — the same direction the run and
-            // meal cards scrim in, because the sheet sits where their text
-            // does.
-            const Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0x59050505),
-                      Color(0xB8050505),
-                      Color(0xE6050505),
-                    ],
-                    stops: [0, 0.42, 1],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
-              ),
-            ),
+            ..._layers(),
             ConstrainedBox(
               constraints: BoxConstraints(
                 minHeight: constraints.maxWidth / ratio,
@@ -645,6 +628,47 @@ class _PhotoBacked extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// The photo, its loop and the scrim, filling whatever size the card is.
+  List<Widget> _layers() {
+    return [
+      Positioned.fill(
+        child: Image(
+          key: WorkoutSummaryCard.backdropKey,
+          image: image,
+          fit: BoxFit.cover,
+          // A backdrop that fails to load must not take the workout's
+          // numbers down with it — fall back to the flat tint and
+          // carry on.
+          errorBuilder: (context, error, stackTrace) =>
+              ColoredBox(color: fallbackColor),
+        ),
+      ),
+      if (video case final source?)
+        Positioned.fill(child: LoopingVideoLayer(source: source)),
+      // Without this the metrics sit on whatever the photo happens to
+      // be, and a bright gym window erases them. Nearly even from top
+      // to bottom, because the poster puts words at the top, the
+      // figure in the middle and the log at the bottom — there is no
+      // empty band left for the photo to show through untouched.
+      const Positioned.fill(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0x99050505),
+                Color(0xAD050505),
+                Color(0xD9050505),
+              ],
+              stops: [0, 0.5, 1],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        ),
+      ),
+    ];
   }
 }
 
@@ -735,12 +759,17 @@ class _PosterHero extends ConsumerWidget {
     required this.muscles,
     required this.skin,
     required this.compact,
+    this.overPhoto = false,
   });
 
   final List<_Stat> stats;
   final Map<String, double> muscles;
   final _CardSkin skin;
   final Widget compact;
+
+  /// Drawn over a photo or loop: the figure keeps its dark-theme colours,
+  /// because a picture is the same in both themes.
+  final bool overPhoto;
 
   /// The figure's height bounds: below the smaller it reads no better than
   /// the compact row, past the larger it crowds the header off the card.
@@ -771,6 +800,7 @@ class _PosterHero extends ConsumerWidget {
                   sets: muscles,
                   scale: HeatScale.session,
                   height: math.min(figure, _maxFigure),
+                  forceDarkPalette: overPhoto,
                 ),
               ),
               const SizedBox(height: 14),
@@ -1084,6 +1114,80 @@ class _ShrinkToFit extends StatelessWidget {
       fit: BoxFit.scaleDown,
       alignment: alignment,
       child: child,
+    );
+  }
+}
+
+/// The exercise lines: the first [maxRows], then "+N more".
+///
+/// "+N more" opens the rest in place. People read each other's sessions to
+/// borrow from them, and a count of what they cannot see is no use for that —
+/// tapping it shows every movement, and "Show less" folds them away again.
+class _ExerciseList extends StatefulWidget {
+  const _ExerciseList({
+    required this.exercises,
+    required this.showLoad,
+    required this.skin,
+    required this.maxRows,
+    required this.expandable,
+  });
+
+  final List<_Exercise> exercises;
+  final bool showLoad;
+  final _CardSkin skin;
+  final int maxRows;
+  final bool expandable;
+
+  @override
+  State<_ExerciseList> createState() => _ExerciseListState();
+}
+
+class _ExerciseListState extends State<_ExerciseList> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final exercises = widget.exercises;
+    final hidden = exercises.length - widget.maxRows;
+    final open = _expanded && widget.expandable;
+    final shown = open ? exercises : exercises.take(widget.maxRows);
+    final linkStyle = TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w600,
+      color: widget.skin.accent,
+    );
+
+    Widget link(String label) {
+      final text = Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(label, style: linkStyle),
+      );
+      if (!widget.expandable) return text;
+      return Semantics(
+        button: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _expanded = !_expanded),
+          // Taller than the words, so a thumb finds it.
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: text,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final exercise in shown)
+          _ExerciseRow(
+            exercise: exercise,
+            showLoad: widget.showLoad,
+            skin: widget.skin,
+          ),
+        if (hidden > 0) link(open ? 'Show less' : '+$hidden more'),
+      ],
     );
   }
 }

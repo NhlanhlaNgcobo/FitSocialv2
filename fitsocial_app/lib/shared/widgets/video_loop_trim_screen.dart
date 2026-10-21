@@ -240,10 +240,19 @@ class _VideoLoopTrimScreenState extends State<VideoLoopTrimScreen> {
             minimumSize: const Size.fromHeight(50),
           ),
           child: _working
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              // Words with the spinner: the cut takes several seconds on a
+              // budget phone, and a bare spinner that long reads as stuck.
+              ? const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 10),
+                    Text('Making your loop…'),
+                  ],
                 )
               : const Text(
                   'Use this loop',

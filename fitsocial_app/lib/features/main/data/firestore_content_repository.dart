@@ -3345,10 +3345,13 @@ class FirestoreContentRepository implements ContentRepository {
     // Best effort: the image is orphaned the moment the post is gone and keeps
     // costing storage. A failure here shouldn't report the delete as failed,
     // since the post itself is already removed.
-    final imageUrl = data['imageUrl'] as String?;
-    if (imageUrl != null && imageUrl.isNotEmpty) {
+    // The loop goes with its first frame; left behind, it is a megabyte that
+    // nothing will ever point at again.
+    for (final field in const ['imageUrl', 'backgroundVideoUrl']) {
+      final url = data[field] as String?;
+      if (url == null || url.isEmpty) continue;
       try {
-        await FirebaseStorage.instance.refFromURL(imageUrl).delete();
+        await FirebaseStorage.instance.refFromURL(url).delete();
       } catch (_) {
         // Already deleted, or a URL we can't resolve — nothing to recover.
       }

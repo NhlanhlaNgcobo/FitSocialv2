@@ -71,10 +71,8 @@ void main() {
     // darkened photo.
     testWidgets('keeps its text light over a photo in either theme',
         (tester) async {
-      Color titleColour() => tester
-          .widget<Text>(find.text('Leg Day'))
-          .style!
-          .color!;
+      Color titleColour() =>
+          tester.widget<Text>(find.text('Leg Day')).style!.color!;
 
       await pumpCard(
         tester,
@@ -97,10 +95,8 @@ void main() {
 
     testWidgets('follows the theme when there is no photo to sit on',
         (tester) async {
-      Color titleColour() => tester
-          .widget<Text>(find.text('Leg Day'))
-          .style!
-          .color!;
+      Color titleColour() =>
+          tester.widget<Text>(find.text('Leg Day')).style!.color!;
 
       await pumpCard(tester, dark: true);
       final onDark = titleColour();
@@ -109,13 +105,15 @@ void main() {
       final onLight = titleColour();
 
       expect(onLight, isNot(onDark));
-      expect(onDark.computeLuminance(), greaterThan(onLight.computeLuminance()));
+      expect(
+          onDark.computeLuminance(), greaterThan(onLight.computeLuminance()));
     });
 
     testWidgets('survives a background that fails to load', (tester) async {
       // Image.network cannot reach anything under the test binding, so this is
       // the failure path by default — the card must still render its content.
-      await pumpCard(tester, backgroundImageUrl: 'https://example.com/gone.jpg');
+      await pumpCard(tester,
+          backgroundImageUrl: 'https://example.com/gone.jpg');
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.text('Leg Day'), findsOneWidget);
@@ -184,6 +182,32 @@ void main() {
       expect(find.text('+2 more'), findsOneWidget);
     });
 
+    testWidgets('"+N more" opens the rest, and "Show less" folds them away',
+        (tester) async {
+      // Tall enough that the whole poster, opened, is on screen to tap.
+      tester.view.physicalSize = const Size(400, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await pumpCard(tester, workout: {
+        'title': 'Full Body',
+        'duration': '80 min',
+        'exercises': [
+          for (var i = 1; i <= 7; i++)
+            {'name': 'Lift $i', 'sets': 3, 'reps': 10},
+        ],
+      });
+
+      await tester.tap(find.text('+2 more'));
+      await tester.pumpAndSettle();
+      expect(find.text('Lift 6'), findsOneWidget);
+      expect(find.text('Lift 7'), findsOneWidget);
+
+      await tester.tap(find.text('Show less'));
+      await tester.pumpAndSettle();
+      expect(find.text('Lift 6'), findsNothing);
+      expect(find.text('+2 more'), findsOneWidget);
+    });
+
     testWidgets('holds its columns on a narrow phone', (tester) async {
       // The sheet's whole layout is fixed-width columns with a leader
       // stretching between them, so the width it has least of is the one that
@@ -221,15 +245,16 @@ void main() {
       expect(find.byType(FitSocialLogo), findsOneWidget);
     });
 
-    testWidgets('asks the photo for its own shape rather than picking one',
+    testWidgets('is the same card with a photo behind it as without one',
         (tester) async {
       await pumpCard(tester);
-      expect(find.byType(NetworkPhotoAspect), findsNothing);
+      final plain = tester.getSize(find.byType(WorkoutSummaryCard));
 
       await pumpCard(tester, backgroundImageUrl: 'https://example.com/gym.jpg');
-      // The card sizes itself to the decoded photo's ratio instead of cropping
-      // it to whatever height the rows happen to need.
-      expect(find.byType(NetworkPhotoAspect), findsOneWidget);
+      // The photo fills the poster; it does not reshape it, and it does not
+      // swap the big figure for the compact row.
+      expect(find.byType(NetworkPhotoAspect), findsNothing);
+      expect(tester.getSize(find.byType(WorkoutSummaryCard)), plain);
     });
 
     testWidgets('still renders exercises written as plain strings',
