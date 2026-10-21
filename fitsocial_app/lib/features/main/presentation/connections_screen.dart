@@ -126,7 +126,7 @@ class _KindSegment extends ConsumerWidget {
         height: 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Color.lerp(palette.surface, palette.brand, selection),
+          color: Color.lerp(palette.wash, palette.brand, selection),
           borderRadius: BorderRadius.circular(AppRadius.pill),
           border: Border.all(
             color: Color.lerp(palette.stroke, palette.brand, selection)!,

@@ -187,7 +187,7 @@ class _SectionHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
           decoration: BoxDecoration(
-            color: palette.surfaceHigh,
+            color: palette.washHigh,
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
           child: Text(

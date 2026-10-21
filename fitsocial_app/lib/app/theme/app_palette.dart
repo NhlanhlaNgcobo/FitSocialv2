@@ -229,6 +229,18 @@ class AppPalette extends ThemeExtension<AppPalette> {
     navShadow: Color(0x1A000000),
   );
 
+  /// The fill for a small control sitting on the page — a search bar, a pill,
+  /// a tile, a field: a faint lift of [overlay] that lets the page's warm
+  /// glow show through.
+  ///
+  /// The opaque [surface] / [surfaceHigh] greys are near-black slabs on the
+  /// dark theme, holes in a page that is otherwise all glass; they stay for
+  /// what genuinely needs to be opaque (dialogs, sheets, menus).
+  Color get wash => overlay.withValues(alpha: isDark ? 0.06 : 0.05);
+
+  /// [wash], one step up: an inset well inside a control, a selected tile.
+  Color get washHigh => overlay.withValues(alpha: isDark ? 0.10 : 0.08);
+
   /// An identifying hue, adjusted for the surface it is about to be drawn on.
   ///
   /// The app's non-brand accents — the four Create actions, the progress

@@ -768,7 +768,7 @@ class _SyncChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(9, 5, 10, 5),
           decoration: BoxDecoration(
-            color: palette.surfaceHigh,
+            color: palette.washHigh,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: palette.stroke),
           ),
@@ -861,7 +861,7 @@ class _NoticeCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: Color.alphaBlend(
                 color.withValues(alpha: palette.isDark ? 0.18 : 0.10),
-                palette.surface,
+                Colors.transparent,
               ),
               borderRadius: BorderRadius.circular(13),
             ),
@@ -991,7 +991,7 @@ class _ConnectedCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: Color.alphaBlend(
                 success.withValues(alpha: palette.isDark ? 0.18 : 0.10),
-                palette.surface,
+                Colors.transparent,
               ),
               borderRadius: BorderRadius.circular(13),
             ),
@@ -1627,7 +1627,7 @@ class _DiagnosticRow extends StatelessWidget {
                             colour.withValues(
                               alpha: palette.isDark ? 0.16 : 0.10,
                             ),
-                            palette.surface,
+                            Colors.transparent,
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),

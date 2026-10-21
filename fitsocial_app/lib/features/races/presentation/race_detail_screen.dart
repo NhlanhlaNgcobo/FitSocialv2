@@ -522,7 +522,7 @@ class _WhereCard extends StatelessWidget {
               tooltip: 'Open in maps',
               visualDensity: VisualDensity.compact,
               style: IconButton.styleFrom(
-                backgroundColor: palette.surfaceHigh,
+                backgroundColor: palette.washHigh,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),

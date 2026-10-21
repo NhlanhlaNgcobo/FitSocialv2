@@ -10,6 +10,7 @@ import '../../auth/presentation/account_switcher_sheet.dart';
 import '../application/content_providers.dart';
 import '../domain/app_models.dart';
 import '../domain/explore_models.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 import '../../../shared/widgets/post_summary_tile.dart';
 import '../../../shared/widgets/avatar.dart';
 import '../../../shared/widgets/bottom_nav.dart';
@@ -399,41 +400,49 @@ class _NotSharedEntry extends ConsumerWidget {
         AppSpacing.md,
         0,
       ),
-      child: Material(
-        color: palette.surfaceHigh,
+      // Glass with a hairline, like the cards around it: a flat fill here sat
+      // on the page as a dark slab.
+      child: LiquidGlass(
         borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => context.push(
-            _workouts ? '/not-shared-workouts' : '/not-shared',
+        child: Material(
+          type: MaterialType.transparency,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: palette.stroke),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: 12,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => context.push(
+              _workouts ? '/not-shared-workouts' : '/not-shared',
             ),
-            child: Row(
-              children: [
-                Icon(Icons.lock_outline_rounded,
-                    size: 18, color: palette.brandText),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Not shared',
-                    style: TextStyle(
-                      color: palette.text,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 12,
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline_rounded,
+                      size: 18, color: palette.brandText),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Not shared',
+                      style: TextStyle(
+                        color: palette.text,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  '$count',
-                  style: TextStyle(color: palette.muted, fontSize: 14),
-                ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right_rounded, color: palette.muted),
-              ],
+                  Text(
+                    '$count',
+                    style: TextStyle(color: palette.muted, fontSize: 14),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, color: palette.muted),
+                ],
+              ),
             ),
           ),
         ),
@@ -645,16 +654,20 @@ class _EmptyGrid extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: palette.surfaceHigh,
-            ),
-            child: Icon(
-              Icons.camera_alt_outlined,
-              color: palette.brand,
-              size: 48,
+          // A glass disc with a hairline, not a dark filled circle.
+          LiquidGlass(
+            borderRadius: BorderRadius.circular(48),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: palette.stroke),
+              ),
+              child: Icon(
+                Icons.camera_alt_outlined,
+                color: palette.brand,
+                size: 48,
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),

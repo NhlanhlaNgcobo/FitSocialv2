@@ -109,7 +109,7 @@ class GoalTile extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: palette.surface,
+        color: palette.wash,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: hit ? palette.success : palette.stroke),
       ),
@@ -233,7 +233,14 @@ Future<void> showCreateGoalSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => const CreateGoalSheet(),
+    // Glass like the app's other sheets, over the page it was opened from,
+    // rather than the theme's opaque near-black panel.
+    backgroundColor: Colors.transparent,
+    builder: (_) => const LiquidGlass(
+      lens: true,
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      child: CreateGoalSheet(),
+    ),
   );
 }
 
@@ -458,7 +465,7 @@ class _DateField extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: palette.surface,
+          color: palette.wash,
           borderRadius: BorderRadius.circular(AppRadius.field),
           border: Border.all(color: palette.stroke),
         ),

@@ -336,7 +336,7 @@ class _Field extends StatelessWidget {
             hintText: hint,
             isDense: true,
             filled: true,
-            fillColor: palette.surface,
+            fillColor: palette.wash,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 14,
@@ -379,7 +379,7 @@ class _DateField extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
             decoration: BoxDecoration(
-              color: palette.surface,
+              color: palette.wash,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: palette.stroke),
             ),
@@ -423,7 +423,7 @@ class _ProvinceField extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: palette.surface,
+            color: palette.wash,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: palette.stroke),
           ),

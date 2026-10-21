@@ -148,7 +148,9 @@ abstract final class AppTheme {
         titleTextStyle: AppTypography.title.copyWith(color: palette.text),
       ),
       cardTheme: CardThemeData(
-        color: palette.surface,
+        // Translucent like the glass cards around it rather than a solid
+        // near-black block.
+        color: palette.wash,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -174,7 +176,9 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: palette.surface,
+        // A wash, not the opaque surface grey: a field is a control on the
+        // page, and the grey read as a black slab on the dark theme.
+        fillColor: palette.wash,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 16,

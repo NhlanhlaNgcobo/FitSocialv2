@@ -104,7 +104,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: palette.surface,
+                fillColor: palette.wash,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.field),
                   borderSide: BorderSide(color: palette.stroke),
@@ -440,7 +440,7 @@ class _FilterChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? palette.brand : palette.surface,
+          color: isSelected ? palette.brand : palette.wash,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: isSelected ? palette.brand : palette.stroke,
@@ -623,7 +623,7 @@ class _CountPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: onMedia ? Colors.black54 : palette.surfaceHigh,
+        color: onMedia ? Colors.black54 : palette.washHigh,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -682,7 +682,7 @@ class _ExploreMessage extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: palette.surfaceHigh,
+                color: palette.washHigh,
               ),
               child: Icon(icon, size: 56, color: palette.brand),
             ),

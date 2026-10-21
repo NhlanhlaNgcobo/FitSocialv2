@@ -58,7 +58,7 @@ class RaceChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? palette.brand : palette.surface,
+          color: isSelected ? palette.brand : palette.wash,
           borderRadius: BorderRadius.circular(999),
           border:
               Border.all(color: isSelected ? palette.brand : palette.stroke),

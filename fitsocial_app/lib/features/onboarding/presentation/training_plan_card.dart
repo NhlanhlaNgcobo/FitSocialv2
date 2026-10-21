@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/theme/app_palette.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../shared/widgets/liquid_glass.dart';
 import '../../main/application/content_providers.dart';
 import '../application/fitness_plan.dart';
 import '../domain/fitness_profile.dart';
@@ -30,20 +31,26 @@ class TrainingPlanCard extends ConsumerWidget {
     if (plan is! AsyncData<FitnessProfile?>) return const SizedBox.shrink();
     final profile = plan.value;
 
-    return Material(
-      color: palette.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: palette.brandSoftStroke),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => context.push<bool>('/plan/goal'),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: profile == null
-              ? _NoPlan(palette: palette)
-              : _Plan(profile: profile, days: days, palette: palette),
+    // A pane of glass like the goal cards under it, not a solid slab: the
+    // orange rim is what marks it as the plan.
+    final radius = BorderRadius.circular(20);
+    return LiquidGlass(
+      borderRadius: radius,
+      child: Material(
+        type: MaterialType.transparency,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: palette.brandSoftStroke),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => context.push<bool>('/plan/goal'),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: profile == null
+                ? _NoPlan(palette: palette)
+                : _Plan(profile: profile, days: days, palette: palette),
+          ),
         ),
       ),
     );
