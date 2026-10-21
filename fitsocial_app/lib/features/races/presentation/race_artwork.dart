@@ -69,6 +69,8 @@ class RaceArtwork extends StatelessWidget {
   static _Profile _profileOf(RaceEvent event) {
     if (event.tags.contains(RaceTag.trail)) return _Profile.trail;
     if (event.tags.contains(RaceTag.crossCountry)) return _Profile.trail;
+    if (event.tags.contains(RaceTag.mtb)) return _Profile.trail;
+    if (event.tags.contains(RaceTag.gravel)) return _Profile.trail;
     return _Profile.road;
   }
 

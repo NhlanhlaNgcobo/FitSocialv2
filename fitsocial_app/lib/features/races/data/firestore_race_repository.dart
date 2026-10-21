@@ -45,6 +45,14 @@ class FirestoreRaceRepository implements RaceRepository {
           isLessThan: Timestamp.fromDate(until));
     }
 
+    // Cycling asks the server for rides only. Running cannot do the same:
+    // the listings written before cycling carry no sport field, and Firestore
+    // cannot match a field that is not there. Rides are a small share of the
+    // calendar, so running reads everything and drops them in matches().
+    if (filter.sport == RaceSport.cycling) {
+      query = query.where(RaceFields.sport, isEqualTo: RaceSport.cycling.key);
+    }
+
     switch (plan.serverClause) {
       case RaceServerClause.provinces:
         query = query.where(

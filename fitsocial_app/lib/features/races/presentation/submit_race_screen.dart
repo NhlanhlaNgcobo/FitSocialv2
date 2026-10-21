@@ -36,6 +36,10 @@ class _SubmitRaceScreenState extends ConsumerState<SubmitRaceScreen> {
   final _notes = TextEditingController();
 
   Province _province = Province.gauteng;
+
+  /// Starts on whichever calendar the person was looking at when they tapped
+  /// "Submit a race".
+  late RaceSport _sport = ref.read(raceFilterProvider).sport;
   DateTime? _date;
   bool _submitting = false;
 
@@ -86,6 +90,17 @@ class _SubmitRaceScreenState extends ConsumerState<SubmitRaceScreen> {
                   TextStyle(fontSize: 13.5, height: 1.45, color: palette.muted),
             ),
             const SizedBox(height: AppSpacing.lg),
+            SegmentedButton<RaceSport>(
+              segments: [
+                for (final sport in RaceSport.values)
+                  ButtonSegment(value: sport, label: Text(sport.label)),
+              ],
+              selected: {_sport},
+              showSelectedIcon: false,
+              onSelectionChanged: (picked) =>
+                  setState(() => _sport = picked.first),
+            ),
+            const SizedBox(height: AppSpacing.md),
             _Field(
               controller: _name,
               label: 'Race name',
@@ -122,7 +137,9 @@ class _SubmitRaceScreenState extends ConsumerState<SubmitRaceScreen> {
             _Field(
               controller: _distances,
               label: 'Distances',
-              hint: '5 km, 10 km and 21.1 km',
+              hint: _sport == RaceSport.cycling
+                  ? '35 km, 70 km and 109 km'
+                  : '5 km, 10 km and 21.1 km',
               optional: true,
             ),
             const SizedBox(height: AppSpacing.md),
@@ -156,7 +173,9 @@ class _SubmitRaceScreenState extends ConsumerState<SubmitRaceScreen> {
             _Field(
               controller: _notes,
               label: 'Anything else',
-              hint: 'Comrades qualifier, trail route, start time…',
+              hint: _sport == RaceSport.cycling
+                  ? 'Road, MTB or gravel, stage race, start time…'
+                  : 'Comrades qualifier, trail route, start time…',
               maxLines: 3,
               optional: true,
             ),
@@ -235,6 +254,7 @@ class _SubmitRaceScreenState extends ConsumerState<SubmitRaceScreen> {
               entryUrl: _emptyToNull(_entryUrl.text),
               distancesNote: _emptyToNull(_distances.text),
               notes: _emptyToNull(_notes.text),
+              sport: _sport,
             ),
           );
       if (!mounted) return;

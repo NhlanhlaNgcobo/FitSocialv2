@@ -241,3 +241,33 @@ test("normaliseAll returns every row when the file is clean", () => {
   ]);
   assert.equal(events.length, 2);
 });
+
+test("a row with no sport is a run, and says so", () => {
+  const { doc } = normaliseEvent(row(), "race 1");
+  assert.equal(doc.sport, "run");
+  assert.deepEqual(doc.distanceBuckets, ["10k"]);
+});
+
+test("a ride gets the cycling bands and no running labels", () => {
+  const { doc } = normaliseEvent(
+    row({
+      name: "Cape Town Cycle Tour",
+      sport: "ride",
+      distances: [{ km: 42 }, { km: 109 }],
+      tags: ["road"],
+    }),
+    "race 1"
+  );
+  assert.equal(doc.sport, "ride");
+  assert.deepEqual(doc.distanceBuckets, ["ride-u50", "ride-80"]);
+  // 42 km on a bike is not a marathon.
+  assert.equal(doc.distances[0].label, "42 km");
+  assert.equal(bucketFor(94.7, "ride"), "ride-80");
+});
+
+test("an unknown sport and the cycling tags are checked", () => {
+  assert.throws(() => normaliseEvent(row({ sport: "swim" }), "race 1"), /sport/);
+  assert.doesNotThrow(() =>
+    normaliseEvent(row({ sport: "ride", tags: ["mtb", "gravel", "stage"] }), "race 1")
+  );
+});

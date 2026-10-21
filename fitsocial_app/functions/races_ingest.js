@@ -50,7 +50,12 @@ const TAGS = new Set([
   "charity",
   "stage",
   "virtual",
+  "mtb",
+  "gravel",
 ]);
+
+/** Must match RaceSport in race_models.dart. "run" when a row leaves it out. */
+const SPORTS = new Set(["run", "ride"]);
 
 /** Must match RaceStatus in race_models.dart. */
 const STATUSES = new Set([
@@ -67,9 +72,16 @@ const SOURCES = new Set(["curated", "submission", "partner"]);
 /**
  * Must match DistanceBucket.forKilometres in race_models.dart, including the
  * generous boundaries — a 21.4 km "half" is a real race that advertises itself
- * that way, and a runner filtering for halfs should still see it.
+ * that way, and a runner filtering for halfs should still see it. Rides have
+ * their own bands; 80–120 holds both the Cycle Tour (109) and the 94.7.
  */
-function bucketFor(km) {
+function bucketFor(km, sport = "run") {
+  if (sport === "ride") {
+    if (km < 50) return "ride-u50";
+    if (km < 80) return "ride-50";
+    if (km < 120) return "ride-80";
+    return "ride-120";
+  }
   if (km < 4) return "fun";
   if (km < 7.5) return "5k";
   if (km < 12.5) return "10k";
@@ -116,6 +128,7 @@ function normaliseEvent(raw, label) {
 
   const known = new Set([
     "name",
+    "sport",
     "date",
     "endDate",
     "startTime",
@@ -150,6 +163,8 @@ function normaliseEvent(raw, label) {
   if (typeof raw.name !== "string" || raw.name.trim().length < 3) {
     fail("name must be a string of at least 3 characters");
   }
+  const sport = raw.sport ?? "run";
+  if (!SPORTS.has(sport)) fail(`sport must be "run" or "ride", not "${raw.sport}"`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw.date ?? "")) {
     fail('date must be "YYYY-MM-DD"');
   }
@@ -205,7 +220,7 @@ function normaliseEvent(raw, label) {
 
     return {
       km: entry.km,
-      label: entry.label ?? defaultDistanceLabel(entry.km),
+      label: entry.label ?? defaultDistanceLabel(entry.km, sport),
       ...(entry.priceCents !== undefined
         ? { priceCents: entry.priceCents }
         : {}),
@@ -259,6 +274,9 @@ function normaliseEvent(raw, label) {
     id: eventId(raw),
     doc: {
       name: raw.name.trim(),
+      // Always written, so every listing seeded from here on can be queried
+      // by sport. Older running documents without it read as "run".
+      sport,
       startAt,
       ...(endAt ? { endAt } : {}),
       province: raw.province,
@@ -269,7 +287,7 @@ function normaliseEvent(raw, label) {
       distances,
       // Derived, never hand-written: the app's distance filter reads this array
       // and nothing else, so it has to agree with the distances above.
-      distanceBuckets: [...new Set(distances.map((d) => bucketFor(d.km)))],
+      distanceBuckets: [...new Set(distances.map((d) => bucketFor(d.km, sport)))],
       tags,
       ...(raw.organiser ? { organiser: raw.organiser.trim() } : {}),
       ...(raw.description ? { description: raw.description.trim() } : {}),
@@ -289,10 +307,12 @@ function normaliseEvent(raw, label) {
   };
 }
 
-function defaultDistanceLabel(km) {
-  const bucket = bucketFor(km);
-  if (bucket === "42.2k") return "Marathon";
-  if (bucket === "21.1k") return "Half Marathon";
+function defaultDistanceLabel(km, sport = "run") {
+  if (sport === "run") {
+    const bucket = bucketFor(km);
+    if (bucket === "42.2k") return "Marathon";
+    if (bucket === "21.1k") return "Half Marathon";
+  }
   return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
 }
 
@@ -328,6 +348,7 @@ module.exports = {
   COLLECTION,
   PROVINCES,
   TAGS,
+  SPORTS,
   STATUSES,
   SOURCES,
   bucketFor,

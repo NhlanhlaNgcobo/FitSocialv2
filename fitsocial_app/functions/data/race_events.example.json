@@ -49,5 +49,21 @@
     "tags": ["trail", "stage"],
     "entryUrl": "https://www.entryninja.com/events/trail-running",
     "status": "scheduled"
+  },
+  {
+    "_comment": "PLACEHOLDER DATA — a cycling event. \"sport\": \"ride\" puts it on the Cycling tab; leave sport out (or \"run\") for running. Rides use their own distance bands (under 50, 50–80, 80–120, 120+ km). Tags for rides: road, mtb, gravel, stage, night, womens, charity, virtual.",
+    "name": "Example Road Classic",
+    "sport": "ride",
+    "date": "2026-11-29",
+    "startTime": "06:15",
+    "province": "WC",
+    "city": "Cape Town",
+    "organiser": "Example Cycling Club",
+    "distances": [
+      { "km": 45, "label": "45 km Fun Ride", "priceCents": 35000 },
+      { "km": 109, "label": "109 km Classic", "priceCents": 85000 }
+    ],
+    "tags": ["road", "charity"],
+    "entryUrl": "https://www.example.com/enter"
   }
 ]

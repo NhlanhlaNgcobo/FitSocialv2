@@ -13,7 +13,7 @@ import 'race_filter_sheet.dart';
 import 'race_toasts.dart';
 import 'race_widgets.dart';
 
-/// The running calendar — every upcoming race, filtered.
+/// The race calendar — every upcoming run or ride, filtered.
 ///
 /// Grouped by month rather than shown as a flat list. A runner reading this is
 /// looking for a date they are free on, and month headers are what turn a
@@ -104,6 +104,7 @@ class _RacesScreenState extends ConsumerState<RacesScreen> {
                 ),
               ),
             ),
+            SliverToBoxAdapter(child: _SportSwitch(sport: filter.sport)),
             SliverToBoxAdapter(child: _TimeframeRow(filter: filter)),
             SliverToBoxAdapter(child: _QuickFilterRow(filter: filter)),
             SliverToBoxAdapter(
@@ -314,6 +315,46 @@ class _SearchField extends StatelessWidget {
   }
 }
 
+/// Running or cycling: which calendar the page is.
+///
+/// Above the timeframe because it changes what every row below it means — the
+/// distance bands and the quick chips are each calendar's own.
+class _SportSwitch extends ConsumerWidget {
+  const _SportSwitch({required this.sport});
+
+  final RaceSport sport;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      child: SegmentedButton<RaceSport>(
+        segments: const [
+          ButtonSegment(
+            value: RaceSport.running,
+            label: Text('Running'),
+            icon: Icon(Icons.directions_run_rounded),
+          ),
+          ButtonSegment(
+            value: RaceSport.cycling,
+            label: Text('Cycling'),
+            icon: Icon(Icons.directions_bike_rounded),
+          ),
+        ],
+        selected: {sport},
+        showSelectedIcon: false,
+        onSelectionChanged: (picked) =>
+            ref.read(raceFilterProvider.notifier).setSport(picked.first),
+      ),
+    );
+  }
+}
+
 /// The timeframe row — single choice, always visible.
 class _TimeframeRow extends ConsumerWidget {
   const _TimeframeRow({required this.filter});
@@ -343,8 +384,9 @@ class _TimeframeRow extends ConsumerWidget {
   }
 }
 
-/// The row below the timeframe: the two qualifier chips, trail, and a way into
-/// the full filter sheet.
+/// The row below the timeframe: a way into the full filter sheet, then the
+/// chips each calendar is searched by most — the two qualifiers and trail for
+/// running, the surface for cycling.
 ///
 /// The qualifier chips are promoted to the top level rather than buried in the
 /// sheet because for a large part of the SA season they are the only filter
@@ -354,6 +396,19 @@ class _QuickFilterRow extends ConsumerWidget {
   const _QuickFilterRow({required this.filter});
 
   final RaceFilter filter;
+
+  static const _runningChips = [
+    (RaceTag.comradesQualifier, Icons.verified_rounded),
+    (RaceTag.twoOceansQualifier, Icons.verified_rounded),
+    (RaceTag.trail, Icons.terrain_rounded),
+  ];
+
+  /// The cycling calendar splits first by surface: road, mountain, gravel.
+  static const _cyclingChips = [
+    (RaceTag.road, Icons.add_road_rounded),
+    (RaceTag.mtb, Icons.terrain_rounded),
+    (RaceTag.gravel, Icons.landscape_rounded),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -374,27 +429,17 @@ class _QuickFilterRow extends ConsumerWidget {
               isSelected: narrowed > 0,
               onTap: () => showRaceFilterSheet(context),
             ),
-            const SizedBox(width: AppSpacing.sm),
-            RaceChip(
-              label: 'Comrades qualifier',
-              icon: Icons.verified_rounded,
-              isSelected: filter.tags.contains(RaceTag.comradesQualifier),
-              onTap: () => notifier.toggleTag(RaceTag.comradesQualifier),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            RaceChip(
-              label: 'Two Oceans qualifier',
-              icon: Icons.verified_rounded,
-              isSelected: filter.tags.contains(RaceTag.twoOceansQualifier),
-              onTap: () => notifier.toggleTag(RaceTag.twoOceansQualifier),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            RaceChip(
-              label: 'Trail',
-              icon: Icons.terrain_rounded,
-              isSelected: filter.tags.contains(RaceTag.trail),
-              onTap: () => notifier.toggleTag(RaceTag.trail),
-            ),
+            for (final (tag, icon) in filter.sport == RaceSport.cycling
+                ? _cyclingChips
+                : _runningChips) ...[
+              const SizedBox(width: AppSpacing.sm),
+              RaceChip(
+                label: tag.label,
+                icon: icon,
+                isSelected: filter.tags.contains(tag),
+                onTap: () => notifier.toggleTag(tag),
+              ),
+            ],
           ],
         ),
       ),

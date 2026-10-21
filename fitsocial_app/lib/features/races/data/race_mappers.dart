@@ -30,6 +30,11 @@ abstract final class RaceFields {
   static const String tapRef = 'ref';
 
   static const String name = 'name';
+
+  /// [RaceSport.key]. Absent on every listing written before cycling, which
+  /// reads as running.
+  static const String sport = 'sport';
+
   static const String startAt = 'startAt';
   static const String endAt = 'endAt';
   static const String province = 'province';
@@ -103,6 +108,7 @@ RaceEvent? raceEventFromDoc(String id, Map<String, dynamic>? data) {
   // event. Wrong-but-visible is recoverable by a moderator; invisible is not.
   final province =
       Province.byCode(data[RaceFields.province] as String?) ?? Province.gauteng;
+  final sport = RaceSport.byKey(data[RaceFields.sport] as String?);
 
   final rawDistances = data[RaceFields.distances];
   final distances = <RaceDistance>[];
@@ -119,9 +125,10 @@ RaceEvent? raceEventFromDoc(String id, Map<String, dynamic>? data) {
           kilometres: km.toDouble(),
           label: rawLabel is String && rawLabel.trim().isNotEmpty
               ? rawLabel
-              : _defaultDistanceLabel(km.toDouble()),
+              : _defaultDistanceLabel(km.toDouble(), sport),
           priceCents: price is num ? price.toInt() : null,
           startTime: time is String && time.isNotEmpty ? time : null,
+          sport: sport,
         ),
       );
     }
@@ -140,6 +147,7 @@ RaceEvent? raceEventFromDoc(String id, Map<String, dynamic>? data) {
   return RaceEvent(
     id: id,
     name: name.trim(),
+    sport: sport,
     startAt: startAt,
     endAt: _dateOf(data[RaceFields.endAt]),
     venue: RaceVenue(
@@ -176,6 +184,7 @@ Map<String, Object?> raceSubmissionToDoc(
     'submittedAt': FieldValue.serverTimestamp(),
     'reviewState': 'pending',
     RaceFields.name: submission.name.trim(),
+    RaceFields.sport: submission.sport.key,
     RaceFields.startAt: Timestamp.fromDate(submission.startAt),
     RaceFields.city: submission.city.trim(),
     RaceFields.province: submission.province.code,
@@ -190,10 +199,13 @@ Map<String, Object?> raceSubmissionToDoc(
 }
 
 /// A label for a distance the source did not name.
-String _defaultDistanceLabel(double km) {
-  final bucket = DistanceBucket.forKilometres(km);
-  if (bucket == DistanceBucket.marathon) return 'Marathon';
-  if (bucket == DistanceBucket.half) return 'Half Marathon';
+String _defaultDistanceLabel(double km, RaceSport sport) {
+  // "Marathon" is a running word; a 42 km ride is just 42 km.
+  if (sport == RaceSport.running) {
+    final bucket = DistanceBucket.forKilometres(km);
+    if (bucket == DistanceBucket.marathon) return 'Marathon';
+    if (bucket == DistanceBucket.half) return 'Half Marathon';
+  }
   // Trim a trailing .0 so 10.0 reads as "10 km".
   final rounded =
       km == km.roundToDouble() ? km.round().toString() : km.toStringAsFixed(1);

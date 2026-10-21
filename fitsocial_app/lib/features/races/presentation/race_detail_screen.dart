@@ -701,6 +701,10 @@ class _DistanceRow extends StatelessWidget {
         DistanceBucket.thirtyK => '30K',
         DistanceBucket.marathon => 'FULL',
         DistanceBucket.ultra => 'ULTRA',
+        DistanceBucket.rideShort => '<50',
+        DistanceBucket.ride50 => '50+',
+        DistanceBucket.ride80 => '80+',
+        DistanceBucket.ride120 => '120+',
       };
 }
 

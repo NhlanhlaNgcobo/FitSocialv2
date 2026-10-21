@@ -176,6 +176,18 @@ test("a submission accepts the optional fields", async () => {
   );
 });
 
+test("a submission may say it is a run or a ride, and nothing else", async () => {
+  await assertSucceeds(
+    addDoc(collection(asUser(), "raceSubmissions"), submission({ sport: "ride" }))
+  );
+  await assertSucceeds(
+    addDoc(collection(asUser(), "raceSubmissions"), submission({ sport: "run" }))
+  );
+  await assertFails(
+    addDoc(collection(asUser(), "raceSubmissions"), submission({ sport: "swim" }))
+  );
+});
+
 test("nobody can read the moderation queue", async () => {
   // Not even the person who filed it. An unreviewed claim about a public event
   // must not become a second, unvetted calendar.

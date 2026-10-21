@@ -472,4 +472,71 @@ void main() {
       expect(Province.byCode(null), isNull);
     });
   });
+
+  group('cycling calendar', () {
+    test('rides fall in the cycling bands, not the running ones', () {
+      DistanceBucket ride(double km) =>
+          DistanceBucket.forKilometres(km, sport: RaceSport.cycling);
+      expect(ride(35), DistanceBucket.rideShort);
+      expect(ride(70), DistanceBucket.ride50);
+      // The two big ones share a band.
+      expect(ride(94.7), DistanceBucket.ride80);
+      expect(ride(109), DistanceBucket.ride80);
+      expect(ride(160), DistanceBucket.ride120);
+      expect(
+        DistanceBucket.forSport(RaceSport.cycling).every(
+          (bucket) => bucket.sport == RaceSport.cycling,
+        ),
+        isTrue,
+      );
+    });
+
+    test('a missing or unknown sport reads as running', () {
+      expect(RaceSport.byKey(null), RaceSport.running);
+      expect(RaceSport.byKey('swim'), RaceSport.running);
+      expect(RaceSport.byKey('ride'), RaceSport.cycling);
+    });
+
+    test('each calendar only matches its own events', () {
+      final run = _event();
+      final ride = RaceEvent(
+        id: 'ride-1',
+        name: 'Cape Town Cycle Tour',
+        startAt: DateTime(2026, 9, 12, 6),
+        venue:
+            const RaceVenue(city: 'Cape Town', province: Province.westernCape),
+        distances: const [
+          RaceDistance(
+            kilometres: 109,
+            label: '109 km',
+            sport: RaceSport.cycling,
+          ),
+        ],
+        sport: RaceSport.cycling,
+      );
+      const running = RaceFilter();
+      const cycling = RaceFilter(sport: RaceSport.cycling);
+      expect(running.matches(run), isTrue);
+      expect(running.matches(ride), isFalse);
+      expect(cycling.matches(ride), isTrue);
+      expect(cycling.matches(run), isFalse);
+      expect(ride.buckets, {DistanceBucket.ride80});
+    });
+
+    test('switching sport drops the bands and the tags that do not apply', () {
+      final filter = const RaceFilter()
+          .toggleBucket(DistanceBucket.half)
+          .toggleTag(RaceTag.comradesQualifier)
+          .toggleTag(RaceTag.nightRace)
+          .toggleProvince(Province.westernCape);
+      final switched = filter.withSport(RaceSport.cycling);
+      expect(switched.sport, RaceSport.cycling);
+      expect(switched.buckets, isEmpty);
+      expect(switched.tags, {RaceTag.nightRace});
+      expect(switched.provinces, {Province.westernCape});
+      // The tab is not a filter.
+      expect(
+          const RaceFilter(sport: RaceSport.cycling).hasActiveFilters, isFalse);
+    });
+  });
 }

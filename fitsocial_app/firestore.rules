@@ -1537,9 +1537,12 @@ service cloud.firestore {
     match /raceSubmissions/{submissionId} {
       function submissionIsValid(entry) {
         return entry.keys().hasOnly(['submittedBy', 'submittedAt',
-                                     'reviewState', 'name', 'startAt', 'city',
-                                     'province', 'organiser', 'entryUrl',
-                                     'distancesNote', 'notes'])
+                                     'reviewState', 'name', 'sport', 'startAt',
+                                     'city', 'province', 'organiser',
+                                     'entryUrl', 'distancesNote', 'notes'])
+               // Running or cycling. Optional, for the builds that predate
+               // cycling and send no sport at all.
+               && (!('sport' in entry) || entry.sport in ['run', 'ride'])
                && entry.keys().hasAll(['submittedBy', 'submittedAt',
                                        'reviewState', 'name', 'startAt',
                                        'city', 'province'])

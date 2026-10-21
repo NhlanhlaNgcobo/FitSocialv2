@@ -100,7 +100,8 @@ class _RaceFilterSheet extends ConsumerWidget {
                         spacing: AppSpacing.sm,
                         runSpacing: AppSpacing.sm,
                         children: [
-                          for (final bucket in DistanceBucket.values)
+                          for (final bucket
+                              in DistanceBucket.forSport(filter.sport))
                             RaceChip(
                               label: bucket.label,
                               isSelected: filter.buckets.contains(bucket),
@@ -152,11 +153,12 @@ class _RaceFilterSheet extends ConsumerWidget {
                         runSpacing: AppSpacing.sm,
                         children: [
                           for (final tag in _filterableTags)
-                            RaceChip(
-                              label: tag.label,
-                              isSelected: filter.tags.contains(tag),
-                              onTap: () => notifier.toggleTag(tag),
-                            ),
+                            if (tag.appliesTo(filter.sport))
+                              RaceChip(
+                                label: tag.label,
+                                isSelected: filter.tags.contains(tag),
+                                onTap: () => notifier.toggleTag(tag),
+                              ),
                         ],
                       ),
                     ],
@@ -173,12 +175,14 @@ class _RaceFilterSheet extends ConsumerWidget {
   /// The tags worth offering as filters.
   ///
   /// Not every tag earns a chip. "Road" would match nearly the whole calendar,
-  /// and "stage race" matches about four events a year — neither is a filter
-  /// somebody reaches for. The two qualifier tags are absent here because they
-  /// already have chips on the screen behind this sheet.
+  /// which is not a filter somebody reaches for. Stage races are rare on the
+  /// running calendar but are the headline events on the cycling one. The two qualifier tags, MTB and gravel are absent
+  /// here because they already have chips on the screen behind this sheet.
+  /// Only the ones that apply to the calendar showing are offered.
   static const List<RaceTag> _filterableTags = [
     RaceTag.trail,
     RaceTag.crossCountry,
+    RaceTag.stageRace,
     RaceTag.nightRace,
     RaceTag.womensRace,
     RaceTag.charity,

@@ -130,6 +130,10 @@ class RaceBadge extends StatelessWidget {
           const RaceBadge(label: 'Stage race', icon: Icons.route_rounded),
         RaceTag.virtual =>
           const RaceBadge(label: 'Virtual', icon: Icons.smartphone_rounded),
+        RaceTag.mtb =>
+          const RaceBadge(label: 'MTB', icon: Icons.terrain_rounded),
+        RaceTag.gravel =>
+          const RaceBadge(label: 'Gravel', icon: Icons.landscape_rounded),
       };
 
   final String label;

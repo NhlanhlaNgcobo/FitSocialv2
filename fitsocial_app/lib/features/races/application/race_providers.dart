@@ -32,7 +32,10 @@ class RaceFilterController extends StateNotifier<RaceFilter> {
 
   void setQuery(String query) => state = state.copyWith(query: query);
 
-  void clear() => state = const RaceFilter();
+  void setSport(RaceSport sport) => state = state.withSport(sport);
+
+  /// Clears the filters but stays on the calendar being looked at.
+  void clear() => state = RaceFilter(sport: state.sport);
 }
 
 /// The day the calendar is being read on.

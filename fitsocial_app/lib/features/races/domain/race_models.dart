@@ -1,4 +1,4 @@
-/// The running calendar: South African race events, and how they get filtered.
+/// The race calendar — running and cycling — and how it gets filtered.
 ///
 /// The shape here follows what a runner actually asks when looking for a race —
 /// when, where, how far, and does it count as a qualifier — rather than what a
@@ -61,6 +61,23 @@ enum Province {
       .toList(growable: false);
 }
 
+/// Which calendar an event belongs to: the running one or the cycling one.
+///
+/// Stored as `sport` on the event. A document without it is a running race —
+/// the field arrived with cycling, and every listing written before then was
+/// one — so the running calendar never needed re-seeding to gain it.
+enum RaceSport {
+  running('run', 'Running'),
+  cycling('ride', 'Cycling');
+
+  const RaceSport(this.key, this.label);
+
+  final String key;
+  final String label;
+
+  static RaceSport byKey(String? key) => key == cycling.key ? cycling : running;
+}
+
 /// The distance bands the filter offers.
 ///
 /// A coarse band rather than the exact kilometres, because the exact figure is
@@ -68,6 +85,10 @@ enum Province {
 /// halfs" across events that call the same distance 21 km, 21.1 km and
 /// "Half Marathon". Each event carries its matching bands in a denormalised
 /// array so a single `array-contains-any` covers the whole chip row.
+///
+/// Each calendar has its own bands. A rider does not think in 5 km steps any
+/// more than a runner thinks in 50 km ones, and the bands are what the chips
+/// show, so they are kept per [sport].
 enum DistanceBucket {
   fun('fun', 'Fun run', 'Under 5 km'),
   fiveK('5k', '5 km', '5 km'),
@@ -76,13 +97,31 @@ enum DistanceBucket {
   half('21.1k', 'Half', '21.1 km'),
   thirtyK('30k', '30 km', '30 km'),
   marathon('42.2k', 'Marathon', '42.2 km'),
-  ultra('ultra', 'Ultra', 'Over 42.2 km');
+  ultra('ultra', 'Ultra', 'Over 42.2 km'),
 
-  const DistanceBucket(this.key, this.label, this.description);
+  // Cycling. 80–120 is drawn wide on purpose: the Cape Town Cycle Tour
+  // (109 km) and the 94.7 (94.7 km) are the two rides most of the country
+  // trains for, and they belong in the same band.
+  rideShort('ride-u50', 'Under 50 km', 'Under 50 km', RaceSport.cycling),
+  ride50('ride-50', '50–80 km', '50 to 80 km', RaceSport.cycling),
+  ride80('ride-80', '80–120 km', '80 to 120 km', RaceSport.cycling),
+  ride120('ride-120', '120 km+', 'Over 120 km', RaceSport.cycling);
+
+  const DistanceBucket(
+    this.key,
+    this.label,
+    this.description, [
+    this.sport = RaceSport.running,
+  ]);
 
   final String key;
   final String label;
   final String description;
+  final RaceSport sport;
+
+  /// The bands one calendar offers, in order.
+  static List<DistanceBucket> forSport(RaceSport sport) =>
+      values.where((bucket) => bucket.sport == sport).toList(growable: false);
 
   static DistanceBucket? byKey(String? key) {
     if (key == null) return null;
@@ -98,7 +137,16 @@ enum DistanceBucket {
   /// "10 km" are both real races that really advertise themselves that way, and
   /// a runner who filters for a half and does not see one because the route was
   /// measured honestly has been failed by the filter, not served by it.
-  static DistanceBucket forKilometres(double km) {
+  static DistanceBucket forKilometres(
+    double km, {
+    RaceSport sport = RaceSport.running,
+  }) {
+    if (sport == RaceSport.cycling) {
+      if (km < 50) return rideShort;
+      if (km < 80) return ride50;
+      if (km < 120) return ride80;
+      return ride120;
+    }
     if (km < 4) return fun;
     if (km < 7.5) return fiveK;
     if (km < 12.5) return tenK;
@@ -128,12 +176,26 @@ enum RaceTag {
   womensRace('womens', "Women's race"),
   charity('charity', 'Charity'),
   stageRace('stage', 'Stage race'),
-  virtual('virtual', 'Virtual');
+  virtual('virtual', 'Virtual'),
+  mtb('mtb', 'MTB'),
+  gravel('gravel', 'Gravel');
 
   const RaceTag(this.key, this.label);
 
   final String key;
   final String label;
+
+  /// Whether this tag means anything on [sport]'s calendar. A Comrades
+  /// qualifier is a running idea and a gravel ride a cycling one; the rest —
+  /// road, night, stage, charity — are shared.
+  bool appliesTo(RaceSport sport) => switch (this) {
+        crossCountry ||
+        comradesQualifier ||
+        twoOceansQualifier =>
+          sport == RaceSport.running,
+        mtb || gravel => sport == RaceSport.cycling,
+        _ => true,
+      };
 
   static RaceTag? byKey(String? key) {
     if (key == null) return null;
@@ -218,9 +280,13 @@ class RaceDistance {
     required this.label,
     this.priceCents,
     this.startTime,
+    this.sport = RaceSport.running,
   });
 
   final double kilometres;
+
+  /// The event's calendar, which decides which band [bucket] falls in.
+  final RaceSport sport;
 
   /// What the organiser calls it — "Half Marathon", "10 km Fun Run".
   ///
@@ -239,7 +305,8 @@ class RaceDistance {
   /// event's first start. Null means it goes with the gun.
   final String? startTime;
 
-  DistanceBucket get bucket => DistanceBucket.forKilometres(kilometres);
+  DistanceBucket get bucket =>
+      DistanceBucket.forKilometres(kilometres, sport: sport);
 
   /// The fee as a rand string, or null when there is no published fee.
   String? get priceLabel {
@@ -309,10 +376,14 @@ class RaceEvent {
     this.status = RaceStatus.scheduled,
     this.source = RaceSource.curated,
     this.verifiedAt,
+    this.sport = RaceSport.running,
   });
 
   final String id;
   final String name;
+
+  /// The running calendar or the cycling one.
+  final RaceSport sport;
 
   /// First start, in UTC.
   ///
@@ -452,12 +523,17 @@ enum RaceTimeframe {
 /// the whole row with one assignment.
 class RaceFilter {
   const RaceFilter({
+    this.sport = RaceSport.running,
     this.timeframe = RaceTimeframe.threeMonths,
     this.provinces = const {},
     this.buckets = const {},
     this.tags = const {},
     this.query = '',
   });
+
+  /// Which calendar is showing. Not a filter in the [hasActiveFilters] sense —
+  /// it is the tab, and clearing the filters keeps it.
+  final RaceSport sport;
 
   final RaceTimeframe timeframe;
 
@@ -483,6 +559,7 @@ class RaceFilter {
       timeframe != RaceTimeframe.threeMonths;
 
   RaceFilter copyWith({
+    RaceSport? sport,
     RaceTimeframe? timeframe,
     Set<Province>? provinces,
     Set<DistanceBucket>? buckets,
@@ -490,11 +567,29 @@ class RaceFilter {
     String? query,
   }) {
     return RaceFilter(
+      sport: sport ?? this.sport,
       timeframe: timeframe ?? this.timeframe,
       provinces: provinces ?? this.provinces,
       buckets: buckets ?? this.buckets,
       tags: tags ?? this.tags,
       query: query ?? this.query,
+    );
+  }
+
+  /// Switches calendar. Distance bands belong to one sport, so they go; tags
+  /// that mean nothing on the new calendar go with them. Place, time and the
+  /// search carry over — a rider in the Western Cape is still there.
+  RaceFilter withSport(RaceSport next) {
+    if (next == sport) return this;
+    return RaceFilter(
+      sport: next,
+      timeframe: timeframe,
+      provinces: provinces,
+      tags: {
+        for (final tag in tags)
+          if (tag.appliesTo(next)) tag,
+      },
+      query: query,
     );
   }
 
@@ -517,6 +612,7 @@ class RaceFilter {
   /// deliberately the single place both concerns live so the list and the tests
   /// agree on what "matches" means.
   bool matches(RaceEvent event) {
+    if (event.sport != sport) return false;
     if (provinces.isNotEmpty && !provinces.contains(event.venue.province)) {
       return false;
     }
@@ -550,6 +646,7 @@ class RaceFilter {
   @override
   bool operator ==(Object other) {
     return other is RaceFilter &&
+        other.sport == sport &&
         other.timeframe == timeframe &&
         other.query == query &&
         _setEquals(other.provinces, provinces) &&
@@ -559,6 +656,7 @@ class RaceFilter {
 
   @override
   int get hashCode => Object.hash(
+        sport,
         timeframe,
         query,
         Object.hashAllUnordered(provinces),
@@ -583,7 +681,11 @@ class RaceSubmission {
     this.entryUrl,
     this.distancesNote,
     this.notes,
+    this.sport = RaceSport.running,
   });
+
+  /// Which calendar the submitter thinks it belongs on.
+  final RaceSport sport;
 
   final String name;
   final DateTime startAt;
