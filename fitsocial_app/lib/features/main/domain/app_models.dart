@@ -348,6 +348,7 @@ class FeedPost {
     this.reactionsBy = const {},
     this.postType = PostType.text,
     this.imageUrl,
+    this.backgroundVideoUrl,
     this.workoutData,
     this.mealData,
     this.routePoints = const [],
@@ -363,6 +364,11 @@ class FeedPost {
   });
 
   final String id;
+
+  /// A few silent seconds that loop behind a run or workout card. [imageUrl]
+  /// still holds its first frame, which is what shows before it plays, in a
+  /// shared file, and on builds that predate video backgrounds.
+  final String? backgroundVideoUrl;
 
   /// Uid of the author. Needed so the UI can tell whose post it is — for the
   /// delete action, which only the author may perform.
@@ -473,6 +479,7 @@ class FeedPost {
       reactionsBy: reactionsBy,
       postType: postType,
       imageUrl: imageUrl,
+      backgroundVideoUrl: backgroundVideoUrl,
       workoutData: workoutData,
       mealData: mealData,
       routePoints: routePoints,
@@ -531,6 +538,7 @@ class FeedPost {
       reactionsBy: reactionsBy ?? this.reactionsBy,
       postType: postType ?? this.postType,
       imageUrl: imageUrl ?? this.imageUrl,
+      backgroundVideoUrl: backgroundVideoUrl,
       workoutData: workoutData ?? this.workoutData,
       mealData: mealData ?? this.mealData,
       routePoints: routePoints ?? this.routePoints,

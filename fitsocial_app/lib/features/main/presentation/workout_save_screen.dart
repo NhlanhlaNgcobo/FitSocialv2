@@ -12,6 +12,8 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../core/config/feature_flags.dart';
 import '../../../shared/input/typed_number.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/services/video_loop_maker.dart';
+import '../../../shared/widgets/video_loop_trim_screen.dart';
 import '../../../shared/widgets/confirm_destructive_sheet.dart';
 import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
@@ -352,6 +354,7 @@ class _WorkoutSaveScreenState extends ConsumerState<WorkoutSaveScreen> {
             path: _photoPath,
             onPick: _saving ? null : _pickPhoto,
             onRemove: _saving ? null : () => setState(() => _photoPath = null),
+            onVideoPicked: (poster) => setState(() => _photoPath = poster),
           ),
           const SizedBox(height: AppSpacing.md),
           const _Label('DESCRIPTION'),
@@ -675,11 +678,15 @@ class _PhotoPicker extends StatelessWidget {
     required this.path,
     required this.onPick,
     required this.onRemove,
+    this.onVideoPicked,
   });
 
   final String? path;
   final ValueChanged<ImageSource>? onPick;
   final VoidCallback? onRemove;
+
+  /// Given a new loop's first frame. Null hides the Video button.
+  final ValueChanged<String>? onVideoPicked;
 
   @override
   Widget build(BuildContext context) {
@@ -728,6 +735,24 @@ class _PhotoPicker extends StatelessWidget {
                   onPick == null ? null : () => onPick!(ImageSource.camera),
               icon: const Icon(Icons.photo_camera_outlined),
               label: const Text('Camera'),
+            ),
+          ),
+        ],
+        if (onVideoPicked != null && VideoLoopMaker.isSupported) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onPick == null
+                  ? null
+                  : () async {
+                      final poster = await pickVideoLoop(
+                        context,
+                        source: ImageSource.gallery,
+                      );
+                      if (poster != null) onVideoPicked?.call(poster);
+                    },
+              icon: const Icon(Icons.movie_outlined),
+              label: const Text('Video'),
             ),
           ),
         ],

@@ -14,7 +14,9 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../core/config/feature_flags.dart';
 import '../../../shared/input/typed_number.dart';
 import '../../../shared/services/instagram_photo_picker.dart';
+import '../../../shared/services/video_loop_maker.dart';
 import '../../../shared/services/workout_card_exporter.dart';
+import '../../../shared/widgets/video_loop_trim_screen.dart';
 import '../../../shared/widgets/glass_well.dart';
 import '../../../shared/widgets/health_pull_card.dart';
 import '../../../shared/widgets/keyboard_safe_bottom_bar.dart';
@@ -689,6 +691,8 @@ class _WorkoutLogScreenState extends ConsumerState<WorkoutLogScreen> {
                   onRemove: _isSaving
                       ? null
                       : () => setState(() => _backgroundPath = null),
+                  onVideoPicked: (poster) =>
+                      setState(() => _backgroundPath = poster),
                 ),
                 if (_shareToFeed) ...[
                   const SizedBox(height: AppSpacing.md),
@@ -1900,11 +1904,15 @@ class _PhotoRow extends StatelessWidget {
     required this.imagePath,
     required this.onPick,
     required this.onRemove,
+    this.onVideoPicked,
   });
 
   final String? imagePath;
   final ValueChanged<ImageSource>? onPick;
   final VoidCallback? onRemove;
+
+  /// Given a new loop's first frame. Null hides the video disc.
+  final ValueChanged<String>? onVideoPicked;
 
   @override
   Widget build(BuildContext context) {
@@ -1933,7 +1941,11 @@ class _PhotoRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              path == null ? 'Card photo' : 'Photo added',
+              path == null
+                  ? 'Card photo'
+                  : videoLoopBeside(path) != null
+                      ? 'Video loop added'
+                      : 'Photo added',
               style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
@@ -1957,6 +1969,22 @@ class _PhotoRow extends StatelessWidget {
               tooltip: 'Take a photo',
               onTap: onPick == null ? null : () => onPick!(ImageSource.camera),
             ),
+            if (onVideoPicked != null && VideoLoopMaker.isSupported) ...[
+              const SizedBox(width: 8),
+              _PhotoAction(
+                icon: Icons.movie_rounded,
+                tooltip: 'Use a short video loop',
+                onTap: onPick == null
+                    ? null
+                    : () async {
+                        final poster = await pickVideoLoop(
+                          context,
+                          source: ImageSource.gallery,
+                        );
+                        if (poster != null) onVideoPicked?.call(poster);
+                      },
+              ),
+            ],
           ] else
             TextButton(
               onPressed: onRemove,

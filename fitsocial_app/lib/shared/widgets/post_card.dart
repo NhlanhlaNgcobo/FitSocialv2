@@ -53,6 +53,7 @@ class PostCard extends StatelessWidget {
     this.onDeleted,
     this.postType = PostType.text,
     this.imageUrl,
+    this.backgroundVideoUrl,
     this.workoutData,
     this.mealData,
     this.routePoints = const [],
@@ -97,6 +98,7 @@ class PostCard extends StatelessWidget {
       backgroundColors: post.backgroundColors,
       postType: post.postType,
       imageUrl: post.imageUrl,
+      backgroundVideoUrl: post.backgroundVideoUrl,
       workoutData: post.workoutData,
       mealData: post.mealData,
       routePoints: post.routePoints,
@@ -139,6 +141,10 @@ class PostCard extends StatelessWidget {
 
   final PostType postType;
   final String? imageUrl;
+
+  /// The silent loop over a run or workout card; [imageUrl] is its first
+  /// frame.
+  final String? backgroundVideoUrl;
   final Map<String, dynamic>? workoutData;
 
   /// The meal's calories, protein, carbs and fat. Null on every post that
@@ -585,6 +591,7 @@ class PostCard extends StatelessWidget {
       durationLabel: RunSummaryCard.durationFrom(metricLabels),
       paceLabel: RunSummaryCard.paceFrom(metricLabels),
       background: imageUrl == null ? null : appPhoto(imageUrl!),
+      backgroundVideo: backgroundVideoUrl,
       showMap: showRouteMap,
       routePlacement: routePlacement,
       margin: const EdgeInsets.symmetric(horizontal: _gutter),
@@ -714,6 +721,7 @@ class PostCard extends StatelessWidget {
       // A workout's photo is a backdrop for its numbers, not a photo post — so
       // it goes behind the summary rather than replacing it.
       backgroundImageUrl: imageUrl,
+      backgroundVideo: backgroundVideoUrl,
       margin: const EdgeInsets.symmetric(horizontal: _gutter),
     );
   }

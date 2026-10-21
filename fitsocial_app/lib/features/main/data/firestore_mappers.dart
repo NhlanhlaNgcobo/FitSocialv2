@@ -78,6 +78,7 @@ class FirestoreMapper {
       reactionsBy: _parseReactionsBy(post.reactionsBy),
       postType: _readablePostType(post),
       imageUrl: post.imageUrl,
+      backgroundVideoUrl: post.backgroundVideoUrl,
       workoutData: post.workoutData,
       mealData: post.mealData,
       routePoints: post.routePoints,

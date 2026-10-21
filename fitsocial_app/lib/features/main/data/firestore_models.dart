@@ -116,6 +116,7 @@ class FirestorePostRecord {
       reactionCounts: data['reactionCounts'],
       postType: (data['postType'] as String?) ?? 'text',
       imageUrl: data['imageUrl'] as String?,
+      backgroundVideoUrl: data['backgroundVideoUrl'] as String?,
       workoutData: (data['workoutData'] as Map<String, dynamic>?),
       mealData: (data['mealData'] as Map<String, dynamic>?),
       routePoints: RoutePoint.listFromFirestore(data['routePoints']),
@@ -149,6 +150,7 @@ class FirestorePostRecord {
     this.reactionCounts,
     this.postType = 'text',
     this.imageUrl,
+    this.backgroundVideoUrl,
     this.workoutData,
     this.mealData,
     this.routePoints = const [],
@@ -163,6 +165,10 @@ class FirestorePostRecord {
     this.prompt,
     this.createdAt,
   });
+
+  /// The silent loop behind a run or workout card; [imageUrl] is its first
+  /// frame. Absent on everything else and on every post before loops existed.
+  final String? backgroundVideoUrl;
 
   final String id;
   final String authorId;

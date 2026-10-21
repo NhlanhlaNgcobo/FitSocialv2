@@ -14,6 +14,7 @@ import '../../features/main/domain/workout_math.dart' show parseMuscleSets;
 import 'app_photo.dart';
 import 'fit_social_logo.dart';
 import 'liquid_glass.dart';
+import 'looping_video_layer.dart';
 import 'muscle_heatmap.dart';
 import 'network_photo_aspect.dart';
 import 'picture_ratio.dart';
@@ -42,6 +43,7 @@ class WorkoutSummaryCard extends StatelessWidget {
     required this.activity,
     this.backgroundImageUrl,
     this.backgroundImage,
+    this.backgroundVideo,
     this.aspectRatio,
     this.forExport = false,
     this.transparentGround = false,
@@ -68,6 +70,11 @@ class WorkoutSummaryCard extends StatelessWidget {
   /// from a URL: the exporter, which has just decoded the photo and must draw
   /// exactly that entry, and the log screen's local file before upload.
   final ImageProvider? backgroundImage;
+
+  /// A silent loop played over the photo, which is its first frame — an
+  /// https URL, or a local path before upload. Ignored without a photo and
+  /// in exports, which are still pictures.
+  final String? backgroundVideo;
 
   /// The photo's width/height, when the caller already knows it. Skips the
   /// measuring pass in [NetworkPhotoAspect], which cannot run inside the
@@ -452,6 +459,7 @@ class WorkoutSummaryCard extends StatelessWidget {
             : _PhotoBacked(
                 image: photo,
                 imageUrl: backgroundImageUrl,
+                video: forExport ? null : backgroundVideo,
                 pinnedRatio: aspectRatio,
                 fallbackColor: skin.photoFallback,
                 child: content,
@@ -544,12 +552,16 @@ class _PhotoBacked extends StatelessWidget {
   const _PhotoBacked({
     required this.image,
     required this.imageUrl,
+    this.video,
     required this.pinnedRatio,
     required this.fallbackColor,
     required this.child,
   });
 
   final ImageProvider image;
+
+  /// The loop [image] is the first frame of, played over it under the scrim.
+  final String? video;
 
   /// Where [image] came from, when it came from the network — what
   /// [NetworkPhotoAspect] measures by. Null for a local or pre-decoded photo,
@@ -588,6 +600,8 @@ class _PhotoBacked extends StatelessWidget {
                     ColoredBox(color: fallbackColor),
               ),
             ),
+            if (video case final source?)
+              Positioned.fill(child: LoopingVideoLayer(source: source)),
             // Without this the metrics sit on whatever the photo happens to
             // be, and a bright gym window erases them. Lightest at the top,
             // heaviest under the sheet — the same direction the run and

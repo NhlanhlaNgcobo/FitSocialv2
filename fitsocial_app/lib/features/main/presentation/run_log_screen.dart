@@ -821,6 +821,8 @@ class _ManualRunSheetState extends ConsumerState<_ManualRunSheet> {
                   durationLabel: _hasDuration ? _clockLabel : null,
                   paceLabel: _isComplete ? _paceLabel : null,
                   onPick: _isSaving ? null : _pickBackground,
+                  onVideoPicked: (poster) =>
+                      setState(() => _backgroundPath = poster),
                   onRemove: _isSaving
                       ? null
                       : () => setState(() => _backgroundPath = null),

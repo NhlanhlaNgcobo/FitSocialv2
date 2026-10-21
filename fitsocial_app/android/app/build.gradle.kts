@@ -138,6 +138,12 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Trims a picked clip into a card's video loop (VideoLoopBridge). Pinned
+    // to the Media3 version video_player_android already brings, so the app
+    // carries one Media3, not two that disagree.
+    implementation("androidx.media3:media3-transformer:1.9.2")
+    implementation("androidx.media3:media3-effect:1.9.2")
+    implementation("androidx.media3:media3-common:1.9.2")
 }
 
 flutter {

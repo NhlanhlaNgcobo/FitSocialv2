@@ -281,6 +281,8 @@ class _FinishRunSheetState extends State<_FinishRunSheet> {
                   showMap: _showMap,
                   onMapReady: (controller) => _map = controller,
                   onPick: _pickBackground,
+                  onVideoPicked: (poster) =>
+                      setState(() => _backgroundPath = poster),
                   onRemove: () => setState(() => _backgroundPath = null),
                   routePlacement: _routePlacement,
                   onRoutePlacementChanged: _saving

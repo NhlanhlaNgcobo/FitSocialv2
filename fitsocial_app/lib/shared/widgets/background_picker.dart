@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../app/theme/app_palette.dart';
 import '../../app/theme/app_spacing.dart';
 import '../../shared/widgets/liquid_glass.dart';
+import '../services/video_loop_maker.dart';
 
 /// The controls that choose the photo behind a workout or a run card.
 ///
@@ -16,12 +17,17 @@ class BackgroundPickerRow extends StatelessWidget {
     required this.onPick,
     required this.onRemove,
     this.hasImage = false,
+    this.onPickVideo,
     super.key,
   });
 
   /// Given the source the user chose. Null while a save is in flight, which
   /// disables the buttons.
   final ValueChanged<ImageSource>? onPick;
+
+  /// Starts the video-loop flow. Null hides the button — a caller that has
+  /// nowhere to send a loop, or a phone that cannot make one.
+  final VoidCallback? onPickVideo;
 
   /// Clears the current choice. Only reachable once [hasImage] is true.
   final VoidCallback? onRemove;
@@ -51,6 +57,16 @@ class BackgroundPickerRow extends StatelessWidget {
                 onTap: pick == null ? null : () => pick(ImageSource.camera),
               ),
             ),
+            if (onPickVideo != null && VideoLoopMaker.isSupported) ...[
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _BackgroundAction(
+                  icon: Icons.movie_rounded,
+                  label: 'Video',
+                  onTap: pick == null ? null : onPickVideo,
+                ),
+              ),
+            ],
           ],
         ),
         // Only offered once there is something to take away, so the row doesn't

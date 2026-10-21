@@ -12,6 +12,8 @@ import 'form_section_header.dart';
 import 'route_sparkline.dart';
 import 'run_summary_card.dart';
 import 'save_run_card_row.dart' show CardActionButton;
+import 'video_loop_trim_screen.dart';
+import '../services/video_loop_maker.dart' show videoLoopBeside;
 
 /// Chooses the photo behind a run, previewing the actual card the whole time.
 ///
@@ -43,11 +45,17 @@ class RunBackgroundSection extends StatefulWidget {
     this.onMapReady,
     this.routePlacement = RoutePlacement.centred,
     this.onRoutePlacementChanged,
+    this.onVideoPicked,
     super.key,
   });
 
-  /// Local path of the chosen photo, or null for the gradient.
+  /// Local path of the chosen photo, or null for the gradient. For a video
+  /// loop this is its first frame, with the clip beside it on disk.
   final String? imagePath;
+
+  /// Given the first frame of a newly made video loop, to keep as
+  /// [imagePath]. Null leaves the Video button off.
+  final ValueChanged<String>? onVideoPicked;
 
   /// An already-uploaded photo, shown when there is no [imagePath] — a saved
   /// run reopened in the editor.
@@ -144,6 +152,7 @@ class _RunBackgroundSectionState extends State<RunBackgroundSection> {
             // With the map on, the preview is the live map, which is what gets
             // captured; a photo picked earlier waits for the map to go off.
             background: showMap ? null : photo,
+            backgroundVideo: showMap ? null : videoLoopBeside(path),
             showMap: showMap,
             onMapReady: onMapReady,
             // Portrait, because this map is what gets captured, and the
@@ -173,6 +182,15 @@ class _RunBackgroundSectionState extends State<RunBackgroundSection> {
             hasImage: photo != null,
             onPick: onPick,
             onRemove: onRemove,
+            onPickVideo: widget.onVideoPicked == null
+                ? null
+                : () async {
+                    final poster = await pickVideoLoop(
+                      context,
+                      source: ImageSource.gallery,
+                    );
+                    if (poster != null) widget.onVideoPicked?.call(poster);
+                  },
           ),
         ],
       ],

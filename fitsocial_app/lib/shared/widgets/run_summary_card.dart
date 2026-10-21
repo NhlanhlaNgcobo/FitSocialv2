@@ -13,6 +13,7 @@ import '../../features/main/domain/app_models.dart';
 import 'fit_social_logo.dart';
 import 'route_sparkline.dart';
 import 'liquid_glass.dart';
+import 'looping_video_layer.dart';
 import 'picture_ratio.dart';
 import 'run_route_map.dart';
 
@@ -101,6 +102,7 @@ class RunSummaryCard extends StatelessWidget {
     this.durationLabel,
     this.paceLabel,
     this.background,
+    this.backgroundVideo,
     this.showMap = false,
     this.onMapReady,
     this.margin = EdgeInsets.zero,
@@ -128,6 +130,11 @@ class RunSummaryCard extends StatelessWidget {
 
   /// The photo behind the card. Null keeps the themed gradient.
   final ImageProvider? background;
+
+  /// A silent loop played over [background], which is its first frame — an
+  /// https URL, or a local path before upload. Ignored without a
+  /// [background] and in exports, which are still pictures.
+  final String? backgroundVideo;
 
   /// Whether to show the route on the map instead of as a bare line. With a
   /// [background] that background *is* the map; without one the map is drawn
@@ -245,8 +252,7 @@ class RunSummaryCard extends StatelessWidget {
           Image(
             image: photo,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                ColoredBox(color: skin.photoFallback),
+            errorBuilder: (_, __, ___) => ColoredBox(color: skin.photoFallback),
           )
         else if (liveMap)
           // The map is a backdrop, not a control: the card's own taps and the
@@ -272,6 +278,8 @@ class RunSummaryCard extends StatelessWidget {
             skin: skin,
             forExport: forExport,
           ),
+        if (photo != null && !map && !forExport && backgroundVideo != null)
+          LoopingVideoLayer(source: backgroundVideo!),
         if (hasRoute && !map)
           Padding(
             // Keeps the line clear of the branding in every corner, so

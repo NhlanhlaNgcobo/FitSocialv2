@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/config/functions_region.dart';
 import '../../../shared/reactions/fit_reaction.dart';
+import '../../../shared/services/video_loop_maker.dart' show videoLoopBeside;
 import '../../auth/domain/auth_models.dart';
 import '../../auth/domain/username.dart';
 import '../../notifications/data/firestore_notification_repository.dart';
@@ -1676,7 +1677,8 @@ class FirestoreContentRepository implements ContentRepository {
     // Uploaded before anything is written, so both the log and the post can
     // carry the same URL. A failed upload costs the backdrop and nothing else —
     // the workout still saves, and the card falls back to its gradient.
-    final backgroundUrl = await _tryUploadBackground(draft.backgroundImagePath);
+    final background = await _tryUploadBackground(draft.backgroundImagePath);
+    final backgroundUrl = background.imageUrl;
 
     // Written whether or not the workout is shared, mirroring saveRun: the log
     // is the canonical record, and the Progress tab reads from it. Sharing
@@ -1707,6 +1709,7 @@ class FirestoreContentRepository implements ContentRepository {
       themeKey: 'burn',
       postType: 'workout',
       imageUrl: backgroundUrl,
+      backgroundVideoUrl: background.videoUrl,
       workoutData: draft.workoutData,
       taggedUsers: draft.taggedUsers,
     );
@@ -1819,7 +1822,8 @@ class FirestoreContentRepository implements ContentRepository {
   ) async {
     // Uploaded before anything is written, so both the log and the post can
     // carry the same URL — same order, and the same reasoning, as saveWorkout.
-    final backgroundUrl = await _tryUploadBackground(draft.backgroundImagePath);
+    final background = await _tryUploadBackground(draft.backgroundImagePath);
+    final backgroundUrl = background.imageUrl;
     final noun = draft.activityKind.descriptor.singular;
 
     // Only a run may move the longest-run record. maxRunDistanceKm is a
@@ -1850,6 +1854,7 @@ class FirestoreContentRepository implements ContentRepository {
       averagePace: draft.averagePace,
       route: route,
       imageUrl: backgroundUrl,
+      backgroundVideoUrl: background.videoUrl,
       showRouteMap: draft.showRouteMap,
       routePlacement: draft.routePlacement,
       taggedUsers: draft.taggedUsers,
@@ -1877,13 +1882,21 @@ class FirestoreContentRepository implements ContentRepository {
   /// asked for a session to be saved. Losing the whole thing because a photo
   /// upload timed out on bad signal is the wrong trade — the session is the
   /// thing, the picture is decoration.
-  Future<String?> _tryUploadBackground(String? path) async {
-    if (path == null) return null;
+  ///
+  /// A video loop arrives as its first frame, with the clip beside it on disk
+  /// (see [videoLoopBeside]). The frame goes up as the backdrop exactly as a
+  /// photo would, so everything that reads [imageUrl] carries on unchanged;
+  /// the clip goes up next to it. Losing the clip costs the motion and keeps
+  /// the still.
+  Future<({String? imageUrl, String? videoUrl})> _tryUploadBackground(
+    String? path,
+  ) async {
+    if (path == null) return (imageUrl: null, videoUrl: null);
 
     try {
       final user = _requireCurrentUser();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      return await _uploadJpeg(
+      final imageUrl = await _uploadJpeg(
         'posts/${user.uid}/$timestamp.jpg',
         path,
         // Its own, shorter bound rather than uploadPostImage's: the result is
@@ -1891,9 +1904,25 @@ class FirestoreContentRepository implements ContentRepository {
         // full minute for it.
         timeout: _backgroundUploadTimeout,
       );
+
+      String? videoUrl;
+      final loop = videoLoopBeside(path);
+      if (loop != null) {
+        try {
+          videoUrl = await _uploadFile(
+            'posts/${user.uid}/$timestamp.mp4',
+            loop,
+            contentType: 'video/mp4',
+            timeout: _loopUploadTimeout,
+          );
+        } catch (error, stackTrace) {
+          debugPrint('Loop upload failed: $error\n$stackTrace');
+        }
+      }
+      return (imageUrl: imageUrl, videoUrl: videoUrl);
     } catch (error, stackTrace) {
       debugPrint('Background upload failed: $error\n$stackTrace');
-      return null;
+      return (imageUrl: null, videoUrl: null);
     }
   }
 
@@ -1953,6 +1982,7 @@ class FirestoreContentRepository implements ContentRepository {
     required String averagePace,
     required List<Map<String, double>> route,
     required String? imageUrl,
+    String? backgroundVideoUrl,
     required bool showRouteMap,
     required RoutePlacement routePlacement,
     required List<TaggedUser> taggedUsers,
@@ -1981,6 +2011,7 @@ class FirestoreContentRepository implements ContentRepository {
       // workout's, it is decoration on the session rather than a photo post —
       // the renderers decide that from the post type, not from this field.
       imageUrl: imageUrl,
+      backgroundVideoUrl: backgroundVideoUrl,
       // Denormalised onto the post so the feed renders the route from the
       // documents it already streams, with no extra read per card.
       routePoints: route,
@@ -2052,7 +2083,8 @@ class FirestoreContentRepository implements ContentRepository {
   ) async {
     _requireCurrentUser();
     final run = share.run;
-    final newImageUrl = await _tryUploadBackground(share.backgroundImagePath);
+    final newImageUrl =
+        (await _tryUploadBackground(share.backgroundImagePath)).imageUrl;
     final imageUrl = share.backgroundImagePath != null
         ? newImageUrl
         : share.keepExistingImage
@@ -2158,7 +2190,8 @@ class FirestoreContentRepository implements ContentRepository {
   ) async {
     _requireCurrentUser();
     final workout = share.workout;
-    final newImageUrl = await _tryUploadBackground(share.backgroundImagePath);
+    final newImageUrl =
+        (await _tryUploadBackground(share.backgroundImagePath)).imageUrl;
     final imageUrl = share.backgroundImagePath != null
         ? newImageUrl
         : share.keepExistingImage
@@ -2536,6 +2569,7 @@ class FirestoreContentRepository implements ContentRepository {
     required String themeKey,
     String postType = 'text',
     String? imageUrl,
+    String? backgroundVideoUrl,
     Map<String, dynamic>? workoutData,
     Map<String, dynamic>? mealData,
     List<Map<String, double>> routePoints = const [],
@@ -2569,6 +2603,9 @@ class FirestoreContentRepository implements ContentRepository {
       likedBy: const [],
       postType: postType,
       imageUrl: imageUrl,
+      // Only alongside its first frame: a loop with no still would leave
+      // older builds and the share export with nothing to draw.
+      backgroundVideoUrl: imageUrl == null ? null : backgroundVideoUrl,
       workoutData: workoutData,
       mealData: mealData,
       routePoints: RoutePoint.listFromFirestore(routePoints),
@@ -2613,6 +2650,8 @@ class FirestoreContentRepository implements ContentRepository {
       if (record.authorAvatarUrl != null)
         'authorAvatarUrl': record.authorAvatarUrl,
       if (record.imageUrl != null) 'imageUrl': record.imageUrl,
+      if (record.backgroundVideoUrl != null)
+        'backgroundVideoUrl': record.backgroundVideoUrl,
       if (record.imageAspectRatio != null)
         'imageAspectRatio': record.imageAspectRatio,
       if (record.workoutData != null) 'workoutData': record.workoutData,
@@ -3450,6 +3489,33 @@ class FirestoreContentRepository implements ContentRepository {
   /// not working, and every second past that is a spinner in front of someone
   /// who has already finished their run.
   static const Duration _backgroundUploadTimeout = Duration(seconds: 20);
+
+  /// A five-second loop is about a megabyte; this is room for a slow signal.
+  static const Duration _loopUploadTimeout = Duration(seconds: 45);
+
+  /// Uploads a file of any type to [path], giving up after [timeout].
+  Future<String> _uploadFile(
+    String path,
+    String localFilePath, {
+    required String contentType,
+    required Duration timeout,
+  }) async {
+    final bytes = await XFile(localFilePath).readAsBytes();
+    final uploadTask = FirebaseStorage.instance.ref().child(path).putData(
+          bytes,
+          SettableMetadata(contentType: contentType),
+        );
+    final snapshot = await uploadTask.timeout(
+      timeout,
+      onTimeout: () {
+        unawaited(uploadTask.cancel().catchError((Object _) => false));
+        throw TimeoutException(
+          'Upload timed out after ${timeout.inSeconds} seconds.',
+        );
+      },
+    );
+    return await snapshot.ref.getDownloadURL();
+  }
 
   /// Uploads [localFilePath] as a JPEG to [path], giving up after [timeout].
   ///

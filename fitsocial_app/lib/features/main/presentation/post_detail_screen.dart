@@ -464,6 +464,7 @@ class _MediaBlock extends StatelessWidget {
           background: post.imageUrl == null || post.imageUrl!.isEmpty
               ? null
               : appPhoto(post.imageUrl!),
+          backgroundVideo: post.backgroundVideoUrl,
           showMap: post.showRouteMap,
           routePlacement: post.routePlacement,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -487,6 +488,7 @@ class _MediaBlock extends StatelessWidget {
           workoutData: post.workoutData,
           activity: post.activity,
           backgroundImageUrl: post.imageUrl,
+          backgroundVideo: post.backgroundVideoUrl,
           // Sized to the log: at this width a 9:16 sheet is mostly empty.
           portrait: false,
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),

@@ -25,6 +25,7 @@ class MainActivity : FlutterFragmentActivity() {
 
     private var mediaSession: MediaSessionBridge? = null
     private var panic: PanicBridge? = null
+    private var videoLoop: VideoLoopBridge? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,6 +114,12 @@ class MainActivity : FlutterFragmentActivity() {
             applicationContext,
             flutterEngine.dartExecutor.binaryMessenger,
         )
+        // Card video loops. Application context: it writes to the cache dir
+        // and runs an encoder, neither of which belongs to this activity.
+        videoLoop = VideoLoopBridge(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -123,6 +130,8 @@ class MainActivity : FlutterFragmentActivity() {
         mediaSession = null
         panic?.dispose()
         panic = null
+        videoLoop?.dispose()
+        videoLoop = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

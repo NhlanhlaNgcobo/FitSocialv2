@@ -35,13 +35,17 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Post images: posts/{uid}/...
+    // Post images: posts/{uid}/... — and the few-second video loops behind
+    // run and workout cards, which the app cuts to about a megabyte. The cap
+    // is generous for that and far short of a full video.
     match /posts/{userId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null
                    && request.auth.uid == userId
-                   && request.resource.size < 10 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+                   && ((request.resource.size < 10 * 1024 * 1024
+                        && request.resource.contentType.matches('image/.*'))
+                       || (request.resource.size < 8 * 1024 * 1024
+                           && request.resource.contentType == 'video/mp4'));
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
