@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -128,6 +130,10 @@ class _RunRouteMapState extends State<RunRouteMap> {
 
   RunMapPrefs _prefs = RunMapPrefs.current.value;
 
+  /// Whether the camera rides the newest fix. Only a spectator ever turns it
+  /// off, by panning; the recentre button turns it back on.
+  bool _following = true;
+
   // Johannesburg — only ever shown for the instant before the first GPS fix
   // arrives, since a GoogleMap requires some initial camera target.
   static const _fallbackTarget = LatLng(-26.2041, 28.0473);
@@ -214,15 +220,30 @@ class _RunRouteMapState extends State<RunRouteMap> {
       _measureRoute();
       _loadKmIcons();
     }
-    if (widget.route.length != old.route.length ||
-        widget.replayProgress != old.replayProgress) {
+    // Where the route ends, not only how long it is: a live share's trail is
+    // thinned to a fixed length, so past that its count stops changing while
+    // the athlete keeps moving.
+    if (routeChanged || widget.replayProgress != old.replayProgress) {
       _syncCamera();
     }
+  }
+
+  /// The viewer touched a spectator map: stop following until they ask for
+  /// it back, so the camera does not snap away from what they moved to.
+  void _stopFollowing() {
+    if (!_isSpectator || !_following) return;
+    setState(() => _following = false);
+  }
+
+  void _resumeFollowing() {
+    setState(() => _following = true);
+    _syncCamera();
   }
 
   Future<void> _syncCamera() async {
     final map = _map;
     if (map == null || widget.route.isEmpty) return;
+    if (_isLive && !_following) return;
 
     if (_isReplaying && widget.replayProgress! < 1) {
       final drawn = routePrefix(widget.route, widget.replayProgress!);
@@ -444,38 +465,57 @@ class _RunRouteMapState extends State<RunRouteMap> {
         width: double.infinity,
         child: Stack(
           children: [
-            GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: initialTarget,
-                zoom: followsTilted ? _followZoom : 16,
-                tilt: followsTilted ? _tilt : 0,
+            Listener(
+              onPointerDown: (_) => _stopFollowing(),
+              child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: initialTarget,
+                  zoom: followsTilted ? _followZoom : 16,
+                  tilt: followsTilted ? _tilt : 0,
+                ),
+                mapType: style.mapType,
+                style: style.json,
+                buildingsEnabled: true,
+                // The blue "my location" dot only makes sense while running —
+                // on somebody else's run it would put the viewer on their map.
+                myLocationEnabled: _isLive && !_isSpectator,
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                compassEnabled: false,
+                mapToolbarEnabled: false,
+                // A pannable map inside the feed's ListView would swallow the
+                // scroll gesture, so previews are display-only.
+                zoomGesturesEnabled: _isLive,
+                scrollGesturesEnabled: _isLive,
+                rotateGesturesEnabled: false,
+                tiltGesturesEnabled: false,
+                // The spectator map sits inside the viewer's ListView, which
+                // would otherwise win every vertical drag and leave the map
+                // unpannable. Claiming gestures eagerly gives them to the map.
+                gestureRecognizers: _isSpectator
+                    ? {
+                        const Factory<OneSequenceGestureRecognizer>(
+                          EagerGestureRecognizer.new,
+                        ),
+                      }
+                    : const {},
+                padding: widget.padding,
+                polylines: _buildPolylines(style.isDarkGround),
+                markers: _buildMarkers(),
+                onTap: widget.onTap == null ? null : (_) => widget.onTap!(),
+                onMapCreated: (controller) {
+                  _map = controller;
+                  _syncCamera();
+                  widget.onMapReady?.call(controller);
+                },
               ),
-              mapType: style.mapType,
-              style: style.json,
-              buildingsEnabled: true,
-              // The blue "my location" dot only makes sense while running —
-              // on somebody else's run it would put the viewer on their map.
-              myLocationEnabled: _isLive && !_isSpectator,
-              myLocationButtonEnabled: false,
-              zoomControlsEnabled: false,
-              compassEnabled: false,
-              mapToolbarEnabled: false,
-              // A pannable map inside the feed's ListView would swallow the
-              // scroll gesture, so previews are display-only.
-              zoomGesturesEnabled: _isLive,
-              scrollGesturesEnabled: _isLive,
-              rotateGesturesEnabled: false,
-              tiltGesturesEnabled: false,
-              padding: widget.padding,
-              polylines: _buildPolylines(style.isDarkGround),
-              markers: _buildMarkers(),
-              onTap: widget.onTap == null ? null : (_) => widget.onTap!(),
-              onMapCreated: (controller) {
-                _map = controller;
-                _syncCamera();
-                widget.onMapReady?.call(controller);
-              },
             ),
+            if (_isSpectator && !_following)
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: _RecentreButton(onTap: _resumeFollowing),
+              ),
             if (widget.showBadge)
               Positioned(
                 top: 12,
@@ -497,6 +537,51 @@ class _RunRouteMapState extends State<RunRouteMap> {
     RunMapPrefs.current.removeListener(_onPrefsChanged);
     _map?.dispose();
     super.dispose();
+  }
+}
+
+/// Puts the camera back on the athlete and resumes following them, shown once
+/// the viewer has panned away.
+class _RecentreButton extends StatelessWidget {
+  const _RecentreButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Tooltip(
+      message: 'Follow',
+      child: Material(
+        color: RunMapPlate.fill(context),
+        shape: StadiumBorder(
+          side: BorderSide(color: palette.stroke.withValues(alpha: 0.6)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.my_location_rounded, size: 16, color: palette.text),
+                const SizedBox(width: 6),
+                Text(
+                  'Follow',
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
